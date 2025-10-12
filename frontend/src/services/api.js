@@ -1,8 +1,6 @@
 import axios from 'axios';
 
-// Temporarily hard-coded for testing
-const API_URL = 'http://10.100.102.27:5000';
-// const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 // Debug: Log the API URL being used
 console.log('🔧 API_URL:', API_URL);

@@ -24,6 +24,8 @@ const server = http.createServer(app);
 const allowedOrigins = [
   'http://localhost:3456',
   'http://10.100.102.27:3456',
+  'https://main.d390gabr466gfy.amplifyapp.com',
+  'https://d125ckyjvo1azi.cloudfront.net',
   process.env.FRONTEND_URL
 ].filter(Boolean);
 

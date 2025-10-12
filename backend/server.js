@@ -1,0 +1,288 @@
+require('dotenv').config();
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
+const session = require('express-session');
+const connectDB = require('./config/database');
+const passport = require('./config/passport');
+
+// Import routes
+const authRoutes = require('./routes/auth');
+const songRoutes = require('./routes/songs');
+const roomRoutes = require('./routes/rooms');
+const setlistRoutes = require('./routes/setlists');
+const adminRoutes = require('./routes/admin');
+const mediaRoutes = require('./routes/media');
+
+// Import models
+const Room = require('./models/Room');
+const Song = require('./models/Song');
+
+const app = express();
+const server = http.createServer(app);
+const allowedOrigins = [
+  'http://localhost:3456',
+  'http://10.100.102.27:3456',
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+});
+
+// Connect to MongoDB
+connectDB();
+
+// Middleware
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Passport middleware
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Routes
+app.use('/auth', authRoutes);
+app.use('/api/songs', songRoutes);
+app.use('/api/rooms', roomRoutes);
+app.use('/api/setlists', setlistRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/media', mediaRoutes);
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', message: 'Server is running' });
+});
+
+// Socket.IO for real-time room synchronization
+const operatorSockets = new Map(); // Map of userId -> socketId
+const viewerRooms = new Map(); // Map of socketId -> roomPin
+
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+
+  // Operator joins their room
+  socket.on('operator:join', async (data) => {
+    try {
+      const { userId, roomId } = data;
+
+      const room = await Room.findById(roomId);
+      if (!room) {
+        socket.emit('error', { message: 'Room not found' });
+        return;
+      }
+
+      // Join socket room
+      socket.join(`room:${room.pin}`);
+      operatorSockets.set(userId, socket.id);
+
+      socket.emit('operator:joined', { roomPin: room.pin });
+      console.log(`Operator ${userId} joined room ${room.pin}`);
+    } catch (error) {
+      console.error('Error in operator:join:', error);
+      socket.emit('error', { message: 'Failed to join room' });
+    }
+  });
+
+  // Viewer joins a room
+  socket.on('viewer:join', async (data) => {
+    try {
+      const { pin } = data;
+
+      const room = await Room.findOne({ pin: pin.toUpperCase(), isActive: true })
+        .populate('currentSlide.songId');
+
+      if (!room) {
+        socket.emit('error', { message: 'Room not found or inactive' });
+        return;
+      }
+
+      // Check room capacity
+      if (room.viewerCount >= 500) {
+        socket.emit('error', { message: 'Room is at capacity' });
+        return;
+      }
+
+      // Join socket room
+      socket.join(`room:${room.pin}`);
+      viewerRooms.set(socket.id, room.pin);
+
+      // Increment viewer count
+      room.viewerCount += 1;
+      await room.save();
+
+      // Fetch current slide data if available
+      let slideData = null;
+      if (room.currentSlide && !room.currentSlide.isBlank && room.currentSlide.songId) {
+        const song = await Song.findById(room.currentSlide.songId);
+        if (song && song.slides[room.currentSlide.slideIndex]) {
+          slideData = {
+            slide: song.slides[room.currentSlide.slideIndex],
+            displayMode: room.currentSlide.displayMode,
+            songTitle: song.title,
+            backgroundImage: room.backgroundImage || ''
+          };
+        }
+      }
+
+      // Send current slide to viewer
+      socket.emit('viewer:joined', {
+        roomPin: room.pin,
+        currentSlide: room.currentSlide,
+        slideData: slideData,
+        backgroundImage: room.backgroundImage || ''
+      });
+
+      // Notify operator of viewer count
+      io.to(`room:${room.pin}`).emit('room:viewerCount', { count: room.viewerCount });
+
+      console.log(`Viewer joined room ${room.pin}, total viewers: ${room.viewerCount}`);
+    } catch (error) {
+      console.error('Error in viewer:join:', error);
+      socket.emit('error', { message: 'Failed to join room' });
+    }
+  });
+
+  // Operator updates slide
+  socket.on('operator:updateSlide', async (data) => {
+    console.log('📥 Received operator:updateSlide event:', data);
+    try {
+      const { roomId, songId, slideIndex, displayMode, isBlank } = data;
+
+      const room = await Room.findById(roomId).populate('currentSlide.songId');
+
+      if (!room) {
+        socket.emit('error', { message: 'Room not found' });
+        return;
+      }
+
+      // Update room's current slide
+      room.currentSlide = {
+        songId: isBlank ? null : songId,
+        slideIndex: slideIndex || 0,
+        displayMode: displayMode || 'bilingual',
+        isBlank: isBlank || false
+      };
+
+      await room.updateActivity();
+
+      // Fetch song data if not blank
+      let slideData = null;
+      if (!isBlank && songId) {
+        const song = await Song.findById(songId);
+        if (song && song.slides[slideIndex]) {
+          slideData = {
+            slide: song.slides[slideIndex],
+            displayMode: room.currentSlide.displayMode,
+            songTitle: song.title,
+            backgroundImage: room.backgroundImage || ''
+          };
+        }
+      }
+
+      // Broadcast to all viewers in the room
+      io.to(`room:${room.pin}`).emit('slide:update', {
+        currentSlide: room.currentSlide,
+        slideData,
+        isBlank,
+        backgroundImage: room.backgroundImage || ''
+      });
+
+      console.log(`Slide updated in room ${room.pin}`);
+    } catch (error) {
+      console.error('Error in operator:updateSlide:', error);
+      socket.emit('error', { message: 'Failed to update slide' });
+    }
+  });
+
+  // Operator updates background
+  socket.on('operator:updateBackground', async (data) => {
+    console.log('📥 Received operator:updateBackground event:', data);
+    try {
+      const { roomId, backgroundImage } = data;
+
+      const room = await Room.findById(roomId);
+
+      if (!room) {
+        socket.emit('error', { message: 'Room not found' });
+        return;
+      }
+
+      // Update room's background
+      room.backgroundImage = backgroundImage || '';
+      await room.save();
+
+      // Broadcast to all viewers in the room
+      io.to(`room:${room.pin}`).emit('background:update', {
+        backgroundImage: room.backgroundImage
+      });
+
+      console.log(`Background updated in room ${room.pin}`);
+    } catch (error) {
+      console.error('Error in operator:updateBackground:', error);
+      socket.emit('error', { message: 'Failed to update background' });
+    }
+  });
+
+  // Handle disconnect
+  socket.on('disconnect', async () => {
+    try {
+      // Check if this was a viewer
+      const roomPin = viewerRooms.get(socket.id);
+      if (roomPin) {
+        const room = await Room.findOne({ pin: roomPin });
+        if (room) {
+          room.viewerCount = Math.max(0, room.viewerCount - 1);
+          await room.save();
+
+          // Notify operator of viewer count
+          io.to(`room:${roomPin}`).emit('room:viewerCount', { count: room.viewerCount });
+
+          console.log(`Viewer left room ${roomPin}, remaining viewers: ${room.viewerCount}`);
+        }
+        viewerRooms.delete(socket.id);
+      }
+
+      // Check if this was an operator
+      for (const [userId, socketId] of operatorSockets.entries()) {
+        if (socketId === socket.id) {
+          operatorSockets.delete(userId);
+          break;
+        }
+      }
+
+      console.log('Client disconnected:', socket.id);
+    } catch (error) {
+      console.error('Error in disconnect:', error);
+    }
+  });
+});
+
+// Start server
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+module.exports = { app, server, io };
+

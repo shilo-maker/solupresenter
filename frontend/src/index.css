@@ -11,3 +11,36 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* Prevent blinking cursor on non-input elements */
+* {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Re-enable text selection for input elements and text areas */
+input,
+textarea,
+[contenteditable="true"],
+.text-selectable {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* Prevent caret from appearing on divs */
+div:focus {
+  outline: none;
+  caret-color: transparent;
+}
+
+/* Prevent focus outline on all non-interactive elements */
+div:not([contenteditable="true"]):focus,
+span:focus,
+p:focus {
+  outline: none;
+  caret-color: transparent;
+}

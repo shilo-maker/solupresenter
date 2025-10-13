@@ -9,6 +9,8 @@ function Register() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showVerificationMessage, setShowVerificationMessage] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
   const navigate = useNavigate();
   const { register, googleLogin } = useAuth();
 
@@ -29,7 +31,14 @@ function Register() {
     const result = await register(email, password);
 
     if (result.success) {
-      navigate('/dashboard');
+      if (result.requiresVerification) {
+        // Show verification message
+        setRegisteredEmail(result.email);
+        setShowVerificationMessage(true);
+      } else {
+        // Old flow - direct login (shouldn't happen with new backend)
+        navigate('/dashboard');
+      }
     } else {
       setError(result.error);
     }
@@ -51,7 +60,31 @@ function Register() {
             </div>
             <h4 className="text-center mb-4">Register</h4>
 
-            {error && <Alert variant="danger">{error}</Alert>}
+            {showVerificationMessage ? (
+              <div>
+                <Alert variant="success">
+                  <Alert.Heading>Check Your Email!</Alert.Heading>
+                  <p>
+                    We've sent a verification link to <strong>{registeredEmail}</strong>
+                  </p>
+                  <p>
+                    Please click the link in the email to verify your account and complete registration.
+                  </p>
+                  <hr />
+                  <p className="mb-0" style={{ fontSize: '0.9rem' }}>
+                    Didn't receive the email? Check your spam folder or{' '}
+                    <Link to="/login">return to login</Link> to request a new verification email.
+                  </p>
+                </Alert>
+                <div className="text-center mt-3">
+                  <Link to="/login" className="btn btn-primary">
+                    Go to Login
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <>
+                {error && <Alert variant="danger">{error}</Alert>}
 
             <Form onSubmit={handleSubmit}>
               <Form.Group className="mb-3" controlId="email">
@@ -109,6 +142,8 @@ function Register() {
             <div className="text-center mt-3">
               Already have an account? <Link to="/login">Login</Link>
             </div>
+              </>
+            )}
           </Card.Body>
         </Card>
       </div>

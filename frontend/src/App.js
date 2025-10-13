@@ -6,6 +6,7 @@ import PrivateRoute from './components/PrivateRoute';
 // Pages
 import Login from './pages/Login';
 import Register from './pages/Register';
+import VerifyEmail from './pages/VerifyEmail';
 import Dashboard from './pages/Dashboard';
 import ViewerPage from './pages/ViewerPage';
 import SongList from './pages/SongList';
@@ -32,6 +33,7 @@ function App() {
           {/* Public routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/viewer" element={<ViewerPage />} />
 
           {/* Private routes */}

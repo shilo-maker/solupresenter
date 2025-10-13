@@ -7,10 +7,7 @@ console.log('🔧 API_URL:', API_URL);
 console.log('🔧 process.env.REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
 
 const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  baseURL: API_URL
 });
 
 // Add token to requests
@@ -19,6 +16,10 @@ api.interceptors.request.use(
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    // Set Content-Type to application/json for non-FormData requests
+    if (!(config.data instanceof FormData) && !config.headers['Content-Type']) {
+      config.headers['Content-Type'] = 'application/json';
     }
     return config;
   },
@@ -84,6 +85,29 @@ export const adminAPI = {
   approveSong: (id) => api.post(`/api/admin/approve-song/${id}`),
   rejectSong: (id) => api.post(`/api/admin/reject-song/${id}`),
   createPublicSong: (songData) => api.post('/api/admin/create-public-song', songData)
+};
+
+// Helper function to get full image URL
+export const getFullImageUrl = (url) => {
+  if (!url) return '';
+
+  // If it's already a full URL (starts with http), return as is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+
+  // If it's a gradient, return as is
+  if (url.startsWith('linear-gradient')) {
+    return url;
+  }
+
+  // If it's a relative path (starts with /uploads), prepend API URL
+  if (url.startsWith('/uploads')) {
+    return `${API_URL}${url}`;
+  }
+
+  // Otherwise return as is
+  return url;
 };
 
 export default api;

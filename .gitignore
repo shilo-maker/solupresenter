@@ -35,3 +35,4 @@ frontend/.env.production.local
 # Misc
 .cache
 .temp
+uploads/

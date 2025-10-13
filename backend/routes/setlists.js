@@ -9,6 +9,7 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const setlists = await Setlist.find({ createdBy: req.user._id })
       .populate('items.song')
+      .populate('items.image')
       .sort({ updatedAt: -1 });
 
     res.json({ setlists });
@@ -21,7 +22,9 @@ router.get('/', authenticateToken, async (req, res) => {
 // Get single setlist
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const setlist = await Setlist.findById(req.params.id).populate('items.song');
+    const setlist = await Setlist.findById(req.params.id)
+      .populate('items.song')
+      .populate('items.image');
 
     if (!setlist) {
       return res.status(404).json({ error: 'Setlist not found' });
@@ -41,7 +44,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Get setlist by share token
 router.get('/shared/:token', authenticateToken, async (req, res) => {
   try {
-    const setlist = await Setlist.findOne({ shareToken: req.params.token }).populate('items.song');
+    const setlist = await Setlist.findOne({ shareToken: req.params.token })
+      .populate('items.song')
+      .populate('items.image');
 
     if (!setlist) {
       return res.status(404).json({ error: 'Setlist not found' });
@@ -96,7 +101,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     await setlist.save();
 
-    const updatedSetlist = await Setlist.findById(setlist._id).populate('items.song');
+    const updatedSetlist = await Setlist.findById(setlist._id)
+      .populate('items.song')
+      .populate('items.image');
 
     res.json({ setlist: updatedSetlist });
   } catch (error) {

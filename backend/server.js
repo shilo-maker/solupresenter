@@ -4,6 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const session = require('express-session');
+const multer = require('multer');
 const connectDB = require('./config/database');
 const passport = require('./config/passport');
 
@@ -45,8 +46,8 @@ app.use(cors({
   origin: allowedOrigins,
   credentials: true
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Session configuration
 app.use(session({
@@ -63,6 +64,9 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Serve uploaded files statically
+app.use('/uploads', express.static('uploads'));
+
 // Routes
 app.use('/auth', authRoutes);
 app.use('/api/songs', songRoutes);
@@ -74,6 +78,25 @@ app.use('/api/media', mediaRoutes);
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+
+  if (err instanceof multer.MulterError) {
+    // Multer-specific errors
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File too large. Maximum size is 5MB per file.' });
+    }
+    if (err.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({ error: 'Too many files. Maximum is 50 files.' });
+    }
+    return res.status(400).json({ error: `Upload error: ${err.message}` });
+  }
+
+  // Other errors
+  res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
 // Socket.IO for real-time room synchronization
@@ -169,7 +192,7 @@ io.on('connection', (socket) => {
   socket.on('operator:updateSlide', async (data) => {
     console.log('📥 Received operator:updateSlide event:', data);
     try {
-      const { roomId, songId, slideIndex, displayMode, isBlank } = data;
+      const { roomId, songId, slideIndex, displayMode, isBlank, imageUrl } = data;
 
       const room = await Room.findById(roomId).populate('currentSlide.songId');
 
@@ -188,9 +211,9 @@ io.on('connection', (socket) => {
 
       await room.updateActivity();
 
-      // Fetch song data if not blank
+      // Fetch song data if not blank and not an image
       let slideData = null;
-      if (!isBlank && songId) {
+      if (!isBlank && !imageUrl && songId) {
         const song = await Song.findById(songId);
         if (song && song.slides[slideIndex]) {
           slideData = {
@@ -207,10 +230,11 @@ io.on('connection', (socket) => {
         currentSlide: room.currentSlide,
         slideData,
         isBlank,
+        imageUrl: imageUrl || null,
         backgroundImage: room.backgroundImage || ''
       });
 
-      console.log(`Slide updated in room ${room.pin}`);
+      console.log(`Slide updated in room ${room.pin}`, imageUrl ? `(image: ${imageUrl})` : '');
     } catch (error) {
       console.error('Error in operator:updateSlide:', error);
       socket.emit('error', { message: 'Failed to update slide' });
@@ -244,6 +268,11 @@ io.on('connection', (socket) => {
       console.error('Error in operator:updateBackground:', error);
       socket.emit('error', { message: 'Failed to update background' });
     }
+  });
+
+  // Heartbeat - ping/pong
+  socket.on('ping', (timestamp) => {
+    socket.emit('pong', timestamp);
   });
 
   // Handle disconnect

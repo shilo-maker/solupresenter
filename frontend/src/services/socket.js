@@ -5,34 +5,116 @@ const SOCKET_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 class SocketService {
   constructor() {
     this.socket = null;
+    this.connectionStatus = 'disconnected'; // 'connecting', 'connected', 'disconnected', 'reconnecting'
+    this.statusCallbacks = [];
+    this.latency = null;
+    this.heartbeatInterval = null;
   }
 
   connect() {
     console.log('🔌 socketService.connect() called, current socket:', this.socket);
     if (!this.socket) {
       console.log('📡 Creating new socket connection to:', SOCKET_URL);
+      this.updateConnectionStatus('connecting');
+
       this.socket = io(SOCKET_URL, {
         transports: ['websocket', 'polling'],
         reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000
       });
 
       this.socket.on('connect', () => {
         console.log('✅ Socket connected, ID:', this.socket.id);
+        this.updateConnectionStatus('connected');
+        this.startHeartbeat();
       });
 
-      this.socket.on('disconnect', () => {
-        console.log('❌ Socket disconnected');
+      this.socket.on('disconnect', (reason) => {
+        console.log('❌ Socket disconnected, reason:', reason);
+        this.updateConnectionStatus('disconnected');
+        this.stopHeartbeat();
+      });
+
+      this.socket.on('reconnect_attempt', () => {
+        console.log('🔄 Attempting to reconnect...');
+        this.updateConnectionStatus('reconnecting');
+      });
+
+      this.socket.on('reconnect', (attemptNumber) => {
+        console.log('✅ Reconnected after', attemptNumber, 'attempts');
+        this.updateConnectionStatus('connected');
+        this.startHeartbeat();
+      });
+
+      this.socket.on('reconnect_error', (error) => {
+        console.error('⚠️ Reconnection error:', error);
+      });
+
+      this.socket.on('reconnect_failed', () => {
+        console.error('❌ Reconnection failed after all attempts');
+        this.updateConnectionStatus('disconnected');
       });
 
       this.socket.on('error', (error) => {
         console.error('⚠️ Socket error:', error);
       });
+
+      // Heartbeat response
+      this.socket.on('pong', (timestamp) => {
+        this.latency = Date.now() - timestamp;
+        console.log('💓 Heartbeat latency:', this.latency, 'ms');
+      });
     } else {
       console.log('ℹ️ Socket already exists, reusing it');
     }
     return this.socket;
+  }
+
+  startHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+    }
+
+    // Send ping every 5 seconds
+    this.heartbeatInterval = setInterval(() => {
+      if (this.socket && this.socket.connected) {
+        this.socket.emit('ping', Date.now());
+      }
+    }, 5000);
+  }
+
+  stopHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  updateConnectionStatus(status) {
+    this.connectionStatus = status;
+    this.statusCallbacks.forEach(callback => callback(status, this.latency));
+  }
+
+  onConnectionStatusChange(callback) {
+    this.statusCallbacks.push(callback);
+    // Immediately call with current status
+    callback(this.connectionStatus, this.latency);
+
+    // Return unsubscribe function
+    return () => {
+      this.statusCallbacks = this.statusCallbacks.filter(cb => cb !== callback);
+    };
+  }
+
+  getConnectionStatus() {
+    return {
+      status: this.connectionStatus,
+      latency: this.latency,
+      isConnected: this.socket?.connected || false
+    };
   }
 
   disconnect() {

@@ -1,7 +1,46 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const Media = require('../models/Media');
 const { authenticateToken, isAdmin } = require('../middleware/auth');
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, '../uploads/backgrounds');
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    // Generate unique filename: timestamp-randomstring-originalname
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept only image files
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed (JPEG, PNG, GIF, WebP)'));
+    }
+  }
+});
 
 // Get all media (public + user's personal media)
 router.get('/', authenticateToken, async (req, res) => {
@@ -20,7 +59,41 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// Create new media (for now, just storing URLs)
+// Upload background image file
+router.post('/upload', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const { name } = req.body;
+
+    // Generate URL for the uploaded file
+    const fileUrl = `/uploads/backgrounds/${req.file.filename}`;
+
+    const media = await Media.create({
+      name: name || req.file.originalname,
+      type: 'image',
+      url: fileUrl,
+      thumbnailUrl: fileUrl, // Use same URL for thumbnail (could optimize later)
+      uploadedBy: req.user._id,
+      isPublic: false
+    });
+
+    res.status(201).json({ media });
+  } catch (error) {
+    console.error('Error uploading media:', error);
+    // Delete uploaded file if database save failed
+    if (req.file) {
+      fs.unlink(req.file.path, (err) => {
+        if (err) console.error('Error deleting file:', err);
+      });
+    }
+    res.status(500).json({ error: 'Failed to upload media' });
+  }
+});
+
+// Create new media (for URLs and gradients)
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { name, type, url, thumbnailUrl } = req.body;
@@ -56,6 +129,14 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
     if (media.uploadedBy.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // If it's an uploaded file (not a URL or gradient), delete the file
+    if (media.url.startsWith('/uploads/')) {
+      const filePath = path.join(__dirname, '..', media.url);
+      fs.unlink(filePath, (err) => {
+        if (err) console.error('Error deleting file:', err);
+      });
     }
 
     await media.deleteOne();

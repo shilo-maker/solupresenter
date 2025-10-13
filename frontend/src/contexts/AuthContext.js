@@ -48,6 +48,17 @@ export const AuthProvider = ({ children }) => {
       console.error('❌ Login error:', error);
       console.error('Error response:', error.response);
       console.error('Error message:', error.message);
+
+      // Check if error is due to unverified email
+      if (error.response?.data?.requiresVerification) {
+        return {
+          success: false,
+          requiresVerification: true,
+          email: error.response.data.email,
+          error: error.response.data.error
+        };
+      }
+
       const errorMessage = error.response?.data?.error || 'Login failed';
       setError(errorMessage);
       return { success: false, error: errorMessage };
@@ -58,8 +69,23 @@ export const AuthProvider = ({ children }) => {
     try {
       setError(null);
       const response = await authAPI.register(email, password);
-      localStorage.setItem('token', response.data.token);
-      setUser(response.data.user);
+
+      // Check if registration requires email verification
+      if (response.data.requiresVerification) {
+        return {
+          success: true,
+          requiresVerification: true,
+          message: response.data.message,
+          email: response.data.user.email
+        };
+      }
+
+      // If no verification required (shouldn't happen with new flow, but keeping for backward compatibility)
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        setUser(response.data.user);
+      }
+
       return { success: true };
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Registration failed';

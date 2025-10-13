@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const setlistItemSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ['song', 'blank'],
+    enum: ['song', 'blank', 'image'],
     required: true
   },
   song: {
@@ -11,6 +11,13 @@ const setlistItemSchema = new mongoose.Schema({
     ref: 'Song',
     required: function() {
       return this.type === 'song';
+    }
+  },
+  image: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Media',
+    required: function() {
+      return this.type === 'image';
     }
   },
   order: {

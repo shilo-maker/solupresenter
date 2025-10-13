@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Form, Tab, Tabs, Alert, Modal } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import api, { getFullImageUrl } from '../services/api';
 import { gradientPresets } from '../utils/gradients';
 
 function MediaLibrary() {
@@ -16,6 +16,9 @@ function MediaLibrary() {
   const [newMediaName, setNewMediaName] = useState('');
   const [newMediaUrl, setNewMediaUrl] = useState('');
   const [selectedGradient, setSelectedGradient] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploadPreview, setUploadPreview] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     fetchMedia();
@@ -34,8 +37,54 @@ function MediaLibrary() {
     }
   };
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSelectedFile(file);
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUploadPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleAddMedia = async () => {
     setError('');
+
+    if (modalTab === 'upload') {
+      // Handle file upload
+      if (!selectedFile) {
+        setError('Please select a file to upload');
+        return;
+      }
+
+      setUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('name', newMediaName || selectedFile.name);
+
+        await api.post('/api/media/upload', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+
+        setShowAddModal(false);
+        setNewMediaName('');
+        setSelectedFile(null);
+        setUploadPreview('');
+        fetchMedia();
+      } catch (error) {
+        console.error('Error uploading media:', error);
+        setError(error.response?.data?.error || 'Failed to upload media');
+      } finally {
+        setUploading(false);
+      }
+      return;
+    }
 
     let url = '';
     let name = '';
@@ -133,7 +182,7 @@ function MediaLibrary() {
                   <div
                     style={{
                       height: '150px',
-                      background: isGradient(item.url) ? item.url : `url(${item.url})`,
+                      background: isGradient(item.url) ? item.url : `url(${getFullImageUrl(item.url)})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                       borderTopLeftRadius: '0.25rem',
@@ -171,6 +220,47 @@ function MediaLibrary() {
           {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
 
           <Tabs activeKey={modalTab} onSelect={(k) => setModalTab(k)} className="mb-3">
+            <Tab eventKey="upload" title="Upload File">
+              <Form.Group className="mb-3">
+                <Form.Label>Background Name (optional)</Form.Label>
+                <Form.Control
+                  type="text"
+                  placeholder="Enter a custom name"
+                  value={newMediaName}
+                  onChange={(e) => setNewMediaName(e.target.value)}
+                />
+              </Form.Group>
+
+              <Form.Group className="mb-3">
+                <Form.Label>Select Image File *</Form.Label>
+                <Form.Control
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  required
+                />
+                <Form.Text className="text-muted">
+                  Upload an image file (JPG, PNG, GIF, WebP). Max size: 10MB
+                </Form.Text>
+              </Form.Group>
+
+              {uploadPreview && (
+                <div className="mb-3">
+                  <Form.Label>Preview</Form.Label>
+                  <div
+                    style={{
+                      height: '200px',
+                      backgroundImage: `url(${uploadPreview})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      borderRadius: '8px',
+                      border: '1px solid #dee2e6'
+                    }}
+                  />
+                </div>
+              )}
+            </Tab>
+
             <Tab eventKey="gradient" title="Gradient">
               <Form.Group className="mb-3">
                 <Form.Label>Background Name (optional)</Form.Label>
@@ -254,11 +344,11 @@ function MediaLibrary() {
           </Tabs>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowAddModal(false)}>
+          <Button variant="secondary" onClick={() => setShowAddModal(false)} disabled={uploading}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleAddMedia}>
-            Add Background
+          <Button variant="primary" onClick={handleAddMedia} disabled={uploading}>
+            {uploading ? 'Uploading...' : 'Add Background'}
           </Button>
         </Modal.Footer>
       </Modal>

@@ -2,29 +2,54 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Container, Form, Button, Alert, Card } from 'react-bootstrap';
 import { useAuth } from '../contexts/AuthContext';
+import api from '../services/api';
 
 function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [requiresVerification, setRequiresVerification] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
   const navigate = useNavigate();
   const { login, googleLogin } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setResendSuccess(false);
     setLoading(true);
 
     const result = await login(email, password);
 
     if (result.success) {
       navigate('/dashboard');
+    } else if (result.requiresVerification) {
+      setRequiresVerification(true);
+      setUnverifiedEmail(result.email);
+      setError(result.error);
     } else {
       setError(result.error);
     }
 
     setLoading(false);
+  };
+
+  const handleResendVerification = async () => {
+    setResendingEmail(true);
+    setError('');
+    setResendSuccess(false);
+
+    try {
+      await api.post('/auth/resend-verification', { email: unverifiedEmail });
+      setResendSuccess(true);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to resend verification email');
+    } finally {
+      setResendingEmail(false);
+    }
   };
 
   const handleGoogleLogin = () => {
@@ -42,6 +67,26 @@ function Login() {
             <h4 className="text-center mb-4">Login</h4>
 
             {error && <Alert variant="danger">{error}</Alert>}
+
+            {resendSuccess && (
+              <Alert variant="success">
+                Verification email sent successfully! Please check your inbox.
+              </Alert>
+            )}
+
+            {requiresVerification && !resendSuccess && (
+              <Alert variant="warning">
+                <p className="mb-2">Your email address hasn't been verified yet.</p>
+                <Button
+                  variant="warning"
+                  size="sm"
+                  onClick={handleResendVerification}
+                  disabled={resendingEmail}
+                >
+                  {resendingEmail ? 'Sending...' : 'Resend Verification Email'}
+                </Button>
+              </Alert>
+            )}
 
             <Form onSubmit={handleSubmit}>
               <Form.Group className="mb-3" controlId="email">

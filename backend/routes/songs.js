@@ -1,7 +1,39 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const Song = require('../models/Song');
 const { authenticateToken } = require('../middleware/auth');
+
+// Helper function to detect and extract primary language text from title
+function extractPrimaryLanguage(title) {
+  // Remove content in parentheses/brackets (usually translations)
+  let cleanTitle = title.replace(/\([^)]*\)/g, '').replace(/\[[^\]]*\]/g, '').trim();
+
+  // If we still have text, use it
+  if (cleanTitle) {
+    return cleanTitle;
+  }
+
+  // Otherwise return original title
+  return title.trim();
+}
+
+// Configure multer for file uploads (store in memory)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit per file
+    files: 50 // Max 50 files at once
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept only .txt files
+    if (file.mimetype === 'text/plain' || file.originalname.endsWith('.txt')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only .txt files are allowed'));
+    }
+  }
+});
 
 // Get all songs (public + user's personal songs)
 router.get('/', authenticateToken, async (req, res) => {
@@ -52,6 +84,140 @@ router.get('/search', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error searching songs:', error);
     res.status(500).json({ error: 'Failed to search songs' });
+  }
+});
+
+// Get all unique tags
+router.get('/meta/tags', authenticateToken, async (req, res) => {
+  try {
+    const tags = await Song.distinct('tags', {
+      $or: [
+        { isPublic: true },
+        { createdBy: req.user._id }
+      ]
+    });
+
+    res.json({ tags: tags.sort() });
+  } catch (error) {
+    console.error('Error fetching tags:', error);
+    res.status(500).json({ error: 'Failed to fetch tags' });
+  }
+});
+
+// Bulk import songs from .txt files
+router.post('/bulk-import', authenticateToken, upload.array('songFiles', 50), async (req, res) => {
+  console.log('📤 Bulk import request received');
+  console.log('Files count:', req.files?.length || 0);
+  console.log('User:', req.user?.email);
+
+  try {
+    if (!req.files || req.files.length === 0) {
+      console.error('❌ No files uploaded');
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+
+    const results = {
+      successful: [],
+      failed: []
+    };
+
+    // Process each uploaded file
+    for (const file of req.files) {
+      try {
+        const content = file.buffer.toString('utf8');
+        const lines = content.split('\n').map(line => line.trim()).filter(line => line);
+
+        if (lines.length === 0) {
+          results.failed.push({
+            filename: file.originalname,
+            error: 'File is empty'
+          });
+          continue;
+        }
+
+        // First line is the title - extract primary language (remove translations in parentheses)
+        const title = extractPrimaryLanguage(lines[0]);
+        const slides = [];
+        let i = 1;
+
+        // Parse slides (4 lines per slide)
+        while (i < lines.length) {
+          const originalText = lines[i] || '';
+          const transliteration = lines[i + 1] || '';
+          const translation = lines[i + 2] || '';
+          const translationOverflow = lines[i + 3] || '';
+
+          // Only add slide if it has at least original text
+          if (originalText) {
+            slides.push({
+              originalText,
+              transliteration,
+              translation,
+              translationOverflow,
+              verseType: 'verse' // Default verse type
+            });
+          }
+
+          i += 4; // Move to next slide
+        }
+
+        if (slides.length === 0) {
+          results.failed.push({
+            filename: file.originalname,
+            error: 'No valid slides found'
+          });
+          continue;
+        }
+
+        // Create the song
+        const song = await Song.create({
+          title,
+          originalLanguage: 'he', // Default to Hebrew, user can change later
+          slides,
+          tags: [],
+          createdBy: req.user._id,
+          isPublic: false,
+          isPendingApproval: false,
+          backgroundImage: ''
+        });
+
+        results.successful.push({
+          filename: file.originalname,
+          songId: song._id,
+          title: song.title,
+          slideCount: slides.length
+        });
+
+      } catch (error) {
+        console.error(`Error processing file ${file.originalname}:`, error);
+        results.failed.push({
+          filename: file.originalname,
+          error: error.message
+        });
+      }
+    }
+
+    console.log('✅ Bulk import completed');
+    console.log('Summary:', {
+      total: req.files.length,
+      successful: results.successful.length,
+      failed: results.failed.length
+    });
+
+    res.json({
+      message: 'Bulk import completed',
+      results,
+      summary: {
+        total: req.files.length,
+        successful: results.successful.length,
+        failed: results.failed.length
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error in bulk import:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to process bulk import' });
   }
 });
 
@@ -181,23 +347,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error deleting song:', error);
     res.status(500).json({ error: 'Failed to delete song' });
-  }
-});
-
-// Get all unique tags
-router.get('/meta/tags', authenticateToken, async (req, res) => {
-  try {
-    const tags = await Song.distinct('tags', {
-      $or: [
-        { isPublic: true },
-        { createdBy: req.user._id }
-      ]
-    });
-
-    res.json({ tags: tags.sort() });
-  } catch (error) {
-    console.error('Error fetching tags:', error);
-    res.status(500).json({ error: 'Failed to fetch tags' });
   }
 });
 

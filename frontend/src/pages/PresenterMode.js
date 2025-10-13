@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Form, Button, InputGroup, Modal, Row, Col } from 'react-bootstrap';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import api from '../services/api';
+import api, { getFullImageUrl } from '../services/api';
 import socketService from '../services/socket';
 
 function PresenterMode() {
@@ -20,8 +20,12 @@ function PresenterMode() {
   const [searchResults, setSearchResults] = useState([]);
   const [allSongs, setAllSongs] = useState([]);
 
-  // Setlist state
+  // Image search state
+  const [imageSearchResults, setImageSearchResults] = useState([]);
+
+  // Setlist state (contains items with type: 'song', 'blank', or 'image')
   const [setlist, setSetlist] = useState([]);
+  const [currentItem, setCurrentItem] = useState(null); // Current setlist item (song or image)
 
   // Current song and slides
   const [currentSong, setCurrentSong] = useState(null);
@@ -35,12 +39,22 @@ function PresenterMode() {
   const [showBackgroundModal, setShowBackgroundModal] = useState(false);
 
   // Collapsible sections
-  const [songSectionOpen, setSongSectionOpen] = useState(true);
+  const [activeResourcePanel, setActiveResourcePanel] = useState('songs'); // 'songs' or 'images'
   const [setlistSectionOpen, setSetlistSectionOpen] = useState(true);
   const [slideSectionOpen, setSlideSectionOpen] = useState(true);
 
+  // Switch resource panel and apply search
+  const switchResourcePanel = (panel) => {
+    setActiveResourcePanel(panel);
+    // Re-apply current search query to new panel
+    handleSearch(searchQuery);
+  };
+
   // Responsive layout
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Keyboard shortcuts help
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -131,13 +145,20 @@ function PresenterMode() {
       const response = await api.get(`/api/setlists/${setlistId}`);
       const loadedSetlist = response.data.setlist;
 
-      // Extract songs from setlist items (filter out blank slides)
-      const songs = loadedSetlist.items
-        .filter(item => item.type === 'song' && item.song)
-        .map(item => item.song);
+      // Keep all items (songs, blanks, and images) with their type info
+      const items = loadedSetlist.items.map(item => {
+        if (item.type === 'song') {
+          return { type: 'song', data: item.song };
+        } else if (item.type === 'image') {
+          return { type: 'image', data: item.image };
+        } else if (item.type === 'blank') {
+          return { type: 'blank', data: null };
+        }
+        return null;
+      }).filter(Boolean);
 
-      setSetlist(songs);
-      console.log('✅ Setlist loaded:', songs.length, 'songs');
+      setSetlist(items);
+      console.log('✅ Setlist loaded:', items.length, 'items');
     } catch (error) {
       console.error('Error loading setlist:', error);
       alert('Failed to load setlist');
@@ -150,8 +171,9 @@ function PresenterMode() {
       const song = response.data.song;
 
       // Add the song to the setlist and select it
-      setSetlist([song]);
+      setSetlist([{ type: 'song', data: song }]);
       setCurrentSong(song);
+      setCurrentItem({ type: 'song', data: song });
       setCurrentSlideIndex(0);
       console.log('✅ Song loaded:', song.title);
     } catch (error) {
@@ -174,6 +196,7 @@ function PresenterMode() {
     try {
       const response = await api.get('/api/media');
       setMedia(response.data.media);
+      setImageSearchResults(response.data.media); // Initialize with all images
     } catch (error) {
       console.error('Error fetching media:', error);
     }
@@ -190,31 +213,53 @@ function PresenterMode() {
 
   const handleSearch = (query) => {
     setSearchQuery(query);
-    if (query.trim() === '') {
-      setSearchResults(allSongs);
+
+    if (activeResourcePanel === 'songs') {
+      // Search songs
+      if (query.trim() === '') {
+        setSearchResults(allSongs);
+      } else {
+        const filtered = allSongs.filter(song => {
+          const searchTerm = query.toLowerCase();
+
+          // Check if title matches
+          if (song.title.toLowerCase().includes(searchTerm)) {
+            return true;
+          }
+
+          // Check if any slide content matches
+          return song.slides.some(slide =>
+            (slide.originalText && slide.originalText.toLowerCase().includes(searchTerm)) ||
+            (slide.transliteration && slide.transliteration.toLowerCase().includes(searchTerm)) ||
+            (slide.translation && slide.translation.toLowerCase().includes(searchTerm)) ||
+            (slide.translationOverflow && slide.translationOverflow.toLowerCase().includes(searchTerm))
+          );
+        });
+        setSearchResults(filtered);
+      }
     } else {
-      const filtered = allSongs.filter(song => {
-        const searchTerm = query.toLowerCase();
-
-        // Check if title matches
-        if (song.title.toLowerCase().includes(searchTerm)) {
-          return true;
-        }
-
-        // Check if any slide content matches
-        return song.slides.some(slide =>
-          (slide.originalText && slide.originalText.toLowerCase().includes(searchTerm)) ||
-          (slide.transliteration && slide.transliteration.toLowerCase().includes(searchTerm)) ||
-          (slide.translation && slide.translation.toLowerCase().includes(searchTerm)) ||
-          (slide.translationOverflow && slide.translationOverflow.toLowerCase().includes(searchTerm))
+      // Search images
+      if (query.trim() === '') {
+        setImageSearchResults(media);
+      } else {
+        const filtered = media.filter(image =>
+          image.name.toLowerCase().includes(query.toLowerCase())
         );
-      });
-      setSearchResults(filtered);
+        setImageSearchResults(filtered);
+      }
     }
   };
 
   const addToSetlist = (song) => {
-    setSetlist([...setlist, song]);
+    setSetlist([...setlist, { type: 'song', data: song }]);
+  };
+
+  const addImageToSetlist = (image) => {
+    setSetlist([...setlist, { type: 'image', data: image }]);
+  };
+
+  const addBlankToSetlist = () => {
+    setSetlist([...setlist, { type: 'blank', data: null }]);
   };
 
   const removeFromSetlist = (index) => {
@@ -246,11 +291,27 @@ function PresenterMode() {
     }
   };
 
+  const selectItem = (item) => {
+    setCurrentItem(item);
+    setIsBlankActive(false);
+
+    if (item.type === 'song') {
+      setCurrentSong(item.data);
+      setCurrentSlideIndex(0);
+      updateSlide(item.data, 0, displayMode, false);
+    } else if (item.type === 'image') {
+      setCurrentSong(null);
+      setCurrentSlideIndex(0);
+      updateImageSlide(item.data);
+    } else if (item.type === 'blank') {
+      setCurrentSong(null);
+      setIsBlankActive(true);
+      updateSlide(null, 0, displayMode, true);
+    }
+  };
+
   const selectSong = (song) => {
-    setCurrentSong(song);
-    setCurrentSlideIndex(0);
-    // Update the display
-    updateSlide(song, 0, displayMode, false);
+    selectItem({ type: 'song', data: song });
   };
 
   const selectSlide = (index) => {
@@ -279,6 +340,25 @@ function PresenterMode() {
     });
   };
 
+  const updateImageSlide = (imageData) => {
+    console.log('🖼️ updateImageSlide called:', { room, image: imageData?.name });
+
+    if (!room) {
+      console.error('❌ Cannot update image slide: room is null');
+      return;
+    }
+
+    console.log('📤 Sending image slide update to backend');
+    socketService.operatorUpdateSlide({
+      roomId: room._id,
+      songId: null,
+      slideIndex: 0,
+      displayMode: displayMode,
+      isBlank: false,
+      imageUrl: imageData?.url || null
+    });
+  };
+
   const toggleDisplayMode = () => {
     const newMode = displayMode === 'bilingual' ? 'original' : 'bilingual';
     setDisplayMode(newMode);
@@ -301,6 +381,142 @@ function PresenterMode() {
       }
     }
   };
+
+  // Navigate to next slide
+  const nextSlide = useCallback(() => {
+    if (isBlankActive) return;
+
+    // If current item is a song, navigate through its slides
+    if (currentSong && currentSlideIndex < currentSong.slides.length - 1) {
+      const newIndex = currentSlideIndex + 1;
+      setCurrentSlideIndex(newIndex);
+      updateSlide(currentSong, newIndex, displayMode, false);
+      return;
+    }
+
+    // Move to next item in setlist
+    if (!currentItem) return;
+
+    const currentItemIndex = setlist.findIndex(item => {
+      if (item.type === 'song' && currentItem.type === 'song') {
+        return item.data?._id === currentItem.data?._id;
+      }
+      return item === currentItem;
+    });
+
+    if (currentItemIndex !== -1 && currentItemIndex < setlist.length - 1) {
+      const nextItem = setlist[currentItemIndex + 1];
+      selectItem(nextItem);
+    }
+  }, [currentSong, currentItem, currentSlideIndex, displayMode, isBlankActive, setlist]);
+
+  // Navigate to previous slide
+  const previousSlide = useCallback(() => {
+    if (isBlankActive) return;
+
+    // If current item is a song and not at first slide, go to previous slide
+    if (currentSong && currentSlideIndex > 0) {
+      const newIndex = currentSlideIndex - 1;
+      setCurrentSlideIndex(newIndex);
+      updateSlide(currentSong, newIndex, displayMode, false);
+      return;
+    }
+
+    // Move to previous item in setlist
+    if (!currentItem) return;
+
+    const currentItemIndex = setlist.findIndex(item => {
+      if (item.type === 'song' && currentItem.type === 'song') {
+        return item.data?._id === currentItem.data?._id;
+      }
+      return item === currentItem;
+    });
+
+    if (currentItemIndex > 0) {
+      const prevItem = setlist[currentItemIndex - 1];
+      selectItem(prevItem);
+
+      // If previous item is a song, go to its last slide
+      if (prevItem.type === 'song' && prevItem.data?.slides) {
+        const lastSlideIndex = prevItem.data.slides.length - 1;
+        setCurrentSlideIndex(lastSlideIndex);
+      }
+    }
+  }, [currentSong, currentItem, currentSlideIndex, displayMode, isBlankActive, setlist]);
+
+  // Navigate to next song/item
+  const nextSong = useCallback(() => {
+    if (!currentItem) return;
+
+    const currentItemIndex = setlist.findIndex(item => {
+      if (item.type === 'song' && currentItem.type === 'song') {
+        return item.data?._id === currentItem.data?._id;
+      }
+      return item === currentItem;
+    });
+
+    if (currentItemIndex !== -1 && currentItemIndex < setlist.length - 1) {
+      const nextItem = setlist[currentItemIndex + 1];
+      selectItem(nextItem);
+    }
+  }, [currentItem, setlist]);
+
+  // Navigate to previous song/item
+  const previousSong = useCallback(() => {
+    if (!currentItem) return;
+
+    const currentItemIndex = setlist.findIndex(item => {
+      if (item.type === 'song' && currentItem.type === 'song') {
+        return item.data?._id === currentItem.data?._id;
+      }
+      return item === currentItem;
+    });
+
+    if (currentItemIndex > 0) {
+      const prevItem = setlist[currentItemIndex - 1];
+      selectItem(prevItem);
+    }
+  }, [currentItem, setlist]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      // Ignore if user is typing in an input field
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      switch(e.key) {
+        case 'ArrowRight':
+          e.preventDefault();
+          nextSlide();
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          previousSlide();
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          nextSong();
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          previousSong();
+          break;
+        case ' ': // Spacebar
+        case 'b':
+        case 'B':
+          e.preventDefault();
+          toggleBlankSlide();
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [nextSlide, previousSlide, nextSong, previousSong, toggleBlankSlide]);
 
   return (
     <div style={{
@@ -384,7 +600,7 @@ function PresenterMode() {
         )}
       </div>
 
-      {/* Songs and Setlist Side-by-Side */}
+      {/* Songs/Images and Setlist Side-by-Side */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
@@ -409,19 +625,23 @@ function PresenterMode() {
             }}
           >
             {/* Title with collapse toggle */}
-            <div
-              onClick={() => setSongSectionOpen(!songSectionOpen)}
-              style={{
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                flex: '0 0 auto'
-              }}
-            >
-              <span style={{ fontSize: '1.5rem', marginRight: '10px' }}>
-                {songSectionOpen ? '▼' : '▶'}
-              </span>
-              <span style={{ fontSize: '1.2rem', fontWeight: '500' }}>Songs</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '0 0 auto' }}>
+              <Button
+                variant={activeResourcePanel === 'songs' ? 'primary' : 'outline-secondary'}
+                size="sm"
+                onClick={() => switchResourcePanel('songs')}
+                style={{ fontWeight: '500' }}
+              >
+                Songs
+              </Button>
+              <Button
+                variant={activeResourcePanel === 'images' ? 'primary' : 'outline-secondary'}
+                size="sm"
+                onClick={() => switchResourcePanel('images')}
+                style={{ fontWeight: '500' }}
+              >
+                Images
+              </Button>
             </div>
 
             {/* Search bar */}
@@ -443,9 +663,8 @@ function PresenterMode() {
             </div>
           </div>
 
-          {songSectionOpen && (
-            <div style={{ padding: '20px' }}>
-
+          <div style={{ padding: '20px' }}>
+            {activeResourcePanel === 'songs' ? (
               <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                 {searchResults.map((song) => (
                   <div
@@ -488,8 +707,85 @@ function PresenterMode() {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                {imageSearchResults.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: '#666', fontSize: '0.9rem' }}>
+                    {searchQuery ? 'No images match your search' : 'No images available'}
+                  </p>
+                ) : (
+                  imageSearchResults.map((image) => {
+                    const isGradient = image.url.startsWith('linear-gradient');
+                    return (
+                      <div
+                        key={image._id}
+                        style={{
+                          padding: '12px',
+                          backgroundColor: 'white',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          cursor: 'pointer',
+                          borderRadius: '5px',
+                          marginBottom: '5px',
+                          border: '1px solid #ddd'
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: '50px',
+                            height: '50px',
+                            background: isGradient ? image.url : `url(${getFullImageUrl(image.url)})`,
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center',
+                            borderRadius: '4px',
+                            flexShrink: 0
+                          }}
+                        />
+                        <span
+                          style={{ fontSize: '0.95rem', flex: 1 }}
+                          onClick={() => selectItem({ type: 'image', data: image })}
+                        >
+                          {image.name}
+                        </span>
+                        <Button
+                          variant="dark"
+                          size="sm"
+                          style={{
+                            borderRadius: '50%',
+                            width: '35px',
+                            height: '35px',
+                            padding: '0',
+                            fontSize: '1.5rem',
+                            backgroundColor: '#000',
+                            color: 'white',
+                            border: 'none'
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addImageToSetlist(image);
+                          }}
+                        >
+                          +
+                        </Button>
+                      </div>
+                    );
+                  })
+                )}
+                {/* Add Blank Slide Button */}
+                <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #ddd' }}>
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    style={{ width: '100%' }}
+                    onClick={addBlankToSetlist}
+                  >
+                    + Add Blank Slide
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Setlist Section */}
@@ -522,44 +818,72 @@ function PresenterMode() {
                 </p>
               ) : (
                 <div>
-                  {setlist.map((song, index) => (
-                    <div
-                      key={index}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, index)}
-                      onDragOver={handleDragOver}
-                      onDrop={(e) => handleDrop(e, index)}
-                      style={{
-                        padding: '15px',
-                        backgroundColor: '#f8f9fa',
-                        borderRadius: '5px',
-                        marginBottom: '10px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        cursor: 'grab'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '10px' }}>
-                        <span style={{ fontSize: '1.2rem', color: '#666', cursor: 'grab' }}>
-                          ⋮⋮
-                        </span>
-                        <span
-                          style={{ fontSize: '1.1rem', cursor: 'pointer', flex: 1 }}
-                          onClick={() => selectSong(song)}
-                        >
-                          {index + 1}. {song.title}
-                        </span>
-                      </div>
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => removeFromSetlist(index)}
+                  {setlist.map((item, index) => {
+                    const getItemDisplay = () => {
+                      if (item.type === 'song') {
+                        return {
+                          icon: '🎵',
+                          title: item.data?.title || 'Unknown Song',
+                          bgColor: '#f8f9fa'
+                        };
+                      } else if (item.type === 'image') {
+                        return {
+                          icon: '🖼️',
+                          title: item.data?.name || 'Image Slide',
+                          bgColor: '#e7f3ff'
+                        };
+                      } else if (item.type === 'blank') {
+                        return {
+                          icon: '⬛',
+                          title: 'Blank Slide',
+                          bgColor: '#fff3e0'
+                        };
+                      }
+                      return { icon: '?', title: 'Unknown', bgColor: '#f8f9fa' };
+                    };
+
+                    const display = getItemDisplay();
+
+                    return (
+                      <div
+                        key={index}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, index)}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, index)}
+                        style={{
+                          padding: '15px',
+                          backgroundColor: display.bgColor,
+                          borderRadius: '5px',
+                          marginBottom: '10px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          cursor: 'grab'
+                        }}
                       >
-                        Remove
-                      </Button>
-                    </div>
-                  ))}
+                        <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '10px' }}>
+                          <span style={{ fontSize: '1.2rem', color: '#666', cursor: 'grab' }}>
+                            ⋮⋮
+                          </span>
+                          <span style={{ fontSize: '1.3rem' }}>{display.icon}</span>
+                          <span
+                            style={{ fontSize: '1.1rem', cursor: 'pointer', flex: 1 }}
+                            onClick={() => selectItem(item)}
+                          >
+                            {index + 1}. {display.title}
+                          </span>
+                        </div>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => removeFromSetlist(index)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -599,7 +923,13 @@ function PresenterMode() {
               {slideSectionOpen ? '▼' : '▶'}
             </span>
             <span style={{ fontSize: '1.2rem', fontWeight: '500' }}>
-              {currentSong ? currentSong.title : 'No Song Selected'}
+              {currentItem
+                ? currentItem.type === 'song'
+                  ? currentItem.data?.title
+                  : currentItem.type === 'image'
+                  ? `Image: ${currentItem.data?.name}`
+                  : 'Blank Slide'
+                : 'No Item Selected'}
             </span>
           </div>
 
@@ -650,14 +980,51 @@ function PresenterMode() {
         </div>
 
         {slideSectionOpen && currentSong && (
-          <div style={{
-            padding: '20px',
-            maxHeight: '500px',
-            overflowY: 'auto',
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
-            gap: '15px'
-          }}>
+          <div>
+            {/* Next Slide Preview Banner */}
+            {currentSlideIndex < currentSong.slides.length - 1 && (
+              <div style={{
+                padding: '12px 20px',
+                backgroundColor: '#e7f3ff',
+                borderBottom: '2px solid #007bff',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                <div style={{
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  color: '#007bff',
+                  minWidth: '80px'
+                }}>
+                  NEXT SLIDE:
+                </div>
+                <div style={{
+                  fontSize: '0.9rem',
+                  color: '#333',
+                  flex: 1,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {currentSong.slides[currentSlideIndex + 1].verseType && (
+                    <strong style={{ color: '#007bff', marginRight: '8px' }}>
+                      {currentSong.slides[currentSlideIndex + 1].verseType}:
+                    </strong>
+                  )}
+                  {currentSong.slides[currentSlideIndex + 1].originalText}
+                </div>
+              </div>
+            )}
+
+            <div style={{
+              padding: '20px',
+              maxHeight: '500px',
+              overflowY: 'auto',
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+              gap: '15px'
+            }}>
             {currentSong.slides.map((slide, index) => {
               // Function to get background color based on verse type
               const getBackgroundColor = (verseType, isSelected) => {
@@ -732,14 +1099,117 @@ function PresenterMode() {
             );
             })}
           </div>
+          </div>
         )}
 
-        {slideSectionOpen && !currentSong && (
+        {slideSectionOpen && currentItem && currentItem.type === 'image' && (
+          <div style={{ padding: '20px' }}>
+            <div style={{
+              width: '100%',
+              height: '400px',
+              background: currentItem.data?.url.startsWith('linear-gradient')
+                ? currentItem.data.url
+                : `url(${getFullImageUrl(currentItem.data?.url)})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              borderRadius: '10px',
+              border: '2px solid #007bff'
+            }} />
+            <div style={{
+              marginTop: '15px',
+              textAlign: 'center',
+              fontSize: '1.1rem',
+              color: '#666'
+            }}>
+              {currentItem.data?.name}
+            </div>
+          </div>
+        )}
+
+        {slideSectionOpen && !currentItem && (
           <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
-            Select a song to view slides
+            Select a song or item to view
           </div>
         )}
       </div>
+
+      {/* Keyboard Shortcuts Help Button - Fixed Bottom Right */}
+      <button
+        onClick={() => setShowKeyboardHelp(!showKeyboardHelp)}
+        style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          width: '50px',
+          height: '50px',
+          borderRadius: '50%',
+          backgroundColor: '#007bff',
+          color: 'white',
+          border: 'none',
+          fontSize: '1.3rem',
+          fontWeight: 'bold',
+          cursor: 'pointer',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+        title="Keyboard Shortcuts"
+      >
+        ?
+      </button>
+
+      {/* Keyboard Shortcuts Help Modal */}
+      <Modal show={showKeyboardHelp} onHide={() => setShowKeyboardHelp(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Keyboard Shortcuts</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div style={{ fontSize: '0.95rem' }}>
+            <div style={{ marginBottom: '20px' }}>
+              <h6 style={{ fontWeight: 'bold', marginBottom: '12px' }}>Navigation</h6>
+              <div style={{ display: 'grid', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>→</kbd> Right Arrow</span>
+                  <span style={{ color: '#666' }}>Next Slide</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>←</kbd> Left Arrow</span>
+                  <span style={{ color: '#666' }}>Previous Slide</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>↓</kbd> Down Arrow</span>
+                  <span style={{ color: '#666' }}>Next Song</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>↑</kbd> Up Arrow</span>
+                  <span style={{ color: '#666' }}>Previous Song</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h6 style={{ fontWeight: 'bold', marginBottom: '12px' }}>Display Control</h6>
+              <div style={{ display: 'grid', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>Space</kbd> or <kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>B</kbd></span>
+                  <span style={{ color: '#666' }}>Toggle Blank Screen</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: '20px', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px', fontSize: '0.85rem', color: '#666' }}>
+              <strong>Tip:</strong> Keyboard shortcuts won't work while typing in search fields or text inputs.
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowKeyboardHelp(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       {/* Background Selection Modal */}
       <Modal show={showBackgroundModal} onHide={() => setShowBackgroundModal(false)} size="lg">
@@ -779,7 +1249,7 @@ function PresenterMode() {
                     onClick={() => handleBackgroundChange(item.url)}
                     style={{
                       height: '120px',
-                      background: isGradient ? item.url : `url(${item.url})`,
+                      background: isGradient ? item.url : `url(${getFullImageUrl(item.url)})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                       borderRadius: '8px',

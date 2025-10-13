@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Form, ListGroup, InputGroup, Alert } from 'react-bootstrap';
 import { useNavigate, useLocation } from 'react-router-dom';
-import api from '../services/api';
+import api, { getFullImageUrl } from '../services/api';
 
 function SetlistCreate() {
   const navigate = useNavigate();
@@ -11,11 +11,13 @@ function SetlistCreate() {
   const [allSongs, setAllSongs] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [media, setMedia] = useState([]);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetchSongs();
+    fetchMedia();
 
     // If a songId was passed from navigation state, add it
     if (location.state?.songId) {
@@ -38,6 +40,15 @@ function SetlistCreate() {
     } catch (error) {
       console.error('Error fetching songs:', error);
       setError('Failed to load songs');
+    }
+  };
+
+  const fetchMedia = async () => {
+    try {
+      const response = await api.get('/api/media');
+      setMedia(response.data.media);
+    } catch (error) {
+      console.error('Error fetching media:', error);
     }
   };
 
@@ -65,6 +76,15 @@ function SetlistCreate() {
   const addBlankSlide = () => {
     setItems([...items, {
       type: 'blank',
+      order: items.length
+    }]);
+  };
+
+  const addImageToSetlist = (image) => {
+    setItems([...items, {
+      type: 'image',
+      image: image._id,
+      imageData: image,
       order: items.length
     }]);
   };
@@ -121,6 +141,7 @@ function SetlistCreate() {
       const formattedItems = items.map(item => ({
         type: item.type,
         song: item.type === 'song' ? item.song : undefined,
+        image: item.type === 'image' ? item.image : undefined,
         order: item.order
       }));
 
@@ -186,9 +207,16 @@ function SetlistCreate() {
                     {items.map((item, index) => (
                       <ListGroup.Item key={index} className="d-flex justify-content-between align-items-center">
                         <div className="d-flex align-items-center flex-grow-1">
+                          <span className="me-2" style={{ fontSize: '1.2rem' }}>
+                            {item.type === 'song' ? '🎵' : item.type === 'image' ? '🖼️' : '⬛'}
+                          </span>
                           <span className="me-3 text-muted">#{index + 1}</span>
                           <span>
-                            {item.type === 'song' ? item.songData?.title : 'Blank Slide'}
+                            {item.type === 'song'
+                              ? item.songData?.title
+                              : item.type === 'image'
+                              ? (item.imageData?.name || 'Image Slide')
+                              : 'Blank Slide'}
                           </span>
                         </div>
                         <div className="d-flex gap-2">
@@ -259,6 +287,81 @@ function SetlistCreate() {
                     </div>
                   ))}
                 </div>
+              </Card.Body>
+            </Card>
+
+            {/* Add Images */}
+            <Card className="mb-3">
+              <Card.Header>
+                <h5 className="mb-0">Add Images</h5>
+              </Card.Header>
+              <Card.Body>
+                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                  {media.length === 0 ? (
+                    <p className="text-muted text-center py-3" style={{ fontSize: '0.85rem' }}>
+                      No images available. Visit Media Library to add backgrounds.
+                    </p>
+                  ) : (
+                    <div className="d-grid gap-2">
+                      {media.map((image) => {
+                        const isGradient = image.url.startsWith('linear-gradient');
+                        return (
+                          <div
+                            key={image._id}
+                            className="d-flex align-items-center gap-2 p-2 border rounded"
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <div
+                              style={{
+                                width: '50px',
+                                height: '50px',
+                                background: isGradient ? image.url : `url(${getFullImageUrl(image.url)})`,
+                                backgroundSize: 'cover',
+                                backgroundPosition: 'center',
+                                borderRadius: '4px',
+                                flexShrink: 0
+                              }}
+                            />
+                            <span className="flex-grow-1" style={{ fontSize: '0.85rem' }}>
+                              {image.name}
+                            </span>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => addImageToSetlist(image)}
+                            >
+                              Add
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  className="w-100 mt-2"
+                  onClick={() => window.open('/media', '_blank')}
+                >
+                  Manage Images
+                </Button>
+              </Card.Body>
+            </Card>
+
+            {/* Add Blank Slide */}
+            <Card className="mb-3">
+              <Card.Header>
+                <h5 className="mb-0">Add Blank Slide</h5>
+              </Card.Header>
+              <Card.Body>
+                <Button
+                  variant="outline-secondary"
+                  className="w-100"
+                  onClick={addBlankSlide}
+                >
+                  + Add Blank Slide
+                </Button>
               </Card.Body>
             </Card>
 

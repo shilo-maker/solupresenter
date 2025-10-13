@@ -36,3 +36,6 @@ frontend/.env.production.local
 .cache
 .temp
 uploads/
+
+# Migration scripts with credentials
+backend/migrate-songs-to-production.js

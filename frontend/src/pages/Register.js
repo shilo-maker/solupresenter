@@ -31,14 +31,8 @@ function Register() {
     const result = await register(email, password);
 
     if (result.success) {
-      if (result.requiresVerification) {
-        // Show verification message
-        setRegisteredEmail(result.email);
-        setShowVerificationMessage(true);
-      } else {
-        // Old flow - direct login (shouldn't happen with new backend)
-        navigate('/dashboard');
-      }
+      // Email verification disabled - redirect directly to dashboard
+      navigate('/dashboard');
     } else {
       setError(result.error);
     }

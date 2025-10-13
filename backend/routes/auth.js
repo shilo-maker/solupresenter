@@ -30,37 +30,40 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Email already registered' });
     }
 
-    // Generate verification token
-    const verificationToken = generateVerificationToken();
-    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    // Email verification disabled - create user with isEmailVerified: true
+    // const verificationToken = generateVerificationToken();
+    // const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     // Create new user
     const user = await User.create({
       email: email.toLowerCase(),
       password,
       authProvider: 'local',
-      isEmailVerified: false,
-      emailVerificationToken: verificationToken,
-      emailVerificationExpires: verificationExpires
+      isEmailVerified: true, // Auto-verify users
+      // emailVerificationToken: verificationToken,
+      // emailVerificationExpires: verificationExpires
     });
 
-    // Send verification email
-    try {
-      await sendVerificationEmail(user, verificationToken);
-    } catch (emailError) {
-      console.error('Failed to send verification email:', emailError);
-      // Continue with registration even if email fails
-    }
+    // Email sending disabled
+    // try {
+    //   await sendVerificationEmail(user, verificationToken);
+    // } catch (emailError) {
+    //   console.error('Failed to send verification email:', emailError);
+    //   // Continue with registration even if email fails
+    // }
+
+    // Generate token for auto-login after registration
+    const token = generateToken(user._id);
 
     res.status(201).json({
-      message: 'Registration successful! Please check your email to verify your account.',
+      message: 'Registration successful!',
+      token,
       user: {
         _id: user._id,
         email: user.email,
         role: user.role,
         isEmailVerified: user.isEmailVerified
-      },
-      requiresVerification: true
+      }
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -80,14 +83,14 @@ router.post('/login', (req, res, next) => {
       return res.status(401).json({ error: info.message || 'Invalid credentials' });
     }
 
-    // Check if email is verified
-    if (!user.isEmailVerified) {
-      return res.status(403).json({
-        error: 'Please verify your email before logging in',
-        requiresVerification: true,
-        email: user.email
-      });
-    }
+    // Email verification disabled - users can login without verification
+    // if (!user.isEmailVerified) {
+    //   return res.status(403).json({
+    //     error: 'Please verify your email before logging in',
+    //     requiresVerification: true,
+    //     email: user.email
+    //   });
+    // }
 
     const token = generateToken(user._id);
 

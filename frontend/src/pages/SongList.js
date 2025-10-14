@@ -247,11 +247,19 @@ function SongList() {
 
       {/* Songs List */}
       {loading ? (
-        <div className="text-center py-5">
-          <Spinner animation="border" role="status">
-            <span className="visually-hidden">Loading...</span>
-          </Spinner>
-        </div>
+        <Card className="text-center py-5">
+          <Card.Body>
+            <Spinner
+              animation="border"
+              role="status"
+              style={{ width: '3rem', height: '3rem' }}
+            >
+              <span className="visually-hidden">Loading...</span>
+            </Spinner>
+            <h4 className="mt-4">Loading songs...</h4>
+            <p className="text-muted">Please wait while we fetch all songs from the database</p>
+          </Card.Body>
+        </Card>
       ) : songs.length === 0 ? (
         <Card className="text-center py-5">
           <Card.Body>
@@ -264,6 +272,9 @@ function SongList() {
         </Card>
       ) : (
         <Card>
+          <Card.Header>
+            <strong>{songs.length}</strong> {songs.length === 1 ? 'song' : 'songs'} found
+          </Card.Header>
           <Table responsive hover>
             <thead>
               <tr>

@@ -31,8 +31,14 @@ function Register() {
     const result = await register(email, password);
 
     if (result.success) {
-      // Email verification disabled - redirect directly to dashboard
-      navigate('/dashboard');
+      // Show verification message if email verification is required
+      if (result.requiresVerification) {
+        setRegisteredEmail(email);
+        setShowVerificationMessage(true);
+      } else {
+        // Auto-login if no verification required
+        navigate('/dashboard');
+      }
     } else {
       setError(result.error);
     }

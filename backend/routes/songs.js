@@ -285,7 +285,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     console.log('First slide verseType:', slides && slides.length > 0 ? slides[0].verseType : 'no slides');
 
     // If editing a public song that user doesn't own, create personal copy
-    if (originalSong.isPublic && originalSong.createdBy.toString() !== req.user._id.toString()) {
+    if (originalSong.isPublic && originalSong.createdBy && originalSong.createdBy.toString() !== req.user._id.toString()) {
       const personalCopy = await Song.create({
         title: title || originalSong.title,
         originalLanguage: originalLanguage || originalSong.originalLanguage,
@@ -302,8 +302,17 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     // If user owns the song, update it
-    if (originalSong.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ error: 'Access denied' });
+    // If createdBy is null (migrated songs), allow admin users to edit
+    if (originalSong.createdBy && originalSong.createdBy.toString() !== req.user._id.toString()) {
+      // Check if user is admin
+      if (req.user.role !== 'admin' && !req.user.isAdmin) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
+
+    // If createdBy is null and user is not admin, deny access
+    if (!originalSong.createdBy && req.user.role !== 'admin' && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Access denied - song has no owner' });
     }
 
     originalSong.title = title || originalSong.title;

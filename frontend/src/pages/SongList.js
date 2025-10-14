@@ -18,6 +18,7 @@ function SongList() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadResults, setUploadResults] = useState(null);
+  const [error, setError] = useState(null);
 
   const languages = [
     { code: 'he', name: 'Hebrew' },
@@ -50,11 +51,14 @@ function SongList() {
   const fetchSongs = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await api.get('/api/songs');
+      console.log('Fetched songs:', response.data.songs.length);
+      console.log('Sample song:', response.data.songs[0]);
       setSongs(response.data.songs);
     } catch (error) {
       console.error('Error fetching songs:', error);
-      alert('Failed to load songs');
+      setError('Failed to load songs: ' + (error.response?.data?.error || error.message));
     } finally {
       setLoading(false);
     }
@@ -245,6 +249,14 @@ function SongList() {
         </Card.Body>
       </Card>
 
+      {/* Error Display */}
+      {error && (
+        <Alert variant="danger" dismissible onClose={() => setError(null)}>
+          <Alert.Heading>Error Loading Songs</Alert.Heading>
+          <p>{error}</p>
+        </Alert>
+      )}
+
       {/* Songs List */}
       {loading ? (
         <Card className="text-center py-5">
@@ -258,6 +270,16 @@ function SongList() {
             </Spinner>
             <h4 className="mt-4">Loading songs...</h4>
             <p className="text-muted">Please wait while we fetch all songs from the database</p>
+          </Card.Body>
+        </Card>
+      ) : error ? (
+        <Card className="text-center py-5">
+          <Card.Body>
+            <h4 className="text-danger">Failed to Load Songs</h4>
+            <p>{error}</p>
+            <Button variant="primary" onClick={fetchSongs}>
+              Retry
+            </Button>
           </Card.Body>
         </Card>
       ) : songs.length === 0 ? (

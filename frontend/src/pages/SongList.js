@@ -292,18 +292,18 @@ function SongList() {
                 <tr key={song._id}>
                   <td>
                     <strong>{song.title}</strong>
-                    {song.createdBy._id === user._id && (
+                    {song.createdBy && song.createdBy._id === user._id && (
                       <Badge bg="info" className="ms-2">Mine</Badge>
                     )}
                   </td>
                   <td>{getLanguageName(song.originalLanguage)}</td>
-                  <td>{song.slides.length}</td>
+                  <td>{song.slides ? song.slides.length : 0}</td>
                   <td>
-                    {song.tags.map(tag => (
+                    {song.tags && song.tags.map(tag => (
                       <Badge key={tag} bg="secondary" className="me-1">{tag}</Badge>
                     ))}
                   </td>
-                  <td>{song.usageCount}</td>
+                  <td>{song.usageCount || 0}</td>
                   <td>
                     {song.isPublic ? (
                       <Badge bg="success">Public</Badge>
@@ -330,7 +330,7 @@ function SongList() {
                     >
                       Edit
                     </Button>
-                    {song.createdBy._id === user._id && (
+                    {song.createdBy && song.createdBy._id === user._id && (
                       <Button
                         size="sm"
                         variant="outline-danger"

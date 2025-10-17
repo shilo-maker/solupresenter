@@ -37,6 +37,14 @@ const roomSchema = new mongoose.Schema({
       default: false
     }
   },
+  currentImageUrl: {
+    type: String,
+    default: null
+  },
+  currentBibleData: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null
+  },
   backgroundImage: {
     type: String,
     default: ''

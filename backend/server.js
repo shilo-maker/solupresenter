@@ -160,15 +160,34 @@ io.on('connection', (socket) => {
 
       // Fetch current slide data if available
       let slideData = null;
-      if (room.currentSlide && !room.currentSlide.isBlank && room.currentSlide.songId) {
-        const song = await Song.findById(room.currentSlide.songId);
-        if (song && song.slides[room.currentSlide.slideIndex]) {
+      let imageUrl = null;
+
+      if (room.currentSlide && !room.currentSlide.isBlank) {
+        // Check if there's a stored image URL
+        if (room.currentImageUrl) {
+          imageUrl = room.currentImageUrl;
+        }
+        // Check if there's stored Bible data
+        else if (room.currentBibleData) {
           slideData = {
-            slide: song.slides[room.currentSlide.slideIndex],
+            slide: room.currentBibleData.slide,
             displayMode: room.currentSlide.displayMode,
-            songTitle: song.title,
-            backgroundImage: room.backgroundImage || ''
+            songTitle: room.currentBibleData.title,
+            backgroundImage: room.backgroundImage || '',
+            isBible: true
           };
+        }
+        // Otherwise, fetch song from database
+        else if (room.currentSlide.songId) {
+          const song = await Song.findById(room.currentSlide.songId);
+          if (song && song.slides[room.currentSlide.slideIndex]) {
+            slideData = {
+              slide: song.slides[room.currentSlide.slideIndex],
+              displayMode: room.currentSlide.displayMode,
+              songTitle: song.title,
+              backgroundImage: room.backgroundImage || ''
+            };
+          }
         }
       }
 
@@ -177,6 +196,8 @@ io.on('connection', (socket) => {
         roomPin: room.pin,
         currentSlide: room.currentSlide,
         slideData: slideData,
+        imageUrl: imageUrl,
+        isBlank: room.currentSlide.isBlank,
         backgroundImage: room.backgroundImage || ''
       });
 
@@ -212,6 +233,10 @@ io.on('connection', (socket) => {
         displayMode: displayMode || 'bilingual',
         isBlank: isBlank || false
       };
+
+      // Store image URL and Bible data for new viewers
+      room.currentImageUrl = imageUrl || null;
+      room.currentBibleData = bibleData || null;
 
       await room.updateActivity();
 

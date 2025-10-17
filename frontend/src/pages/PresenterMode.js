@@ -321,6 +321,32 @@ function PresenterMode() {
         });
         setSearchResults(filtered);
       }
+    } else if (activeResourcePanel === 'bible') {
+      // Parse Bible reference (e.g., "John 3", "Genesis 12", "1 Corinthians 13")
+      const trimmed = query.trim();
+      if (trimmed === '') {
+        setSelectedBibleBook('');
+        setSelectedBibleChapter('');
+        return;
+      }
+
+      // Try to match pattern: "BookName Chapter"
+      // Match book name (can include numbers like "1 Corinthians") and chapter number
+      const match = trimmed.match(/^(.+?)\s+(\d+)$/);
+      if (match) {
+        const bookName = match[1].trim();
+        const chapterNum = match[2];
+
+        // Find matching book (case-insensitive)
+        const matchedBook = bibleBooks.find(b =>
+          b.name.toLowerCase() === bookName.toLowerCase()
+        );
+
+        if (matchedBook) {
+          setSelectedBibleBook(matchedBook.name);
+          setSelectedBibleChapter(chapterNum);
+        }
+      }
     } else {
       // Search images
       if (query.trim() === '') {
@@ -759,7 +785,11 @@ function PresenterMode() {
                 </InputGroup.Text>
                 <Form.Control
                   type="text"
-                  placeholder="Search..."
+                  placeholder={
+                    activeResourcePanel === 'bible'
+                      ? "e.g. John 3"
+                      : "Search..."
+                  }
                   value={searchQuery}
                   onChange={(e) => handleSearch(e.target.value)}
                   style={{ fontSize: '0.95rem' }}
@@ -815,123 +845,128 @@ function PresenterMode() {
             ) : activeResourcePanel === 'bible' ? (
               <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                 <div style={{ marginBottom: '15px' }}>
-                  <Form.Label style={{ fontSize: '0.9rem', fontWeight: '500', marginBottom: '8px' }}>
-                    Select Book
-                  </Form.Label>
-                  <Form.Select
-                    size="sm"
-                    value={selectedBibleBook}
-                    onChange={(e) => setSelectedBibleBook(e.target.value)}
-                    style={{ marginBottom: '15px' }}
-                  >
-                    <option value="">Choose a book...</option>
-                    <optgroup label="Torah (Pentateuch)">
-                      <option value="Genesis">Genesis (בראשית)</option>
-                      <option value="Exodus">Exodus (שמות)</option>
-                      <option value="Leviticus">Leviticus (ויקרא)</option>
-                      <option value="Numbers">Numbers (במדבר)</option>
-                      <option value="Deuteronomy">Deuteronomy (דברים)</option>
-                    </optgroup>
-                    <optgroup label="Nevi'im (Prophets)">
-                      <option value="Joshua">Joshua (יהושע)</option>
-                      <option value="Judges">Judges (שופטים)</option>
-                      <option value="I Samuel">1 Samuel (שמואל א)</option>
-                      <option value="II Samuel">2 Samuel (שמואל ב)</option>
-                      <option value="I Kings">1 Kings (מלכים א)</option>
-                      <option value="II Kings">2 Kings (מלכים ב)</option>
-                      <option value="Isaiah">Isaiah (ישעיהו)</option>
-                      <option value="Jeremiah">Jeremiah (ירמיהו)</option>
-                      <option value="Ezekiel">Ezekiel (יחזקאל)</option>
-                      <option value="Hosea">Hosea (הושע)</option>
-                      <option value="Joel">Joel (יואל)</option>
-                      <option value="Amos">Amos (עמוס)</option>
-                      <option value="Obadiah">Obadiah (עובדיה)</option>
-                      <option value="Jonah">Jonah (יונה)</option>
-                      <option value="Micah">Micah (מיכה)</option>
-                      <option value="Nahum">Nahum (נחום)</option>
-                      <option value="Habakkuk">Habakkuk (חבקוק)</option>
-                      <option value="Zephaniah">Zephaniah (צפניה)</option>
-                      <option value="Haggai">Haggai (חגי)</option>
-                      <option value="Zechariah">Zechariah (זכריה)</option>
-                      <option value="Malachi">Malachi (מלאכי)</option>
-                    </optgroup>
-                    <optgroup label="Ketuvim (Writings)">
-                      <option value="Psalms">Psalms (תהילים)</option>
-                      <option value="Proverbs">Proverbs (משלי)</option>
-                      <option value="Job">Job (איוב)</option>
-                      <option value="Song of Songs">Song of Songs (שיר השירים)</option>
-                      <option value="Ruth">Ruth (רות)</option>
-                      <option value="Lamentations">Lamentations (איכה)</option>
-                      <option value="Ecclesiastes">Ecclesiastes (קהלת)</option>
-                      <option value="Esther">Esther (אסתר)</option>
-                      <option value="Daniel">Daniel (דניאל)</option>
-                      <option value="Ezra">Ezra (עזרא)</option>
-                      <option value="Nehemiah">Nehemiah (נחמיה)</option>
-                      <option value="I Chronicles">1 Chronicles (דברי הימים א)</option>
-                      <option value="II Chronicles">2 Chronicles (דברי הימים ב)</option>
-                    </optgroup>
-                    <optgroup label="New Testament - Gospels">
-                      <option value="Matthew">Matthew</option>
-                      <option value="Mark">Mark</option>
-                      <option value="Luke">Luke</option>
-                      <option value="John">John</option>
-                    </optgroup>
-                    <optgroup label="New Testament - History">
-                      <option value="Acts">Acts</option>
-                    </optgroup>
-                    <optgroup label="New Testament - Paul's Letters">
-                      <option value="Romans">Romans</option>
-                      <option value="1 Corinthians">1 Corinthians</option>
-                      <option value="2 Corinthians">2 Corinthians</option>
-                      <option value="Galatians">Galatians</option>
-                      <option value="Ephesians">Ephesians</option>
-                      <option value="Philippians">Philippians</option>
-                      <option value="Colossians">Colossians</option>
-                      <option value="1 Thessalonians">1 Thessalonians</option>
-                      <option value="2 Thessalonians">2 Thessalonians</option>
-                      <option value="1 Timothy">1 Timothy</option>
-                      <option value="2 Timothy">2 Timothy</option>
-                      <option value="Titus">Titus</option>
-                      <option value="Philemon">Philemon</option>
-                    </optgroup>
-                    <optgroup label="New Testament - General Letters">
-                      <option value="Hebrews">Hebrews</option>
-                      <option value="James">James</option>
-                      <option value="1 Peter">1 Peter</option>
-                      <option value="2 Peter">2 Peter</option>
-                      <option value="1 John">1 John</option>
-                      <option value="2 John">2 John</option>
-                      <option value="3 John">3 John</option>
-                      <option value="Jude">Jude</option>
-                    </optgroup>
-                    <optgroup label="New Testament - Prophecy">
-                      <option value="Revelation">Revelation</option>
-                    </optgroup>
-                  </Form.Select>
+                  {/* Side-by-side Book and Chapter selectors */}
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                    <div style={{ flex: '2' }}>
+                      <Form.Label style={{ fontSize: '0.85rem', fontWeight: '500', marginBottom: '6px', display: 'block' }}>
+                        Book
+                      </Form.Label>
+                      <Form.Select
+                        size="sm"
+                        value={selectedBibleBook}
+                        onChange={(e) => setSelectedBibleBook(e.target.value)}
+                        style={{ fontSize: '0.85rem' }}
+                      >
+                        <option value="">Select...</option>
+                        <optgroup label="Torah (Pentateuch)">
+                          <option value="Genesis">Genesis (בראשית)</option>
+                          <option value="Exodus">Exodus (שמות)</option>
+                          <option value="Leviticus">Leviticus (ויקרא)</option>
+                          <option value="Numbers">Numbers (במדבר)</option>
+                          <option value="Deuteronomy">Deuteronomy (דברים)</option>
+                        </optgroup>
+                        <optgroup label="Nevi'im (Prophets)">
+                          <option value="Joshua">Joshua (יהושע)</option>
+                          <option value="Judges">Judges (שופטים)</option>
+                          <option value="I Samuel">1 Samuel (שמואל א)</option>
+                          <option value="II Samuel">2 Samuel (שמואל ב)</option>
+                          <option value="I Kings">1 Kings (מלכים א)</option>
+                          <option value="II Kings">2 Kings (מלכים ב)</option>
+                          <option value="Isaiah">Isaiah (ישעיהו)</option>
+                          <option value="Jeremiah">Jeremiah (ירמיהו)</option>
+                          <option value="Ezekiel">Ezekiel (יחזקאל)</option>
+                          <option value="Hosea">Hosea (הושע)</option>
+                          <option value="Joel">Joel (יואל)</option>
+                          <option value="Amos">Amos (עמוס)</option>
+                          <option value="Obadiah">Obadiah (עובדיה)</option>
+                          <option value="Jonah">Jonah (יונה)</option>
+                          <option value="Micah">Micah (מיכה)</option>
+                          <option value="Nahum">Nahum (נחום)</option>
+                          <option value="Habakkuk">Habakkuk (חבקוק)</option>
+                          <option value="Zephaniah">Zephaniah (צפניה)</option>
+                          <option value="Haggai">Haggai (חגי)</option>
+                          <option value="Zechariah">Zechariah (זכריה)</option>
+                          <option value="Malachi">Malachi (מלאכי)</option>
+                        </optgroup>
+                        <optgroup label="Ketuvim (Writings)">
+                          <option value="Psalms">Psalms (תהילים)</option>
+                          <option value="Proverbs">Proverbs (משלי)</option>
+                          <option value="Job">Job (איוב)</option>
+                          <option value="Song of Songs">Song of Songs (שיר השירים)</option>
+                          <option value="Ruth">Ruth (רות)</option>
+                          <option value="Lamentations">Lamentations (איכה)</option>
+                          <option value="Ecclesiastes">Ecclesiastes (קהלת)</option>
+                          <option value="Esther">Esther (אסתר)</option>
+                          <option value="Daniel">Daniel (דניאל)</option>
+                          <option value="Ezra">Ezra (עזרא)</option>
+                          <option value="Nehemiah">Nehemiah (נחמיה)</option>
+                          <option value="I Chronicles">1 Chronicles (דברי הימים א)</option>
+                          <option value="II Chronicles">2 Chronicles (דברי הימים ב)</option>
+                        </optgroup>
+                        <optgroup label="New Testament - Gospels">
+                          <option value="Matthew">Matthew</option>
+                          <option value="Mark">Mark</option>
+                          <option value="Luke">Luke</option>
+                          <option value="John">John</option>
+                        </optgroup>
+                        <optgroup label="New Testament - History">
+                          <option value="Acts">Acts</option>
+                        </optgroup>
+                        <optgroup label="New Testament - Paul's Letters">
+                          <option value="Romans">Romans</option>
+                          <option value="1 Corinthians">1 Corinthians</option>
+                          <option value="2 Corinthians">2 Corinthians</option>
+                          <option value="Galatians">Galatians</option>
+                          <option value="Ephesians">Ephesians</option>
+                          <option value="Philippians">Philippians</option>
+                          <option value="Colossians">Colossians</option>
+                          <option value="1 Thessalonians">1 Thessalonians</option>
+                          <option value="2 Thessalonians">2 Thessalonians</option>
+                          <option value="1 Timothy">1 Timothy</option>
+                          <option value="2 Timothy">2 Timothy</option>
+                          <option value="Titus">Titus</option>
+                          <option value="Philemon">Philemon</option>
+                        </optgroup>
+                        <optgroup label="New Testament - General Letters">
+                          <option value="Hebrews">Hebrews</option>
+                          <option value="James">James</option>
+                          <option value="1 Peter">1 Peter</option>
+                          <option value="2 Peter">2 Peter</option>
+                          <option value="1 John">1 John</option>
+                          <option value="2 John">2 John</option>
+                          <option value="3 John">3 John</option>
+                          <option value="Jude">Jude</option>
+                        </optgroup>
+                        <optgroup label="New Testament - Prophecy">
+                          <option value="Revelation">Revelation</option>
+                        </optgroup>
+                      </Form.Select>
+                    </div>
 
-                  {selectedBibleBook && (
-                    <>
-                      <Form.Label style={{ fontSize: '0.9rem', fontWeight: '500', marginBottom: '8px' }}>
-                        Select Chapter
+                    <div style={{ flex: '1' }}>
+                      <Form.Label style={{ fontSize: '0.85rem', fontWeight: '500', marginBottom: '6px', display: 'block' }}>
+                        Chapter
                       </Form.Label>
                       <Form.Select
                         size="sm"
                         value={selectedBibleChapter}
                         onChange={(e) => setSelectedBibleChapter(e.target.value)}
+                        disabled={!selectedBibleBook}
+                        style={{ fontSize: '0.85rem' }}
                       >
-                        <option value="">Choose a chapter...</option>
-                        {(() => {
+                        <option value="">Select...</option>
+                        {selectedBibleBook && (() => {
                           const bookData = bibleBooks.find(b => b.name === selectedBibleBook);
                           const chapterCount = bookData?.chapters || 50;
                           return Array.from({ length: chapterCount }, (_, i) => (
                             <option key={i + 1} value={i + 1}>
-                              Chapter {i + 1}
+                              {i + 1}
                             </option>
                           ));
                         })()}
                       </Form.Select>
-                    </>
-                  )}
+                    </div>
+                  </div>
 
                   {selectedBibleBook && selectedBibleChapter && !bibleLoading && bibleVerses.length > 0 && (
                     <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #ddd' }}>

@@ -38,8 +38,15 @@ function PresenterMode() {
   const [selectedBackground, setSelectedBackground] = useState('');
   const [showBackgroundModal, setShowBackgroundModal] = useState(false);
 
+  // Bible state
+  const [bibleBooks, setBibleBooks] = useState([]);
+  const [selectedBibleBook, setSelectedBibleBook] = useState('');
+  const [selectedBibleChapter, setSelectedBibleChapter] = useState('');
+  const [bibleVerses, setBibleVerses] = useState([]);
+  const [bibleLoading, setBibleLoading] = useState(false);
+
   // Collapsible sections
-  const [activeResourcePanel, setActiveResourcePanel] = useState('songs'); // 'songs' or 'images'
+  const [activeResourcePanel, setActiveResourcePanel] = useState('songs'); // 'songs', 'images', or 'bible'
   const [setlistSectionOpen, setSetlistSectionOpen] = useState(true);
   const [slideSectionOpen, setSlideSectionOpen] = useState(true);
 
@@ -48,7 +55,83 @@ function PresenterMode() {
     setActiveResourcePanel(panel);
     // Re-apply current search query to new panel
     handleSearch(searchQuery);
+
+    // If switching to Bible panel, load books data if needed
+    if (panel === 'bible' && bibleBooks.length === 0) {
+      fetchBibleBooks();
+    }
   };
+
+  // Fetch Bible books
+  const fetchBibleBooks = async () => {
+    try {
+      const response = await api.get('/api/bible/books');
+      setBibleBooks(response.data.books);
+    } catch (error) {
+      console.error('Error fetching Bible books:', error);
+    }
+  };
+
+  // Fetch Bible verses for selected book and chapter
+  const fetchBibleVerses = async (book, chapter) => {
+    if (!book || !chapter) return;
+
+    setBibleLoading(true);
+    try {
+      const response = await api.get(`/api/bible/verses/${encodeURIComponent(book)}/${chapter}`);
+      const verses = response.data.verses;
+
+      // Convert verses to slides format
+      const bibleSlides = verses.map(verse => ({
+        originalText: verse.hebrew,
+        translation: verse.english,
+        verseNumber: verse.verseNumber,
+        reference: verse.reference
+      }));
+
+      setBibleVerses(bibleSlides);
+
+      // Create a Bible passage object that acts like a song
+      const biblePassage = {
+        _id: `bible-${book}-${chapter}`,
+        title: `${book} ${chapter}`,
+        slides: bibleSlides,
+        isBible: true,
+        book: book,
+        chapter: chapter
+      };
+
+      // Select this passage to show in preview
+      selectBiblePassage(biblePassage);
+
+    } catch (error) {
+      console.error('Error fetching Bible verses:', error);
+      alert('Failed to load Bible verses');
+    } finally {
+      setBibleLoading(false);
+    }
+  };
+
+  // Select Bible passage (similar to selecting a song)
+  const selectBiblePassage = (passage) => {
+    setCurrentSong(passage);
+    setCurrentItem({ type: 'bible', data: passage });
+    setCurrentSlideIndex(0);
+    setIsBlankActive(false);
+    updateSlide(passage, 0, displayMode, false);
+  };
+
+  // Add Bible passage to setlist
+  const addBibleToSetlist = (passage) => {
+    setSetlist([...setlist, { type: 'bible', data: passage }]);
+  };
+
+  // When Bible book or chapter changes, fetch verses
+  useEffect(() => {
+    if (selectedBibleBook && selectedBibleChapter) {
+      fetchBibleVerses(selectedBibleBook, selectedBibleChapter);
+    }
+  }, [selectedBibleBook, selectedBibleChapter]);
 
   // Responsive layout
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -295,7 +378,7 @@ function PresenterMode() {
     setCurrentItem(item);
     setIsBlankActive(false);
 
-    if (item.type === 'song') {
+    if (item.type === 'song' || item.type === 'bible') {
       setCurrentSong(item.data);
       setCurrentSlideIndex(0);
       updateSlide(item.data, 0, displayMode, false);
@@ -331,13 +414,26 @@ function PresenterMode() {
     }
 
     console.log('📤 Sending slide update to backend');
-    socketService.operatorUpdateSlide({
+
+    // For Bible passages, send the slide data directly
+    const payload = {
       roomId: room._id,
       songId: song?._id || null,
       slideIndex,
       displayMode: mode,
       isBlank
-    });
+    };
+
+    // If it's a Bible passage, include the slide data and metadata
+    if (song?.isBible && song.slides && song.slides[slideIndex]) {
+      payload.bibleData = {
+        slide: song.slides[slideIndex],
+        title: song.title,
+        isBible: true
+      };
+    }
+
+    socketService.operatorUpdateSlide(payload);
   };
 
   const updateImageSlide = (imageData) => {
@@ -625,7 +721,7 @@ function PresenterMode() {
             }}
           >
             {/* Title with collapse toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '0 0 auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '0 0 auto', flexWrap: 'wrap' }}>
               <Button
                 variant={activeResourcePanel === 'songs' ? 'primary' : 'outline-secondary'}
                 size="sm"
@@ -641,6 +737,14 @@ function PresenterMode() {
                 style={{ fontWeight: '500' }}
               >
                 Images
+              </Button>
+              <Button
+                variant={activeResourcePanel === 'bible' ? 'primary' : 'outline-secondary'}
+                size="sm"
+                onClick={() => switchResourcePanel('bible')}
+                style={{ fontWeight: '500' }}
+              >
+                Bible
               </Button>
             </div>
 
@@ -706,6 +810,163 @@ function PresenterMode() {
                     </Button>
                   </div>
                 ))}
+              </div>
+            ) : activeResourcePanel === 'bible' ? (
+              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                <div style={{ marginBottom: '15px' }}>
+                  <Form.Label style={{ fontSize: '0.9rem', fontWeight: '500', marginBottom: '8px' }}>
+                    Select Book
+                  </Form.Label>
+                  <Form.Select
+                    size="sm"
+                    value={selectedBibleBook}
+                    onChange={(e) => setSelectedBibleBook(e.target.value)}
+                    style={{ marginBottom: '15px' }}
+                  >
+                    <option value="">Choose a book...</option>
+                    <optgroup label="Torah (Pentateuch)">
+                      <option value="Genesis">Genesis (בראשית)</option>
+                      <option value="Exodus">Exodus (שמות)</option>
+                      <option value="Leviticus">Leviticus (ויקרא)</option>
+                      <option value="Numbers">Numbers (במדבר)</option>
+                      <option value="Deuteronomy">Deuteronomy (דברים)</option>
+                    </optgroup>
+                    <optgroup label="Nevi'im (Prophets)">
+                      <option value="Joshua">Joshua (יהושע)</option>
+                      <option value="Judges">Judges (שופטים)</option>
+                      <option value="I Samuel">1 Samuel (שמואל א)</option>
+                      <option value="II Samuel">2 Samuel (שמואל ב)</option>
+                      <option value="I Kings">1 Kings (מלכים א)</option>
+                      <option value="II Kings">2 Kings (מלכים ב)</option>
+                      <option value="Isaiah">Isaiah (ישעיהו)</option>
+                      <option value="Jeremiah">Jeremiah (ירמיהו)</option>
+                      <option value="Ezekiel">Ezekiel (יחזקאל)</option>
+                      <option value="Hosea">Hosea (הושע)</option>
+                      <option value="Joel">Joel (יואל)</option>
+                      <option value="Amos">Amos (עמוס)</option>
+                      <option value="Obadiah">Obadiah (עובדיה)</option>
+                      <option value="Jonah">Jonah (יונה)</option>
+                      <option value="Micah">Micah (מיכה)</option>
+                      <option value="Nahum">Nahum (נחום)</option>
+                      <option value="Habakkuk">Habakkuk (חבקוק)</option>
+                      <option value="Zephaniah">Zephaniah (צפניה)</option>
+                      <option value="Haggai">Haggai (חגי)</option>
+                      <option value="Zechariah">Zechariah (זכריה)</option>
+                      <option value="Malachi">Malachi (מלאכי)</option>
+                    </optgroup>
+                    <optgroup label="Ketuvim (Writings)">
+                      <option value="Psalms">Psalms (תהילים)</option>
+                      <option value="Proverbs">Proverbs (משלי)</option>
+                      <option value="Job">Job (איוב)</option>
+                      <option value="Song of Songs">Song of Songs (שיר השירים)</option>
+                      <option value="Ruth">Ruth (רות)</option>
+                      <option value="Lamentations">Lamentations (איכה)</option>
+                      <option value="Ecclesiastes">Ecclesiastes (קהלת)</option>
+                      <option value="Esther">Esther (אסתר)</option>
+                      <option value="Daniel">Daniel (דניאל)</option>
+                      <option value="Ezra">Ezra (עזרא)</option>
+                      <option value="Nehemiah">Nehemiah (נחמיה)</option>
+                      <option value="I Chronicles">1 Chronicles (דברי הימים א)</option>
+                      <option value="II Chronicles">2 Chronicles (דברי הימים ב)</option>
+                    </optgroup>
+                    <optgroup label="New Testament - Gospels">
+                      <option value="Matthew">Matthew</option>
+                      <option value="Mark">Mark</option>
+                      <option value="Luke">Luke</option>
+                      <option value="John">John</option>
+                    </optgroup>
+                    <optgroup label="New Testament - History">
+                      <option value="Acts">Acts</option>
+                    </optgroup>
+                    <optgroup label="New Testament - Paul's Letters">
+                      <option value="Romans">Romans</option>
+                      <option value="1 Corinthians">1 Corinthians</option>
+                      <option value="2 Corinthians">2 Corinthians</option>
+                      <option value="Galatians">Galatians</option>
+                      <option value="Ephesians">Ephesians</option>
+                      <option value="Philippians">Philippians</option>
+                      <option value="Colossians">Colossians</option>
+                      <option value="1 Thessalonians">1 Thessalonians</option>
+                      <option value="2 Thessalonians">2 Thessalonians</option>
+                      <option value="1 Timothy">1 Timothy</option>
+                      <option value="2 Timothy">2 Timothy</option>
+                      <option value="Titus">Titus</option>
+                      <option value="Philemon">Philemon</option>
+                    </optgroup>
+                    <optgroup label="New Testament - General Letters">
+                      <option value="Hebrews">Hebrews</option>
+                      <option value="James">James</option>
+                      <option value="1 Peter">1 Peter</option>
+                      <option value="2 Peter">2 Peter</option>
+                      <option value="1 John">1 John</option>
+                      <option value="2 John">2 John</option>
+                      <option value="3 John">3 John</option>
+                      <option value="Jude">Jude</option>
+                    </optgroup>
+                    <optgroup label="New Testament - Prophecy">
+                      <option value="Revelation">Revelation</option>
+                    </optgroup>
+                  </Form.Select>
+
+                  {selectedBibleBook && (
+                    <>
+                      <Form.Label style={{ fontSize: '0.9rem', fontWeight: '500', marginBottom: '8px' }}>
+                        Select Chapter
+                      </Form.Label>
+                      <Form.Select
+                        size="sm"
+                        value={selectedBibleChapter}
+                        onChange={(e) => setSelectedBibleChapter(e.target.value)}
+                      >
+                        <option value="">Choose a chapter...</option>
+                        {(() => {
+                          const bookData = bibleBooks.find(b => b.name === selectedBibleBook);
+                          const chapterCount = bookData?.chapters || 50;
+                          return Array.from({ length: chapterCount }, (_, i) => (
+                            <option key={i + 1} value={i + 1}>
+                              Chapter {i + 1}
+                            </option>
+                          ));
+                        })()}
+                      </Form.Select>
+                    </>
+                  )}
+
+                  {selectedBibleBook && selectedBibleChapter && !bibleLoading && bibleVerses.length > 0 && (
+                    <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #ddd' }}>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        style={{ width: '100%' }}
+                        onClick={() => {
+                          const biblePassage = {
+                            _id: `bible-${selectedBibleBook}-${selectedBibleChapter}`,
+                            title: `${selectedBibleBook} ${selectedBibleChapter}`,
+                            slides: bibleVerses,
+                            isBible: true,
+                            book: selectedBibleBook,
+                            chapter: selectedBibleChapter
+                          };
+                          addBibleToSetlist(biblePassage);
+                        }}
+                      >
+                        + Add {selectedBibleBook} {selectedBibleChapter} to Setlist
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {bibleLoading && (
+                  <div style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
+                    Loading verses...
+                  </div>
+                )}
+
+                {!bibleLoading && bibleVerses.length === 0 && selectedBibleBook && selectedBibleChapter && (
+                  <div style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
+                    Select a book and chapter to load verses
+                  </div>
+                )}
               </div>
             ) : (
               <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
@@ -826,6 +1087,12 @@ function PresenterMode() {
                           title: item.data?.title || 'Unknown Song',
                           bgColor: '#f8f9fa'
                         };
+                      } else if (item.type === 'bible') {
+                        return {
+                          icon: '📖',
+                          title: item.data?.title || 'Bible Passage',
+                          bgColor: '#f3e5f5'
+                        };
                       } else if (item.type === 'image') {
                         return {
                           icon: '🖼️',
@@ -925,6 +1192,8 @@ function PresenterMode() {
             <span style={{ fontSize: '1.2rem', fontWeight: '500' }}>
               {currentItem
                 ? currentItem.type === 'song'
+                  ? currentItem.data?.title
+                  : currentItem.type === 'bible'
                   ? currentItem.data?.title
                   : currentItem.type === 'image'
                   ? `Image: ${currentItem.data?.name}`
@@ -1073,7 +1342,11 @@ function PresenterMode() {
                   marginBottom: '10px',
                   fontSize: '1rem'
                 }}>
-                  {slide.verseType ? `${slide.verseType} - ` : ''}Slide {index + 1}
+                  {currentSong.isBible
+                    ? `Verse ${slide.verseNumber || index + 1}`
+                    : slide.verseType
+                    ? `${slide.verseType} - Slide ${index + 1}`
+                    : `Slide ${index + 1}`}
                 </div>
                 <div style={{ fontSize: '1.1rem', lineHeight: '1.6' }}>
                   <div style={{ marginBottom: '5px' }}>

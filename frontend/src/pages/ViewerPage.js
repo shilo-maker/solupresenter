@@ -225,8 +225,8 @@ function ViewerPage() {
         boxSizing: 'border-box',
         position: 'relative'
       }}>
-        {/* Verse Type Label - Top Left */}
-        {slide.verseType && (
+        {/* Verse Type/Reference Label - Top Left */}
+        {(slide.verseType || slide.reference) && (
           <div style={{
             position: 'absolute',
             top: '20px',
@@ -240,7 +240,7 @@ function ViewerPage() {
             backdropFilter: 'blur(10px)',
             border: '1px solid rgba(255, 255, 255, 0.2)'
           }}>
-            {slide.verseType}
+            {slide.reference || slide.verseType}
           </div>
         )}
 

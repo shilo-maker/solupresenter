@@ -15,6 +15,7 @@ const roomRoutes = require('./routes/rooms');
 const setlistRoutes = require('./routes/setlists');
 const adminRoutes = require('./routes/admin');
 const mediaRoutes = require('./routes/media');
+const bibleRoutes = require('./routes/bible');
 
 // Import models
 const Room = require('./models/Room');
@@ -74,6 +75,7 @@ app.use('/api/rooms', roomRoutes);
 app.use('/api/setlists', setlistRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/media', mediaRoutes);
+app.use('/api/bible', bibleRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -192,7 +194,7 @@ io.on('connection', (socket) => {
   socket.on('operator:updateSlide', async (data) => {
     console.log('📥 Received operator:updateSlide event:', data);
     try {
-      const { roomId, songId, slideIndex, displayMode, isBlank, imageUrl } = data;
+      const { roomId, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData } = data;
 
       const room = await Room.findById(roomId).populate('currentSlide.songId');
 
@@ -202,8 +204,10 @@ io.on('connection', (socket) => {
       }
 
       // Update room's current slide
+      // For Bible passages, set songId to null since they're not in the database
+      const isBiblePassage = bibleData || (songId && songId.startsWith('bible-'));
       room.currentSlide = {
-        songId: isBlank ? null : songId,
+        songId: (isBlank || isBiblePassage) ? null : songId,
         slideIndex: slideIndex || 0,
         displayMode: displayMode || 'bilingual',
         isBlank: isBlank || false
@@ -211,17 +215,29 @@ io.on('connection', (socket) => {
 
       await room.updateActivity();
 
-      // Fetch song data if not blank and not an image
+      // Fetch song data if not blank, not an image, and not Bible data
       let slideData = null;
-      if (!isBlank && !imageUrl && songId) {
-        const song = await Song.findById(songId);
-        if (song && song.slides[slideIndex]) {
+      if (!isBlank && !imageUrl) {
+        if (bibleData) {
+          // Use Bible data directly
           slideData = {
-            slide: song.slides[slideIndex],
+            slide: bibleData.slide,
             displayMode: room.currentSlide.displayMode,
-            songTitle: song.title,
-            backgroundImage: room.backgroundImage || ''
+            songTitle: bibleData.title,
+            backgroundImage: room.backgroundImage || '',
+            isBible: true
           };
+        } else if (songId) {
+          // Fetch song from database
+          const song = await Song.findById(songId);
+          if (song && song.slides[slideIndex]) {
+            slideData = {
+              slide: song.slides[slideIndex],
+              displayMode: room.currentSlide.displayMode,
+              songTitle: song.title,
+              backgroundImage: room.backgroundImage || ''
+            };
+          }
         }
       }
 
@@ -234,7 +250,7 @@ io.on('connection', (socket) => {
         backgroundImage: room.backgroundImage || ''
       });
 
-      console.log(`Slide updated in room ${room.pin}`, imageUrl ? `(image: ${imageUrl})` : '');
+      console.log(`Slide updated in room ${room.pin}`, imageUrl ? `(image: ${imageUrl})` : bibleData ? `(Bible: ${bibleData.title})` : '');
     } catch (error) {
       console.error('Error in operator:updateSlide:', error);
       socket.emit('error', { message: 'Failed to update slide' });

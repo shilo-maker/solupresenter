@@ -86,7 +86,8 @@ function PresenterMode() {
         originalText: verse.hebrew,
         translation: verse.english,
         verseNumber: verse.verseNumber,
-        reference: verse.reference
+        reference: verse.reference,
+        hebrewReference: verse.hebrewReference
       }));
 
       setBibleVerses(bibleSlides);

@@ -238,9 +238,20 @@ function ViewerPage() {
             fontSize: 'clamp(0.9rem, 1.5vw, 1.2rem)',
             fontWeight: '600',
             backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255, 255, 255, 0.2)'
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            gap: '4px'
           }}>
-            {slide.reference || slide.verseType}
+            {slide.hebrewReference && (
+              <div style={{ direction: 'rtl', width: '100%' }}>
+                {slide.hebrewReference}
+              </div>
+            )}
+            <div>
+              {slide.reference || slide.verseType}
+            </div>
           </div>
         )}
 

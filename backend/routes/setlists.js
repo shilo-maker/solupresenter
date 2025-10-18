@@ -4,10 +4,13 @@ const Setlist = require('../models/Setlist');
 const { authenticateToken } = require('../middleware/auth');
 const crypto = require('crypto');
 
-// Get all user's setlists
+// Get all user's setlists (only permanent ones)
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const setlists = await Setlist.find({ createdBy: req.user._id })
+    const setlists = await Setlist.find({
+      createdBy: req.user._id,
+      isTemporary: false  // Only show permanent setlists
+    })
       .populate('items.song')
       .populate('items.image')
       .sort({ updatedAt: -1 });

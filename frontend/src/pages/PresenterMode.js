@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Form, Button, InputGroup, Modal, Row, Col, Alert } from 'react-bootstrap';
+import { Form, Button, InputGroup, Modal, Row, Col, Alert, Badge } from 'react-bootstrap';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api, { getFullImageUrl } from '../services/api';
@@ -9,6 +9,20 @@ function PresenterMode() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loading } = useAuth();
+
+  // Add pulse animation keyframes
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.innerHTML = `
+      @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.15); }
+        100% { transform: scale(1); }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
 
   // Error state
   const [error, setError] = useState('');
@@ -42,6 +56,12 @@ function PresenterMode() {
   const [media, setMedia] = useState([]);
   const [selectedBackground, setSelectedBackground] = useState('');
   const [showBackgroundModal, setShowBackgroundModal] = useState(false);
+
+  // Save setlist state
+  const [showSaveSetlistModal, setShowSaveSetlistModal] = useState(false);
+  const [setlistName, setSetlistName] = useState('');
+  const [saveSetlistLoading, setSaveSetlistLoading] = useState(false);
+  const [linkedSetlistName, setLinkedSetlistName] = useState('');
 
   // Bible state
   const [bibleBooks, setBibleBooks] = useState([]);
@@ -155,6 +175,67 @@ function PresenterMode() {
     }
   }, [error]);
 
+  // Save setlist to backend whenever it changes
+  useEffect(() => {
+    if (!room || !room._id || !room.temporarySetlist) {
+      return; // Skip if room not created yet
+    }
+
+    const saveSetlist = async () => {
+      try {
+        // Convert setlist to backend format
+        const items = setlist.map((item, index) => {
+          if (item.type === 'song') {
+            return {
+              type: 'song',
+              song: item.data._id,
+              order: index
+            };
+          } else if (item.type === 'image') {
+            return {
+              type: 'image',
+              image: item.data._id,
+              order: index
+            };
+          } else if (item.type === 'bible') {
+            // Extract Bible data from the item
+            const bibleId = item.data._id; // e.g., "bible-Genesis-1"
+            const parts = bibleId.replace('bible-', '').split('-');
+            const book = parts.slice(0, -1).join('-'); // Book name might have hyphens
+            const chapter = parseInt(parts[parts.length - 1]);
+
+            return {
+              type: 'bible',
+              bibleData: {
+                book: book,
+                chapter: chapter,
+                title: item.data.title,
+                slides: item.data.slides
+              },
+              order: index
+            };
+          } else if (item.type === 'blank') {
+            return {
+              type: 'blank',
+              order: index
+            };
+          }
+          return null;
+        }).filter(Boolean);
+
+        await api.put(`/api/rooms/${room._id}/setlist`, { items });
+        console.log('✅ Temporary setlist saved to backend');
+      } catch (error) {
+        console.error('❌ Error saving temporary setlist:', error);
+        // Don't show error to user - this is auto-save
+      }
+    };
+
+    // Debounce the save - only save 500ms after last change
+    const timeoutId = setTimeout(saveSetlist, 500);
+    return () => clearTimeout(timeoutId);
+  }, [setlist, room]);
+
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
@@ -202,6 +283,43 @@ function PresenterMode() {
         setRoomPin(response.data.room.pin);
         setRoomCreated(true);
 
+        // Load setlist from room - prioritize permanent over temporary
+        const setlistToLoad = response.data.room.linkedPermanentSetlist || response.data.room.temporarySetlist;
+
+        if (setlistToLoad && setlistToLoad.items) {
+          const setlistType = response.data.room.linkedPermanentSetlist ? 'permanent' : 'temporary';
+          console.log(`📋 Loading ${setlistType} setlist from room:`, setlistToLoad);
+
+          // Store the linked setlist name if it's a permanent setlist
+          if (response.data.room.linkedPermanentSetlist && setlistToLoad.name) {
+            setLinkedSetlistName(setlistToLoad.name);
+          }
+
+          const loadedItems = setlistToLoad.items.map(item => {
+            if (item.type === 'song' && item.song) {
+              return { type: 'song', data: item.song };
+            } else if (item.type === 'image' && item.image) {
+              return { type: 'image', data: item.image };
+            } else if (item.type === 'bible' && item.bibleData) {
+              // Reconstruct Bible passage object
+              return {
+                type: 'bible',
+                data: {
+                  _id: `bible-${item.bibleData.book}-${item.bibleData.chapter}`,
+                  title: item.bibleData.title,
+                  slides: item.bibleData.slides,
+                  isBible: true
+                }
+              };
+            } else if (item.type === 'blank') {
+              return { type: 'blank', data: null };
+            }
+            return null;
+          }).filter(Boolean);
+          setSetlist(loadedItems);
+          console.log(`✅ Loaded ${loadedItems.length} items from ${setlistType} setlist`);
+        }
+
         // Join as operator
         socketService.operatorJoinRoom(user._id, response.data.room._id);
       } catch (error) {
@@ -223,6 +341,12 @@ function PresenterMode() {
 
   // Load setlist or song if passed via location state or URL params
   useEffect(() => {
+    // Wait for room to be ready before loading setlist
+    if (!room?._id) {
+      console.log('⏳ Waiting for room to be ready before loading setlist...');
+      return;
+    }
+
     // Check URL query params first
     const params = new URLSearchParams(location.search);
     const urlSetlistId = params.get('setlistId');
@@ -237,12 +361,37 @@ function PresenterMode() {
     } else if (location.state?.songId) {
       loadSong(location.state.songId);
     }
-  }, [location.state, location.search]);
+  }, [location.state, location.search, room?._id]);
 
   const loadSetlist = async (setlistId) => {
     try {
+      if (!room?._id) {
+        console.error('❌ Cannot load setlist: room not ready');
+        setError('Room not ready. Please wait a moment and try again.');
+        return;
+      }
+
+      // Link this setlist to the room (replaces any previous link)
+      try {
+        await api.post(`/api/rooms/${room._id}/link-setlist`, { setlistId });
+        console.log('✅ Linked setlist to room');
+
+        // Update local room state
+        setRoom(prevRoom => ({
+          ...prevRoom,
+          linkedPermanentSetlist: setlistId
+        }));
+      } catch (linkError) {
+        console.error('Error linking setlist:', linkError);
+        setError('Failed to link setlist to room. Please try again.');
+        return;
+      }
+
       const response = await api.get(`/api/setlists/${setlistId}`);
       const loadedSetlist = response.data.setlist;
+
+      // Store the linked setlist name
+      setLinkedSetlistName(loadedSetlist.name);
 
       // Keep all items (songs, blanks, and images) with their type info
       const items = loadedSetlist.items.map(item => {
@@ -252,6 +401,17 @@ function PresenterMode() {
           return { type: 'image', data: item.image };
         } else if (item.type === 'blank') {
           return { type: 'blank', data: null };
+        } else if (item.type === 'bible' && item.bibleData) {
+          // Reconstruct Bible passage object
+          return {
+            type: 'bible',
+            data: {
+              _id: `bible-${item.bibleData.book}-${item.bibleData.chapter}`,
+              title: item.bibleData.title,
+              slides: item.bibleData.slides,
+              isBible: true
+            }
+          };
         }
         return null;
       }).filter(Boolean);
@@ -419,6 +579,36 @@ function PresenterMode() {
     const [movedItem] = newSetlist.splice(fromIndex, 1);
     newSetlist.splice(toIndex, 0, movedItem);
     setSetlist(newSetlist);
+  };
+
+  const handleSaveSetlist = async () => {
+    if (!setlistName.trim()) {
+      setError('Please enter a name for the setlist');
+      return;
+    }
+
+    setSaveSetlistLoading(true);
+    try {
+      const response = await api.post(`/api/rooms/${room._id}/save-setlist`, {
+        name: setlistName.trim()
+      });
+
+      // Update room with linked permanent setlist
+      setRoom(prevRoom => ({
+        ...prevRoom,
+        linkedPermanentSetlist: response.data.room.linkedPermanentSetlist
+      }));
+
+      setShowSaveSetlistModal(false);
+      setSetlistName('');
+      setError('');
+      alert(`Setlist "${response.data.setlist.name}" saved! All changes will now auto-save to this setlist.`);
+    } catch (error) {
+      console.error('Error saving setlist:', error);
+      setError('Failed to save setlist: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setSaveSetlistLoading(false);
+    }
   };
 
   const handleDragStart = (e, index) => {
@@ -898,21 +1088,52 @@ function PresenterMode() {
                   >
                     <span style={{ fontSize: '1.1rem' }}>{song.title}</span>
                     <Button
-                      variant="dark"
+                      variant="primary"
                       size="sm"
                       style={{
-                        borderRadius: '50%',
-                        width: '35px',
-                        height: '35px',
+                        borderRadius: '8px',
+                        width: '36px',
+                        height: '36px',
                         padding: '0',
-                        fontSize: '1.5rem',
-                        backgroundColor: currentSong?._id === song._id ? 'white' : '#000',
-                        color: currentSong?._id === song._id ? '#007bff' : 'white',
-                        border: 'none'
+                        fontSize: '1.3rem',
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: currentSong?._id === song._id ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        border: 'none',
+                        boxShadow: '0 2px 8px rgba(102, 126, 234, 0.4)',
+                        transition: 'all 0.2s ease',
+                        cursor: 'pointer'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'scale(1.1)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.6)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'scale(1)';
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.4)';
+                      }}
+                      onMouseDown={(e) => {
+                        e.currentTarget.style.transform = 'scale(0.9)';
+                        e.currentTarget.style.boxShadow = '0 1px 4px rgba(102, 126, 234, 0.3)';
+                      }}
+                      onMouseUp={(e) => {
+                        e.currentTarget.style.transform = 'scale(1.1)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.6)';
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
                         addToSetlist(song);
+
+                        // Pulse animation on click
+                        const button = e.currentTarget;
+                        button.style.animation = 'none';
+                        setTimeout(() => {
+                          if (button && button.style) {
+                            button.style.animation = 'pulse 0.4s ease';
+                          }
+                        }, 10);
                       }}
                     >
                       +
@@ -1132,21 +1353,52 @@ function PresenterMode() {
                           {image.name}
                         </span>
                         <Button
-                          variant="dark"
+                          variant="primary"
                           size="sm"
                           style={{
-                            borderRadius: '50%',
-                            width: '35px',
-                            height: '35px',
+                            borderRadius: '8px',
+                            width: '36px',
+                            height: '36px',
                             padding: '0',
-                            fontSize: '1.5rem',
-                            backgroundColor: '#000',
-                            color: 'white',
-                            border: 'none'
+                            fontSize: '1.3rem',
+                            fontWeight: '600',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            border: 'none',
+                            boxShadow: '0 2px 8px rgba(102, 126, 234, 0.4)',
+                            transition: 'all 0.2s ease',
+                            cursor: 'pointer'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.6)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'scale(1)';
+                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.4)';
+                          }}
+                          onMouseDown={(e) => {
+                            e.currentTarget.style.transform = 'scale(0.9)';
+                            e.currentTarget.style.boxShadow = '0 1px 4px rgba(102, 126, 234, 0.3)';
+                          }}
+                          onMouseUp={(e) => {
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.6)';
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
                             addImageToSetlist(image);
+
+                            // Pulse animation on click
+                            const button = e.currentTarget;
+                            button.style.animation = 'none';
+                            setTimeout(() => {
+                              if (button && button.style) {
+                                button.style.animation = 'pulse 0.4s ease';
+                              }
+                            }, 10);
                           }}
                         >
                           +
@@ -1178,19 +1430,128 @@ function PresenterMode() {
           overflow: 'hidden'
         }}>
           <div
-            onClick={() => setSetlistSectionOpen(!setlistSectionOpen)}
             style={{
               padding: '15px 20px',
-              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              backgroundColor: '#f8f9fa'
+              justifyContent: 'space-between',
+              backgroundColor: '#f8f9fa',
+              flexWrap: 'wrap',
+              gap: '10px'
             }}
           >
-            <span style={{ fontSize: '1.5rem', marginRight: '10px' }}>
-              {setlistSectionOpen ? '▼' : '▶'}
-            </span>
-            <span style={{ fontSize: '1.2rem', fontWeight: '500' }}>Setlist</span>
+            <div
+              onClick={() => setSetlistSectionOpen(!setlistSectionOpen)}
+              style={{
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                flex: 1,
+                minWidth: '150px'
+              }}
+            >
+              <span style={{ fontSize: '1.5rem', marginRight: '10px' }}>
+                {setlistSectionOpen ? '▼' : '▶'}
+              </span>
+              <span style={{ fontSize: '1.2rem', fontWeight: '500' }}>Setlist</span>
+              {room?.linkedPermanentSetlist && linkedSetlistName && (
+                <span style={{
+                  marginLeft: '12px',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  padding: '4px 12px',
+                  borderRadius: '6px',
+                  background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+                  color: 'white',
+                  boxShadow: '0 2px 6px rgba(17, 153, 142, 0.3)',
+                  maxWidth: '200px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  display: 'inline-block'
+                }}>
+                  {linkedSetlistName}
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              {room?.linkedPermanentSetlist && (
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const confirmNew = window.confirm(
+                      'Are you sure you want to create a new empty setlist?\n\n' +
+                      'This will unlink "' + linkedSetlistName + '" from this room and start fresh.'
+                    );
+                    if (confirmNew) {
+                      try {
+                        // Unlink the setlist
+                        await api.post(`/api/rooms/${room._id}/unlink-setlist`);
+
+                        // Clear the local state
+                        setRoom(prevRoom => ({
+                          ...prevRoom,
+                          linkedPermanentSetlist: null
+                        }));
+                        setLinkedSetlistName('');
+                        setSetlist([]);
+                        setCurrentSong(null);
+                        setCurrentItem(null);
+
+                        console.log('✅ Created new empty setlist');
+                      } catch (error) {
+                        console.error('Error creating new setlist:', error);
+                        setError('Failed to create new setlist. Please try again.');
+                      }
+                    }
+                  }}
+                  style={{
+                    padding: '6px 16px',
+                    fontSize: '0.875rem',
+                    fontWeight: '600',
+                    borderRadius: '8px',
+                    border: '2px solid #718096',
+                    color: '#718096',
+                    background: 'transparent',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#718096';
+                    e.currentTarget.style.color = 'white';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = '#718096';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}
+                  title="Create new empty setlist"
+                >
+                  New
+                </Button>
+              )}
+              {!room?.linkedPermanentSetlist && (
+                <Button
+                  variant="success"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowSaveSetlistModal(true);
+                  }}
+                  disabled={setlist.length === 0}
+                  style={{
+                    marginLeft: '10px',
+                    padding: '5px 10px',
+                    fontSize: '1.2rem'
+                  }}
+                  title="Save as permanent setlist"
+                >
+                  💾
+                </Button>
+              )}
+            </div>
           </div>
 
           {setlistSectionOpen && (
@@ -1200,35 +1561,39 @@ function PresenterMode() {
                   No songs in setlist. Add songs from above.
                 </p>
               ) : (
-                <div>
+                <div style={{
+                  maxHeight: '400px',
+                  overflowY: 'auto',
+                  paddingRight: '5px'
+                }}>
                   {setlist.map((item, index) => {
                     const getItemDisplay = () => {
                       if (item.type === 'song') {
                         return {
-                          icon: '🎵',
                           title: item.data?.title || 'Unknown Song',
-                          bgColor: '#f8f9fa'
+                          bgColor: '#f8f9fa',
+                          borderLeft: '4px solid #667eea'
                         };
                       } else if (item.type === 'bible') {
                         return {
-                          icon: '📖',
                           title: item.data?.title || 'Bible Passage',
-                          bgColor: '#f3e5f5'
+                          bgColor: '#f3e5f5',
+                          borderLeft: '4px solid #764ba2'
                         };
                       } else if (item.type === 'image') {
                         return {
-                          icon: '🖼️',
                           title: item.data?.name || 'Image Slide',
-                          bgColor: '#e7f3ff'
+                          bgColor: '#e7f3ff',
+                          borderLeft: '4px solid #4facfe'
                         };
                       } else if (item.type === 'blank') {
                         return {
-                          icon: '⬛',
                           title: 'Blank Slide',
-                          bgColor: '#fff3e0'
+                          bgColor: '#fff3e0',
+                          borderLeft: '4px solid #f093fb'
                         };
                       }
-                      return { icon: '?', title: 'Unknown', bgColor: '#f8f9fa' };
+                      return { title: 'Unknown', bgColor: '#f8f9fa', borderLeft: '4px solid #718096' };
                     };
 
                     const display = getItemDisplay();
@@ -1241,23 +1606,33 @@ function PresenterMode() {
                         onDragOver={handleDragOver}
                         onDrop={(e) => handleDrop(e, index)}
                         style={{
-                          padding: '15px',
+                          padding: '12px 15px',
                           backgroundColor: display.bgColor,
-                          borderRadius: '5px',
+                          borderRadius: '8px',
+                          borderLeft: display.borderLeft,
                           marginBottom: '10px',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
-                          cursor: 'grab'
+                          cursor: 'grab',
+                          transition: 'all 0.2s ease',
+                          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateX(4px)';
+                          e.currentTarget.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.15)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateX(0)';
+                          e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '10px' }}>
-                          <span style={{ fontSize: '1.2rem', color: '#666', cursor: 'grab' }}>
+                          <span style={{ fontSize: '1.2rem', color: '#718096', cursor: 'grab', fontWeight: '600' }}>
                             ⋮⋮
                           </span>
-                          <span style={{ fontSize: '1.3rem' }}>{display.icon}</span>
                           <span
-                            style={{ fontSize: '1.1rem', cursor: 'pointer', flex: 1 }}
+                            style={{ fontSize: '1rem', cursor: 'pointer', flex: 1, fontWeight: '500', color: '#2d3748' }}
                             onClick={() => selectItem(item)}
                           >
                             {index + 1}. {display.title}
@@ -1684,6 +2059,50 @@ function PresenterMode() {
           </Button>
           <Button variant="primary" onClick={() => navigate('/media')}>
             Manage Backgrounds
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Save Setlist Modal */}
+      <Modal show={showSaveSetlistModal} onHide={() => setShowSaveSetlistModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Save Setlist as Permanent</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Form.Group>
+              <Form.Label>Setlist Name</Form.Label>
+              <Form.Control
+                type="text"
+                placeholder="Enter setlist name"
+                value={setlistName}
+                onChange={(e) => setSetlistName(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSaveSetlist();
+                  }
+                }}
+                autoFocus
+              />
+            </Form.Group>
+            <div style={{ marginTop: '15px', color: '#666' }}>
+              <small>
+                This will create a permanent copy of your current setlist with {setlist.length} item{setlist.length !== 1 ? 's' : ''}.
+              </small>
+            </div>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowSaveSetlistModal(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="success"
+            onClick={handleSaveSetlist}
+            disabled={saveSetlistLoading || !setlistName.trim()}
+          >
+            {saveSetlistLoading ? 'Saving...' : 'Save Setlist'}
           </Button>
         </Modal.Footer>
       </Modal>

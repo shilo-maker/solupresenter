@@ -21,6 +21,9 @@ const bibleRoutes = require('./routes/bible');
 const Room = require('./models/Room');
 const Song = require('./models/Song');
 
+// Import cleanup job
+const cleanupTemporarySetlists = require('./jobs/cleanupTemporarySetlists');
+
 const app = express();
 const server = http.createServer(app);
 const allowedOrigins = [
@@ -354,6 +357,13 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+
+  // Run cleanup job immediately on startup
+  cleanupTemporarySetlists();
+
+  // Schedule cleanup job to run every hour
+  setInterval(cleanupTemporarySetlists, 60 * 60 * 1000); // 1 hour
+  console.log('✅ Scheduled temporary setlist cleanup job (runs every hour)');
 });
 
 module.exports = { app, server, io };

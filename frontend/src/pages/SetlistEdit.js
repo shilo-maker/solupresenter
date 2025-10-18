@@ -16,10 +16,21 @@ function SetlistEdit() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Bible state
+  const [bibleBooks, setBibleBooks] = useState([]);
+  const [selectedBibleBook, setSelectedBibleBook] = useState('');
+  const [selectedBibleChapter, setSelectedBibleChapter] = useState('');
+  const [bibleVerses, setBibleVerses] = useState([]);
+  const [bibleLoading, setBibleLoading] = useState(false);
+
+  // Drag and drop state
+  const [draggedIndex, setDraggedIndex] = useState(null);
+
   useEffect(() => {
     fetchSetlist();
     fetchSongs();
     fetchMedia();
+    fetchBibleBooks();
   }, [id]);
 
   const fetchSetlist = async () => {
@@ -29,11 +40,12 @@ function SetlistEdit() {
       const setlist = response.data.setlist;
 
       setName(setlist.name);
-      // Map items to include songData or imageData for display
+      // Map items to include songData, imageData, or bibleData for display
       const mappedItems = setlist.items.map(item => ({
         ...item,
         songData: item.song,
-        imageData: item.image
+        imageData: item.image,
+        bibleData: item.bibleData
       }));
       setItems(mappedItems);
     } catch (error) {
@@ -62,6 +74,45 @@ function SetlistEdit() {
       console.error('Error fetching media:', error);
     }
   };
+
+  const fetchBibleBooks = async () => {
+    try {
+      const response = await api.get('/api/bible/books');
+      setBibleBooks(response.data.books);
+    } catch (error) {
+      console.error('Error fetching Bible books:', error);
+    }
+  };
+
+  const fetchBibleVerses = async (book, chapter) => {
+    if (!book || !chapter) return;
+
+    setBibleLoading(true);
+    try {
+      const response = await api.get(`/api/bible/verses/${encodeURIComponent(book)}/${chapter}`);
+      const verses = response.data.verses;
+
+      // Convert verses to slides format
+      const bibleSlides = verses.map(verse => ({
+        originalText: verse.hebrew,
+        translation: verse.text,
+        verseNumber: verse.verse
+      }));
+
+      setBibleVerses(bibleSlides);
+    } catch (error) {
+      console.error('Error fetching Bible verses:', error);
+      setBibleVerses([]);
+    } finally {
+      setBibleLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedBibleBook && selectedBibleChapter) {
+      fetchBibleVerses(selectedBibleBook, selectedBibleChapter);
+    }
+  }, [selectedBibleBook, selectedBibleChapter]);
 
   const handleSearch = (query) => {
     setSearchQuery(query);
@@ -100,6 +151,19 @@ function SetlistEdit() {
     }]);
   };
 
+  const addBibleToSetlist = (passage) => {
+    setItems([...items, {
+      type: 'bible',
+      bibleData: {
+        book: passage.book,
+        chapter: passage.chapter,
+        title: passage.title,
+        slides: passage.slides
+      },
+      order: items.length
+    }]);
+  };
+
   const removeItem = (index) => {
     const newItems = items.filter((_, i) => i !== index);
     // Reorder items
@@ -131,6 +195,38 @@ function SetlistEdit() {
     setItems(newItems);
   };
 
+  // Drag and drop handlers
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.target);
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+
+    const newItems = [...items];
+    const draggedItem = newItems[draggedIndex];
+
+    // Remove dragged item
+    newItems.splice(draggedIndex, 1);
+    // Insert at new position
+    newItems.splice(index, 0, draggedItem);
+
+    // Update order
+    newItems.forEach((item, idx) => {
+      item.order = idx;
+    });
+
+    setItems(newItems);
+    setDraggedIndex(index);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -153,6 +249,7 @@ function SetlistEdit() {
         type: item.type,
         song: item.type === 'song' ? (item.song._id || item.song) : undefined,
         image: item.type === 'image' ? (item.image._id || item.image) : undefined,
+        bibleData: item.type === 'bible' ? item.bibleData : undefined,
         order: item.order
       }));
 
@@ -194,9 +291,18 @@ function SetlistEdit() {
     <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Edit Setlist</h2>
-        <Button variant="outline-secondary" onClick={() => navigate(`/setlists/${id}`)}>
-          Cancel
-        </Button>
+        <div className="d-flex gap-2">
+          <Button
+            variant="success"
+            onClick={handleSubmit}
+            disabled={saving}
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </Button>
+          <Button variant="outline-secondary" onClick={() => navigate(`/setlists/${id}`)}>
+            Cancel
+          </Button>
+        </div>
       </div>
 
       {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
@@ -236,10 +342,26 @@ function SetlistEdit() {
                 ) : (
                   <ListGroup>
                     {items.map((item, index) => (
-                      <ListGroup.Item key={index} className="d-flex justify-content-between align-items-center">
+                      <ListGroup.Item
+                        key={index}
+                        className="d-flex justify-content-between align-items-center"
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, index)}
+                        onDragOver={(e) => handleDragOver(e, index)}
+                        onDragEnd={handleDragEnd}
+                        style={{
+                          cursor: 'grab',
+                          opacity: draggedIndex === index ? 0.5 : 1,
+                          transition: 'opacity 0.2s',
+                          backgroundColor: draggedIndex === index ? '#f0f0f0' : 'transparent'
+                        }}
+                      >
                         <div className="d-flex align-items-center flex-grow-1">
+                          <span className="me-2" style={{ fontSize: '1.2rem', cursor: 'grab' }}>
+                            ⋮⋮
+                          </span>
                           <span className="me-2" style={{ fontSize: '1.2rem' }}>
-                            {item.type === 'song' ? '🎵' : item.type === 'image' ? '🖼️' : '⬛'}
+                            {item.type === 'song' ? '🎵' : item.type === 'image' ? '🖼️' : item.type === 'bible' ? '📖' : '⬛'}
                           </span>
                           <span className="me-3 text-muted">#{index + 1}</span>
                           <span>
@@ -247,26 +369,12 @@ function SetlistEdit() {
                               ? (item.songData?.title || 'Unknown Song')
                               : item.type === 'image'
                               ? (item.imageData?.name || 'Image Slide')
+                              : item.type === 'bible'
+                              ? (item.bibleData?.title || 'Bible Passage')
                               : 'Blank Slide'}
                           </span>
                         </div>
                         <div className="d-flex gap-2">
-                          <Button
-                            variant="outline-secondary"
-                            size="sm"
-                            onClick={() => moveItemUp(index)}
-                            disabled={index === 0}
-                          >
-                            ↑
-                          </Button>
-                          <Button
-                            variant="outline-secondary"
-                            size="sm"
-                            onClick={() => moveItemDown(index)}
-                            disabled={index === items.length - 1}
-                          >
-                            ↓
-                          </Button>
                           <Button
                             variant="outline-danger"
                             size="sm"
@@ -380,6 +488,85 @@ function SetlistEdit() {
               </Card.Body>
             </Card>
 
+            {/* Add Bible Reading */}
+            <Card className="mb-3">
+              <Card.Header>
+                <h5 className="mb-0">Add Bible Reading</h5>
+              </Card.Header>
+              <Card.Body>
+                <div className="mb-2">
+                  <Form.Label style={{ fontSize: '0.85rem', marginBottom: '5px' }}>
+                    Book
+                  </Form.Label>
+                  <Form.Select
+                    size="sm"
+                    value={selectedBibleBook}
+                    onChange={(e) => setSelectedBibleBook(e.target.value)}
+                    style={{ fontSize: '0.85rem' }}
+                  >
+                    <option value="">Select book...</option>
+                    {bibleBooks.map((book) => (
+                      <option key={book.name} value={book.name}>
+                        {book.name}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </div>
+
+                <div className="mb-2">
+                  <Form.Label style={{ fontSize: '0.85rem', marginBottom: '5px' }}>
+                    Chapter
+                  </Form.Label>
+                  <Form.Select
+                    size="sm"
+                    value={selectedBibleChapter}
+                    onChange={(e) => setSelectedBibleChapter(e.target.value)}
+                    disabled={!selectedBibleBook}
+                    style={{ fontSize: '0.85rem' }}
+                  >
+                    <option value="">Select...</option>
+                    {selectedBibleBook && (() => {
+                      const bookData = bibleBooks.find(b => b.name === selectedBibleBook);
+                      const chapterCount = bookData?.chapters || 50;
+                      return Array.from({ length: chapterCount }, (_, i) => (
+                        <option key={i + 1} value={i + 1}>
+                          Chapter {i + 1}
+                        </option>
+                      ));
+                    })()}
+                  </Form.Select>
+                </div>
+
+                {bibleLoading && (
+                  <div style={{ textAlign: 'center', padding: '10px', color: '#666' }}>
+                    Loading verses...
+                  </div>
+                )}
+
+                {selectedBibleBook && selectedBibleChapter && !bibleLoading && bibleVerses.length > 0 && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="w-100 mt-2"
+                    onClick={() => {
+                      const biblePassage = {
+                        book: selectedBibleBook,
+                        chapter: parseInt(selectedBibleChapter),
+                        title: `${selectedBibleBook} ${selectedBibleChapter}`,
+                        slides: bibleVerses
+                      };
+                      addBibleToSetlist(biblePassage);
+                      setSelectedBibleBook('');
+                      setSelectedBibleChapter('');
+                      setBibleVerses([]);
+                    }}
+                  >
+                    + Add {selectedBibleBook} {selectedBibleChapter}
+                  </Button>
+                )}
+              </Card.Body>
+            </Card>
+
             {/* Add Blank Slide */}
             <Card className="mb-3">
               <Card.Header>
@@ -396,23 +583,6 @@ function SetlistEdit() {
               </Card.Body>
             </Card>
 
-            {/* Submit Button */}
-            <div className="d-grid gap-2">
-              <Button
-                variant="success"
-                type="submit"
-                size="lg"
-                disabled={saving}
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </Button>
-              <Button
-                variant="outline-secondary"
-                onClick={() => navigate(`/setlists/${id}`)}
-              >
-                Cancel
-              </Button>
-            </div>
           </Col>
         </Row>
       </Form>

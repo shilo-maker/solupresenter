@@ -20,6 +20,7 @@ function ViewerPage() {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const [imageUrl, setImageUrl] = useState(null); // For image-only slides
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Refs for click outside detection
   const controlsRef = useRef(null);
@@ -44,6 +45,25 @@ function ViewerPage() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showControls]);
+
+  // Handle fullscreen change events (e.g., when user presses ESC)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
 
   useEffect(() => {
     socketService.connect();
@@ -130,6 +150,20 @@ function ViewerPage() {
       socketService.viewerJoinRoom(pin.trim().toUpperCase());
     } else {
       setError('PIN must be 4 characters');
+    }
+  };
+
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        // Enter fullscreen
+        await document.documentElement.requestFullscreen();
+      } else {
+        // Exit fullscreen
+        await document.exitFullscreen();
+      }
+    } catch (error) {
+      console.error('Error toggling fullscreen:', error);
     }
   };
 
@@ -509,6 +543,34 @@ function ViewerPage() {
         title="Display Settings"
       >
         ⚙️
+      </button>
+
+      {/* Fullscreen Button - Bottom Right */}
+      <button
+        onClick={toggleFullscreen}
+        style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          width: '50px',
+          height: '50px',
+          borderRadius: '50%',
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          border: '2px solid rgba(255, 255, 255, 0.3)',
+          color: 'white',
+          fontSize: '1.3rem',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backdropFilter: 'blur(10px)',
+          zIndex: 1001,
+          transition: 'all 0.3s ease',
+          boxShadow: isFullscreen ? '0 0 20px rgba(255,255,255,0.3)' : 'none'
+        }}
+        title={isFullscreen ? 'Exit Fullscreen (ESC)' : 'Enter Fullscreen (F11)'}
+      >
+        {isFullscreen ? '⤡' : '⤢'}
       </button>
 
       {/* Controls Panel - Slide out from left */}

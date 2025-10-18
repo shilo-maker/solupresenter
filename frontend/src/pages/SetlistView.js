@@ -112,7 +112,7 @@ function SetlistView() {
           {/* Setlist Items */}
           <Card className="mb-4">
             <Card.Header>
-              <h5 className="mb-0">Songs in this Setlist</h5>
+              <h5 className="mb-0">Items in this Setlist</h5>
             </Card.Header>
             <Card.Body>
               {setlist.items.length === 0 ? (
@@ -135,9 +135,31 @@ function SetlistView() {
                                 {item.song.slides?.length || 0} slides
                               </small>
                             </>
+                          ) : item.type === 'bible' && item.bibleData ? (
+                            <>
+                              <div style={{ fontSize: '1.1rem' }}>
+                                📖 {item.bibleData.title}
+                              </div>
+                              <small className="text-muted">
+                                {item.bibleData.slides?.length || 0} verses
+                              </small>
+                            </>
+                          ) : item.type === 'image' && item.image ? (
+                            <>
+                              <div style={{ fontSize: '1.1rem' }}>
+                                🖼️ {item.image.title || 'Image'}
+                              </div>
+                              <small className="text-muted">
+                                Image slide
+                              </small>
+                            </>
+                          ) : item.type === 'blank' ? (
+                            <div style={{ fontSize: '1.1rem', fontStyle: 'italic' }}>
+                              ⬜ Blank Slide
+                            </div>
                           ) : (
                             <div style={{ fontSize: '1.1rem', fontStyle: 'italic' }}>
-                              Blank Slide
+                              Unknown Item
                             </div>
                           )}
                         </div>

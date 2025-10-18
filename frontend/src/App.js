@@ -23,6 +23,7 @@ import MediaLibrary from './pages/MediaLibrary';
 
 // Import Bootstrap CSS
 import 'bootstrap/dist/css/bootstrap.min.css';
+import './styles/modern.css';  // Modern theme overrides
 import './App.css';
 
 function App() {

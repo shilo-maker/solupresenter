@@ -84,7 +84,7 @@ function SetlistList() {
                   <Card.Title>{setlist.name}</Card.Title>
                   <div className="mb-3">
                     <Badge bg="secondary" className="me-2">
-                      {setlist.items.length} {setlist.items.length === 1 ? 'song' : 'songs'}
+                      {setlist.items.length} {setlist.items.length === 1 ? 'item' : 'items'}
                     </Badge>
                     <Badge bg="info">
                       Used {setlist.usageCount} {setlist.usageCount === 1 ? 'time' : 'times'}
@@ -93,11 +93,21 @@ function SetlistList() {
 
                   {setlist.items.length > 0 && (
                     <div className="mb-3">
-                      <small className="text-muted">Songs:</small>
+                      <small className="text-muted">Items:</small>
                       <ul className="mb-0 mt-1" style={{ fontSize: '0.9rem' }}>
                         {setlist.items.slice(0, 3).map((item, idx) => (
                           <li key={idx}>
-                            {item.type === 'song' && item.song ? item.song.title : 'Blank Slide'}
+                            {item.type === 'song' && item.song ? (
+                              item.song.title
+                            ) : item.type === 'bible' && item.bibleData ? (
+                              `📖 ${item.bibleData.title}`
+                            ) : item.type === 'image' && item.image ? (
+                              `🖼️ ${item.image.title || 'Image'}`
+                            ) : item.type === 'blank' ? (
+                              '⬜ Blank Slide'
+                            ) : (
+                              'Unknown Item'
+                            )}
                           </li>
                         ))}
                         {setlist.items.length > 3 && (

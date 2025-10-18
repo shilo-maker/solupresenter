@@ -1,0 +1,352 @@
+/* Modern SoluCast Theme - Global Styles */
+
+/* Import modern font */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* CSS Variables for easy theming */
+:root {
+  --color-primary: #667eea;
+  --color-primary-dark: #764ba2;
+  --color-success: #11998e;
+  --color-success-light: #38ef7d;
+  --color-danger: #eb3349;
+  --color-danger-light: #f45c43;
+  --color-warning: #f093fb;
+  --color-warning-light: #f5576c;
+  --color-info: #4facfe;
+  --color-info-light: #00f2fe;
+
+  --color-dark: #2d3748;
+  --color-gray: #718096;
+  --color-light-gray: #e2e8f0;
+  --color-background: #f7fafc;
+  --color-white: #ffffff;
+
+  --color-text-dark: #1a202c;
+  --color-text-medium: #4a5568;
+  --color-text-light: #a0aec0;
+
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  --border-radius-sm: 0.25rem;
+  --border-radius-md: 0.5rem;
+  --border-radius-lg: 0.75rem;
+  --border-radius-xl: 1rem;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.15), 0 10px 10px rgba(0, 0, 0, 0.04);
+}
+
+/* Global typography */
+body {
+  font-family: var(--font-family) !important;
+  color: var(--color-text-dark);
+  background-color: var(--color-background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-family) !important;
+  font-weight: 700;
+  color: var(--color-text-dark);
+}
+
+/* Modern Button Styles */
+.btn {
+  border-radius: var(--border-radius-md) !important;
+  font-weight: 600 !important;
+  font-family: var(--font-family) !important;
+  transition: all 0.2s ease !important;
+  border: none !important;
+  padding: 0.5rem 1.5rem !important;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%) !important;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4) !important;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.6) !important;
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-light) 100%) !important;
+  box-shadow: 0 2px 8px rgba(17, 153, 142, 0.4) !important;
+}
+
+.btn-success:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(17, 153, 142, 0.6) !important;
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-light) 100%) !important;
+  box-shadow: 0 2px 8px rgba(235, 51, 73, 0.4) !important;
+}
+
+.btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(235, 51, 73, 0.6) !important;
+}
+
+.btn-warning {
+  background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-light) 100%) !important;
+  box-shadow: 0 2px 8px rgba(240, 147, 251, 0.4) !important;
+  color: white !important;
+}
+
+.btn-warning:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(240, 147, 251, 0.6) !important;
+  color: white !important;
+}
+
+.btn-info {
+  background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info-light) 100%) !important;
+  box-shadow: 0 2px 8px rgba(79, 172, 254, 0.4) !important;
+}
+
+.btn-info:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(79, 172, 254, 0.6) !important;
+}
+
+.btn-outline-primary {
+  background: transparent !important;
+  border: 2px solid var(--color-primary) !important;
+  color: var(--color-primary) !important;
+  box-shadow: none !important;
+}
+
+.btn-outline-primary:hover {
+  background: var(--color-primary) !important;
+  color: white !important;
+  transform: translateY(-2px);
+}
+
+.btn-outline-secondary {
+  background: transparent !important;
+  border: 2px solid var(--color-gray) !important;
+  color: var(--color-gray) !important;
+  box-shadow: none !important;
+}
+
+.btn-outline-secondary:hover {
+  background: var(--color-gray) !important;
+  color: white !important;
+  transform: translateY(-2px);
+}
+
+.btn-outline-danger {
+  background: transparent !important;
+  border: 2px solid var(--color-danger) !important;
+  color: var(--color-danger) !important;
+  box-shadow: none !important;
+}
+
+.btn-outline-danger:hover {
+  background: var(--color-danger) !important;
+  color: white !important;
+  transform: translateY(-2px);
+}
+
+/* Modern Card Styles */
+.card {
+  border-radius: var(--border-radius-lg) !important;
+  border: none !important;
+  box-shadow: var(--shadow-md) !important;
+  transition: all 0.2s ease !important;
+  background: var(--color-white) !important;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.card-header {
+  background: var(--color-background) !important;
+  border-bottom: 2px solid var(--color-light-gray) !important;
+  border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0 !important;
+  font-weight: 600 !important;
+}
+
+.card-body {
+  padding: 1.5rem !important;
+}
+
+/* Modern Form Styles */
+.form-control,
+.form-select {
+  border-radius: var(--border-radius-md) !important;
+  border: 2px solid var(--color-light-gray) !important;
+  padding: 0.5rem 1rem !important;
+  font-family: var(--font-family) !important;
+  transition: all 0.2s ease !important;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+  outline: none !important;
+}
+
+.form-label {
+  font-weight: 600 !important;
+  color: var(--color-text-dark) !important;
+  margin-bottom: 0.5rem !important;
+}
+
+/* Modern Alert Styles */
+.alert {
+  border-radius: var(--border-radius-md) !important;
+  border: none !important;
+  font-weight: 500 !important;
+}
+
+.alert-success {
+  background: linear-gradient(135deg, rgba(17, 153, 142, 0.1) 0%, rgba(56, 239, 125, 0.1) 100%) !important;
+  color: var(--color-success) !important;
+}
+
+.alert-danger {
+  background: linear-gradient(135deg, rgba(235, 51, 73, 0.1) 0%, rgba(244, 92, 67, 0.1) 100%) !important;
+  color: var(--color-danger) !important;
+}
+
+.alert-warning {
+  background: linear-gradient(135deg, rgba(240, 147, 251, 0.1) 0%, rgba(245, 87, 108, 0.1) 100%) !important;
+  color: var(--color-warning) !important;
+}
+
+.alert-info {
+  background: linear-gradient(135deg, rgba(79, 172, 254, 0.1) 0%, rgba(0, 242, 254, 0.1) 100%) !important;
+  color: var(--color-info) !important;
+}
+
+/* Modern Badge Styles */
+.badge {
+  border-radius: var(--border-radius-sm) !important;
+  font-weight: 600 !important;
+  padding: 0.35em 0.65em !important;
+}
+
+/* Modern List Group Styles */
+.list-group-item {
+  border-radius: var(--border-radius-md) !important;
+  border: 1px solid var(--color-light-gray) !important;
+  margin-bottom: 0.5rem !important;
+  transition: all 0.2s ease !important;
+}
+
+.list-group-item:hover {
+  background-color: var(--color-background) !important;
+  transform: translateX(4px);
+}
+
+/* Modern Modal Styles */
+.modal-content {
+  border-radius: var(--border-radius-lg) !important;
+  border: none !important;
+  box-shadow: var(--shadow-xl) !important;
+}
+
+.modal-header {
+  border-bottom: 2px solid var(--color-light-gray) !important;
+  padding: 1.5rem !important;
+}
+
+.modal-title {
+  font-weight: 700 !important;
+}
+
+.modal-body {
+  padding: 1.5rem !important;
+}
+
+.modal-footer {
+  border-top: 2px solid var(--color-light-gray) !important;
+  padding: 1.5rem !important;
+}
+
+/* Modern Table Styles */
+.table {
+  border-radius: var(--border-radius-md) !important;
+  overflow: hidden;
+}
+
+.table thead th {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  border: none !important;
+}
+
+.table tbody tr {
+  transition: all 0.2s ease !important;
+}
+
+.table tbody tr:hover {
+  background-color: var(--color-background) !important;
+}
+
+/* Smooth page transitions */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  border-radius: var(--border-radius-md);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%);
+}
+
+/* Modern spinner */
+.spinner-border {
+  border-width: 3px !important;
+}
+
+.spinner-border-sm {
+  border-width: 2px !important;
+}
+
+/* Container spacing */
+.container, .container-fluid {
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+
+/* Link styles */
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+a:hover {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
+}

@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const setlistItemSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ['song', 'blank', 'image'],
+    enum: ['song', 'blank', 'image', 'bible'],
     required: true
   },
   song: {
@@ -18,6 +18,23 @@ const setlistItemSchema = new mongoose.Schema({
     ref: 'Media',
     required: function() {
       return this.type === 'image';
+    }
+  },
+  bibleData: {
+    type: {
+      book: String,
+      chapter: Number,
+      title: String,
+      slides: [{
+        originalText: String,
+        translation: String,
+        verseNumber: Number,
+        reference: String,
+        hebrewReference: String
+      }]
+    },
+    required: function() {
+      return this.type === 'bible';
     }
   },
   order: {
@@ -37,6 +54,15 @@ const setlistSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
+  },
+  isTemporary: {
+    type: Boolean,
+    default: false
+  },
+  linkedRoom: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Room',
+    default: null
   },
   usageCount: {
     type: Number,

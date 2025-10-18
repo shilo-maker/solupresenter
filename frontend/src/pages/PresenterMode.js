@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Form, Button, InputGroup, Modal, Row, Col } from 'react-bootstrap';
+import { Form, Button, InputGroup, Modal, Row, Col, Alert } from 'react-bootstrap';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api, { getFullImageUrl } from '../services/api';
@@ -10,6 +10,9 @@ function PresenterMode() {
   const location = useLocation();
   const { user, loading } = useAuth();
 
+  // Error state
+  const [error, setError] = useState('');
+
   // Room state
   const [room, setRoom] = useState(null);
   const [roomPin, setRoomPin] = useState('');
@@ -19,9 +22,11 @@ function PresenterMode() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [allSongs, setAllSongs] = useState([]);
+  const [songsLoading, setSongsLoading] = useState(false);
 
   // Image search state
   const [imageSearchResults, setImageSearchResults] = useState([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
 
   // Setlist state (contains items with type: 'song', 'blank', or 'image')
   const [setlist, setSetlist] = useState([]);
@@ -107,7 +112,7 @@ function PresenterMode() {
 
     } catch (error) {
       console.error('Error fetching Bible verses:', error);
-      alert('Failed to load Bible verses');
+      setError('Failed to load Bible verses. Please try again.');
     } finally {
       setBibleLoading(false);
     }
@@ -139,6 +144,16 @@ function PresenterMode() {
 
   // Keyboard shortcuts help
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+
+  // Auto-dismiss errors after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -192,7 +207,7 @@ function PresenterMode() {
       } catch (error) {
         console.error('❌ Error creating room:', error);
         console.error('Error details:', error.response?.data);
-        alert('Failed to create room: ' + (error.response?.data?.error || error.message));
+        setError('Failed to create room: ' + (error.response?.data?.error || error.message));
       }
     };
 
@@ -245,7 +260,7 @@ function PresenterMode() {
       console.log('✅ Setlist loaded:', items.length, 'items');
     } catch (error) {
       console.error('Error loading setlist:', error);
-      alert('Failed to load setlist');
+      setError('Failed to load setlist. Please check your connection and try again.');
     }
   };
 
@@ -262,27 +277,35 @@ function PresenterMode() {
       console.log('✅ Song loaded:', song.title);
     } catch (error) {
       console.error('Error loading song:', error);
-      alert('Failed to load song');
+      setError('Failed to load song. Please check your connection and try again.');
     }
   };
 
   const fetchSongs = async () => {
+    setSongsLoading(true);
     try {
       const response = await api.get('/api/songs');
       setAllSongs(response.data.songs);
       setSearchResults(response.data.songs);
     } catch (error) {
       console.error('Error fetching songs:', error);
+      setError('Failed to load songs. Please refresh the page.');
+    } finally {
+      setSongsLoading(false);
     }
   };
 
   const fetchMedia = async () => {
+    setMediaLoading(true);
     try {
       const response = await api.get('/api/media');
       setMedia(response.data.media);
       setImageSearchResults(response.data.media); // Initialize with all images
     } catch (error) {
       console.error('Error fetching media:', error);
+      setError('Failed to load media library. Please refresh the page.');
+    } finally {
+      setMediaLoading(false);
     }
   };
 
@@ -700,18 +723,31 @@ function PresenterMode() {
         }}>
           <img src="/logo.png" alt="SoluCast Logo" style={{ maxWidth: '120px', height: 'auto' }} />
         </div>
-        <div style={{
-          fontSize: '3rem',
-          fontWeight: 'bold',
-          letterSpacing: '0.5rem',
-          color: '#333',
-          marginTop: '40px'
-        }}>
-          {roomPin || 'Loading...'}
-        </div>
-        <div style={{ fontSize: '0.9rem', color: '#666', marginTop: '5px' }}>
-          Share this Room PIN with viewers
-        </div>
+        {roomPin ? (
+          <>
+            <div style={{
+              fontSize: '3rem',
+              fontWeight: 'bold',
+              letterSpacing: '0.5rem',
+              color: '#333',
+              marginTop: '40px'
+            }}>
+              {roomPin}
+            </div>
+            <div style={{ fontSize: '0.9rem', color: '#666', marginTop: '5px' }}>
+              Share this Room PIN with viewers
+            </div>
+          </>
+        ) : (
+          <div style={{ marginTop: '40px', textAlign: 'center' }}>
+            <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem', marginBottom: '15px' }}>
+              <span className="visually-hidden">Loading...</span>
+            </div>
+            <div style={{ fontSize: '0.9rem', color: '#666' }}>
+              Creating your presentation room...
+            </div>
+          </div>
+        )}
 
         {roomPin && (
           <div style={{ marginTop: '20px' }}>
@@ -737,6 +773,21 @@ function PresenterMode() {
           </div>
         )}
       </div>
+
+      {/* Error Alert */}
+      {error && (
+        <Alert
+          variant="danger"
+          dismissible
+          onClose={() => setError('')}
+          style={{
+            marginBottom: '20px',
+            borderRadius: '10px'
+          }}
+        >
+          {error}
+        </Alert>
+      )}
 
       {/* Songs/Images and Setlist Side-by-Side */}
       <div style={{
@@ -816,7 +867,19 @@ function PresenterMode() {
           <div style={{ padding: '20px' }}>
             {activeResourcePanel === 'songs' ? (
               <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                {searchResults.map((song) => (
+                {songsLoading ? (
+                  <div style={{ textAlign: 'center', color: '#666', padding: '40px' }}>
+                    <div className="spinner-border text-primary" role="status" style={{ marginBottom: '10px' }}>
+                      <span className="visually-hidden">Loading...</span>
+                    </div>
+                    <div>Loading songs...</div>
+                  </div>
+                ) : searchResults.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: '#666', fontSize: '0.9rem' }}>
+                    {searchQuery ? 'No songs match your search' : 'No songs available'}
+                  </p>
+                ) : (
+                  searchResults.map((song) => (
                   <div
                     key={song._id}
                     style={{
@@ -855,14 +918,15 @@ function PresenterMode() {
                       +
                     </Button>
                   </div>
-                ))}
+                  ))
+                )}
               </div>
             ) : activeResourcePanel === 'bible' ? (
               <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                 <div style={{ marginBottom: '15px' }}>
-                  {/* Side-by-side Book and Chapter selectors */}
-                  <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-                    <div style={{ flex: '2' }}>
+                  {/* Side-by-side Book and Chapter selectors (stacks on mobile) */}
+                  <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '10px', marginBottom: '15px' }}>
+                    <div style={{ flex: isMobile ? '1' : '2' }}>
                       <Form.Label style={{ fontSize: '0.85rem', fontWeight: '500', marginBottom: '6px', display: 'block' }}>
                         Book
                       </Form.Label>
@@ -958,7 +1022,7 @@ function PresenterMode() {
                       </Form.Select>
                     </div>
 
-                    <div style={{ flex: '1' }}>
+                    <div style={{ flex: isMobile ? '1' : '1' }}>
                       <Form.Label style={{ fontSize: '0.85rem', fontWeight: '500', marginBottom: '6px', display: 'block' }}>
                         Chapter
                       </Form.Label>
@@ -1021,7 +1085,14 @@ function PresenterMode() {
               </div>
             ) : (
               <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                {imageSearchResults.length === 0 ? (
+                {mediaLoading ? (
+                  <div style={{ textAlign: 'center', color: '#666', padding: '40px' }}>
+                    <div className="spinner-border text-primary" role="status" style={{ marginBottom: '10px' }}>
+                      <span className="visually-hidden">Loading...</span>
+                    </div>
+                    <div>Loading media library...</div>
+                  </div>
+                ) : imageSearchResults.length === 0 ? (
                   <p style={{ textAlign: 'center', color: '#666', fontSize: '0.9rem' }}>
                     {searchQuery ? 'No images match your search' : 'No images available'}
                   </p>

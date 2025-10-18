@@ -14,7 +14,7 @@ function Login() {
   const [resendingEmail, setResendingEmail] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
   const navigate = useNavigate();
-  const { login, googleLogin } = useAuth();
+  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -50,10 +50,6 @@ function Login() {
     } finally {
       setResendingEmail(false);
     }
-  };
-
-  const handleGoogleLogin = () => {
-    googleLogin();
   };
 
   return (
@@ -119,17 +115,6 @@ function Login() {
                 {loading ? 'Logging in...' : 'Login'}
               </Button>
             </Form>
-
-            <hr />
-
-            <Button
-              variant="outline-danger"
-              className="w-100 mb-3"
-              onClick={handleGoogleLogin}
-            >
-              <i className="bi bi-google me-2"></i>
-              Continue with Google
-            </Button>
 
             <div className="text-center mt-3">
               Don't have an account? <Link to="/register">Register</Link>

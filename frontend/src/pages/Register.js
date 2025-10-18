@@ -12,7 +12,7 @@ function Register() {
   const [showVerificationMessage, setShowVerificationMessage] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState('');
   const navigate = useNavigate();
-  const { register, googleLogin } = useAuth();
+  const { register } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,10 +44,6 @@ function Register() {
     }
 
     setLoading(false);
-  };
-
-  const handleGoogleLogin = () => {
-    googleLogin();
   };
 
   return (
@@ -127,17 +123,6 @@ function Register() {
                 {loading ? 'Creating account...' : 'Register'}
               </Button>
             </Form>
-
-            <hr />
-
-            <Button
-              variant="outline-danger"
-              className="w-100 mb-3"
-              onClick={handleGoogleLogin}
-            >
-              <i className="bi bi-google me-2"></i>
-              Sign up with Google
-            </Button>
 
             <div className="text-center mt-3">
               Already have an account? <Link to="/login">Login</Link>

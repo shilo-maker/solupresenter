@@ -73,7 +73,7 @@ function PresenterMode() {
   };
 
   // Fetch Bible verses for selected book and chapter
-  const fetchBibleVerses = async (book, chapter) => {
+  const fetchBibleVerses = useCallback(async (book, chapter) => {
     if (!book || !chapter) return;
 
     setBibleLoading(true);
@@ -111,7 +111,7 @@ function PresenterMode() {
     } finally {
       setBibleLoading(false);
     }
-  };
+  }, [displayMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Select Bible passage (similar to selecting a song)
   const selectBiblePassage = (passage) => {
@@ -334,13 +334,28 @@ function PresenterMode() {
       // Match book name (can include numbers like "1 Corinthians") and chapter number
       const match = trimmed.match(/^(.+?)\s+(\d+)$/);
       if (match) {
-        const bookName = match[1].trim();
+        const bookName = match[1].trim().toLowerCase();
         const chapterNum = match[2];
 
-        // Find matching book (case-insensitive)
-        const matchedBook = bibleBooks.find(b =>
-          b.name.toLowerCase() === bookName.toLowerCase()
+        // Find matching book with fuzzy matching
+        // Try exact match first, then prefix match, then contains match
+        let matchedBook = bibleBooks.find(b =>
+          b.name.toLowerCase() === bookName
         );
+
+        if (!matchedBook) {
+          // Try prefix match (e.g., "gen" matches "Genesis")
+          matchedBook = bibleBooks.find(b =>
+            b.name.toLowerCase().startsWith(bookName)
+          );
+        }
+
+        if (!matchedBook) {
+          // Try contains match (e.g., "corin" matches "1 Corinthians")
+          matchedBook = bibleBooks.find(b =>
+            b.name.toLowerCase().includes(bookName)
+          );
+        }
 
         if (matchedBook) {
           setSelectedBibleBook(matchedBook.name);
@@ -490,7 +505,7 @@ function PresenterMode() {
     }
   };
 
-  const toggleBlankSlide = () => {
+  const toggleBlankSlide = useCallback(() => {
     const newBlankState = !isBlankActive;
     setIsBlankActive(newBlankState);
 
@@ -503,7 +518,7 @@ function PresenterMode() {
         updateSlide(currentSong, currentSlideIndex, displayMode, false);
       }
     }
-  };
+  }, [isBlankActive, currentSong, currentSlideIndex, displayMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Navigate to next slide
   const nextSlide = useCallback(() => {
@@ -531,7 +546,7 @@ function PresenterMode() {
       const nextItem = setlist[currentItemIndex + 1];
       selectItem(nextItem);
     }
-  }, [currentSong, currentItem, currentSlideIndex, displayMode, isBlankActive, setlist]);
+  }, [currentSong, currentItem, currentSlideIndex, displayMode, isBlankActive, setlist]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Navigate to previous slide
   const previousSlide = useCallback(() => {
@@ -565,7 +580,7 @@ function PresenterMode() {
         setCurrentSlideIndex(lastSlideIndex);
       }
     }
-  }, [currentSong, currentItem, currentSlideIndex, displayMode, isBlankActive, setlist]);
+  }, [currentSong, currentItem, currentSlideIndex, displayMode, isBlankActive, setlist]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Navigate to next song/item
   const nextSong = useCallback(() => {
@@ -582,7 +597,7 @@ function PresenterMode() {
       const nextItem = setlist[currentItemIndex + 1];
       selectItem(nextItem);
     }
-  }, [currentItem, setlist]);
+  }, [currentItem, setlist]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Navigate to previous song/item
   const previousSong = useCallback(() => {
@@ -599,7 +614,7 @@ function PresenterMode() {
       const prevItem = setlist[currentItemIndex - 1];
       selectItem(prevItem);
     }
-  }, [currentItem, setlist]);
+  }, [currentItem, setlist]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyboard shortcuts
   useEffect(() => {

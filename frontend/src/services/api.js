@@ -2,10 +2,6 @@ import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-// Debug: Log the API URL being used
-console.log('🔧 API_URL:', API_URL);
-console.log('🔧 process.env.REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
-
 const api = axios.create({
   baseURL: API_URL
 });
@@ -44,8 +40,7 @@ api.interceptors.response.use(
 export const authAPI = {
   register: (email, password) => api.post('/auth/register', { email, password }),
   login: (email, password) => api.post('/auth/login', { email, password }),
-  getCurrentUser: () => api.get('/auth/me'),
-  googleAuth: () => window.location.href = `${API_URL}/auth/google`
+  getCurrentUser: () => api.get('/auth/me')
 };
 
 // Song endpoints

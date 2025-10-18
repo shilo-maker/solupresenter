@@ -333,7 +333,15 @@ router.put('/:id', authenticateToken, async (req, res) => {
     res.json({ song: originalSong });
   } catch (error) {
     console.error('Error updating song:', error);
-    res.status(500).json({ error: 'Failed to update song' });
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    if (error.name === 'ValidationError') {
+      console.error('Validation errors:', error.errors);
+    }
+    res.status(500).json({
+      error: 'Failed to update song',
+      details: error.message
+    });
   }
 });
 

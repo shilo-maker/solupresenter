@@ -51,7 +51,8 @@ const songSchema = new mongoose.Schema({
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false,  // Allow null for migrated songs
+    default: null
   },
   usageCount: {
     type: Number,

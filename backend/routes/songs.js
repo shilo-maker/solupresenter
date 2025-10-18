@@ -289,34 +289,40 @@ router.put('/:id', authenticateToken, async (req, res) => {
     console.log('  tags:', tags);
     console.log('First slide verseType:', slides && slides.length > 0 ? slides[0].verseType : 'no slides');
 
-    // If editing a public song that user doesn't own, create personal copy
+    // If editing a public song that user doesn't own
+    // Admin users can edit directly, non-admin users get a personal copy
+    const isAdmin = req.user.role === 'admin' || req.user.isAdmin;
     if (originalSong.isPublic && originalSong.createdBy && originalSong.createdBy.toString() !== req.user._id.toString()) {
-      const personalCopy = await Song.create({
-        title: title !== undefined ? title : originalSong.title,
-        originalLanguage: originalLanguage !== undefined ? originalLanguage : originalSong.originalLanguage,
-        slides: slides !== undefined ? slides : originalSong.slides,
-        tags: tags !== undefined ? tags : originalSong.tags,
-        createdBy: req.user._id,
-        isPublic: false,
-        isPendingApproval: false,
-        backgroundImage: backgroundImage !== undefined ? backgroundImage : originalSong.backgroundImage
-      });
+      if (!isAdmin) {
+        // Non-admin users: create a personal copy
+        const personalCopy = await Song.create({
+          title: title !== undefined ? title : originalSong.title,
+          originalLanguage: originalLanguage !== undefined ? originalLanguage : originalSong.originalLanguage,
+          slides: slides !== undefined ? slides : originalSong.slides,
+          tags: tags !== undefined ? tags : originalSong.tags,
+          createdBy: req.user._id,
+          isPublic: false,
+          isPendingApproval: false,
+          backgroundImage: backgroundImage !== undefined ? backgroundImage : originalSong.backgroundImage
+        });
 
-      console.log('Created personal copy with slides:', personalCopy.slides);
-      return res.json({ song: personalCopy, message: 'Personal copy created' });
+        console.log('Created personal copy with slides:', personalCopy.slides);
+        return res.json({ song: personalCopy, message: 'Personal copy created' });
+      }
+      // Admin users: continue to edit the original song below
     }
 
     // If user owns the song, update it
     // If createdBy is null (migrated songs), allow admin users to edit
     if (originalSong.createdBy && originalSong.createdBy.toString() !== req.user._id.toString()) {
-      // Check if user is admin
-      if (req.user.role !== 'admin' && !req.user.isAdmin) {
+      // Check if user is admin (already checked above, but double-check for security)
+      if (!isAdmin) {
         return res.status(403).json({ error: 'Access denied' });
       }
     }
 
     // If createdBy is null and user is not admin, deny access
-    if (!originalSong.createdBy && req.user.role !== 'admin' && !req.user.isAdmin) {
+    if (!originalSong.createdBy && !isAdmin) {
       return res.status(403).json({ error: 'Access denied - song has no owner' });
     }
 

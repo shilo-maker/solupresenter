@@ -31,7 +31,8 @@ const songSchema = new mongoose.Schema({
   },
   originalLanguage: {
     type: String,
-    required: true,
+    required: false,  // Allow null for migrated songs without language
+    default: 'he',    // Default to Hebrew for new songs
     enum: ['he', 'en', 'es', 'fr', 'de', 'ru', 'ar', 'other']
   },
   slides: [slideSchema],

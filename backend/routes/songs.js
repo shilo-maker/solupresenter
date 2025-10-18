@@ -281,16 +281,21 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const { title, originalLanguage, slides, tags, backgroundImage } = req.body;
 
     console.log('Received update request for song:', req.params.id);
-    console.log('Received slides:', slides);
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('Extracted values:');
+    console.log('  title:', title);
+    console.log('  originalLanguage:', originalLanguage);
+    console.log('  slides count:', slides?.length);
+    console.log('  tags:', tags);
     console.log('First slide verseType:', slides && slides.length > 0 ? slides[0].verseType : 'no slides');
 
     // If editing a public song that user doesn't own, create personal copy
     if (originalSong.isPublic && originalSong.createdBy && originalSong.createdBy.toString() !== req.user._id.toString()) {
       const personalCopy = await Song.create({
-        title: title || originalSong.title,
-        originalLanguage: originalLanguage || originalSong.originalLanguage,
-        slides: slides || originalSong.slides,
-        tags: tags || originalSong.tags,
+        title: title !== undefined ? title : originalSong.title,
+        originalLanguage: originalLanguage !== undefined ? originalLanguage : originalSong.originalLanguage,
+        slides: slides !== undefined ? slides : originalSong.slides,
+        tags: tags !== undefined ? tags : originalSong.tags,
         createdBy: req.user._id,
         isPublic: false,
         isPendingApproval: false,
@@ -315,10 +320,19 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied - song has no owner' });
     }
 
-    originalSong.title = title || originalSong.title;
-    originalSong.originalLanguage = originalLanguage || originalSong.originalLanguage;
-    originalSong.slides = slides || originalSong.slides;
-    originalSong.tags = tags || originalSong.tags;
+    // Only update fields if they are provided (not undefined)
+    if (title !== undefined) {
+      originalSong.title = title;
+    }
+    if (originalLanguage !== undefined) {
+      originalSong.originalLanguage = originalLanguage;
+    }
+    if (slides !== undefined) {
+      originalSong.slides = slides;
+    }
+    if (tags !== undefined) {
+      originalSong.tags = tags;
+    }
     if (backgroundImage !== undefined) {
       originalSong.backgroundImage = backgroundImage;
     }

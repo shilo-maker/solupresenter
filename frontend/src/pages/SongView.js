@@ -74,7 +74,7 @@ function SongView() {
     );
   }
 
-  const isOwner = song.createdBy._id === user._id;
+  const isOwner = song.createdBy && song.createdBy._id === user._id;
 
   return (
     <Container className="py-4">
@@ -165,12 +165,12 @@ function SongView() {
             <Card.Body>
               <div className="mb-3">
                 <small className="text-muted">Language:</small>
-                <div>{languages[song.originalLanguage]}</div>
+                <div>{song.originalLanguage ? languages[song.originalLanguage] : 'Unknown'}</div>
               </div>
 
               <div className="mb-3">
                 <small className="text-muted">Created By:</small>
-                <div>{song.createdBy.email}</div>
+                <div>{song.createdBy ? song.createdBy.email : 'Unknown (Migrated Song)'}</div>
               </div>
 
               <div className="mb-3">

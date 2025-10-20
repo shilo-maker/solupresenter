@@ -121,11 +121,17 @@ router.post('/bulk-import', authenticateToken, upload.array('songFiles', 50), as
       failed: []
     };
 
+    const hasHebrew = (text) => /[\u0590-\u05FF]/.test(text);
+    const extractHebrew = (text) => {
+      const hebrewMatch = text.match(/[\u0590-\u05FF]+(?:\s+[\u0590-\u05FF]+)*/);
+      return hebrewMatch ? hebrewMatch[0] : null;
+    };
+
     // Process each uploaded file
     for (const file of req.files) {
       try {
         const content = file.buffer.toString('utf8');
-        const lines = content.split('\n').map(line => line.trim()).filter(line => line);
+        const lines = content.split('\n').map(line => line.trim());
 
         if (lines.length === 0) {
           results.failed.push({
@@ -135,30 +141,99 @@ router.post('/bulk-import', authenticateToken, upload.array('songFiles', 50), as
           continue;
         }
 
-        // First line is the title - extract primary language (remove translations in parentheses)
-        const title = extractPrimaryLanguage(lines[0]);
+        // Extract title from first line: "Title: [song title]"
+        let title = file.originalname.replace('.txt', ''); // Default to filename
+        let i = 0;
+
+        if (lines[i] && lines[i].startsWith('Title:')) {
+          title = lines[i].substring(6).trim();
+          i++;
+        }
+
+        // If title is English-only, try to get Hebrew from filename
+        if (!hasHebrew(title)) {
+          const hebrewFromFilename = extractHebrew(file.originalname);
+          if (hebrewFromFilename) {
+            title = hebrewFromFilename;
+          }
+        }
+
+        // Skip empty lines after title
+        while (i < lines.length && lines[i] === '') {
+          i++;
+        }
+
+        // Parse slides using the correct pattern:
+        // 1. Find next Hebrew line (skip if not Hebrew)
+        // 2. Next line of text = transliteration
+        // 3. Empty line
+        // 4. 1 or 2 consecutive lines = translation (+ optional overflow)
+        // 5. Empty line, then repeat
         const slides = [];
-        let i = 1;
 
-        // Parse slides (4 lines per slide)
         while (i < lines.length) {
-          const originalText = lines[i] || '';
-          const transliteration = lines[i + 1] || '';
-          const translation = lines[i + 2] || '';
-          const translationOverflow = lines[i + 3] || '';
-
-          // Only add slide if it has at least original text
-          if (originalText) {
-            slides.push({
-              originalText,
-              transliteration,
-              translation,
-              translationOverflow,
-              verseType: 'verse' // Default verse type
-            });
+          // Skip empty lines
+          while (i < lines.length && lines[i] === '') {
+            i++;
           }
 
-          i += 4; // Move to next slide
+          if (i >= lines.length) break;
+
+          // Step 1: Find next Hebrew line
+          let originalText = '';
+          while (i < lines.length && lines[i]) {
+            if (hasHebrew(lines[i])) {
+              originalText = lines[i];
+              i++;
+              break;
+            }
+            // Skip non-Hebrew lines
+            i++;
+          }
+
+          if (!originalText) break; // No more Hebrew lines found
+
+          // Step 2: Read transliteration (next non-empty line)
+          while (i < lines.length && lines[i] === '') {
+            i++;
+          }
+
+          let transliteration = '';
+          if (i < lines.length && lines[i]) {
+            transliteration = lines[i];
+            i++;
+          }
+
+          // Step 3: Skip empty line(s) before translation
+          while (i < lines.length && lines[i] === '') {
+            i++;
+          }
+
+          // Step 4: Read translation (1 or 2 consecutive lines)
+          let translation = '';
+          let translationOverflow = '';
+
+          if (i < lines.length && lines[i]) {
+            translation = lines[i];
+            i++;
+
+            // Check if next line (without empty line in between) is also translation overflow
+            if (i < lines.length && lines[i] && !hasHebrew(lines[i])) {
+              translationOverflow = lines[i];
+              i++;
+            }
+          }
+
+          // Add slide
+          slides.push({
+            originalText,
+            transliteration,
+            translation,
+            translationOverflow,
+            verseType: 'verse' // Default verse type
+          });
+
+          // Step 5: Empty line should follow, and loop repeats
         }
 
         if (slides.length === 0) {
@@ -167,6 +242,15 @@ router.post('/bulk-import', authenticateToken, upload.array('songFiles', 50), as
             error: 'No valid slides found'
           });
           continue;
+        }
+
+        // Final fallback: If title still doesn't have Hebrew, use first few words of first Hebrew line
+        if (!hasHebrew(title) && slides.length > 0 && slides[0].originalText) {
+          const firstHebrew = slides[0].originalText;
+          const words = firstHebrew.split(/\s+/).filter(w => w.length > 0).slice(0, 4).join(' ');
+          if (words) {
+            title = words;
+          }
         }
 
         // Create the song

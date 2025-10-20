@@ -11,20 +11,32 @@ async function importSong(filePath) {
     const content = fs.readFileSync(filePath, 'utf8');
     const lines = content.split('\n').map(line => line.trim());
 
-    // Use Hebrew filename as title (remove .txt extension)
-    const filename = path.basename(filePath);
-    const title = filename.replace('.txt', '');
+    console.log(`\nImporting song: ${path.basename(filePath)}`);
 
-    console.log(`\nImporting song: ${title}`);
+    // Extract title from first line: "Title: [song title]"
+    let title = path.basename(filePath).replace('.txt', ''); // Default to filename
+    let i = 0;
 
-    // Parse slides
-    const slides = [];
-    let i = 0; // Start from beginning
-
-    // Skip the Title: line and any empty lines after it
-    while (i < lines.length && (lines[i] === '' || lines[i].startsWith('Title:'))) {
+    if (lines[i] && lines[i].startsWith('Title:')) {
+      title = lines[i].substring(6).trim(); // Extract title after "Title: "
       i++;
     }
+
+    console.log(`Song title: ${title}`);
+
+    // Skip empty lines after title
+    while (i < lines.length && lines[i] === '') {
+      i++;
+    }
+
+    // Parse slides using the correct pattern:
+    // 1. Find next Hebrew line (skip if not Hebrew)
+    // 2. Next line of text = transliteration
+    // 3. Empty line
+    // 4. 1 or 2 consecutive lines = translation (+ optional overflow)
+    // 5. Empty line, then repeat
+    const slides = [];
+    const hasHebrew = (text) => /[\u0590-\u05FF]/.test(text);
 
     while (i < lines.length) {
       // Skip empty lines
@@ -34,26 +46,37 @@ async function importSong(filePath) {
 
       if (i >= lines.length) break;
 
-      // Read Hebrew line (originalText)
-      const originalText = lines[i];
-      if (!originalText) break;
-      i++;
+      // Step 1: Find next Hebrew line
+      let originalText = '';
+      while (i < lines.length && lines[i]) {
+        if (hasHebrew(lines[i])) {
+          originalText = lines[i];
+          i++;
+          break;
+        }
+        // Skip non-Hebrew lines
+        i++;
+      }
 
-      // Skip empty line
+      if (!originalText) break; // No more Hebrew lines found
+
+      // Step 2: Read transliteration (next non-empty line)
       while (i < lines.length && lines[i] === '') {
         i++;
       }
 
-      // Read transliteration line
-      const transliteration = lines[i] || '';
-      i++;
+      let transliteration = '';
+      if (i < lines.length && lines[i]) {
+        transliteration = lines[i];
+        i++;
+      }
 
-      // Skip empty line
+      // Step 3: Skip empty line(s) before translation
       while (i < lines.length && lines[i] === '') {
         i++;
       }
 
-      // Read translation line(s)
+      // Step 4: Read translation (1 or 2 consecutive lines)
       let translation = '';
       let translationOverflow = '';
 
@@ -61,33 +84,22 @@ async function importSong(filePath) {
         translation = lines[i];
         i++;
 
-        // Check if next non-empty line is part of translation (not Hebrew)
-        while (i < lines.length && lines[i] === '') {
+        // Check if next line (without empty line in between) is also translation overflow
+        if (i < lines.length && lines[i] && !hasHebrew(lines[i])) {
+          translationOverflow = lines[i];
           i++;
-        }
-
-        // If the next line exists and doesn't look like Hebrew (no Hebrew characters), it's overflow
-        if (i < lines.length && lines[i]) {
-          const nextLine = lines[i];
-          // Check if line contains Hebrew characters
-          const hasHebrew = /[\u0590-\u05FF]/.test(nextLine);
-
-          if (!hasHebrew && nextLine) {
-            translationOverflow = nextLine;
-            i++;
-          }
         }
       }
 
       // Add slide
-      if (originalText) {
-        slides.push({
-          originalText,
-          transliteration,
-          translation,
-          translationOverflow
-        });
-      }
+      slides.push({
+        originalText,
+        transliteration,
+        translation,
+        translationOverflow
+      });
+
+      // Step 5: Empty line should follow, and loop repeats
     }
 
     console.log(`Parsed ${slides.length} slides`);
@@ -119,8 +131,8 @@ async function importAllSongs() {
 
     console.log(`Importing songs as user: ${admin.email}`);
 
-    // Get all .txt files from songs_import folder
-    const songsImportDir = path.join(__dirname, '../../songs_import');
+    // Get all .txt files from import_new folder
+    const songsImportDir = path.join(__dirname, '../../import_new');
     const files = fs.readdirSync(songsImportDir).filter(file => file.endsWith('.txt'));
 
     console.log(`Found ${files.length} song file(s) to import\n`);

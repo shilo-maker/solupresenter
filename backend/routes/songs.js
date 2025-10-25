@@ -44,7 +44,7 @@ router.get('/', authenticateToken, async (req, res) => {
         { createdBy: req.user._id }
       ]
     })
-    .select('title originalLanguage tags isPublic createdBy usageCount updatedAt')
+    .select('_id title originalLanguage tags isPublic createdBy usageCount updatedAt')
     .populate('createdBy', 'email')
     .sort({ title: 1 })
     .lean();
@@ -81,7 +81,7 @@ router.get('/search', authenticateToken, async (req, res) => {
     }
 
     const songs = await Song.find(filter)
-      .select('title originalLanguage tags isPublic createdBy usageCount updatedAt')
+      .select('_id title originalLanguage tags isPublic createdBy usageCount updatedAt')
       .populate('createdBy', 'email')
       .sort(query ? { score: { $meta: 'textScore' } } : { title: 1 })
       .lean();
@@ -329,11 +329,12 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const song = await Song.findById(req.params.id).populate('createdBy', 'email');
 
     if (!song) {
+      console.log(`Song not found: ${req.params.id}`);
       return res.status(404).json({ error: 'Song not found' });
     }
 
-    // Check access permission
-    if (!song.isPublic && song.createdBy._id.toString() !== req.user._id.toString()) {
+    // Check access permission (allow access if no creator or if public or if user owns it)
+    if (!song.isPublic && song.createdBy && song.createdBy._id.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: 'Access denied' });
     }
 

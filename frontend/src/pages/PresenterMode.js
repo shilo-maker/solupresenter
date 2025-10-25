@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Form, Button, InputGroup, Modal, Row, Col, Alert, Badge } from 'react-bootstrap';
+import { Form, Button, InputGroup, Modal, Row, Col, Alert, Badge, Dropdown } from 'react-bootstrap';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api, { getFullImageUrl } from '../services/api';
@@ -57,11 +57,37 @@ function PresenterMode() {
   const [selectedBackground, setSelectedBackground] = useState('');
   const [showBackgroundModal, setShowBackgroundModal] = useState(false);
 
+  // Get default date (today) and time (next round hour)
+  const getDefaultDateTime = () => {
+    const now = new Date();
+
+    // Format date as YYYY-MM-DD
+    const dateStr = now.toISOString().split('T')[0];
+
+    // Get next round hour
+    const nextHour = now.getHours() + 1;
+    const hours = String(nextHour).padStart(2, '0');
+    const timeStr = `${hours}:00`;
+
+    return { dateStr, timeStr };
+  };
+
   // Save setlist state
   const [showSaveSetlistModal, setShowSaveSetlistModal] = useState(false);
   const [setlistName, setSetlistName] = useState('');
+  const [setlistDate, setSetlistDate] = useState('');
+  const [setlistTime, setSetlistTime] = useState('');
+  const [setlistVenue, setSetlistVenue] = useState('');
   const [saveSetlistLoading, setSaveSetlistLoading] = useState(false);
   const [linkedSetlistName, setLinkedSetlistName] = useState('');
+
+  // Load setlist state
+  const [showLoadSetlistModal, setShowLoadSetlistModal] = useState(false);
+  const [availableSetlists, setAvailableSetlists] = useState([]);
+  const [loadSetlistLoading, setLoadSetlistLoading] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
+  const [pendingLoadAction, setPendingLoadAction] = useState(null);
 
   // Bible state
   const [bibleBooks, setBibleBooks] = useState([]);
@@ -175,66 +201,62 @@ function PresenterMode() {
     }
   }, [error]);
 
-  // Save setlist to backend whenever it changes
-  useEffect(() => {
+  // Manual save function for setlist
+  const handleManualSaveSetlist = async () => {
     if (!room || !room._id || !room.temporarySetlist) {
-      return; // Skip if room not created yet
+      setError('No active setlist to save');
+      return;
     }
 
-    const saveSetlist = async () => {
-      try {
-        // Convert setlist to backend format
-        const items = setlist.map((item, index) => {
-          if (item.type === 'song') {
-            return {
-              type: 'song',
-              song: item.data._id,
-              order: index
-            };
-          } else if (item.type === 'image') {
-            return {
-              type: 'image',
-              image: item.data._id,
-              order: index
-            };
-          } else if (item.type === 'bible') {
-            // Extract Bible data from the item
-            const bibleId = item.data._id; // e.g., "bible-Genesis-1"
-            const parts = bibleId.replace('bible-', '').split('-');
-            const book = parts.slice(0, -1).join('-'); // Book name might have hyphens
-            const chapter = parseInt(parts[parts.length - 1]);
+    try {
+      // Convert setlist to backend format
+      const items = setlist.map((item, index) => {
+        if (item.type === 'song') {
+          return {
+            type: 'song',
+            song: item.data._id,
+            order: index
+          };
+        } else if (item.type === 'image') {
+          return {
+            type: 'image',
+            image: item.data._id,
+            order: index
+          };
+        } else if (item.type === 'bible') {
+          // Extract Bible data from the item
+          const bibleId = item.data._id; // e.g., "bible-Genesis-1"
+          const parts = bibleId.replace('bible-', '').split('-');
+          const book = parts.slice(0, -1).join('-'); // Book name might have hyphens
+          const chapter = parseInt(parts[parts.length - 1]);
 
-            return {
-              type: 'bible',
-              bibleData: {
-                book: book,
-                chapter: chapter,
-                title: item.data.title,
-                slides: item.data.slides
-              },
-              order: index
-            };
-          } else if (item.type === 'blank') {
-            return {
-              type: 'blank',
-              order: index
-            };
-          }
-          return null;
-        }).filter(Boolean);
+          return {
+            type: 'bible',
+            bibleData: {
+              book: book,
+              chapter: chapter,
+              title: item.data.title,
+              slides: item.data.slides
+            },
+            order: index
+          };
+        } else if (item.type === 'blank') {
+          return {
+            type: 'blank',
+            order: index
+          };
+        }
+        return null;
+      }).filter(Boolean);
 
-        await api.put(`/api/rooms/${room._id}/setlist`, { items });
-        console.log('✅ Temporary setlist saved to backend');
-      } catch (error) {
-        console.error('❌ Error saving temporary setlist:', error);
-        // Don't show error to user - this is auto-save
-      }
-    };
-
-    // Debounce the save - only save 500ms after last change
-    const timeoutId = setTimeout(saveSetlist, 500);
-    return () => clearTimeout(timeoutId);
-  }, [setlist, room]);
+      await api.put(`/api/rooms/${room._id}/setlist`, { items });
+      console.log('✅ Setlist saved to backend');
+      setHasUnsavedChanges(false);
+    } catch (error) {
+      console.error('❌ Error saving setlist:', error);
+      setError('Failed to save setlist: ' + (error.response?.data?.error || error.message));
+    }
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -244,6 +266,14 @@ function PresenterMode() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Track setlist changes to detect unsaved changes
+  useEffect(() => {
+    // Skip marking as unsaved on initial load or when setlist is empty
+    if (setlist.length > 0 && room && room._id) {
+      setHasUnsavedChanges(true);
+    }
+  }, [setlist]);
 
   useEffect(() => {
     console.log('🔄 PresenterMode useEffect triggered', {
@@ -581,16 +611,38 @@ function PresenterMode() {
     setSetlist(newSetlist);
   };
 
+  const handleOpenSaveModal = () => {
+    const { dateStr, timeStr } = getDefaultDateTime();
+    setSetlistDate(dateStr);
+    setSetlistTime(timeStr);
+    setShowSaveSetlistModal(true);
+  };
+
   const handleSaveSetlist = async () => {
-    if (!setlistName.trim()) {
-      setError('Please enter a name for the setlist');
+    if (!setlistDate.trim()) {
+      setError('Please select a date');
       return;
     }
+    if (!setlistTime.trim()) {
+      setError('Please select a time');
+      return;
+    }
+    if (!setlistVenue.trim()) {
+      setError('Please enter a venue');
+      return;
+    }
+
+    // Convert date from YYYY-MM-DD to DD/MM
+    const [year, month, day] = setlistDate.split('-');
+    const formattedDate = `${day}/${month}`;
+
+    // Generate setlist name: Date(DD/MM) Time(HH:MM) Venue
+    const generatedName = `${formattedDate} ${setlistTime} ${setlistVenue}`;
 
     setSaveSetlistLoading(true);
     try {
       const response = await api.post(`/api/rooms/${room._id}/save-setlist`, {
-        name: setlistName.trim()
+        name: generatedName
       });
 
       // Update room with linked permanent setlist
@@ -600,14 +652,102 @@ function PresenterMode() {
       }));
 
       setShowSaveSetlistModal(false);
-      setSetlistName('');
+      setSetlistDate('');
+      setSetlistTime('');
+      setSetlistVenue('');
       setError('');
+      setHasUnsavedChanges(false);
+      setLinkedSetlistName(response.data.setlist.name);
       alert(`Setlist "${response.data.setlist.name}" saved! All changes will now auto-save to this setlist.`);
     } catch (error) {
       console.error('Error saving setlist:', error);
       setError('Failed to save setlist: ' + (error.response?.data?.error || error.message));
     } finally {
       setSaveSetlistLoading(false);
+    }
+  };
+
+  const handleOpenLoadModal = async () => {
+    // Check for unsaved changes
+    if (hasUnsavedChanges) {
+      setShowUnsavedChangesModal(true);
+      setPendingLoadAction(() => async () => {
+        await continueLoadModal();
+      });
+      return;
+    }
+
+    await continueLoadModal();
+  };
+
+  const continueLoadModal = async () => {
+    setShowLoadSetlistModal(true);
+    setLoadSetlistLoading(true);
+    try {
+      const response = await api.get('/api/setlists');
+      setAvailableSetlists(response.data.setlists || []);
+    } catch (error) {
+      console.error('Error fetching setlists:', error);
+      setError('Failed to load setlists: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setLoadSetlistLoading(false);
+    }
+  };
+
+  const handleUnsavedChangesSave = async () => {
+    await handleManualSaveSetlist();
+    setShowUnsavedChangesModal(false);
+    if (pendingLoadAction) {
+      await pendingLoadAction();
+      setPendingLoadAction(null);
+    }
+  };
+
+  const handleUnsavedChangesDontSave = async () => {
+    setShowUnsavedChangesModal(false);
+    setHasUnsavedChanges(false);
+    if (pendingLoadAction) {
+      await pendingLoadAction();
+      setPendingLoadAction(null);
+    }
+  };
+
+  const handleUnsavedChangesCancel = () => {
+    setShowUnsavedChangesModal(false);
+    setPendingLoadAction(null);
+  };
+
+  const handleLoadSetlist = async (setlistId) => {
+    setLoadSetlistLoading(true);
+    try {
+      const response = await api.post(`/api/rooms/${room._id}/link-setlist`, {
+        setlistId
+      });
+
+      console.log('Load setlist response:', response.data);
+
+      // Update room with linked setlist and load the setlist content
+      if (response.data && response.data.room) {
+        setRoom(prevRoom => ({
+          ...prevRoom,
+          linkedPermanentSetlist: response.data.room.linkedPermanentSetlist
+        }));
+      }
+
+      if (response.data && response.data.setlist) {
+        setSetlist(response.data.setlist.songs || []);
+        setLinkedSetlistName(response.data.setlist.name);
+        setHasUnsavedChanges(false);
+      }
+
+      setShowLoadSetlistModal(false);
+      setError('');
+    } catch (error) {
+      console.error('Error loading setlist:', error);
+      console.error('Error response:', error.response);
+      setError('Failed to load setlist: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setLoadSetlistLoading(false);
     }
   };
 
@@ -874,7 +1014,7 @@ function PresenterMode() {
       minHeight: '100vh',
       backgroundColor: '#2d2d2d',
       padding: '20px',
-      paddingBottom: '100px',
+      paddingBottom: '20px',
       display: 'flex',
       justifyContent: 'center'
     }}>
@@ -911,7 +1051,7 @@ function PresenterMode() {
           right: '20px',
           top: '20px'
         }}>
-          <img src="/logo.png" alt="SoluCast Logo" style={{ maxWidth: '120px', height: 'auto' }} />
+          <img src="/cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '40px', height: 'auto' }} />
         </div>
         {roomPin ? (
           <>
@@ -983,8 +1123,8 @@ function PresenterMode() {
       <div style={{
         display: 'grid',
         gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-        gap: '20px',
-        marginBottom: '20px'
+        gap: '12px',
+        marginBottom: '12px'
       }}>
         {/* Song Search Section */}
         <div style={{
@@ -994,17 +1134,17 @@ function PresenterMode() {
         }}>
           <div
             style={{
-              padding: '15px 20px',
+              padding: '8px 12px',
               backgroundColor: '#f8f9fa',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: '15px',
+              gap: '8px',
               flexWrap: 'wrap'
             }}
           >
             {/* Title with collapse toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '0 0 auto', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '0 0 auto', flexWrap: 'wrap' }}>
               <Button
                 variant={activeResourcePanel === 'songs' ? 'primary' : 'outline-secondary'}
                 size="sm"
@@ -1054,9 +1194,9 @@ function PresenterMode() {
             </div>
           </div>
 
-          <div style={{ padding: '20px' }}>
+          <div style={{ padding: '10px' }}>
             {activeResourcePanel === 'songs' ? (
-              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
                 {songsLoading ? (
                   <div style={{ textAlign: 'center', color: '#666', padding: '40px' }}>
                     <div className="spinner-border text-primary" role="status" style={{ marginBottom: '10px' }}>
@@ -1073,20 +1213,20 @@ function PresenterMode() {
                   <div
                     key={song._id}
                     style={{
-                      padding: '15px',
+                      padding: '8px 10px',
                       backgroundColor: currentSong?._id === song._id ? '#007bff' : 'white',
                       color: currentSong?._id === song._id ? 'white' : '#000',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
                       cursor: 'pointer',
-                      borderRadius: '5px',
-                      marginBottom: '5px',
+                      borderRadius: '4px',
+                      marginBottom: '4px',
                       border: currentSong?._id === song._id ? '2px solid #0056b3' : '1px solid #ddd'
                     }}
                     onClick={() => selectSong(song)}
                   >
-                    <span style={{ fontSize: '1.1rem' }}>{song.title}</span>
+                    <span style={{ fontSize: '0.95rem' }}>{song.title}</span>
                     <Button
                       variant="primary"
                       size="sm"
@@ -1143,7 +1283,7 @@ function PresenterMode() {
                 )}
               </div>
             ) : activeResourcePanel === 'bible' ? (
-              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
                 <div style={{ marginBottom: '15px' }}>
                   {/* Side-by-side Book and Chapter selectors (stacks on mobile) */}
                   <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '10px', marginBottom: '15px' }}>
@@ -1305,7 +1445,7 @@ function PresenterMode() {
                 )}
               </div>
             ) : (
-              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
                 {mediaLoading ? (
                   <div style={{ textAlign: 'center', color: '#666', padding: '40px' }}>
                     <div className="spinner-border text-primary" role="status" style={{ marginBottom: '10px' }}>
@@ -1324,21 +1464,21 @@ function PresenterMode() {
                       <div
                         key={image._id}
                         style={{
-                          padding: '12px',
+                          padding: '8px 10px',
                           backgroundColor: 'white',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '10px',
+                          gap: '8px',
                           cursor: 'pointer',
-                          borderRadius: '5px',
-                          marginBottom: '5px',
+                          borderRadius: '4px',
+                          marginBottom: '4px',
                           border: '1px solid #ddd'
                         }}
                       >
                         <div
                           style={{
-                            width: '50px',
-                            height: '50px',
+                            width: '40px',
+                            height: '40px',
                             background: isGradient ? image.url : `url(${getFullImageUrl(image.url)})`,
                             backgroundSize: 'cover',
                             backgroundPosition: 'center',
@@ -1431,138 +1571,273 @@ function PresenterMode() {
         }}>
           <div
             style={{
-              padding: '15px 20px',
+              padding: '8px 12px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               backgroundColor: '#f8f9fa',
               flexWrap: 'wrap',
-              gap: '10px'
+              gap: '6px'
             }}
           >
             <div
-              onClick={() => setSetlistSectionOpen(!setlistSectionOpen)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenLoadModal();
+              }}
               style={{
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 flex: 1,
-                minWidth: '150px'
+                minWidth: '150px',
+                gap: '10px'
               }}
             >
-              <span style={{ fontSize: '1.5rem', marginRight: '10px' }}>
+              <span
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSetlistSectionOpen(!setlistSectionOpen);
+                }}
+                style={{
+                  fontSize: '1.1rem',
+                  color: '#718096',
+                  transition: 'transform 0.2s ease',
+                  cursor: 'pointer',
+                  padding: '4px'
+                }}
+              >
                 {setlistSectionOpen ? '▼' : '▶'}
               </span>
-              <span style={{ fontSize: '1.2rem', fontWeight: '500' }}>Setlist</span>
-              {room?.linkedPermanentSetlist && linkedSetlistName && (
-                <span style={{
-                  marginLeft: '12px',
-                  fontSize: '0.85rem',
-                  fontWeight: '600',
-                  padding: '4px 12px',
-                  borderRadius: '6px',
-                  background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
-                  color: 'white',
-                  boxShadow: '0 2px 6px rgba(17, 153, 142, 0.3)',
-                  maxWidth: '200px',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  display: 'inline-block'
-                }}>
-                  {linkedSetlistName}
-                </span>
+              {room?.linkedPermanentSetlist && linkedSetlistName ? (
+                <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                  <span style={{
+                    fontSize: '1.05rem',
+                    fontWeight: '600',
+                    color: '#2D3748',
+                    background: 'linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%)',
+                    padding: '6px 14px',
+                    borderRadius: '8px',
+                    border: '1px solid #FED7AA',
+                    boxShadow: '0 1px 3px rgba(255, 140, 66, 0.1)',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: '250px'
+                  }}>
+                    {linkedSetlistName}
+                  </span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{
+                    fontSize: '1.05rem',
+                    fontWeight: '600',
+                    color: '#4A5568',
+                    letterSpacing: '0.3px'
+                  }}>
+                    Setlist
+                  </span>
+                </div>
               )}
             </div>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              {room?.linkedPermanentSetlist && (
-                <Button
-                  variant="outline-secondary"
-                  size="sm"
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    const confirmNew = window.confirm(
-                      'Are you sure you want to create a new empty setlist?\n\n' +
-                      'This will unlink "' + linkedSetlistName + '" from this room and start fresh.'
-                    );
-                    if (confirmNew) {
-                      try {
-                        // Unlink the setlist
-                        await api.post(`/api/rooms/${room._id}/unlink-setlist`);
+            <Dropdown onClick={(e) => e.stopPropagation()}>
+              <Dropdown.Toggle
+                variant="link"
+                id="setlist-dropdown"
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#4A5568',
+                  padding: '6px 10px',
+                  fontSize: '1.4rem',
+                  lineHeight: '1',
+                  textDecoration: 'none',
+                  boxShadow: 'none',
+                  borderRadius: '8px',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#F7FAFC';
+                  e.currentTarget.style.color = '#FF8C42';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = '#4A5568';
+                }}
+              >
+                ⋮
+              </Dropdown.Toggle>
 
-                        // Clear the local state
-                        setRoom(prevRoom => ({
-                          ...prevRoom,
-                          linkedPermanentSetlist: null
-                        }));
-                        setLinkedSetlistName('');
-                        setSetlist([]);
-                        setCurrentSong(null);
-                        setCurrentItem(null);
-
-                        console.log('✅ Created new empty setlist');
-                      } catch (error) {
-                        console.error('Error creating new setlist:', error);
-                        setError('Failed to create new setlist. Please try again.');
-                      }
-                    }
-                  }}
-                  style={{
-                    padding: '6px 16px',
-                    fontSize: '0.875rem',
-                    fontWeight: '600',
-                    borderRadius: '8px',
-                    border: '2px solid #718096',
-                    color: '#718096',
-                    background: 'transparent',
-                    transition: 'all 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#718096';
-                    e.currentTarget.style.color = 'white';
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.color = '#718096';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}
-                  title="Create new empty setlist"
-                >
-                  New
-                </Button>
-              )}
-              {!room?.linkedPermanentSetlist && (
-                <Button
-                  variant="success"
-                  size="sm"
+              <Dropdown.Menu
+                style={{
+                  borderRadius: '12px',
+                  border: '1px solid #E2E8F0',
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+                  padding: '8px',
+                  minWidth: '180px',
+                  marginTop: '8px'
+                }}
+              >
+                <Dropdown.Item
                   onClick={(e) => {
                     e.stopPropagation();
-                    setShowSaveSetlistModal(true);
+                    handleManualSaveSetlist();
                   }}
                   disabled={setlist.length === 0}
                   style={{
-                    marginLeft: '10px',
-                    padding: '5px 10px',
-                    fontSize: '1.2rem'
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    fontSize: '0.95rem',
+                    fontWeight: '500',
+                    color: setlist.length === 0 ? '#A0AEC0' : '#2D3748',
+                    transition: 'all 0.2s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
                   }}
-                  title="Save as permanent setlist"
+                  onMouseEnter={(e) => {
+                    if (setlist.length > 0) {
+                      e.currentTarget.style.background = '#F0FDF4';
+                      e.currentTarget.style.color = '#16A34A';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = setlist.length === 0 ? '#A0AEC0' : '#2D3748';
+                  }}
                 >
-                  💾
-                </Button>
-              )}
-            </div>
+                  <span style={{ fontSize: '1.1rem' }}>💾</span> Save
+                </Dropdown.Item>
+
+                {room?.linkedPermanentSetlist && (
+                  <Dropdown.Item
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const confirmNew = window.confirm(
+                        'Are you sure you want to create a new empty setlist?\n\n' +
+                        'This will unlink "' + linkedSetlistName + '" from this room and start fresh.'
+                      );
+                      if (confirmNew) {
+                        try {
+                          // Unlink the setlist
+                          await api.post(`/api/rooms/${room._id}/unlink-setlist`);
+
+                          // Clear the local state
+                          setRoom(prevRoom => ({
+                            ...prevRoom,
+                            linkedPermanentSetlist: null
+                          }));
+                          setLinkedSetlistName('');
+                          setSetlist([]);
+                          setCurrentSong(null);
+                          setCurrentItem(null);
+                          setHasUnsavedChanges(false);
+
+                          console.log('✅ Created new empty setlist');
+                        } catch (error) {
+                          console.error('Error creating new setlist:', error);
+                          setError('Failed to create new setlist. Please try again.');
+                        }
+                      }
+                    }}
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: '8px',
+                      fontSize: '0.95rem',
+                      fontWeight: '500',
+                      color: '#2D3748',
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#F0F9FF';
+                      e.currentTarget.style.color = '#0284C7';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = '#2D3748';
+                    }}
+                  >
+                    <span style={{ fontSize: '1.1rem' }}>✨</span> New
+                  </Dropdown.Item>
+                )}
+
+                <Dropdown.Item
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenLoadModal();
+                  }}
+                  style={{
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    fontSize: '0.95rem',
+                    fontWeight: '500',
+                    color: '#2D3748',
+                    transition: 'all 0.2s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#FEF3C7';
+                    e.currentTarget.style.color = '#D97706';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = '#2D3748';
+                  }}
+                >
+                  <span style={{ fontSize: '1.1rem' }}>📂</span> Load
+                </Dropdown.Item>
+
+                {!room?.linkedPermanentSetlist && (
+                  <Dropdown.Item
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenSaveModal();
+                    }}
+                    disabled={setlist.length === 0}
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: '8px',
+                      fontSize: '0.95rem',
+                      fontWeight: '500',
+                      color: setlist.length === 0 ? '#A0AEC0' : '#2D3748',
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (setlist.length > 0) {
+                        e.currentTarget.style.background = '#FFF7ED';
+                        e.currentTarget.style.color = '#FF8C42';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = setlist.length === 0 ? '#A0AEC0' : '#2D3748';
+                    }}
+                  >
+                    <span style={{ fontSize: '1.1rem' }}>📝</span> Save As...
+                  </Dropdown.Item>
+                )}
+              </Dropdown.Menu>
+            </Dropdown>
           </div>
 
           {setlistSectionOpen && (
-            <div style={{ padding: '20px' }}>
+            <div style={{ padding: '10px' }}>
               {setlist.length === 0 ? (
                 <p style={{ textAlign: 'center', color: '#666' }}>
                   No songs in setlist. Add songs from above.
                 </p>
               ) : (
                 <div style={{
-                  maxHeight: '400px',
+                  maxHeight: '220px',
                   overflowY: 'auto',
                   paddingRight: '5px'
                 }}>
@@ -1606,11 +1881,11 @@ function PresenterMode() {
                         onDragOver={handleDragOver}
                         onDrop={(e) => handleDrop(e, index)}
                         style={{
-                          padding: '12px 15px',
+                          padding: '8px 10px',
                           backgroundColor: display.bgColor,
-                          borderRadius: '8px',
+                          borderRadius: '6px',
                           borderLeft: display.borderLeft,
-                          marginBottom: '10px',
+                          marginBottom: '6px',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
@@ -1627,12 +1902,12 @@ function PresenterMode() {
                           e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '10px' }}>
-                          <span style={{ fontSize: '1.2rem', color: '#718096', cursor: 'grab', fontWeight: '600' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '6px' }}>
+                          <span style={{ fontSize: '1rem', color: '#718096', cursor: 'grab', fontWeight: '600' }}>
                             ⋮⋮
                           </span>
                           <span
-                            style={{ fontSize: '1rem', cursor: 'pointer', flex: 1, fontWeight: '500', color: '#2d3748' }}
+                            style={{ fontSize: '0.9rem', cursor: 'pointer', flex: 1, fontWeight: '500', color: '#2d3748' }}
                             onClick={() => selectItem(item)}
                           >
                             {index + 1}. {display.title}
@@ -1668,8 +1943,8 @@ function PresenterMode() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '15px',
-            flexWrap: 'wrap'
+            gap: '10px',
+            flexWrap: 'nowrap'
           }}
         >
           {/* Title with collapse toggle */}
@@ -1680,13 +1955,20 @@ function PresenterMode() {
               display: 'flex',
               alignItems: 'center',
               flex: '1 1 auto',
-              minWidth: '200px'
+              minWidth: '0',
+              overflow: 'hidden'
             }}
           >
-            <span style={{ fontSize: '1.5rem', marginRight: '10px' }}>
+            <span style={{ fontSize: '1.5rem', marginRight: '10px', flexShrink: 0 }}>
               {slideSectionOpen ? '▼' : '▶'}
             </span>
-            <span style={{ fontSize: '1.2rem', fontWeight: '500' }}>
+            <span style={{
+              fontSize: '1.2rem',
+              fontWeight: '500',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}>
               {currentItem
                 ? currentItem.type === 'song'
                   ? currentItem.data?.title
@@ -1703,14 +1985,14 @@ function PresenterMode() {
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '10px',
-            flexWrap: 'wrap'
+            gap: '6px',
+            flexShrink: 0
           }}>
             <Button
               variant={isBlankActive ? 'warning' : 'dark'}
               onClick={toggleBlankSlide}
               size="sm"
-              style={{ fontSize: '0.9rem', padding: '6px 16px' }}
+              style={{ fontSize: '0.8rem', padding: '4px 10px', whiteSpace: 'nowrap' }}
             >
               {isBlankActive ? 'Blank ON' : 'Blank'}
             </Button>
@@ -1719,77 +2001,32 @@ function PresenterMode() {
               variant="info"
               onClick={() => setShowBackgroundModal(true)}
               size="sm"
-              style={{ fontSize: '0.9rem', padding: '6px 16px' }}
+              style={{ fontSize: '0.8rem', padding: '4px 10px', whiteSpace: 'nowrap' }}
             >
-              Background
+              {isMobile ? 'BG' : 'Background'}
             </Button>
 
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-              <Button
-                variant={displayMode === 'original' ? 'primary' : 'outline-secondary'}
-                onClick={toggleDisplayMode}
-                size="sm"
-                style={{ minWidth: '80px', fontSize: '0.85rem' }}
-              >
-                Original
-              </Button>
-              <Button
-                variant={displayMode === 'bilingual' ? 'primary' : 'outline-secondary'}
-                onClick={toggleDisplayMode}
-                size="sm"
-                style={{ minWidth: '80px', fontSize: '0.85rem' }}
-              >
-                Bilingual
-              </Button>
-            </div>
+            <Button
+              variant="primary"
+              onClick={toggleDisplayMode}
+              size="sm"
+              style={{ fontSize: '0.8rem', padding: '4px 10px', whiteSpace: 'nowrap' }}
+            >
+              {displayMode === 'original' ? 'Original' : 'Bilingual'}
+            </Button>
           </div>
         </div>
 
         {slideSectionOpen && currentSong && (
           <div>
-            {/* Next Slide Preview Banner */}
-            {currentSlideIndex < currentSong.slides.length - 1 && (
-              <div style={{
-                padding: '12px 20px',
-                backgroundColor: '#e7f3ff',
-                borderBottom: '2px solid #007bff',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px'
-              }}>
-                <div style={{
-                  fontSize: '0.85rem',
-                  fontWeight: '600',
-                  color: '#007bff',
-                  minWidth: '80px'
-                }}>
-                  NEXT SLIDE:
-                </div>
-                <div style={{
-                  fontSize: '0.9rem',
-                  color: '#333',
-                  flex: 1,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}>
-                  {currentSong.slides[currentSlideIndex + 1].verseType && (
-                    <strong style={{ color: '#007bff', marginRight: '8px' }}>
-                      {currentSong.slides[currentSlideIndex + 1].verseType}:
-                    </strong>
-                  )}
-                  {currentSong.slides[currentSlideIndex + 1].originalText}
-                </div>
-              </div>
-            )}
-
             <div style={{
-              padding: '20px',
-              maxHeight: '500px',
-              overflowY: 'auto',
+              padding: '8px',
               display: 'grid',
               gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
-              gap: '15px'
+              gap: '6px',
+              maxHeight: 'calc(100vh - 200px)',
+              minHeight: 'calc(100vh - 100px)',
+              overflowY: 'auto'
             }}>
             {currentSong.slides.map((slide, index) => {
               // Function to get background color based on verse type
@@ -1826,9 +2063,9 @@ function PresenterMode() {
                 key={index}
                 onClick={() => selectSlide(index)}
                 style={{
-                  border: currentSlideIndex === index ? '3px solid #007bff' : '1px solid #ddd',
-                  borderRadius: '10px',
-                  padding: '20px',
+                  border: currentSlideIndex === index ? '2px solid #007bff' : '1px solid #ddd',
+                  borderRadius: '6px',
+                  padding: '6px 8px',
                   cursor: 'pointer',
                   backgroundColor: getBackgroundColor(slide.verseType, currentSlideIndex === index)
                 }}
@@ -1836,8 +2073,8 @@ function PresenterMode() {
                 <div style={{
                   color: '#007bff',
                   fontWeight: 'bold',
-                  marginBottom: '10px',
-                  fontSize: '1rem'
+                  marginBottom: '4px',
+                  fontSize: '0.75rem'
                 }}>
                   {currentSong.isBible
                     ? `Verse ${slide.verseNumber || index + 1}`
@@ -1845,22 +2082,22 @@ function PresenterMode() {
                     ? `${slide.verseType} - Slide ${index + 1}`
                     : `Slide ${index + 1}`}
                 </div>
-                <div style={{ fontSize: '1.1rem', lineHeight: '1.6' }}>
-                  <div style={{ marginBottom: '5px' }}>
+                <div style={{ fontSize: '0.85rem', lineHeight: '1.3' }}>
+                  <div style={{ marginBottom: '2px' }}>
                     {slide.originalText}
                   </div>
                   {slide.transliteration && (
-                    <div style={{ marginBottom: '5px' }}>
+                    <div style={{ marginBottom: '2px' }}>
                       {slide.transliteration}
                     </div>
                   )}
                   {slide.translation && (
-                    <div style={{ marginBottom: '5px' }}>
+                    <div style={{ marginBottom: '2px' }}>
                       {slide.translation}
                     </div>
                   )}
                   {slide.translationOverflow && (
-                    <div style={{ marginBottom: '5px' }}>
+                    <div style={{ marginBottom: '2px' }}>
                       {slide.translationOverflow}
                     </div>
                   )}
@@ -2064,28 +2301,61 @@ function PresenterMode() {
       </Modal>
 
       {/* Save Setlist Modal */}
-      <Modal show={showSaveSetlistModal} onHide={() => setShowSaveSetlistModal(false)}>
+      <Modal show={showSaveSetlistModal} onHide={() => {
+        setShowSaveSetlistModal(false);
+        setSetlistDate('');
+        setSetlistTime('');
+        setSetlistVenue('');
+      }}>
         <Modal.Header closeButton>
           <Modal.Title>Save Setlist as Permanent</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form>
-            <Form.Group>
-              <Form.Label>Setlist Name</Form.Label>
+            <Form.Group className="mb-3">
+              <Form.Label>Date</Form.Label>
+              <Form.Control
+                type="date"
+                value={setlistDate}
+                onChange={(e) => setSetlistDate(e.target.value)}
+                autoFocus
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Time</Form.Label>
+              <Form.Control
+                type="time"
+                value={setlistTime}
+                onChange={(e) => setSetlistTime(e.target.value)}
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Venue</Form.Label>
               <Form.Control
                 type="text"
-                placeholder="Enter setlist name"
-                value={setlistName}
-                onChange={(e) => setSetlistName(e.target.value)}
+                placeholder="Main Hall"
+                value={setlistVenue}
+                onChange={(e) => setSetlistVenue(e.target.value)}
                 onKeyPress={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
                     handleSaveSetlist();
                   }
                 }}
-                autoFocus
               />
             </Form.Group>
+            {setlistDate && setlistTime && setlistVenue && (() => {
+              // Format date for preview
+              const [year, month, day] = setlistDate.split('-');
+              const formattedDate = `${day}/${month}`;
+              return (
+                <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
+                  <small style={{ color: '#666' }}>
+                    <strong>Setlist name:</strong> {formattedDate} {setlistTime} {setlistVenue}
+                  </small>
+                </div>
+              );
+            })()}
             <div style={{ marginTop: '15px', color: '#666' }}>
               <small>
                 This will create a permanent copy of your current setlist with {setlist.length} item{setlist.length !== 1 ? 's' : ''}.
@@ -2094,15 +2364,161 @@ function PresenterMode() {
           </Form>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowSaveSetlistModal(false)}>
+          <Button variant="secondary" onClick={() => {
+            setShowSaveSetlistModal(false);
+            setSetlistDate('');
+            setSetlistTime('');
+            setSetlistVenue('');
+          }}>
             Cancel
           </Button>
           <Button
             variant="success"
             onClick={handleSaveSetlist}
-            disabled={saveSetlistLoading || !setlistName.trim()}
+            disabled={saveSetlistLoading || !setlistDate.trim() || !setlistTime.trim() || !setlistVenue.trim()}
           >
             {saveSetlistLoading ? 'Saving...' : 'Save Setlist'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Load Setlist Modal */}
+      <Modal show={showLoadSetlistModal} onHide={() => setShowLoadSetlistModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Load Setlist</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {loadSetlistLoading ? (
+            <div style={{ textAlign: 'center', padding: '20px' }}>
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </div>
+              <div style={{ marginTop: '10px' }}>Loading setlists...</div>
+            </div>
+          ) : availableSetlists.length === 0 ? (
+            <p style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
+              No saved setlists found. Create a new setlist by adding songs and clicking "Save".
+            </p>
+          ) : (
+            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              {availableSetlists.map((setlist) => (
+                <div
+                  key={setlist._id}
+                  style={{
+                    padding: '12px',
+                    marginBottom: '8px',
+                    border: '1px solid #ddd',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    backgroundColor: 'white'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#f8f9fa';
+                    e.currentTarget.style.borderColor = '#007bff';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'white';
+                    e.currentTarget.style.borderColor = '#ddd';
+                  }}
+                  onClick={() => handleLoadSetlist(setlist._id)}
+                >
+                  <div style={{ fontWeight: '500', marginBottom: '4px' }}>
+                    {setlist.name}
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                    {setlist.items?.length || 0} item{(setlist.items?.length || 0) !== 1 ? 's' : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowLoadSetlistModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Unsaved Changes Warning Modal */}
+      <Modal
+        show={showUnsavedChangesModal}
+        onHide={handleUnsavedChangesCancel}
+        centered
+        backdrop="static"
+      >
+        <Modal.Header closeButton style={{
+          borderBottom: '1px solid #E2E8F0',
+          padding: '20px 24px'
+        }}>
+          <Modal.Title style={{
+            fontSize: '1.25rem',
+            fontWeight: '600',
+            color: '#2D3748'
+          }}>
+            ⚠️ Unsaved Changes
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{
+          padding: '24px',
+          fontSize: '1rem',
+          color: '#4A5568',
+          lineHeight: '1.6'
+        }}>
+          <p style={{ marginBottom: '16px' }}>
+            You have unsaved changes in your current setlist.
+          </p>
+          <p style={{ marginBottom: '0', fontWeight: '500' }}>
+            What would you like to do?
+          </p>
+        </Modal.Body>
+        <Modal.Footer style={{
+          borderTop: '1px solid #E2E8F0',
+          padding: '16px 24px',
+          gap: '12px',
+          display: 'flex',
+          justifyContent: 'flex-end'
+        }}>
+          <Button
+            variant="outline-secondary"
+            onClick={handleUnsavedChangesCancel}
+            style={{
+              padding: '8px 16px',
+              fontSize: '0.95rem',
+              fontWeight: '500',
+              borderRadius: '8px'
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="warning"
+            onClick={handleUnsavedChangesDontSave}
+            style={{
+              padding: '8px 16px',
+              fontSize: '0.95rem',
+              fontWeight: '500',
+              borderRadius: '8px',
+              background: '#F59E0B',
+              border: 'none'
+            }}
+          >
+            Don't Save
+          </Button>
+          <Button
+            variant="success"
+            onClick={handleUnsavedChangesSave}
+            style={{
+              padding: '8px 16px',
+              fontSize: '0.95rem',
+              fontWeight: '500',
+              borderRadius: '8px',
+              background: '#10B981',
+              border: 'none'
+            }}
+          >
+            Save Changes
           </Button>
         </Modal.Footer>
       </Modal>

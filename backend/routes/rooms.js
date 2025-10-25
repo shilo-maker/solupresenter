@@ -287,8 +287,10 @@ router.post('/:id/link-setlist', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Setlist ID is required' });
     }
 
-    // Verify the setlist exists
-    const setlist = await Setlist.findById(setlistId);
+    // Verify the setlist exists and populate it
+    const setlist = await Setlist.findById(setlistId)
+      .populate('items.song')
+      .populate('items.image');
     if (!setlist) {
       return res.status(404).json({ error: 'Setlist not found' });
     }
@@ -297,7 +299,33 @@ router.post('/:id/link-setlist', authenticateToken, async (req, res) => {
     room.linkedPermanentSetlist = setlistId;
     await room.save();
 
-    res.json({ message: 'Setlist linked successfully', setlistId });
+    // Convert setlist items to the format expected by the frontend
+    const songs = setlist.items.map(item => {
+      if (item.type === 'song') {
+        return { type: 'song', data: item.song };
+      } else if (item.type === 'image') {
+        return { type: 'image', data: item.image };
+      } else if (item.type === 'bible') {
+        return { type: 'bible', data: item.bible };
+      } else if (item.type === 'blank') {
+        return { type: 'blank', data: {} };
+      }
+      return item;
+    });
+
+    const responseData = {
+      message: 'Setlist linked successfully',
+      room: { linkedPermanentSetlist: setlistId },
+      setlist: {
+        _id: setlist._id,
+        name: setlist.name,
+        songs
+      }
+    };
+
+    console.log('Sending link-setlist response:', JSON.stringify(responseData, null, 2));
+
+    res.json(responseData);
   } catch (error) {
     console.error('Error linking setlist:', error);
     res.status(500).json({ error: 'Failed to link setlist' });

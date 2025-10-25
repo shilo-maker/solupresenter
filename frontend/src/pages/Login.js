@@ -25,7 +25,7 @@ function Login() {
     const result = await login(email, password);
 
     if (result.success) {
-      navigate('/dashboard');
+      navigate('/operator');
     } else if (result.requiresVerification) {
       setRequiresVerification(true);
       setUnverifiedEmail(result.email);
@@ -58,7 +58,7 @@ function Login() {
         <Card>
           <Card.Body>
             <div className="text-center mb-3">
-              <img src="/logo.png" alt="SoluCast Logo" style={{ maxWidth: '200px', height: 'auto' }} />
+              <img src="/cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '200px', height: 'auto' }} />
             </div>
             <h4 className="text-center mb-4">Login</h4>
 

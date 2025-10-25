@@ -51,7 +51,7 @@ function VerifyEmail() {
         <Card>
           <Card.Body>
             <div className="text-center mb-4">
-              <img src="/logo.png" alt="SoluCast Logo" style={{ maxWidth: '200px', height: 'auto' }} />
+              <img src="/cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '200px', height: 'auto' }} />
             </div>
 
             {verifying && (

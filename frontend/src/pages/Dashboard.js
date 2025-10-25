@@ -10,7 +10,7 @@ function Dashboard() {
   return (
     <Container className="py-5">
       <div className="text-center mb-4">
-        <img src="/logo.png" alt="SoluCast Logo" style={{ maxWidth: '250px', height: 'auto' }} />
+        <img src="/cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '250px', height: 'auto' }} />
       </div>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Dashboard</h2>

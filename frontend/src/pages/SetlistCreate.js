@@ -6,7 +6,28 @@ import api, { getFullImageUrl } from '../services/api';
 function SetlistCreate() {
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Get default date (today) and time (next round hour)
+  const getDefaultDateTime = () => {
+    const now = new Date();
+
+    // Format date as YYYY-MM-DD
+    const dateStr = now.toISOString().split('T')[0];
+
+    // Get next round hour
+    const nextHour = now.getHours() + 1;
+    const hours = String(nextHour).padStart(2, '0');
+    const timeStr = `${hours}:00`;
+
+    return { dateStr, timeStr };
+  };
+
+  const { dateStr, timeStr } = getDefaultDateTime();
+
   const [name, setName] = useState('');
+  const [setlistDate, setSetlistDate] = useState(dateStr);
+  const [setlistTime, setSetlistTime] = useState(timeStr);
+  const [setlistVenue, setSetlistVenue] = useState('');
   const [items, setItems] = useState([]);
   const [allSongs, setAllSongs] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -124,8 +145,18 @@ function SetlistCreate() {
     e.preventDefault();
     setError('');
 
-    if (!name.trim()) {
-      setError('Please enter a setlist name');
+    if (!setlistDate.trim()) {
+      setError('Please select a date');
+      return;
+    }
+
+    if (!setlistTime.trim()) {
+      setError('Please select a time');
+      return;
+    }
+
+    if (!setlistVenue.trim()) {
+      setError('Please enter a venue');
       return;
     }
 
@@ -133,6 +164,13 @@ function SetlistCreate() {
       setError('Please add at least one item to the setlist');
       return;
     }
+
+    // Convert date from YYYY-MM-DD to DD/MM
+    const [year, month, day] = setlistDate.split('-');
+    const formattedDate = `${day}/${month}`;
+
+    // Generate setlist name: Date(DD/MM) Time(HH:MM) Venue
+    const generatedName = `${formattedDate} ${setlistTime} ${setlistVenue}`;
 
     setSaving(true);
 
@@ -146,7 +184,7 @@ function SetlistCreate() {
       }));
 
       const response = await api.post('/api/setlists', {
-        name: name.trim(),
+        name: generatedName,
         items: formattedItems
       });
 
@@ -173,22 +211,60 @@ function SetlistCreate() {
       <Form onSubmit={handleSubmit}>
         <Row>
           <Col lg={8}>
-            {/* Setlist Name */}
+            {/* Setlist Details */}
             <Card className="mb-4">
               <Card.Header>
                 <h5 className="mb-0">Setlist Details</h5>
               </Card.Header>
               <Card.Body>
-                <Form.Group>
-                  <Form.Label>Setlist Name *</Form.Label>
-                  <Form.Control
-                    type="text"
-                    placeholder="Enter setlist name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                  />
-                </Form.Group>
+                <Row>
+                  <Col md={4}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Date *</Form.Label>
+                      <Form.Control
+                        type="date"
+                        value={setlistDate}
+                        onChange={(e) => setSetlistDate(e.target.value)}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Time *</Form.Label>
+                      <Form.Control
+                        type="time"
+                        value={setlistTime}
+                        onChange={(e) => setSetlistTime(e.target.value)}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Venue *</Form.Label>
+                      <Form.Control
+                        type="text"
+                        placeholder="Main Hall"
+                        value={setlistVenue}
+                        onChange={(e) => setSetlistVenue(e.target.value)}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+                {setlistDate && setlistTime && setlistVenue && (() => {
+                  // Format date for preview
+                  const [year, month, day] = setlistDate.split('-');
+                  const formattedDate = `${day}/${month}`;
+                  return (
+                    <div style={{ padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
+                      <small style={{ color: '#666' }}>
+                        <strong>Setlist name:</strong> {formattedDate} {setlistTime} {setlistVenue}
+                      </small>
+                    </div>
+                  );
+                })()}
               </Card.Body>
             </Card>
 

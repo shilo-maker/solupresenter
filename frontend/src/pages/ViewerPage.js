@@ -427,7 +427,7 @@ function ViewerPage() {
           {/* SoluCast Logo */}
           <div style={{ marginBottom: '1.5rem' }}>
             <img
-              src="/logo.png"
+              src="/cast_logo.png"
               alt="SoluCast Logo"
               style={{
                 maxWidth: 'clamp(250px, 40vw, 400px)',

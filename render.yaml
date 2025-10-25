@@ -1,0 +1,43 @@
+services:
+  # Backend API Service
+  - type: web
+    name: solupresenter-backend
+    env: node
+    region: oregon
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGODB_URI
+        sync: false  # Add this in Render dashboard
+      - key: SESSION_SECRET
+        sync: false  # Add this in Render dashboard
+      - key: JWT_SECRET
+        sync: false  # Add this in Render dashboard
+      - key: EMAIL_USER
+        sync: false  # Add this in Render dashboard (if used)
+      - key: EMAIL_PASS
+        sync: false  # Add this in Render dashboard (if used)
+      - key: FRONTEND_URL
+        value: https://solupresenter.onrender.com
+
+  # Frontend Static Site
+  - type: web
+    name: solupresenter-frontend
+    env: static
+    region: oregon
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/build
+    envVars:
+      - key: REACT_APP_API_URL
+        fromService:
+          type: web
+          name: solupresenter-backend
+          envVarKey: RENDER_EXTERNAL_URL
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

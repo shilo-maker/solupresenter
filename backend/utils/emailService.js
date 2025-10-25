@@ -1,8 +1,14 @@
 const { Resend } = require('resend');
 const crypto = require('crypto');
 
-// Initialize Resend client
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Initialize Resend client only if API key is provided
+let resend = null;
+if (process.env.RESEND_API_KEY) {
+  resend = new Resend(process.env.RESEND_API_KEY);
+  console.log('✅ Email service initialized with Resend');
+} else {
+  console.log('⚠️  RESEND_API_KEY not found - email functionality will be disabled');
+}
 
 // Generate verification token
 const generateVerificationToken = () => {
@@ -11,6 +17,11 @@ const generateVerificationToken = () => {
 
 // Send verification email
 const sendVerificationEmail = async (user, token) => {
+  if (!resend) {
+    console.log('⚠️  Email service not configured - skipping verification email');
+    return false;
+  }
+
   const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
 
   try {
@@ -108,6 +119,11 @@ const sendVerificationEmail = async (user, token) => {
 
 // Send password reset email (for future use)
 const sendPasswordResetEmail = async (user, token) => {
+  if (!resend) {
+    console.log('⚠️  Email service not configured - skipping password reset email');
+    return false;
+  }
+
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
 
   try {

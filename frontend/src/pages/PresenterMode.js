@@ -101,6 +101,10 @@ function PresenterMode() {
   const [setlistSectionOpen, setSetlistSectionOpen] = useState(true);
   const [slideSectionOpen, setSlideSectionOpen] = useState(true);
 
+  // Chromecast state
+  const [castAvailable, setCastAvailable] = useState(false);
+  const [castConnected, setCastConnected] = useState(false);
+
   // Switch resource panel and apply search
   const switchResourcePanel = (panel) => {
     setActiveResourcePanel(panel);
@@ -392,6 +396,52 @@ function PresenterMode() {
       loadSong(location.state.songId);
     }
   }, [location.state, location.search, room?._id]);
+
+  // Initialize Chromecast
+  useEffect(() => {
+    const initializeCast = () => {
+      if (!window.chrome || !window.chrome.cast) {
+        console.log('⏳ Waiting for Cast SDK to load...');
+        return;
+      }
+
+      window['__onGCastApiAvailable'] = (isAvailable) => {
+        if (isAvailable) {
+          const cast = window.chrome.cast;
+          const sessionRequest = new cast.SessionRequest(cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID);
+          const apiConfig = new cast.ApiConfig(
+            sessionRequest,
+            (session) => {
+              console.log('✅ Cast session started:', session);
+              setCastConnected(true);
+            },
+            (status) => {
+              console.log('Cast receiver status:', status);
+              if (status === cast.ReceiverAvailability.AVAILABLE) {
+                setCastAvailable(true);
+              } else {
+                setCastAvailable(false);
+              }
+            }
+          );
+
+          cast.initialize(apiConfig, () => {
+            console.log('✅ Cast SDK initialized');
+          }, (error) => {
+            console.error('❌ Cast initialization error:', error);
+          });
+        }
+      };
+    };
+
+    // Initialize cast when SDK is ready
+    if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
+      initializeCast();
+    } else {
+      window.addEventListener('load', initializeCast);
+      return () => window.removeEventListener('load', initializeCast);
+    }
+  }, []);
 
   const loadSetlist = async (setlistId) => {
     try {
@@ -715,6 +765,44 @@ function PresenterMode() {
   const handleUnsavedChangesCancel = () => {
     setShowUnsavedChangesModal(false);
     setPendingLoadAction(null);
+  };
+
+  // Handle Chromecast
+  const handleCast = () => {
+    if (!window.chrome || !window.chrome.cast || !roomPin) {
+      console.error('Cast not available or no room PIN');
+      return;
+    }
+
+    const cast = window.chrome.cast;
+    cast.requestSession((session) => {
+      console.log('✅ Cast session established:', session);
+      setCastConnected(true);
+
+      // Construct the viewer URL with the room PIN
+      const viewerUrl = `${window.location.origin}/viewer?pin=${roomPin}`;
+
+      const mediaInfo = new cast.media.MediaInfo(viewerUrl, 'text/html');
+      mediaInfo.metadata = new cast.media.GenericMediaMetadata();
+      mediaInfo.metadata.title = `SoluCast - Room ${roomPin}`;
+
+      const request = new cast.media.LoadRequest(mediaInfo);
+
+      session.loadMedia(request).then(
+        () => {
+          console.log('✅ Successfully cast viewer page to Chromecast');
+        },
+        (error) => {
+          console.error('❌ Error casting media:', error);
+          setError('Failed to cast to Chromecast');
+        }
+      );
+    }, (error) => {
+      console.error('❌ Error launching cast:', error);
+      if (error.code !== 'cancel') {
+        setError('Failed to connect to Chromecast');
+      }
+    });
   };
 
   const handleLoadSetlist = async (setlistId) => {
@@ -1092,6 +1180,17 @@ function PresenterMode() {
             >
               Copy Share Link
             </Button>
+
+            {castAvailable && (
+              <Button
+                variant={castConnected ? "success" : "outline-primary"}
+                onClick={handleCast}
+                style={{ marginRight: '10px' }}
+                title="Cast to Chromecast"
+              >
+                {castConnected ? '📡 Casting' : '📺 Cast'}
+              </Button>
+            )}
             <div style={{
               fontSize: '0.85rem',
               color: '#666',

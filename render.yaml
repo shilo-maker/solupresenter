@@ -25,10 +25,8 @@ services:
         value: https://solupresenter.onrender.com
 
   # Frontend Static Site
-  - type: web
+  - type: static
     name: solupresenter-frontend
-    env: static
-    region: oregon
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/build
     envVars:

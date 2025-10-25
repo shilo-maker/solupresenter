@@ -2,6 +2,10 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
+// Import Bootstrap CSS
+import 'bootstrap/dist/css/bootstrap.min.css';
+import './styles/modern.css';  // Modern theme overrides
+import './App.css';
 
 // Loading component
 const LoadingFallback = () => (
@@ -34,11 +38,6 @@ const SetlistView = lazy(() => import('./pages/SetlistView'));
 const SetlistEdit = lazy(() => import('./pages/SetlistEdit'));
 const Admin = lazy(() => import('./pages/Admin'));
 const MediaLibrary = lazy(() => import('./pages/MediaLibrary'));
-
-// Import Bootstrap CSS
-import 'bootstrap/dist/css/bootstrap.min.css';
-import './styles/modern.css';  // Modern theme overrides
-import './App.css';
 
 function App() {
   return (

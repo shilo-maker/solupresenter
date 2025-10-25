@@ -5,6 +5,7 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const session = require('express-session');
 const multer = require('multer');
+const compression = require('compression');
 const connectDB = require('./config/database');
 const passport = require('./config/passport');
 
@@ -47,6 +48,7 @@ const io = new Server(server, {
 connectDB();
 
 // Middleware
+app.use(compression()); // Enable gzip compression
 app.use(cors({
   origin: allowedOrigins,
   credentials: true
@@ -359,8 +361,11 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 
-  // Run cleanup job immediately on startup
-  cleanupTemporarySetlists();
+  // Defer cleanup job to run 30 seconds after startup (faster cold starts)
+  setTimeout(() => {
+    cleanupTemporarySetlists();
+    console.log('✅ Initial cleanup completed');
+  }, 30000);
 
   // Schedule cleanup job to run every hour
   setInterval(cleanupTemporarySetlists, 60 * 60 * 1000); // 1 hour

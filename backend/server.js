@@ -31,6 +31,7 @@ const allowedOrigins = [
   'http://10.100.102.27:3456',
   'https://main.d390gabr466gfy.amplifyapp.com',
   'https://d125ckyjvo1azi.cloudfront.net',
+  'https://solupresenter-frontend.onrender.com',
   process.env.FRONTEND_URL
 ].filter(Boolean);
 

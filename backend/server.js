@@ -143,7 +143,8 @@ io.on('connection', (socket) => {
       const { pin } = data;
 
       const room = await Room.findOne({ pin: pin.toUpperCase(), isActive: true })
-        .populate('currentSlide.songId');
+        .select('pin currentSlide currentImageUrl currentBibleData backgroundImage viewerCount')
+        .lean();
 
       if (!room) {
         socket.emit('error', { message: 'Room not found or inactive' });
@@ -160,9 +161,8 @@ io.on('connection', (socket) => {
       socket.join(`room:${room.pin}`);
       viewerRooms.set(socket.id, room.pin);
 
-      // Increment viewer count
-      room.viewerCount += 1;
-      await room.save();
+      // Increment viewer count (atomic operation)
+      await Room.findByIdAndUpdate(room._id, { $inc: { viewerCount: 1 } });
 
       // Fetch current slide data if available
       let slideData = null;
@@ -183,9 +183,11 @@ io.on('connection', (socket) => {
             isBible: true
           };
         }
-        // Otherwise, fetch song from database
+        // Otherwise, fetch song from database (only needed fields)
         else if (room.currentSlide.songId) {
-          const song = await Song.findById(room.currentSlide.songId);
+          const song = await Song.findById(room.currentSlide.songId)
+            .select('title slides')
+            .lean();
           if (song && song.slides[room.currentSlide.slideIndex]) {
             slideData = {
               slide: song.slides[room.currentSlide.slideIndex],
@@ -208,9 +210,9 @@ io.on('connection', (socket) => {
       });
 
       // Notify operator of viewer count
-      io.to(`room:${room.pin}`).emit('room:viewerCount', { count: room.viewerCount });
+      io.to(`room:${room.pin}`).emit('room:viewerCount', { count: room.viewerCount + 1 });
 
-      console.log(`Viewer joined room ${room.pin}, total viewers: ${room.viewerCount}`);
+      console.log(`Viewer joined room ${room.pin}, total viewers: ${room.viewerCount + 1}`);
     } catch (error) {
       console.error('Error in viewer:join:', error);
       socket.emit('error', { message: 'Failed to join room' });
@@ -223,7 +225,8 @@ io.on('connection', (socket) => {
     try {
       const { roomId, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData } = data;
 
-      const room = await Room.findById(roomId).populate('currentSlide.songId');
+      const room = await Room.findById(roomId)
+        .select('pin currentSlide currentImageUrl currentBibleData backgroundImage lastActivity expiresAt');
 
       if (!room) {
         socket.emit('error', { message: 'Room not found' });
@@ -259,8 +262,8 @@ io.on('connection', (socket) => {
             isBible: true
           };
         } else if (songId) {
-          // Fetch song from database
-          const song = await Song.findById(songId);
+          // Fetch song from database (only needed fields)
+          const song = await Song.findById(songId).select('title slides').lean();
           if (song && song.slides[slideIndex]) {
             slideData = {
               slide: song.slides[slideIndex],
@@ -328,15 +331,17 @@ io.on('connection', (socket) => {
       // Check if this was a viewer
       const roomPin = viewerRooms.get(socket.id);
       if (roomPin) {
-        const room = await Room.findOne({ pin: roomPin });
+        // Atomic decrement of viewer count
+        const room = await Room.findOneAndUpdate(
+          { pin: roomPin },
+          { $inc: { viewerCount: -1 } },
+          { new: true }
+        ).select('viewerCount');
+
         if (room) {
-          room.viewerCount = Math.max(0, room.viewerCount - 1);
-          await room.save();
-
           // Notify operator of viewer count
-          io.to(`room:${roomPin}`).emit('room:viewerCount', { count: room.viewerCount });
-
-          console.log(`Viewer left room ${roomPin}, remaining viewers: ${room.viewerCount}`);
+          io.to(`room:${roomPin}`).emit('room:viewerCount', { count: Math.max(0, room.viewerCount) });
+          console.log(`Viewer left room ${roomPin}, remaining viewers: ${Math.max(0, room.viewerCount)}`);
         }
         viewerRooms.delete(socket.id);
       }

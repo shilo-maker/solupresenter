@@ -79,8 +79,13 @@ const roomSchema = new mongoose.Schema({
   }
 });
 
-// Index for expiration
+// Indexes for optimized queries
 roomSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+roomSchema.index({ pin: 1 }); // For PIN lookups
+roomSchema.index({ operator: 1 }); // For user's rooms
+roomSchema.index({ isActive: 1 }); // For active rooms
+roomSchema.index({ pin: 1, isActive: 1 }); // Compound for viewer joins
+roomSchema.index({ lastActivity: -1 }); // For sorting by activity
 
 // Update lastActivity and expiresAt
 roomSchema.methods.updateActivity = function() {

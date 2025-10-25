@@ -43,7 +43,11 @@ router.get('/', authenticateToken, async (req, res) => {
         { isPublic: true },
         { createdBy: req.user._id }
       ]
-    }).populate('createdBy', 'email').sort({ title: 1 });
+    })
+    .select('title originalLanguage tags isPublic createdBy usageCount updatedAt')
+    .populate('createdBy', 'email')
+    .sort({ title: 1 })
+    .lean();
 
     res.json({ songs });
   } catch (error) {
@@ -77,8 +81,10 @@ router.get('/search', authenticateToken, async (req, res) => {
     }
 
     const songs = await Song.find(filter)
+      .select('title originalLanguage tags isPublic createdBy usageCount updatedAt')
       .populate('createdBy', 'email')
-      .sort(query ? { score: { $meta: 'textScore' } } : { title: 1 });
+      .sort(query ? { score: { $meta: 'textScore' } } : { title: 1 })
+      .lean();
 
     res.json({ songs });
   } catch (error) {
@@ -87,9 +93,18 @@ router.get('/search', authenticateToken, async (req, res) => {
   }
 });
 
-// Get all unique tags
+// Get all unique tags (cached for 5 minutes)
+let tagsCache = { data: null, timestamp: 0 };
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
 router.get('/meta/tags', authenticateToken, async (req, res) => {
   try {
+    // Check cache
+    const now = Date.now();
+    if (tagsCache.data && (now - tagsCache.timestamp) < CACHE_DURATION) {
+      return res.json({ tags: tagsCache.data });
+    }
+
     const tags = await Song.distinct('tags', {
       $or: [
         { isPublic: true },
@@ -97,7 +112,10 @@ router.get('/meta/tags', authenticateToken, async (req, res) => {
       ]
     });
 
-    res.json({ tags: tags.sort() });
+    const sortedTags = tags.sort();
+    tagsCache = { data: sortedTags, timestamp: now };
+
+    res.json({ tags: sortedTags });
   } catch (error) {
     console.error('Error fetching tags:', error);
     res.status(500).json({ error: 'Failed to fetch tags' });

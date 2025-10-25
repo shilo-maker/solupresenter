@@ -1,25 +1,39 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
 
-// Pages
-import Login from './pages/Login';
-import Register from './pages/Register';
-import VerifyEmail from './pages/VerifyEmail';
-import Dashboard from './pages/Dashboard';
-import ViewerPage from './pages/ViewerPage';
-import SongList from './pages/SongList';
-import SongCreate from './pages/SongCreate';
-import SongView from './pages/SongView';
-import SongEdit from './pages/SongEdit';
-import PresenterMode from './pages/PresenterMode';
-import SetlistList from './pages/SetlistList';
-import SetlistCreate from './pages/SetlistCreate';
-import SetlistView from './pages/SetlistView';
-import SetlistEdit from './pages/SetlistEdit';
-import Admin from './pages/Admin';
-import MediaLibrary from './pages/MediaLibrary';
+// Loading component
+const LoadingFallback = () => (
+  <div style={{
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100vh',
+    fontSize: '1.2rem',
+    color: '#666'
+  }}>
+    Loading...
+  </div>
+);
+
+// Lazy load pages for code splitting
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const ViewerPage = lazy(() => import('./pages/ViewerPage'));
+const SongList = lazy(() => import('./pages/SongList'));
+const SongCreate = lazy(() => import('./pages/SongCreate'));
+const SongView = lazy(() => import('./pages/SongView'));
+const SongEdit = lazy(() => import('./pages/SongEdit'));
+const PresenterMode = lazy(() => import('./pages/PresenterMode'));
+const SetlistList = lazy(() => import('./pages/SetlistList'));
+const SetlistCreate = lazy(() => import('./pages/SetlistCreate'));
+const SetlistView = lazy(() => import('./pages/SetlistView'));
+const SetlistEdit = lazy(() => import('./pages/SetlistEdit'));
+const Admin = lazy(() => import('./pages/Admin'));
+const MediaLibrary = lazy(() => import('./pages/MediaLibrary'));
 
 // Import Bootstrap CSS
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -30,12 +44,13 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/viewer" element={<ViewerPage />} />
+        <Suspense fallback={<LoadingFallback />}>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/viewer" element={<ViewerPage />} />
 
           {/* Private routes */}
           <Route
@@ -143,9 +158,10 @@ function App() {
             }
           />
 
-          {/* Root shows viewer page */}
-          <Route path="/" element={<ViewerPage />} />
-        </Routes>
+            {/* Root shows viewer page */}
+            <Route path="/" element={<ViewerPage />} />
+          </Routes>
+        </Suspense>
       </Router>
     </AuthProvider>
   );

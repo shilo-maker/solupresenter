@@ -81,4 +81,8 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
+// Indexes for optimized queries
+userSchema.index({ emailVerificationToken: 1 }); // For verification lookups
+userSchema.index({ activeRoom: 1 }); // For room-user queries
+
 module.exports = mongoose.model('User', userSchema);

@@ -89,4 +89,11 @@ setlistSchema.pre('save', function(next) {
   next();
 });
 
+// Indexes for optimized queries
+setlistSchema.index({ createdBy: 1 }); // For user's setlists
+setlistSchema.index({ isTemporary: 1 }); // For cleanup jobs
+setlistSchema.index({ isTemporary: 1, createdAt: -1 }); // Compound for cleanup
+setlistSchema.index({ linkedRoom: 1 }); // For room-setlist queries
+setlistSchema.index({ updatedAt: -1 }); // For sorting by recent
+
 module.exports = mongoose.model('Setlist', setlistSchema);

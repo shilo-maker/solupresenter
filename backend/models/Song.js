@@ -88,9 +88,14 @@ songSchema.pre('save', function(next) {
   next();
 });
 
-// Index for searching
+// Indexes for optimized queries
 songSchema.index({ title: 'text', 'slides.originalText': 'text' });
 songSchema.index({ tags: 1 });
 songSchema.index({ isPublic: 1, createdBy: 1 });
+songSchema.index({ createdBy: 1 }); // For user's own songs
+songSchema.index({ originalLanguage: 1 }); // For language filtering
+songSchema.index({ isPendingApproval: 1 }); // For admin approval queue
+songSchema.index({ updatedAt: -1 }); // For sorting by recent
+songSchema.index({ usageCount: -1 }); // For popular songs
 
 module.exports = mongoose.model('Song', songSchema);

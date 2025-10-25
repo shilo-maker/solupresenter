@@ -408,9 +408,8 @@ function PresenterMode() {
       if (isAvailable) {
         const cast = window.chrome.cast;
 
-        // TODO: Replace 'CC1AD845' with your actual Google Cast Application ID
-        // For now, using the default media receiver for testing
-        const applicationID = cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID;
+        // SoluCast Custom Receiver Application ID from Google Cast Console
+        const applicationID = 'A91753A6';
 
         const sessionRequest = new cast.SessionRequest(applicationID);
         const apiConfig = new cast.ApiConfig(

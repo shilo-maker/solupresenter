@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SoluCast Receiver</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      overflow: hidden;
+    }
+    #iframe-container {
+      width: 100vw;
+      height: 100vh;
+      margin: 0;
+      padding: 0;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+  </style>
+  <!-- Cast Receiver SDK -->
+  <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+</head>
+<body>
+  <div id="iframe-container">
+    <iframe id="viewer-frame" src="" allow="autoplay"></iframe>
+  </div>
+
+  <script>
+    const context = cast.framework.CastReceiverContext.getInstance();
+    const playerManager = context.getPlayerManager();
+
+    // Listen for custom messages from sender
+    context.addCustomMessageListener('urn:x-cast:com.solucast.viewer', (customEvent) => {
+      console.log('Received custom message:', customEvent.data);
+
+      const data = customEvent.data;
+
+      if (data.type === 'LOAD_VIEWER') {
+        // Load the viewer page in the iframe
+        const viewerUrl = data.url;
+        console.log('Loading viewer URL:', viewerUrl);
+        document.getElementById('viewer-frame').src = viewerUrl;
+      }
+    });
+
+    // Start the receiver
+    const options = new cast.framework.CastReceiverOptions();
+    options.disableIdleTimeout = true; // Keep receiver alive
+
+    context.start(options);
+
+    console.log('SoluCast Receiver initialized');
+  </script>
+</body>
+</html>

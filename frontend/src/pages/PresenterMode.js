@@ -399,47 +399,52 @@ function PresenterMode() {
 
   // Initialize Chromecast
   useEffect(() => {
-    const initializeCast = () => {
-      if (!window.chrome || !window.chrome.cast) {
-        console.log('⏳ Waiting for Cast SDK to load...');
-        return;
-      }
+    console.log('🎬 Setting up Chromecast...');
 
-      window['__onGCastApiAvailable'] = (isAvailable) => {
-        if (isAvailable) {
-          const cast = window.chrome.cast;
-          const sessionRequest = new cast.SessionRequest(cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID);
-          const apiConfig = new cast.ApiConfig(
-            sessionRequest,
-            (session) => {
-              console.log('✅ Cast session started:', session);
-              setCastConnected(true);
-            },
-            (status) => {
-              console.log('Cast receiver status:', status);
-              if (status === cast.ReceiverAvailability.AVAILABLE) {
-                setCastAvailable(true);
-              } else {
-                setCastAvailable(false);
-              }
+    // Define the callback that Cast SDK will call when ready
+    window['__onGCastApiAvailable'] = (isAvailable) => {
+      console.log('📡 Cast API available callback fired:', isAvailable);
+
+      if (isAvailable) {
+        const cast = window.chrome.cast;
+
+        // TODO: Replace 'CC1AD845' with your actual Google Cast Application ID
+        // For now, using the default media receiver for testing
+        const applicationID = cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID;
+
+        const sessionRequest = new cast.SessionRequest(applicationID);
+        const apiConfig = new cast.ApiConfig(
+          sessionRequest,
+          (session) => {
+            console.log('✅ Cast session started:', session);
+            setCastConnected(true);
+          },
+          (status) => {
+            console.log('📺 Cast receiver status:', status);
+            if (status === cast.ReceiverAvailability.AVAILABLE) {
+              console.log('✅ Chromecast device found!');
+              setCastAvailable(true);
+            } else {
+              console.log('❌ No Chromecast device available');
+              setCastAvailable(false);
             }
-          );
+          }
+        );
 
-          cast.initialize(apiConfig, () => {
-            console.log('✅ Cast SDK initialized');
-          }, (error) => {
-            console.error('❌ Cast initialization error:', error);
-          });
-        }
-      };
+        cast.initialize(apiConfig, () => {
+          console.log('✅ Cast SDK initialized successfully');
+        }, (error) => {
+          console.error('❌ Cast initialization error:', error);
+        });
+      }
     };
 
-    // Initialize cast when SDK is ready
+    // If Cast SDK is already loaded, trigger the callback manually
     if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
-      initializeCast();
+      console.log('✅ Cast SDK already loaded, initializing now...');
+      window['__onGCastApiAvailable'](true);
     } else {
-      window.addEventListener('load', initializeCast);
-      return () => window.removeEventListener('load', initializeCast);
+      console.log('⏳ Waiting for Cast SDK to load...');
     }
   }, []);
 
@@ -782,19 +787,22 @@ function PresenterMode() {
       // Construct the viewer URL with the room PIN
       const viewerUrl = `${window.location.origin}/viewer?pin=${roomPin}`;
 
-      const mediaInfo = new cast.media.MediaInfo(viewerUrl, 'text/html');
-      mediaInfo.metadata = new cast.media.GenericMediaMetadata();
-      mediaInfo.metadata.title = `SoluCast - Room ${roomPin}`;
+      // Send custom message to receiver to load the viewer page
+      const namespace = 'urn:x-cast:com.solucast.viewer';
+      const message = {
+        type: 'LOAD_VIEWER',
+        url: viewerUrl
+      };
 
-      const request = new cast.media.LoadRequest(mediaInfo);
-
-      session.loadMedia(request).then(
+      session.sendMessage(
+        namespace,
+        message,
         () => {
-          console.log('✅ Successfully cast viewer page to Chromecast');
+          console.log('✅ Successfully sent viewer URL to Chromecast');
         },
         (error) => {
-          console.error('❌ Error casting media:', error);
-          setError('Failed to cast to Chromecast');
+          console.error('❌ Error sending message to Chromecast:', error);
+          setError('Failed to load viewer on Chromecast');
         }
       );
     }, (error) => {

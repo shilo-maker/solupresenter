@@ -33,6 +33,8 @@ const allowedOrigins = [
   'https://main.d390gabr466gfy.amplifyapp.com',
   'https://d125ckyjvo1azi.cloudfront.net',
   'https://solupresenter-frontend.onrender.com',
+  'https://solucast.app',
+  'http://solucast.app',
   process.env.FRONTEND_URL
 ].filter(Boolean);
 

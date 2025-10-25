@@ -883,8 +883,16 @@ function PresenterMode() {
     }
   };
 
-  const selectSong = (song) => {
-    selectItem({ type: 'song', data: song });
+  const selectSong = async (song) => {
+    try {
+      // Fetch full song details including slides
+      const response = await api.get(`/songs/${song._id}`);
+      const fullSong = response.data.song;
+      selectItem({ type: 'song', data: fullSong });
+    } catch (error) {
+      console.error('Error fetching song details:', error);
+      setError('Failed to load song details');
+    }
   };
 
   const selectSlide = (index) => {

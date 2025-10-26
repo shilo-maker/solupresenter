@@ -349,39 +349,47 @@ function ViewerPage() {
               </div>
             )}
 
-            {/* Line 3 - Translation */}
+            {/* Lines 3 & 4 - Translation (with tight spacing between overflow lines) */}
             {slide.translation && (
               <div style={{
-                fontSize: `calc(clamp(1.5rem, 4.5vw, 4.5rem) * ${fontSize / 100})`,
-                lineHeight: 1.4,
-                opacity: 0.95,
-                width: '100%',
-                wordWrap: 'break-word',
-                overflowWrap: 'break-word',
-                color: textColor,
-                textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
-                direction: getTextDirection(slide.translation),
-                unicodeBidi: 'plaintext'
+                display: 'flex',
+                flexDirection: 'column',
+                gap: slide.translationOverflow ? 'clamp(0.3rem, 0.8vh, 0.8rem)' : '0',
+                width: '100%'
               }}>
-                {slide.translation}
-              </div>
-            )}
+                {/* Line 3 - Translation */}
+                <div style={{
+                  fontSize: `calc(clamp(1.5rem, 4.5vw, 4.5rem) * ${fontSize / 100})`,
+                  lineHeight: 1.4,
+                  opacity: 0.95,
+                  width: '100%',
+                  wordWrap: 'break-word',
+                  overflowWrap: 'break-word',
+                  color: textColor,
+                  textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                  direction: getTextDirection(slide.translation),
+                  unicodeBidi: 'plaintext'
+                }}>
+                  {slide.translation}
+                </div>
 
-            {/* Line 4 - Translation Overflow */}
-            {slide.translationOverflow && (
-              <div style={{
-                fontSize: `calc(clamp(1.5rem, 4.5vw, 4.5rem) * ${fontSize / 100})`,
-                lineHeight: 1.4,
-                opacity: 0.95,
-                width: '100%',
-                wordWrap: 'break-word',
-                overflowWrap: 'break-word',
-                color: textColor,
-                textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
-                direction: getTextDirection(slide.translationOverflow),
-                unicodeBidi: 'plaintext'
-              }}>
-                {slide.translationOverflow}
+                {/* Line 4 - Translation Overflow */}
+                {slide.translationOverflow && (
+                  <div style={{
+                    fontSize: `calc(clamp(1.5rem, 4.5vw, 4.5rem) * ${fontSize / 100})`,
+                    lineHeight: 1.4,
+                    opacity: 0.95,
+                    width: '100%',
+                    wordWrap: 'break-word',
+                    overflowWrap: 'break-word',
+                    color: textColor,
+                    textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                    direction: getTextDirection(slide.translationOverflow),
+                    unicodeBidi: 'plaintext'
+                  }}>
+                    {slide.translationOverflow}
+                  </div>
+                )}
               </div>
             )}
           </div>

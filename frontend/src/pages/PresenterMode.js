@@ -1279,18 +1279,60 @@ function PresenterMode() {
           right: '20px',
           top: '20px',
           display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: '12px'
         }}>
-          <img src="/cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '40px', height: 'auto' }} />
-          <span style={{
-            fontSize: '1.2rem',
-            fontWeight: '600',
-            color: '#333',
-            letterSpacing: '0.5px'
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
           }}>
-            SoluCast
-          </span>
+            <img src="/cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '40px', height: 'auto' }} />
+            <span style={{
+              fontSize: '1.2rem',
+              fontWeight: '600',
+              color: '#333',
+              letterSpacing: '0.5px'
+            }}>
+              SoluCast
+            </span>
+          </div>
+
+          {castAvailable && (
+            <Button
+              variant={castConnected ? "danger" : "success"}
+              onClick={handleCast}
+              size="sm"
+              title="Cast to Chromecast"
+              style={{
+                fontSize: '0.8rem',
+                padding: '4px 10px',
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              {castConnected ? (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/>
+                    <line x1="2" y1="20" x2="2.01" y2="20"/>
+                  </svg>
+                  <span>Casting</span>
+                </>
+              ) : (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/>
+                    <line x1="2" y1="20" x2="2.01" y2="20"/>
+                  </svg>
+                  <span>Cast</span>
+                </>
+              )}
+            </Button>
+          )}
         </div>
         {roomPin ? (
           <>
@@ -1327,21 +1369,9 @@ function PresenterMode() {
                 navigator.clipboard.writeText(shareUrl);
                 alert('Share link copied to clipboard!');
               }}
-              style={{ marginRight: '10px' }}
             >
               Copy Share Link
             </Button>
-
-            {castAvailable && (
-              <Button
-                variant={castConnected ? "success" : "outline-primary"}
-                onClick={handleCast}
-                style={{ marginRight: '10px' }}
-                title="Cast to Chromecast"
-              >
-                {castConnected ? '📡 Casting' : '📺 Cast'}
-              </Button>
-            )}
             <div style={{
               fontSize: '0.85rem',
               color: '#666',

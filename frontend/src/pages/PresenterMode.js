@@ -886,7 +886,7 @@ function PresenterMode() {
   const selectSong = async (song) => {
     try {
       // Fetch full song details including slides
-      const response = await api.get(`/songs/${song._id}`);
+      const response = await api.get(`/api/songs/${song._id}`);
       const fullSong = response.data.song;
       selectItem({ type: 'song', data: fullSong });
     } catch (error) {

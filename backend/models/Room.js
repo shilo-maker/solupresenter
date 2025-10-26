@@ -49,6 +49,10 @@ const roomSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  quickSlideText: {
+    type: String,
+    default: ''
+  },
   viewerCount: {
     type: Number,
     default: 0

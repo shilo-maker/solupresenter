@@ -209,6 +209,26 @@ class SocketService {
     }
   }
 
+  operatorUpdateQuickSlideText(roomId, quickSlideText) {
+    if (!this.socket) {
+      console.error('❌ No socket available to update quick slide text');
+      return;
+    }
+
+    console.log('⚡ Updating quick slide text:', { roomId, textLength: quickSlideText?.length || 0 });
+
+    if (this.socket.connected) {
+      this.socket.emit('operator:updateQuickSlideText', { roomId, quickSlideText });
+      console.log('📡 operator:updateQuickSlideText event emitted');
+    } else {
+      console.log('⏳ Socket not connected, waiting...');
+      this.socket.once('connect', () => {
+        console.log('✅ Socket connected, now sending quick slide text update');
+        this.socket.emit('operator:updateQuickSlideText', { roomId, quickSlideText });
+      });
+    }
+  }
+
   // Viewer methods
   viewerJoinRoom(pin) {
     if (this.socket) {

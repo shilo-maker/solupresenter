@@ -131,7 +131,10 @@ io.on('connection', (socket) => {
       socket.join(`room:${room.pin}`);
       operatorSockets.set(userId, socket.id);
 
-      socket.emit('operator:joined', { roomPin: room.pin });
+      socket.emit('operator:joined', {
+        roomPin: room.pin,
+        quickSlideText: room.quickSlideText || ''
+      });
       console.log(`Operator ${userId} joined room ${room.pin}`);
     } catch (error) {
       console.error('Error in operator:join:', error);
@@ -236,10 +239,11 @@ io.on('connection', (socket) => {
       }
 
       // Update room's current slide
-      // For Bible passages, set songId to null since they're not in the database
+      // For Bible passages and Quick Slides, set songId to null since they're not in the database
       const isBiblePassage = bibleData || (songId && songId.startsWith('bible-'));
+      const isTemporarySlide = bibleData || (songId && (songId.startsWith('bible-') || songId.startsWith('quick-')));
       room.currentSlide = {
-        songId: (isBlank || isBiblePassage) ? null : songId,
+        songId: (isBlank || isTemporarySlide) ? null : songId,
         slideIndex: slideIndex || 0,
         displayMode: displayMode || 'bilingual',
         isBlank: isBlank || false
@@ -319,6 +323,30 @@ io.on('connection', (socket) => {
     } catch (error) {
       console.error('Error in operator:updateBackground:', error);
       socket.emit('error', { message: 'Failed to update background' });
+    }
+  });
+
+  // Operator updates quick slide text
+  socket.on('operator:updateQuickSlideText', async (data) => {
+    console.log('📥 Received operator:updateQuickSlideText event');
+    try {
+      const { roomId, quickSlideText } = data;
+
+      const room = await Room.findById(roomId);
+
+      if (!room) {
+        socket.emit('error', { message: 'Room not found' });
+        return;
+      }
+
+      // Update room's quick slide text
+      room.quickSlideText = quickSlideText || '';
+      await room.save();
+
+      console.log(`Quick slide text updated in room ${room.pin}`);
+    } catch (error) {
+      console.error('Error in operator:updateQuickSlideText:', error);
+      socket.emit('error', { message: 'Failed to update quick slide text' });
     }
   });
 

@@ -2216,42 +2216,78 @@ function PresenterMode() {
             gap: '6px',
             flexShrink: 0
           }}>
-            <Button
-              variant={isBlankActive ? 'warning' : 'dark'}
-              onClick={toggleBlankSlide}
-              size="sm"
-              style={{ fontSize: '0.8rem', padding: '4px 10px', whiteSpace: 'nowrap' }}
-            >
-              {isBlankActive ? 'Blank ON' : 'Blank'}
-            </Button>
+            {isMobile ? (
+              // Mobile: 3-dot menu
+              <Dropdown align="end" drop="down">
+                <Dropdown.Toggle
+                  variant="secondary"
+                  size="sm"
+                  style={{
+                    fontSize: '1.2rem',
+                    padding: '2px 8px',
+                    lineHeight: '1'
+                  }}
+                >
+                  ⋮
+                </Dropdown.Toggle>
 
-            <Button
-              variant="success"
-              onClick={() => setShowQuickSlideModal(true)}
-              size="sm"
-              style={{ fontSize: '0.8rem', padding: '4px 10px', whiteSpace: 'nowrap' }}
-              title="Create a quick slide on-the-fly"
-            >
-              ⚡ Quick
-            </Button>
+                <Dropdown.Menu style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  <Dropdown.Item onClick={toggleBlankSlide}>
+                    {isBlankActive ? '⚫ Blank ON' : '⚪ Blank OFF'}
+                  </Dropdown.Item>
+                  <Dropdown.Item onClick={() => setShowQuickSlideModal(true)}>
+                    ⚡ Quick Slide
+                  </Dropdown.Item>
+                  <Dropdown.Item onClick={() => setShowBackgroundModal(true)}>
+                    🖼️ Background
+                  </Dropdown.Item>
+                  <Dropdown.Divider />
+                  <Dropdown.Item onClick={toggleDisplayMode}>
+                    {displayMode === 'original' ? '🔤 Switch to Bilingual' : '🔤 Switch to Original'}
+                  </Dropdown.Item>
+                </Dropdown.Menu>
+              </Dropdown>
+            ) : (
+              // Desktop: Regular buttons
+              <>
+                <Button
+                  variant={isBlankActive ? 'warning' : 'dark'}
+                  onClick={toggleBlankSlide}
+                  size="sm"
+                  style={{ fontSize: '0.8rem', padding: '4px 10px', whiteSpace: 'nowrap' }}
+                >
+                  {isBlankActive ? 'Blank ON' : 'Blank'}
+                </Button>
 
-            <Button
-              variant="info"
-              onClick={() => setShowBackgroundModal(true)}
-              size="sm"
-              style={{ fontSize: '0.8rem', padding: '4px 10px', whiteSpace: 'nowrap' }}
-            >
-              {isMobile ? 'BG' : 'Background'}
-            </Button>
+                <Button
+                  variant="success"
+                  onClick={() => setShowQuickSlideModal(true)}
+                  size="sm"
+                  style={{ fontSize: '0.8rem', padding: '4px 10px', whiteSpace: 'nowrap' }}
+                  title="Create a quick slide on-the-fly"
+                >
+                  ⚡ Quick
+                </Button>
 
-            <Button
-              variant="primary"
-              onClick={toggleDisplayMode}
-              size="sm"
-              style={{ fontSize: '0.8rem', padding: '4px 10px', whiteSpace: 'nowrap' }}
-            >
-              {displayMode === 'original' ? 'Original' : 'Bilingual'}
-            </Button>
+                <Button
+                  variant="info"
+                  onClick={() => setShowBackgroundModal(true)}
+                  size="sm"
+                  style={{ fontSize: '0.8rem', padding: '4px 10px', whiteSpace: 'nowrap' }}
+                >
+                  Background
+                </Button>
+
+                <Button
+                  variant="primary"
+                  onClick={toggleDisplayMode}
+                  size="sm"
+                  style={{ fontSize: '0.8rem', padding: '4px 10px', whiteSpace: 'nowrap' }}
+                >
+                  {displayMode === 'original' ? 'Original' : 'Bilingual'}
+                </Button>
+              </>
+            )}
           </div>
         </div>
 

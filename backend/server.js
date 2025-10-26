@@ -228,7 +228,7 @@ io.on('connection', (socket) => {
   socket.on('operator:updateSlide', async (data) => {
     console.log('📥 Received operator:updateSlide event:', data);
     try {
-      const { roomId, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData } = data;
+      const { roomId, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData, slideData } = data;
 
       const room = await Room.findById(roomId)
         .select('pin currentSlide currentImageUrl currentBibleData backgroundImage lastActivity expiresAt');
@@ -240,8 +240,7 @@ io.on('connection', (socket) => {
 
       // Update room's current slide
       // For Bible passages and Quick Slides, set songId to null since they're not in the database
-      const isBiblePassage = bibleData || (songId && songId.startsWith('bible-'));
-      const isTemporarySlide = bibleData || (songId && (songId.startsWith('bible-') || songId.startsWith('quick-')));
+      const isTemporarySlide = slideData?.isTemporary || bibleData || (songId && (songId.startsWith('bible-') || songId.startsWith('quick-')));
       room.currentSlide = {
         songId: (isBlank || isTemporarySlide) ? null : songId,
         slideIndex: slideIndex || 0,
@@ -249,18 +248,28 @@ io.on('connection', (socket) => {
         isBlank: isBlank || false
       };
 
-      // Store image URL and Bible data for new viewers
+      // Store image URL and slide data for new viewers
       room.currentImageUrl = imageUrl || null;
-      room.currentBibleData = bibleData || null;
+      room.currentBibleData = bibleData || slideData || null;
 
-      await room.updateActivity();
+      // Update activity asynchronously (don't wait for DB save)
+      room.updateActivity().catch(err => console.error('Error updating room activity:', err));
 
-      // Fetch song data if not blank, not an image, and not Bible data
-      let slideData = null;
+      // Use provided slide data (no DB query needed!)
+      let broadcastSlideData = null;
       if (!isBlank && !imageUrl) {
-        if (bibleData) {
-          // Use Bible data directly
-          slideData = {
+        if (slideData) {
+          // Use slide data sent from frontend (new optimized path)
+          broadcastSlideData = {
+            slide: slideData.slide,
+            displayMode: room.currentSlide.displayMode,
+            songTitle: slideData.title,
+            backgroundImage: room.backgroundImage || '',
+            isBible: slideData.isBible || false
+          };
+        } else if (bibleData) {
+          // Legacy: Use Bible data directly (for backward compatibility)
+          broadcastSlideData = {
             slide: bibleData.slide,
             displayMode: room.currentSlide.displayMode,
             songTitle: bibleData.title,
@@ -268,10 +277,10 @@ io.on('connection', (socket) => {
             isBible: true
           };
         } else if (songId) {
-          // Fetch song from database (only needed fields)
+          // Fallback: Fetch song from database (for backward compatibility)
           const song = await Song.findById(songId).select('title slides').lean();
           if (song && song.slides[slideIndex]) {
-            slideData = {
+            broadcastSlideData = {
               slide: song.slides[slideIndex],
               displayMode: room.currentSlide.displayMode,
               songTitle: song.title,
@@ -284,13 +293,13 @@ io.on('connection', (socket) => {
       // Broadcast to all viewers in the room
       io.to(`room:${room.pin}`).emit('slide:update', {
         currentSlide: room.currentSlide,
-        slideData,
+        slideData: broadcastSlideData,
         isBlank,
         imageUrl: imageUrl || null,
         backgroundImage: room.backgroundImage || ''
       });
 
-      console.log(`Slide updated in room ${room.pin}`, imageUrl ? `(image: ${imageUrl})` : bibleData ? `(Bible: ${bibleData.title})` : '');
+      console.log(`Slide updated in room ${room.pin}`, imageUrl ? `(image: ${imageUrl})` : slideData ? `(slide: ${slideData.title})` : bibleData ? `(Bible: ${bibleData.title})` : '');
     } catch (error) {
       console.error('Error in operator:updateSlide:', error);
       socket.emit('error', { message: 'Failed to update slide' });

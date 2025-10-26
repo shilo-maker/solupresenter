@@ -915,8 +915,12 @@ function PresenterMode() {
   const selectSlide = (index) => {
     setCurrentSlideIndex(index);
     setIsBlankActive(false); // Turn off blank when selecting a slide
+
+    // Defer socket call to not block UI render (optimistic update)
     if (currentSong) {
-      updateSlide(currentSong, index, displayMode, false);
+      queueMicrotask(() => {
+        updateSlide(currentSong, index, displayMode, false);
+      });
     }
   };
 
@@ -930,7 +934,7 @@ function PresenterMode() {
 
     console.log('📤 Sending slide update to backend');
 
-    // For Bible passages and Quick Slides, send the slide data directly
+    // Send slide data directly to avoid backend DB queries
     const payload = {
       roomId: room._id,
       songId: (song?.isTemporary || song?.isBible) ? null : (song?._id || null),
@@ -939,21 +943,13 @@ function PresenterMode() {
       isBlank
     };
 
-    // If it's a Bible passage, include the slide data and metadata
-    if (song?.isBible && song.slides && song.slides[slideIndex]) {
-      payload.bibleData = {
+    // Send slide data for all types to avoid backend DB query
+    if (song && song.slides && song.slides[slideIndex]) {
+      payload.slideData = {
         slide: song.slides[slideIndex],
         title: song.title,
-        isBible: true
-      };
-    }
-
-    // If it's a Quick Slide (temporary), send the slide data directly
-    if (song?.isTemporary && song.slides && song.slides[slideIndex]) {
-      payload.bibleData = {
-        slide: song.slides[slideIndex],
-        title: song.title || 'Quick Slide',
-        isBible: false  // Not a Bible slide, but we reuse the same mechanism
+        isBible: song.isBible || false,
+        isTemporary: song.isTemporary || false
       };
     }
 

@@ -49,6 +49,11 @@ router.get('/', authenticateToken, async (req, res) => {
     .sort({ title: 1 })
     .lean();
 
+    // Prevent caching to ensure fresh song list
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     res.json({ songs });
   } catch (error) {
     console.error('Error fetching songs:', error);

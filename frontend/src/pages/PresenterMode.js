@@ -8,7 +8,7 @@ import socketService from '../services/socket';
 function PresenterMode() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, loading } = useAuth();
+  const { user, loading, isAdmin } = useAuth();
 
   // Add pulse animation keyframes
   useEffect(() => {
@@ -56,6 +56,15 @@ function PresenterMode() {
   const [media, setMedia] = useState([]);
   const [selectedBackground, setSelectedBackground] = useState('');
   const [showBackgroundModal, setShowBackgroundModal] = useState(false);
+
+  // Create modal state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createModalView, setCreateModalView] = useState('choice'); // 'choice', 'create-song', 'upload-image'
+
+  // Song creation state
+  const [newSongTitle, setNewSongTitle] = useState('');
+  const [newSongExpressText, setNewSongExpressText] = useState('');
+  const [createSongLoading, setCreateSongLoading] = useState(false);
 
   // Get default date (today) and time (next round hour)
   const getDefaultDateTime = () => {
@@ -596,12 +605,16 @@ function PresenterMode() {
           }
 
           // Check if any slide content matches
-          return song.slides.some(slide =>
-            (slide.originalText && slide.originalText.toLowerCase().includes(searchTerm)) ||
-            (slide.transliteration && slide.transliteration.toLowerCase().includes(searchTerm)) ||
-            (slide.translation && slide.translation.toLowerCase().includes(searchTerm)) ||
-            (slide.translationOverflow && slide.translationOverflow.toLowerCase().includes(searchTerm))
-          );
+          if (song.slides && Array.isArray(song.slides)) {
+            return song.slides.some(slide =>
+              (slide.originalText && slide.originalText.toLowerCase().includes(searchTerm)) ||
+              (slide.transliteration && slide.transliteration.toLowerCase().includes(searchTerm)) ||
+              (slide.translation && slide.translation.toLowerCase().includes(searchTerm)) ||
+              (slide.translationOverflow && slide.translationOverflow.toLowerCase().includes(searchTerm))
+            );
+          }
+
+          return false;
         });
         setSearchResults(filtered);
       }
@@ -661,6 +674,73 @@ function PresenterMode() {
 
   const addToSetlist = (song) => {
     setSetlist([...setlist, { type: 'song', data: song }]);
+  };
+
+  // Parse express text into slides
+  const parseExpressText = (text) => {
+    const slideBlocks = text.split(/\n\s*\n/); // Split by blank lines
+
+    const parsedSlides = slideBlocks
+      .map(block => {
+        const lines = block.split('\n').map(line => line.trim()).filter(line => line);
+        if (lines.length === 0) return null;
+
+        return {
+          originalText: lines[0] || '',
+          transliteration: lines[1] || '',
+          translation: lines[2] || '',
+          translationOverflow: lines[3] || ''
+        };
+      })
+      .filter(slide => slide !== null && slide.originalText);
+
+    return parsedSlides.length > 0 ? parsedSlides : [{
+      originalText: '',
+      transliteration: '',
+      translation: '',
+      translationOverflow: ''
+    }];
+  };
+
+  const handleCreateSong = async () => {
+    if (!newSongTitle.trim()) {
+      setError('Please enter a song title');
+      return;
+    }
+
+    if (!newSongExpressText.trim()) {
+      setError('Please enter song content');
+      return;
+    }
+
+    setCreateSongLoading(true);
+    setError('');
+
+    try {
+      // Parse the express text into slides
+      const parsedSlides = parseExpressText(newSongExpressText);
+
+      const response = await api.post('/api/songs', {
+        title: newSongTitle,
+        originalLanguage: 'he',
+        slides: parsedSlides,
+        tags: []
+      });
+
+      // Add the new song to the setlist
+      addToSetlist(response.data.song);
+
+      // Reset form and close modal
+      setNewSongTitle('');
+      setNewSongExpressText('');
+      setShowCreateModal(false);
+      setCreateModalView('choice');
+    } catch (error) {
+      console.error('Error creating song:', error);
+      setError(error.response?.data?.error || 'Failed to create song');
+    } finally {
+      setCreateSongLoading(false);
+    }
   };
 
   const addImageToSetlist = (image) => {
@@ -913,14 +993,15 @@ function PresenterMode() {
   };
 
   const selectSlide = (index) => {
+    // Use startTransition for non-urgent state updates to keep UI responsive
     setCurrentSlideIndex(index);
     setIsBlankActive(false); // Turn off blank when selecting a slide
 
     // Defer socket call to not block UI render (optimistic update)
     if (currentSong) {
-      queueMicrotask(() => {
+      setTimeout(() => {
         updateSlide(currentSong, index, displayMode, false);
-      });
+      }, 0);
     }
   };
 
@@ -1472,6 +1553,22 @@ function PresenterMode() {
                 />
               </InputGroup>
             </div>
+
+            {/* New button */}
+            {(activeResourcePanel === 'songs' || activeResourcePanel === 'images') && (
+              <Button
+                variant="success"
+                size="sm"
+                onClick={() => setShowCreateModal(true)}
+                style={{
+                  fontWeight: '600',
+                  fontSize: '0.75rem'
+                }}
+                title={activeResourcePanel === 'songs' ? 'Create New Song' : 'Upload New Image'}
+              >
+                New
+              </Button>
+            )}
           </div>
 
           <div style={{ padding: '10px' }}>
@@ -2393,7 +2490,15 @@ function PresenterMode() {
                   borderRadius: '6px',
                   padding: '6px 8px',
                   cursor: 'pointer',
-                  backgroundColor: getBackgroundColor(slide.verseType, currentSlideIndex === index)
+                  backgroundColor: getBackgroundColor(slide.verseType, currentSlideIndex === index),
+                  transition: 'border 0.05s ease, background-color 0.05s ease',
+                  userSelect: 'none'
+                }}
+                onMouseDown={(e) => {
+                  e.currentTarget.style.transform = 'scale(0.98)';
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)';
                 }}
               >
                 <div style={{
@@ -2776,6 +2881,161 @@ function PresenterMode() {
           <Button variant="primary" onClick={() => navigate('/media')}>
             Manage Backgrounds
           </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Create Modal */}
+      <Modal
+        show={showCreateModal}
+        onHide={() => {
+          setShowCreateModal(false);
+          setCreateModalView('choice');
+          setNewSongTitle('');
+          setNewSongExpressText('');
+        }}
+        size={createModalView === 'create-song' ? 'lg' : undefined}
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>
+            {createModalView === 'choice' && 'Create New'}
+            {createModalView === 'create-song' && 'Create Song'}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {createModalView === 'choice' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '10px' }}>
+              <div
+                onClick={() => setCreateModalView('create-song')}
+                style={{
+                  padding: '20px',
+                  border: '2px solid #dee2e6',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  textAlign: 'center'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#0d6efd';
+                  e.currentTarget.style.backgroundColor = '#f8f9fa';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#dee2e6';
+                  e.currentTarget.style.backgroundColor = 'white';
+                }}
+              >
+                <h5 style={{ marginBottom: '10px', color: '#0d6efd' }}>Create Song</h5>
+                <p style={{ marginBottom: '0', color: '#666', fontSize: '0.9rem' }}>
+                  Create a new song with lyrics in Hebrew and English
+                </p>
+              </div>
+
+              {isAdmin && (
+                <div
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    navigate('/media');
+                  }}
+                  style={{
+                    padding: '20px',
+                    border: '2px solid #dee2e6',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    textAlign: 'center'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = '#0d6efd';
+                    e.currentTarget.style.backgroundColor = '#f8f9fa';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = '#dee2e6';
+                    e.currentTarget.style.backgroundColor = 'white';
+                  }}
+                >
+                  <h5 style={{ marginBottom: '10px', color: '#0d6efd' }}>Upload Image</h5>
+                  <p style={{ marginBottom: '0', color: '#666', fontSize: '0.9rem' }}>
+                    Upload new images or backgrounds to your media library
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {createModalView === 'create-song' && (
+            <div>
+              <Form.Group className="mb-3">
+                <Form.Label>Song Title</Form.Label>
+                <Form.Control
+                  type="text"
+                  placeholder="Enter song title"
+                  value={newSongTitle}
+                  onChange={(e) => setNewSongTitle(e.target.value)}
+                />
+              </Form.Group>
+
+              <Form.Group className="mb-3">
+                <Form.Label>Song Content</Form.Label>
+                <Form.Control
+                  as="textarea"
+                  rows={15}
+                  placeholder="Enter your song lyrics here. Separate slides with blank lines.
+
+Format for each slide:
+Line 1: Hebrew text (עברית)
+Line 2: Transliteration (optional)
+Line 3: English translation (optional)
+Line 4: Translation overflow (optional)
+
+Example:
+ברוך אתה ה׳
+Baruch atah Adonai
+Blessed are You, LORD
+
+הללויה
+Hallelujah
+Praise the LORD"
+                  value={newSongExpressText}
+                  onChange={(e) => setNewSongExpressText(e.target.value)}
+                  style={{ fontFamily: 'monospace', fontSize: '0.9rem' }}
+                />
+              </Form.Group>
+
+              <div style={{ fontSize: '0.85rem', color: '#666', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+                <strong>Tip:</strong> Separate each slide with a blank line. Within each slide, add up to 4 lines:
+                Hebrew text, transliteration, translation, and translation overflow.
+              </div>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          {createModalView === 'create-song' && (
+            <Button
+              variant="secondary"
+              onClick={() => setCreateModalView('choice')}
+            >
+              Back
+            </Button>
+          )}
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setShowCreateModal(false);
+              setCreateModalView('choice');
+              setNewSongTitle('');
+              setNewSongExpressText('');
+            }}
+          >
+            Cancel
+          </Button>
+          {createModalView === 'create-song' && (
+            <Button
+              variant="primary"
+              onClick={handleCreateSong}
+              disabled={createSongLoading}
+            >
+              {createSongLoading ? 'Creating...' : 'Create & Add to Setlist'}
+            </Button>
+          )}
         </Modal.Footer>
       </Modal>
 

@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 function Dashboard() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
 
   return (
     <Container className="py-5">
@@ -51,35 +51,39 @@ function Dashboard() {
           </Card>
         </Col>
 
-        <Col md={6}>
-          <Card className="h-100">
-            <Card.Body>
-              <Card.Title>Setlists</Card.Title>
-              <Card.Text>
-                Create and manage setlists for your services. Organize songs in the order you need.
-              </Card.Text>
-              <Button variant="primary" onClick={() => navigate('/setlists')}>
-                Manage Setlists
-              </Button>
-            </Card.Body>
-          </Card>
-        </Col>
+        {isAdmin && (
+          <Col md={6}>
+            <Card className="h-100">
+              <Card.Body>
+                <Card.Title>Setlists</Card.Title>
+                <Card.Text>
+                  Create and manage setlists for your services. Organize songs in the order you need.
+                </Card.Text>
+                <Button variant="primary" onClick={() => navigate('/setlists')}>
+                  Manage Setlists
+                </Button>
+              </Card.Body>
+            </Card>
+          </Col>
+        )}
 
-        <Col md={6}>
-          <Card className="h-100">
-            <Card.Body>
-              <Card.Title>Media Library</Card.Title>
-              <Card.Text>
-                Manage background images and gradients for your presentations.
-              </Card.Text>
-              <Button variant="primary" onClick={() => navigate('/media')}>
-                View Media
-              </Button>
-            </Card.Body>
-          </Card>
-        </Col>
+        {isAdmin && (
+          <Col md={6}>
+            <Card className="h-100">
+              <Card.Body>
+                <Card.Title>Media Library</Card.Title>
+                <Card.Text>
+                  Manage background images and gradients for your presentations.
+                </Card.Text>
+                <Button variant="primary" onClick={() => navigate('/media')}>
+                  View Media
+                </Button>
+              </Card.Body>
+            </Card>
+          </Col>
+        )}
 
-        {user?.role === 'admin' && (
+        {isAdmin && (
           <Col md={6}>
             <Card className="h-100 border-warning">
               <Card.Body>

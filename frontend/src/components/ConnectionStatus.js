@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 const ConnectionStatus = ({ status, latency }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
   const getStatusColor = () => {
     switch (status) {
       case 'connected':
@@ -30,57 +32,57 @@ const ConnectionStatus = ({ status, latency }) => {
     }
   };
 
-  const getStatusIcon = () => {
-    switch (status) {
-      case 'connected':
-        return '●'; // Solid circle
-      case 'connecting':
-      case 'reconnecting':
-        return '◐'; // Half circle (spinning would be nice but let's keep it simple)
-      case 'disconnected':
-        return '○'; // Empty circle
-      default:
-        return '?';
-    }
-  };
-
   return (
     <div
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       style={{
         position: 'fixed',
         top: '10px',
-        right: '10px',
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
-        color: 'white',
-        padding: '6px 12px',
-        borderRadius: '20px',
-        fontSize: '0.85rem',
+        left: '10px',
         display: 'flex',
         alignItems: 'center',
         gap: '6px',
         zIndex: 1000,
-        backdropFilter: 'blur(10px)',
-        border: `1px solid ${getStatusColor()}`,
-        transition: 'all 0.3s ease'
+        transition: 'all 0.3s ease',
+        cursor: 'default'
       }}
     >
-      <span
+      {/* Dot indicator */}
+      <div
         style={{
-          color: getStatusColor(),
-          fontSize: '1.2rem',
-          lineHeight: 1,
+          width: '8px',
+          height: '8px',
+          borderRadius: '50%',
+          backgroundColor: getStatusColor(),
+          boxShadow: `0 0 ${isHovered ? '8px' : '4px'} ${getStatusColor()}`,
+          transition: 'all 0.3s ease',
           animation: status === 'connecting' || status === 'reconnecting' ? 'pulse 1.5s infinite' : 'none'
         }}
-      >
-        {getStatusIcon()}
-      </span>
-      <span style={{ fontWeight: 500 }}>
-        {getStatusText()}
-      </span>
+      />
+
+      {/* Text (only shows on hover or when not connected) */}
+      {(isHovered || status !== 'connected') && (
+        <span
+          style={{
+            color: 'white',
+            fontSize: '0.75rem',
+            fontWeight: '500',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            padding: '4px 8px',
+            borderRadius: '8px',
+            backdropFilter: 'blur(10px)',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          {getStatusText()}
+        </span>
+      )}
+
       <style>{`
         @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(1.2); }
         }
       `}</style>
     </div>

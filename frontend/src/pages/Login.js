@@ -53,12 +53,52 @@ function Login() {
   };
 
   return (
-    <Container className="d-flex align-items-center justify-content-center" style={{ minHeight: '100vh' }}>
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(-45deg, #0a0a0a, #1a1a2e, #2d2d2d, #404040, #2a2a3e, #1a1a1a)',
+      backgroundSize: '400% 400%',
+      animation: 'gradientShift 15s ease infinite',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '20px'
+    }}>
+      <style>{`
+        @keyframes gradientShift {
+          0% {
+            background-position: 0% 50%;
+          }
+          50% {
+            background-position: 100% 50%;
+          }
+          100% {
+            background-position: 0% 50%;
+          }
+        }
+      `}</style>
       <div style={{ maxWidth: '400px', width: '100%' }}>
         <Card>
           <Card.Body>
-            <div className="text-center mb-3">
-              <img src="/cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '200px', height: 'auto' }} />
+            <div className="text-center mb-4">
+              <img src="/cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '150px', height: 'auto', marginBottom: '0.8rem' }} />
+              <div style={{
+                color: '#333',
+                fontWeight: '600',
+                fontSize: '1.5rem',
+                letterSpacing: '1px',
+                marginBottom: '0.2rem'
+              }}>
+                SoluCast
+              </div>
+              <div style={{
+                color: '#666',
+                fontWeight: '300',
+                fontSize: '0.75rem',
+                letterSpacing: '2px',
+                textTransform: 'uppercase'
+              }}>
+                WORSHIP AS ONE
+              </div>
             </div>
             <h4 className="text-center mb-4">Login</h4>
 
@@ -126,7 +166,7 @@ function Login() {
           </Card.Body>
         </Card>
       </div>
-    </Container>
+    </div>
   );
 }
 

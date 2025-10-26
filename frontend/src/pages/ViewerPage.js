@@ -203,7 +203,7 @@ function ViewerPage() {
           position: 'relative'
         }}>
           {isBlank ? (
-            // Show "Blank Slide" in top left corner
+            // Show "Blank" in top left corner
             <div style={{
               position: 'absolute',
               top: '20px',
@@ -212,7 +212,7 @@ function ViewerPage() {
               fontSize: 'clamp(1rem, 2vw, 1.5rem)',
               opacity: 0.7
             }}>
-              Blank Slide
+              Blank
             </div>
           ) : (
             // Show "Waiting for presentation..." centered
@@ -300,7 +300,7 @@ function ViewerPage() {
             wordWrap: 'break-word',
             overflowWrap: 'break-word',
             color: textColor,
-            textShadow: '2px 2px 4px rgba(0, 0, 0, 0.8), -1px -1px 2px rgba(0, 0, 0, 0.5)',
+            textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
             direction: getTextDirection(slide.originalText),
             unicodeBidi: 'plaintext'
           }}>
@@ -324,7 +324,7 @@ function ViewerPage() {
               wordWrap: 'break-word',
               overflowWrap: 'break-word',
               color: textColor,
-              textShadow: '2px 2px 4px rgba(0, 0, 0, 0.8), -1px -1px 2px rgba(0, 0, 0, 0.5)',
+              textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
               direction: getTextDirection(slide.originalText),
               unicodeBidi: 'plaintext'
             }}>
@@ -341,7 +341,7 @@ function ViewerPage() {
                 wordWrap: 'break-word',
                 overflowWrap: 'break-word',
                 color: textColor,
-                textShadow: '2px 2px 4px rgba(0, 0, 0, 0.8), -1px -1px 2px rgba(0, 0, 0, 0.5)',
+                textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
                 direction: getTextDirection(slide.transliteration),
                 unicodeBidi: 'plaintext'
               }}>
@@ -359,7 +359,7 @@ function ViewerPage() {
                 wordWrap: 'break-word',
                 overflowWrap: 'break-word',
                 color: textColor,
-                textShadow: '2px 2px 4px rgba(0, 0, 0, 0.8), -1px -1px 2px rgba(0, 0, 0, 0.5)',
+                textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
                 direction: getTextDirection(slide.translation),
                 unicodeBidi: 'plaintext'
               }}>
@@ -377,7 +377,7 @@ function ViewerPage() {
                 wordWrap: 'break-word',
                 overflowWrap: 'break-word',
                 color: textColor,
-                textShadow: '2px 2px 4px rgba(0, 0, 0, 0.8), -1px -1px 2px rgba(0, 0, 0, 0.5)',
+                textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
                 direction: getTextDirection(slide.translationOverflow),
                 unicodeBidi: 'plaintext'
               }}>
@@ -394,12 +394,27 @@ function ViewerPage() {
     return (
       <div style={{
         minHeight: '100vh',
-        backgroundColor: '#2d2d2d',
+        background: 'linear-gradient(-45deg, #0a0a0a, #1a1a2e, #2d2d2d, #404040, #2a2a3e, #1a1a1a)',
+        backgroundSize: '400% 400%',
+        animation: 'gradientShift 15s ease infinite',
         position: 'relative',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center'
       }}>
+        <style>{`
+          @keyframes gradientShift {
+            0% {
+              background-position: 0% 50%;
+            }
+            50% {
+              background-position: 100% 50%;
+            }
+            100% {
+              background-position: 0% 50%;
+            }
+          }
+        `}</style>
         {/* Login Button - Top Right */}
         <Button
           variant="light"
@@ -425,16 +440,35 @@ function ViewerPage() {
           padding: '20px'
         }}>
           {/* SoluCast Logo */}
-          <div style={{ marginBottom: '1.5rem' }}>
+          <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
             <img
               src="/cast_logo.png"
               alt="SoluCast Logo"
               style={{
-                maxWidth: 'clamp(250px, 40vw, 400px)',
+                maxWidth: 'clamp(125px, 20vw, 200px)',
                 height: 'auto',
-                width: '100%'
+                width: '100%',
+                marginBottom: '1rem'
               }}
             />
+            <div style={{
+              color: 'white',
+              fontWeight: '600',
+              fontSize: '1.8rem',
+              letterSpacing: '1px',
+              marginBottom: '0.3rem'
+            }}>
+              SoluCast
+            </div>
+            <div style={{
+              color: 'rgba(255, 255, 255, 0.7)',
+              fontWeight: '300',
+              fontSize: '0.9rem',
+              letterSpacing: '2px',
+              textTransform: 'uppercase'
+            }}>
+              WORSHIP AS ONE
+            </div>
           </div>
 
           {error && (
@@ -444,31 +478,75 @@ function ViewerPage() {
           )}
 
           {/* PIN Input Form */}
-          <Form onSubmit={handleJoin} style={{ width: '100%', maxWidth: '250px' }}>
-            {/* PIN Input Box */}
+          <Form onSubmit={handleJoin} style={{ width: '100%', maxWidth: '320px' }}>
             <div style={{
-              border: '2px solid white',
-              borderRadius: '6px',
-              padding: '8px 12px',
-              marginBottom: '12px',
-              backgroundColor: 'transparent'
+              marginBottom: '20px',
+              textAlign: 'center'
             }}>
+              <h3 style={{
+                color: 'white',
+                fontSize: '1.1rem',
+                fontWeight: '300',
+                marginBottom: '20px',
+                letterSpacing: '0.5px'
+              }}>
+                Enter Room Code
+              </h3>
+
+              {/* PIN Input - Individual Boxes */}
+              <div
+                onClick={() => {
+                  const input = document.querySelector('input[type="text"]');
+                  if (input) input.focus();
+                }}
+                style={{
+                  display: 'flex',
+                  gap: '12px',
+                  justifyContent: 'center',
+                  marginBottom: '24px',
+                  cursor: 'text'
+                }}
+              >
+                {[0, 1, 2, 3].map((index) => (
+                  <div
+                    key={index}
+                    style={{
+                      width: '60px',
+                      height: '70px',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      backdropFilter: 'blur(10px)',
+                      border: '2px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '2rem',
+                      fontWeight: '600',
+                      color: 'white',
+                      letterSpacing: '0',
+                      transition: 'all 0.3s ease',
+                      boxShadow: pin[index] ? '0 0 20px rgba(255, 255, 255, 0.2)' : 'none',
+                      transform: pin[index] ? 'scale(1.05)' : 'scale(1)',
+                      cursor: 'text'
+                    }}
+                  >
+                    {pin[index] || ''}
+                  </div>
+                ))}
+              </div>
+
+              {/* Hidden actual input */}
               <Form.Control
                 type="text"
                 value={pin}
                 onChange={(e) => setPin(e.target.value.toUpperCase())}
                 maxLength={4}
-                placeholder="X X X X"
                 style={{
-                  textTransform: 'uppercase',
-                  fontSize: '1.5rem',
-                  textAlign: 'center',
-                  letterSpacing: '0.6rem',
-                  backgroundColor: 'transparent',
-                  border: 'none',
-                  color: 'white',
-                  outline: 'none',
-                  boxShadow: 'none'
+                  position: 'absolute',
+                  opacity: 0,
+                  pointerEvents: 'none',
+                  width: '1px',
+                  height: '1px'
                 }}
                 autoFocus
                 required
@@ -478,16 +556,29 @@ function ViewerPage() {
             {/* Join Button */}
             <Button
               type="submit"
-              variant="light"
               style={{
                 width: '100%',
-                borderRadius: '6px',
-                padding: '8px',
+                borderRadius: '12px',
+                padding: '14px',
                 fontSize: '1rem',
-                fontWeight: '500'
+                fontWeight: '600',
+                backgroundColor: 'white',
+                color: '#2d2d2d',
+                border: 'none',
+                letterSpacing: '1px',
+                transition: 'all 0.3s ease',
+                boxShadow: '0 4px 15px rgba(255, 255, 255, 0.2)'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-2px)';
+                e.target.style.boxShadow = '0 6px 20px rgba(255, 255, 255, 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 4px 15px rgba(255, 255, 255, 0.2)';
               }}
             >
-              JOIN
+              JOIN ROOM
             </Button>
           </Form>
         </div>
@@ -499,38 +590,55 @@ function ViewerPage() {
   const isGradient = backgroundImage && backgroundImage.startsWith('linear-gradient');
 
   return (
-    <div
-      style={{
-        backgroundColor: '#000',
-        backgroundImage: backgroundImage ? (isGradient ? backgroundImage : `url(${getFullImageUrl(backgroundImage)})`) : 'none',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        width: '100vw',
-        height: '100vh',
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        overflow: 'hidden'
-      }}
-    >
-      <ConnectionStatus status={connectionStatus} latency={latency} />
+    <>
+      <style>{`
+        @keyframes gradientShift {
+          0% {
+            background-position: 0% 50%;
+          }
+          50% {
+            background-position: 100% 50%;
+          }
+          100% {
+            background-position: 0% 50%;
+          }
+        }
+      `}</style>
+      <div
+        style={{
+          background: backgroundImage
+            ? (isGradient ? backgroundImage : `url(${getFullImageUrl(backgroundImage)})`)
+            : 'linear-gradient(-45deg, #0a0a0a, #1a1a2e, #16161d, #1f1f1f, #1a1a2e, #0a0a0a)',
+          backgroundSize: backgroundImage ? 'cover' : '400% 400%',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          animation: backgroundImage ? 'none' : 'gradientShift 20s ease infinite',
+          width: '100vw',
+          height: '100vh',
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          overflow: 'hidden'
+        }}
+      >
+        <ConnectionStatus status={connectionStatus} latency={latency} />
 
       {/* Settings Button - Bottom Left */}
       <button
         ref={settingsButtonRef}
         onClick={() => setShowControls(!showControls)}
+        onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+        onMouseLeave={(e) => e.currentTarget.style.opacity = showControls ? '1' : '0.4'}
         style={{
           position: 'fixed',
           bottom: '20px',
           left: '20px',
-          width: '50px',
-          height: '50px',
-          borderRadius: '50%',
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          border: '2px solid rgba(255, 255, 255, 0.3)',
+          width: '40px',
+          height: '40px',
+          borderRadius: '10px',
+          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
           color: 'white',
-          fontSize: '1.5rem',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
@@ -538,27 +646,36 @@ function ViewerPage() {
           backdropFilter: 'blur(10px)',
           zIndex: 1001,
           transition: 'all 0.3s ease',
-          boxShadow: showControls ? '0 0 20px rgba(255,255,255,0.3)' : 'none'
+          opacity: showControls ? '1' : '0.4',
+          boxShadow: showControls ? '0 4px 12px rgba(255,255,255,0.15)' : 'none'
         }}
         title="Display Settings"
       >
-        ⚙️
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="4" y1="7" x2="20" y2="7"/>
+          <line x1="4" y1="12" x2="20" y2="12"/>
+          <line x1="4" y1="17" x2="20" y2="17"/>
+          <circle cx="8" cy="7" r="2" fill="currentColor"/>
+          <circle cx="16" cy="12" r="2" fill="currentColor"/>
+          <circle cx="10" cy="17" r="2" fill="currentColor"/>
+        </svg>
       </button>
 
       {/* Fullscreen Button - Bottom Right */}
       <button
         onClick={toggleFullscreen}
+        onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+        onMouseLeave={(e) => e.currentTarget.style.opacity = isFullscreen ? '1' : '0.4'}
         style={{
           position: 'fixed',
           bottom: '20px',
           right: '20px',
-          width: '50px',
-          height: '50px',
-          borderRadius: '50%',
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          border: '2px solid rgba(255, 255, 255, 0.3)',
+          width: '40px',
+          height: '40px',
+          borderRadius: '10px',
+          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
           color: 'white',
-          fontSize: '1.3rem',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
@@ -566,11 +683,20 @@ function ViewerPage() {
           backdropFilter: 'blur(10px)',
           zIndex: 1001,
           transition: 'all 0.3s ease',
-          boxShadow: isFullscreen ? '0 0 20px rgba(255,255,255,0.3)' : 'none'
+          opacity: isFullscreen ? '1' : '0.4',
+          boxShadow: isFullscreen ? '0 4px 12px rgba(255,255,255,0.15)' : 'none'
         }}
         title={isFullscreen ? 'Exit Fullscreen (ESC)' : 'Enter Fullscreen (F11)'}
       >
-        {isFullscreen ? '⤡' : '⤢'}
+        {isFullscreen ? (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
+          </svg>
+        ) : (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+          </svg>
+        )}
       </button>
 
       {/* Controls Panel - Slide out from left */}
@@ -776,7 +902,8 @@ function ViewerPage() {
       </div>
 
       {renderSlide()}
-    </div>
+      </div>
+    </>
   );
 }
 

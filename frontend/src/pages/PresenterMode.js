@@ -1229,12 +1229,27 @@ function PresenterMode() {
   return (
     <div style={{
       minHeight: '100vh',
-      backgroundColor: '#2d2d2d',
+      background: 'linear-gradient(-45deg, #0a0a0a, #1a1a2e, #2d2d2d, #404040, #2a2a3e, #1a1a1a)',
+      backgroundSize: '400% 400%',
+      animation: 'gradientShift 15s ease infinite',
       padding: '20px',
       paddingBottom: '20px',
       display: 'flex',
       justifyContent: 'center'
     }}>
+      <style>{`
+        @keyframes gradientShift {
+          0% {
+            background-position: 0% 50%;
+          }
+          50% {
+            background-position: 100% 50%;
+          }
+          100% {
+            background-position: 0% 50%;
+          }
+        }
+      `}</style>
       <div style={{
         width: '100%',
         maxWidth: '900px'
@@ -1254,21 +1269,28 @@ function PresenterMode() {
           style={{
             position: 'absolute',
             left: '20px',
-            top: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px'
+            top: '20px'
           }}
         >
-          <span>←</span>
-          <span>Back to Dashboard</span>
+          Dashboard
         </Button>
         <div style={{
           position: 'absolute',
           right: '20px',
-          top: '20px'
+          top: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
         }}>
           <img src="/cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '40px', height: 'auto' }} />
+          <span style={{
+            fontSize: '1.2rem',
+            fontWeight: '600',
+            color: '#333',
+            letterSpacing: '0.5px'
+          }}>
+            SoluCast
+          </span>
         </div>
         {roomPin ? (
           <>

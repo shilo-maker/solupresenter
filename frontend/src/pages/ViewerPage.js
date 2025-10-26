@@ -354,7 +354,7 @@ function ViewerPage() {
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: slide.translationOverflow ? 'clamp(0.3rem, 0.8vh, 0.8rem)' : '0',
+                gap: slide.translationOverflow ? 'clamp(0.1rem, 0.3vh, 0.3rem)' : '0',
                 width: '100%'
               }}>
                 {/* Line 3 - Translation */}

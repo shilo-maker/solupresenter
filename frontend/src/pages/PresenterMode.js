@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Form, Button, InputGroup, Modal, Row, Col, Alert, Badge, Dropdown } from 'react-bootstrap';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { FixedSizeList } from 'react-window';
 import { useAuth } from '../contexts/AuthContext';
 import api, { getFullImageUrl } from '../services/api';
 import socketService from '../services/socket';
@@ -981,14 +982,20 @@ function PresenterMode() {
   };
 
   const selectSong = async (song) => {
-    try {
-      // Fetch full song details including slides
-      const response = await api.get(`/api/songs/${song._id}`);
-      const fullSong = response.data.song;
-      selectItem({ type: 'song', data: fullSong });
-    } catch (error) {
-      console.error('Error fetching song details:', error);
-      setError('Failed to load song details');
+    // Song data now includes slides from initial fetch - no API call needed!
+    // Check if song has slides (new optimized path)
+    if (song.slides && song.slides.length > 0) {
+      selectItem({ type: 'song', data: song });
+    } else {
+      // Fallback: fetch full song details if slides are missing (backward compatibility)
+      try {
+        const response = await api.get(`/api/songs/${song._id}`);
+        const fullSong = response.data.song;
+        selectItem({ type: 'song', data: fullSong });
+      } catch (error) {
+        console.error('Error fetching song details:', error);
+        setError('Failed to load song details');
+      }
     }
   };
 
@@ -1573,7 +1580,7 @@ function PresenterMode() {
 
           <div style={{ padding: '10px' }}>
             {activeResourcePanel === 'songs' ? (
-              <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+              <div style={{ height: '220px' }}>
                 {songsLoading ? (
                   <div style={{ textAlign: 'center', color: '#666', padding: '40px' }}>
                     <div className="spinner-border text-primary" role="status" style={{ marginBottom: '10px' }}>
@@ -1586,77 +1593,88 @@ function PresenterMode() {
                     {searchQuery ? 'No songs match your search' : 'No songs available'}
                   </p>
                 ) : (
-                  searchResults.map((song) => (
-                  <div
-                    key={song._id}
-                    style={{
-                      padding: '8px 10px',
-                      backgroundColor: currentSong?._id === song._id ? '#007bff' : 'white',
-                      color: currentSong?._id === song._id ? 'white' : '#000',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      cursor: 'pointer',
-                      borderRadius: '4px',
-                      marginBottom: '4px',
-                      border: currentSong?._id === song._id ? '2px solid #0056b3' : '1px solid #ddd'
-                    }}
-                    onClick={() => selectSong(song)}
+                  <FixedSizeList
+                    height={220}
+                    itemCount={searchResults.length}
+                    itemSize={52}
+                    width="100%"
                   >
-                    <span style={{ fontSize: '0.95rem' }}>{song.title}</span>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      style={{
-                        borderRadius: '8px',
-                        width: '36px',
-                        height: '36px',
-                        padding: '0',
-                        fontSize: '1.3rem',
-                        fontWeight: '600',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: currentSong?._id === song._id ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        border: 'none',
-                        boxShadow: '0 2px 8px rgba(102, 126, 234, 0.4)',
-                        transition: 'all 0.2s ease',
-                        cursor: 'pointer'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'scale(1.1)';
-                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.6)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'scale(1)';
-                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.4)';
-                      }}
-                      onMouseDown={(e) => {
-                        e.currentTarget.style.transform = 'scale(0.9)';
-                        e.currentTarget.style.boxShadow = '0 1px 4px rgba(102, 126, 234, 0.3)';
-                      }}
-                      onMouseUp={(e) => {
-                        e.currentTarget.style.transform = 'scale(1.1)';
-                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.6)';
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        addToSetlist(song);
+                    {({ index, style }) => {
+                      const song = searchResults[index];
+                      return (
+                        <div
+                          style={{
+                            ...(style || {}),
+                            padding: '8px 10px',
+                            backgroundColor: currentSong?._id === song._id ? '#007bff' : 'white',
+                            color: currentSong?._id === song._id ? 'white' : '#000',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            cursor: 'pointer',
+                            borderRadius: '4px',
+                            marginBottom: '4px',
+                            border: currentSong?._id === song._id ? '2px solid #0056b3' : '1px solid #ddd',
+                            boxSizing: 'border-box'
+                          }}
+                          onClick={() => selectSong(song)}
+                        >
+                          <span style={{ fontSize: '0.95rem' }}>{song.title}</span>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            style={{
+                              borderRadius: '8px',
+                              width: '36px',
+                              height: '36px',
+                              padding: '0',
+                              fontSize: '1.3rem',
+                              fontWeight: '600',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              background: currentSong?._id === song._id ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                              border: 'none',
+                              boxShadow: '0 2px 8px rgba(102, 126, 234, 0.4)',
+                              transition: 'all 0.2s ease',
+                              cursor: 'pointer'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'scale(1.1)';
+                              e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.6)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)';
+                              e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.4)';
+                            }}
+                            onMouseDown={(e) => {
+                              e.currentTarget.style.transform = 'scale(0.9)';
+                              e.currentTarget.style.boxShadow = '0 1px 4px rgba(102, 126, 234, 0.3)';
+                            }}
+                            onMouseUp={(e) => {
+                              e.currentTarget.style.transform = 'scale(1.1)';
+                              e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.6)';
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              addToSetlist(song);
 
-                        // Pulse animation on click
-                        const button = e.currentTarget;
-                        button.style.animation = 'none';
-                        setTimeout(() => {
-                          if (button && button.style) {
-                            button.style.animation = 'pulse 0.4s ease';
-                          }
-                        }, 10);
-                      }}
-                    >
-                      +
-                    </Button>
-                  </div>
-                  ))
+                              // Pulse animation on click
+                              const button = e.currentTarget;
+                              button.style.animation = 'none';
+                              setTimeout(() => {
+                                if (button && button.style) {
+                                  button.style.animation = 'pulse 0.4s ease';
+                                }
+                              }, 10);
+                            }}
+                          >
+                            +
+                          </Button>
+                        </div>
+                      );
+                    }}
+                  </FixedSizeList>
                 )}
               </div>
             ) : activeResourcePanel === 'bible' ? (

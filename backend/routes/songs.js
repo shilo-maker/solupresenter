@@ -44,7 +44,7 @@ router.get('/', authenticateToken, async (req, res) => {
         { createdBy: req.user._id }
       ]
     })
-    .select('_id title originalLanguage tags isPublic createdBy usageCount updatedAt')
+    .select('_id title originalLanguage tags isPublic createdBy usageCount updatedAt slides')
     .populate('createdBy', 'email')
     .sort({ title: 1 })
     .lean();
@@ -86,7 +86,7 @@ router.get('/search', authenticateToken, async (req, res) => {
     }
 
     const songs = await Song.find(filter)
-      .select('_id title originalLanguage tags isPublic createdBy usageCount updatedAt')
+      .select('_id title originalLanguage tags isPublic createdBy usageCount updatedAt slides')
       .populate('createdBy', 'email')
       .sort(query ? { score: { $meta: 'textScore' } } : { title: 1 })
       .lean();

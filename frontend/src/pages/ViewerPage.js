@@ -314,7 +314,7 @@ function ViewerPage() {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '4vh 6vw',
+        padding: '2vh 6vw',
         color: textColor,
         textAlign: 'center',
         boxSizing: 'border-box',
@@ -608,14 +608,24 @@ function ViewerPage() {
               <Form.Control
                 type="text"
                 value={pin}
-                onChange={(e) => setPin(e.target.value.toUpperCase())}
+                onChange={(e) => {
+                  const newValue = e.target.value.toUpperCase();
+                  setPin(newValue);
+                  // Keep cursor at end
+                  setTimeout(() => {
+                    if (e.target) {
+                      e.target.setSelectionRange(newValue.length, newValue.length);
+                    }
+                  }, 0);
+                }}
                 maxLength={4}
                 style={{
                   position: 'absolute',
                   opacity: 0,
-                  pointerEvents: 'none',
+                  pointerEvents: 'auto',
                   width: '1px',
-                  height: '1px'
+                  height: '1px',
+                  left: '-9999px'
                 }}
                 autoFocus
                 required

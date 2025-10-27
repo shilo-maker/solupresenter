@@ -28,7 +28,7 @@ const sendVerificationEmail = async (user, token) => {
     const { data, error } = await resend.emails.send({
       from: process.env.EMAIL_FROM,
       to: user.email,
-      subject: 'Verify Your Email - SoluPresenter',
+      subject: 'Verify Your Email - SoluCast',
       html: `
         <!DOCTYPE html>
         <html>
@@ -45,7 +45,7 @@ const sendVerificationEmail = async (user, token) => {
               padding: 20px;
             }
             .header {
-              background-color: #007bff;
+              background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
               color: white;
               padding: 20px;
               text-align: center;
@@ -59,7 +59,7 @@ const sendVerificationEmail = async (user, token) => {
             .button {
               display: inline-block;
               padding: 12px 30px;
-              background-color: #007bff;
+              background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
               color: white;
               text-decoration: none;
               border-radius: 5px;
@@ -76,11 +76,11 @@ const sendVerificationEmail = async (user, token) => {
         <body>
           <div class="container">
             <div class="header">
-              <h1>Welcome to SoluPresenter!</h1>
+              <h1>Welcome to SoluCast!</h1>
             </div>
             <div class="content">
               <h2>Verify Your Email Address</h2>
-              <p>Thank you for registering with SoluPresenter. To complete your registration, please verify your email address by clicking the button below:</p>
+              <p>Thank you for registering with SoluCast. To complete your registration, please verify your email address by clicking the button below:</p>
 
               <div style="text-align: center;">
                 <a href="${verificationUrl}" class="button">Verify Email Address</a>
@@ -93,10 +93,10 @@ const sendVerificationEmail = async (user, token) => {
 
               <p><strong>This link will expire in 24 hours.</strong></p>
 
-              <p>If you didn't create an account with SoluPresenter, you can safely ignore this email.</p>
+              <p>If you didn't create an account with SoluCast, you can safely ignore this email.</p>
             </div>
             <div class="footer">
-              <p>&copy; 2025 SoluPresenter. All rights reserved.</p>
+              <p>&copy; 2025 SoluCast. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -130,7 +130,7 @@ const sendPasswordResetEmail = async (user, token) => {
     const { data, error } = await resend.emails.send({
       from: process.env.EMAIL_FROM,
       to: user.email,
-      subject: 'Password Reset Request - SoluPresenter',
+      subject: 'Password Reset Request - SoluCast',
       html: `
         <!DOCTYPE html>
         <html>
@@ -147,7 +147,7 @@ const sendPasswordResetEmail = async (user, token) => {
               padding: 20px;
             }
             .header {
-              background-color: #dc3545;
+              background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
               color: white;
               padding: 20px;
               text-align: center;
@@ -161,7 +161,7 @@ const sendPasswordResetEmail = async (user, token) => {
             .button {
               display: inline-block;
               padding: 12px 30px;
-              background-color: #dc3545;
+              background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
               color: white;
               text-decoration: none;
               border-radius: 5px;
@@ -198,7 +198,7 @@ const sendPasswordResetEmail = async (user, token) => {
               <p>If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.</p>
             </div>
             <div class="footer">
-              <p>&copy; 2025 SoluPresenter. All rights reserved.</p>
+              <p>&copy; 2025 SoluCast. All rights reserved.</p>
             </div>
           </div>
         </body>

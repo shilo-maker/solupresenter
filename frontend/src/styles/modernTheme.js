@@ -1,9 +1,9 @@
 // Modern Design System for SoluCast
 export const colors = {
-  // Primary gradient (purple-blue)
-  primary: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-  primarySolid: '#667eea',
-  primaryDark: '#764ba2',
+  // Primary gradient (Teal/Cyan)
+  primary: 'linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%)',
+  primarySolid: '#14b8a6',
+  primaryDark: '#0891b2',
 
   // Success gradient (green)
   success: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
@@ -13,13 +13,13 @@ export const colors = {
   danger: 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)',
   dangerSolid: '#eb3349',
 
-  // Warning gradient (orange)
-  warning: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-  warningSolid: '#f093fb',
+  // Warning gradient (amber - not primary color)
+  warning: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+  warningSolid: '#f59e0b',
 
-  // Info gradient (blue)
-  info: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-  infoSolid: '#4facfe',
+  // Info gradient (light cyan)
+  info: 'linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)',
+  infoSolid: '#22d3ee',
 
   // Neutrals
   dark: '#2d3748',
@@ -90,7 +90,7 @@ export const buttonStyles = {
     padding: `${spacing.sm} ${spacing.lg}`,
     fontSize: typography.base,
     fontWeight: typography.semibold,
-    boxShadow: '0 2px 8px rgba(102, 126, 234, 0.4)',
+    boxShadow: '0 2px 8px rgba(20, 184, 166, 0.4)',
     transition: 'all 0.2s ease',
     cursor: 'pointer',
     fontFamily: typography.fontFamily,
@@ -187,7 +187,7 @@ export const inputStyles = {
     ':focus': {
       outline: 'none',
       borderColor: colors.primarySolid,
-      boxShadow: `0 0 0 3px rgba(102, 126, 234, 0.1)`,
+      boxShadow: `0 0 0 3px rgba(20, 184, 166, 0.1)`,
     },
   },
 };

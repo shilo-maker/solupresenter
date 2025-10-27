@@ -215,17 +215,78 @@ function ViewerPage() {
               Blank
             </div>
           ) : (
-            // Show "Waiting for presentation..." centered
+            // Show modern waiting state
             <div style={{
               width: '100%',
               height: '100%',
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              color: 'white',
-              fontSize: 'clamp(1.5rem, 4vw, 3rem)'
+              gap: '2rem'
             }}>
-              Waiting for presentation...
+              {/* Logo */}
+              <img
+                src="/new_cast_logo.png"
+                alt="SoluCast"
+                style={{
+                  maxWidth: '150px',
+                  height: 'auto',
+                  opacity: 0.9,
+                  animation: 'fadeIn 1s ease-in'
+                }}
+              />
+
+              {/* Animated dots */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem',
+                color: 'white',
+                fontSize: 'clamp(1.2rem, 3vw, 2rem)',
+                fontWeight: '300',
+                letterSpacing: '0.05em'
+              }}>
+                <span style={{ opacity: 0.7 }}>Waiting for presentation</span>
+                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: 'white',
+                    opacity: 0.7,
+                    animation: 'pulse 1.5s ease-in-out infinite'
+                  }} />
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: 'white',
+                    opacity: 0.7,
+                    animation: 'pulse 1.5s ease-in-out 0.5s infinite'
+                  }} />
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: 'white',
+                    opacity: 0.7,
+                    animation: 'pulse 1.5s ease-in-out 1s infinite'
+                  }} />
+                </div>
+              </div>
+
+              {/* CSS animations */}
+              <style>{`
+                @keyframes pulse {
+                  0%, 100% { opacity: 0.3; transform: scale(1); }
+                  50% { opacity: 1; transform: scale(1.2); }
+                }
+                @keyframes fadeIn {
+                  from { opacity: 0; transform: translateY(-10px); }
+                  to { opacity: 0.9; transform: translateY(0); }
+                }
+              `}</style>
             </div>
           )}
         </div>
@@ -450,7 +511,7 @@ function ViewerPage() {
           {/* SoluCast Logo */}
           <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
             <img
-              src="/cast_logo.png"
+              src="/new_cast_logo.png"
               alt="SoluCast Logo"
               style={{
                 maxWidth: 'clamp(125px, 20vw, 200px)',

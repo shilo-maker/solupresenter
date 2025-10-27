@@ -6,10 +6,10 @@ const ConnectionStatus = ({ status, latency }) => {
   const getStatusColor = () => {
     switch (status) {
       case 'connected':
-        return latency < 100 ? '#28a745' : latency < 300 ? '#ffc107' : '#fd7e14';
+        return latency < 100 ? '#28a745' : latency < 300 ? '#14b8a6' : '#06b6d4';
       case 'connecting':
       case 'reconnecting':
-        return '#ffc107';
+        return '#14b8a6';
       case 'disconnected':
         return '#dc3545';
       default:

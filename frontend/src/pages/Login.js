@@ -80,7 +80,7 @@ function Login() {
         <Card>
           <Card.Body>
             <div className="text-center mb-4">
-              <img src="/cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '150px', height: 'auto', marginBottom: '0.8rem' }} />
+              <img src="/new_cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '150px', height: 'auto', marginBottom: '0.8rem' }} />
               <div style={{
                 color: '#333',
                 fontWeight: '600',

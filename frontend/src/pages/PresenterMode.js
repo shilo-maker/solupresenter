@@ -1369,7 +1369,7 @@ function PresenterMode() {
             alignItems: 'center',
             gap: '8px'
           }}>
-            <img src="/cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '40px', height: 'auto' }} />
+            <img src="/new_cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '40px', height: 'auto' }} />
             <span style={{
               fontSize: '1.2rem',
               fontWeight: '600',

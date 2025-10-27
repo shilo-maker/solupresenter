@@ -230,30 +230,23 @@ io.on('connection', (socket) => {
     try {
       const { roomId, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData, slideData } = data;
 
+      // Quick lookup to get room pin and background (using lean for speed)
       const room = await Room.findById(roomId)
-        .select('pin currentSlide currentImageUrl currentBibleData backgroundImage lastActivity expiresAt');
+        .select('pin backgroundImage')
+        .lean();
 
       if (!room) {
         socket.emit('error', { message: 'Room not found' });
         return;
       }
 
-      // Update room's current slide
-      // For Bible passages and Quick Slides, set songId to null since they're not in the database
-      const isTemporarySlide = slideData?.isTemporary || bibleData || (songId && (songId.startsWith('bible-') || songId.startsWith('quick-')));
-      room.currentSlide = {
-        songId: (isBlank || isTemporarySlide) ? null : songId,
+      // Prepare slide data for broadcast
+      const currentSlideData = {
+        songId: (isBlank || slideData?.isTemporary || bibleData || (songId && (songId.startsWith('bible-') || songId.startsWith('quick-')))) ? null : songId,
         slideIndex: slideIndex || 0,
         displayMode: displayMode || 'bilingual',
         isBlank: isBlank || false
       };
-
-      // Store image URL and slide data for new viewers
-      room.currentImageUrl = imageUrl || null;
-      room.currentBibleData = bibleData || slideData || null;
-
-      // Update activity asynchronously (don't wait for DB save)
-      room.updateActivity().catch(err => console.error('Error updating room activity:', err));
 
       // Use provided slide data (no DB query needed!)
       let broadcastSlideData = null;
@@ -262,7 +255,7 @@ io.on('connection', (socket) => {
           // Use slide data sent from frontend (new optimized path)
           broadcastSlideData = {
             slide: slideData.slide,
-            displayMode: room.currentSlide.displayMode,
+            displayMode: currentSlideData.displayMode,
             songTitle: slideData.title,
             backgroundImage: room.backgroundImage || '',
             isBible: slideData.isBible || false
@@ -271,7 +264,7 @@ io.on('connection', (socket) => {
           // Legacy: Use Bible data directly (for backward compatibility)
           broadcastSlideData = {
             slide: bibleData.slide,
-            displayMode: room.currentSlide.displayMode,
+            displayMode: currentSlideData.displayMode,
             songTitle: bibleData.title,
             backgroundImage: room.backgroundImage || '',
             isBible: true
@@ -282,7 +275,7 @@ io.on('connection', (socket) => {
           if (song && song.slides[slideIndex]) {
             broadcastSlideData = {
               slide: song.slides[slideIndex],
-              displayMode: room.currentSlide.displayMode,
+              displayMode: currentSlideData.displayMode,
               songTitle: song.title,
               backgroundImage: room.backgroundImage || ''
             };
@@ -290,16 +283,33 @@ io.on('connection', (socket) => {
         }
       }
 
-      // Broadcast to all viewers in the room
+      // 🚀 BROADCAST IMMEDIATELY (no await) - this is the key optimization!
       io.to(`room:${room.pin}`).emit('slide:update', {
-        currentSlide: room.currentSlide,
+        currentSlide: currentSlideData,
         slideData: broadcastSlideData,
         isBlank,
         imageUrl: imageUrl || null,
         backgroundImage: room.backgroundImage || ''
       });
 
-      console.log(`Slide updated in room ${room.pin}`, imageUrl ? `(image: ${imageUrl})` : slideData ? `(slide: ${slideData.title})` : bibleData ? `(Bible: ${bibleData.title})` : '');
+      console.log(`⚡ Slide broadcast instantly to room ${room.pin}`, imageUrl ? `(image: ${imageUrl})` : slideData ? `(slide: ${slideData.title})` : bibleData ? `(Bible: ${bibleData.title})` : '');
+
+      // 💾 Save to database asynchronously (don't block broadcast)
+      setImmediate(async () => {
+        try {
+          const roomToUpdate = await Room.findById(roomId);
+          if (roomToUpdate) {
+            roomToUpdate.currentSlide = currentSlideData;
+            roomToUpdate.currentImageUrl = imageUrl || null;
+            roomToUpdate.currentBibleData = bibleData || slideData || null;
+            await roomToUpdate.updateActivity();
+            console.log(`💾 Room state saved to DB for ${room.pin}`);
+          }
+        } catch (err) {
+          console.error('⚠️ Error saving room state to DB (broadcast already sent):', err);
+        }
+      });
+
     } catch (error) {
       console.error('Error in operator:updateSlide:', error);
       socket.emit('error', { message: 'Failed to update slide' });

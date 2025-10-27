@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const BibleVerse = require('../models/BibleVerse');
 
 // Helper function to convert number to Hebrew numerals
 function toHebrewNumeral(num) {
@@ -147,78 +148,24 @@ router.get('/verses/:bookName/:chapter', async (req, res) => {
       return res.status(400).json({ error: 'Invalid chapter number' });
     }
 
-    // Helper function to strip HTML tags and clean text
-    const stripHtml = (html) => {
-      if (!html) return '';
-      return html
-        .replace(/<br\s*\/?>/gi, '\n')  // Replace <br> with newline
-        .replace(/<sup[^>]*>.*?<\/sup>/gi, '')  // Remove superscript footnotes
-        .replace(/<i[^>]*>.*?<\/i>/gi, '')  // Remove italic footnotes
-        .replace(/<small[^>]*>.*?<\/small>/gi, '')  // Remove small text
-        .replace(/<[^>]+>/g, '')  // Remove any remaining HTML tags
-        .replace(/&thinsp;/g, ' ')  // Replace thin space entity
-        .replace(/&nbsp;/g, ' ')  // Replace non-breaking space
-        .replace(/\s+/g, ' ')  // Normalize multiple spaces
-        .trim();
-    };
+    // Query verses from local database
+    const dbVerses = await BibleVerse.find({
+      book: bookName,
+      chapter: chapterNum
+    }).sort({ verse: 1 }).lean();
 
-    let verses = [];
-
-    if (bookData.testament === 'old') {
-      // Fetch from Sefaria API for Old Testament (has Hebrew + English)
-      const sefariaRef = `${bookData.sefaria}.${chapter}`;
-      const response = await axios.get(`https://www.sefaria.org/api/texts/${sefariaRef}`, {
-        params: {
-          context: 0,
-          pad: 0
-        }
-      });
-
-      const data = response.data;
-      const hebrewVerses = data.he || [];
-      const englishVerses = data.text || [];
-      const maxVerses = Math.max(hebrewVerses.length, englishVerses.length);
-
-      for (let i = 0; i < maxVerses; i++) {
-        verses.push({
-          verseNumber: i + 1,
-          hebrew: stripHtml(hebrewVerses[i]) || '',
-          english: stripHtml(englishVerses[i]) || '',
-          reference: `${bookName} ${chapter}:${i + 1}`,
-          hebrewReference: `${bookData.hebrewName} ${toHebrewNumeral(chapterNum)}:${i + 1}`
-        });
-      }
-    } else {
-      // Fetch from bolls.life for New Testament (Hebrew DHNT + English WEB)
-      const bookNum = bookData.bollsBook;
-
-      // Fetch both Hebrew and English in parallel
-      const [hebrewResponse, englishResponse] = await Promise.all([
-        axios.get(`https://bolls.life/get-text/DHNT/${bookNum}/${chapter}/`),
-        axios.get(`https://bolls.life/get-text/WEB/${bookNum}/${chapter}/`)
-      ]);
-
-      const hebrewVerses = hebrewResponse.data || [];
-      const englishVerses = englishResponse.data || [];
-
-      // Create a map of English verses by verse number for easy lookup
-      const englishMap = {};
-      englishVerses.forEach(v => {
-        englishMap[v.verse] = v.text;
-      });
-
-      // Combine Hebrew and English verses
-      for (let i = 0; i < hebrewVerses.length; i++) {
-        const verseNum = hebrewVerses[i].verse;
-        verses.push({
-          verseNumber: verseNum,
-          hebrew: stripHtml(hebrewVerses[i].text) || '',
-          english: stripHtml(englishMap[verseNum]) || '',
-          reference: `${bookName} ${chapter}:${verseNum}`,
-          hebrewReference: `${bookData.hebrewName} ${toHebrewNumeral(chapterNum)}:${verseNum}`
-        });
-      }
+    if (dbVerses.length === 0) {
+      return res.status(404).json({ error: 'Chapter not found in database' });
     }
+
+    // Format verses for response
+    const verses = dbVerses.map(v => ({
+      verseNumber: v.verse,
+      hebrew: v.hebrewText || '',
+      english: v.englishText || '',
+      reference: `${bookName} ${chapter}:${v.verse}`,
+      hebrewReference: `${bookData.hebrewName} ${toHebrewNumeral(chapterNum)}:${v.verse}`
+    }));
 
     res.json({
       book: bookName,
@@ -230,9 +177,6 @@ router.get('/verses/:bookName/:chapter', async (req, res) => {
 
   } catch (error) {
     console.error('Error fetching Bible verses:', error.message);
-    if (error.response?.status === 404) {
-      return res.status(404).json({ error: 'Chapter not found' });
-    }
     res.status(500).json({ error: 'Failed to fetch Bible verses' });
   }
 });

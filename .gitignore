@@ -37,6 +37,9 @@ frontend/.env.production.local
 .temp
 uploads/
 
+# Database backups
+database-backups/
+
 # Migration scripts with credentials
 backend/migrate-songs-to-production.js
 backend/set-admin-production.js

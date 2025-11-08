@@ -6,6 +6,7 @@ const cors = require('cors');
 const session = require('express-session');
 const multer = require('multer');
 const compression = require('compression');
+const helmet = require('helmet');
 const connectDB = require('./config/database');
 const passport = require('./config/passport');
 
@@ -50,6 +51,10 @@ const io = new Server(server, {
 connectDB();
 
 // Middleware
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin resources
+  contentSecurityPolicy: false // Disable CSP for now (can be configured later)
+})); // Security headers
 app.use(compression()); // Enable gzip compression
 app.use(cors({
   origin: allowedOrigins,

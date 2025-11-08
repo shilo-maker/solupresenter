@@ -85,7 +85,7 @@ const roomSchema = new mongoose.Schema({
 
 // Indexes for optimized queries
 roomSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-roomSchema.index({ pin: 1 }); // For PIN lookups
+// Note: pin index is created automatically by unique constraint
 roomSchema.index({ operator: 1 }); // For user's rooms
 roomSchema.index({ isActive: 1 }); // For active rooms
 roomSchema.index({ pin: 1, isActive: 1 }); // Compound for viewer joins

@@ -1455,8 +1455,44 @@ function PresenterMode() {
                 variant="primary"
                 onClick={() => {
                   const shareUrl = `${window.location.origin}/viewer?pin=${roomPin}`;
-                  navigator.clipboard.writeText(shareUrl);
-                  alert('Share link copied to clipboard!');
+
+                  // Try modern clipboard API first, fallback to older method
+                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(shareUrl)
+                      .then(() => alert('Share link copied to clipboard!'))
+                      .catch(() => {
+                        // Fallback method
+                        fallbackCopyTextToClipboard(shareUrl);
+                      });
+                  } else {
+                    // Fallback method for non-secure contexts
+                    fallbackCopyTextToClipboard(shareUrl);
+                  }
+
+                  function fallbackCopyTextToClipboard(text) {
+                    const textArea = document.createElement('textarea');
+                    textArea.value = text;
+                    textArea.style.position = 'fixed';
+                    textArea.style.top = '0';
+                    textArea.style.left = '0';
+                    textArea.style.width = '2em';
+                    textArea.style.height = '2em';
+                    textArea.style.padding = '0';
+                    textArea.style.border = 'none';
+                    textArea.style.outline = 'none';
+                    textArea.style.boxShadow = 'none';
+                    textArea.style.background = 'transparent';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    try {
+                      document.execCommand('copy');
+                      alert('Share link copied to clipboard!');
+                    } catch (err) {
+                      alert('Failed to copy link. Please copy manually: ' + text);
+                    }
+                    document.body.removeChild(textArea);
+                  }
                 }}
               >
                 Copy Share Link

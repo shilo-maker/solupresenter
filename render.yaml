@@ -3,7 +3,7 @@ services:
   - type: web
     name: solupresenter-backend
     env: node
-    region: oregon
+    region: frankfurt
     buildCommand: cd backend && npm install
     startCommand: cd backend && npm start
     envVars:
@@ -28,6 +28,7 @@ services:
   - type: web
     name: solupresenter-frontend
     env: static
+    region: frankfurt
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/build
     envVars:

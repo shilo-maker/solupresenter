@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Container, Form, Button, Alert, Card } from 'react-bootstrap';
+import { Form, Button, Alert, Card } from 'react-bootstrap';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
 
@@ -17,24 +17,40 @@ function Login() {
   const { login } = useAuth();
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    // Validate inputs
+    if (!email || !password) {
+      setError('Please enter both email and password');
+      return;
+    }
+
     setError('');
     setResendSuccess(false);
     setLoading(true);
 
-    const result = await login(email, password);
+    try {
+      const result = await login(email, password);
 
-    if (result.success) {
-      navigate('/operator');
-    } else if (result.requiresVerification) {
-      setRequiresVerification(true);
-      setUnverifiedEmail(result.email);
-      setError(result.error);
-    } else {
-      setError(result.error);
+      if (result && result.success) {
+        navigate('/operator');
+      } else if (result && result.requiresVerification) {
+        setRequiresVerification(true);
+        setUnverifiedEmail(result.email);
+        setError(result.error || 'Please verify your email before logging in');
+        setLoading(false);
+      } else {
+        setError(result?.error || 'Invalid email or password');
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('An unexpected error occurred. Please try again.');
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const handleResendVerification = async () => {
@@ -102,7 +118,11 @@ function Login() {
             </div>
             <h4 className="text-center mb-4">Login</h4>
 
-            {error && <Alert variant="danger">{error}</Alert>}
+            {error && (
+              <Alert variant="danger" dismissible onClose={() => setError('')}>
+                <strong>Error:</strong> {error}
+              </Alert>
+            )}
 
             {resendSuccess && (
               <Alert variant="success">
@@ -131,7 +151,6 @@ function Login() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  required
                   autoFocus
                 />
               </Form.Group>
@@ -142,7 +161,6 @@ function Login() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  required
                 />
               </Form.Group>
 

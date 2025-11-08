@@ -2,8 +2,29 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const passport = require('passport');
+const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
 const { generateVerificationToken, sendVerificationEmail } = require('../utils/emailService');
+
+// Rate limiter for auth endpoints (prevent brute force attacks)
+// Only enabled in production
+const authLimiter = process.env.NODE_ENV === 'production' ? rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per windowMs
+  message: { error: 'Too many attempts, please try again after 15 minutes' },
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+}) : (req, res, next) => next(); // Skip rate limiting in development
+
+// More lenient rate limiter for registration
+// Only enabled in production
+const registerLimiter = process.env.NODE_ENV === 'production' ? rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // Limit each IP to 3 registrations per hour
+  message: { error: 'Too many accounts created from this IP, please try again after an hour' },
+  standardHeaders: true,
+  legacyHeaders: false,
+}) : (req, res, next) => next(); // Skip rate limiting in development
 
 // Generate JWT token
 const generateToken = (userId) => {
@@ -11,7 +32,7 @@ const generateToken = (userId) => {
 };
 
 // Register with email/password
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -69,7 +90,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Login with email/password
-router.post('/login', (req, res, next) => {
+router.post('/login', authLimiter, (req, res, next) => {
   console.log('🔐 Login attempt:', req.body.email);
   passport.authenticate('local', { session: false }, (err, user, info) => {
     if (err) {

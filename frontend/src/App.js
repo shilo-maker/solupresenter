@@ -7,15 +7,17 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles/modern.css';  // Modern theme overrides
 import './App.css';
 
-// Loading component
+// Loading component - dark theme to blend with app
 const LoadingFallback = () => (
   <div style={{
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
     height: '100vh',
+    backgroundColor: '#1a202c',
     fontSize: '1.2rem',
-    color: '#666'
+    color: '#4a5568',
+    opacity: 0.8
   }}>
     Loading...
   </div>

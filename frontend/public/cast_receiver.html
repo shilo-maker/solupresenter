@@ -45,9 +45,17 @@
       }
     });
 
+    // Keepalive mechanism - prevent Chromecast from disconnecting
+    // Send a status update every 5 seconds to keep the session active
+    setInterval(() => {
+      // Touch the context to keep it alive
+      context.setApplicationState('SoluCast Active');
+    }, 5000);
+
     // Start the receiver
     const options = new cast.framework.CastReceiverOptions();
-    options.disableIdleTimeout = true; // Keep receiver alive
+    options.disableIdleTimeout = true; // Disable idle timeout
+    options.maxInactivity = 3600; // Keep alive for 1 hour of inactivity
 
     context.start(options);
   </script>

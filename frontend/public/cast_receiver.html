@@ -31,6 +31,20 @@
   </div>
 
   <script>
+    // Global error handler to prevent crashes
+    window.addEventListener('error', (event) => {
+      console.error('Window error:', event.error);
+      // Don't let errors crash the receiver
+      event.preventDefault();
+      return true;
+    });
+
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      event.preventDefault();
+      return true;
+    });
+
     const context = cast.framework.CastReceiverContext.getInstance();
     const playerManager = context.getPlayerManager();
 
@@ -48,8 +62,12 @@
     // Keepalive mechanism - prevent Chromecast from disconnecting
     // Send a status update every 5 seconds to keep the session active
     setInterval(() => {
-      // Touch the context to keep it alive
-      context.setApplicationState('SoluCast Active');
+      try {
+        // Touch the context to keep it alive
+        context.setApplicationState('SoluCast Active');
+      } catch (e) {
+        console.error('Keepalive error:', e);
+      }
     }, 5000);
 
     // Start the receiver
@@ -57,7 +75,11 @@
     options.disableIdleTimeout = true; // Disable idle timeout
     options.maxInactivity = 3600; // Keep alive for 1 hour of inactivity
 
-    context.start(options);
+    try {
+      context.start(options);
+    } catch (e) {
+      console.error('Failed to start receiver:', e);
+    }
   </script>
 </body>
 </html>

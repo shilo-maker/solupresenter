@@ -21,40 +21,102 @@
       height: 100%;
       border: none;
     }
+    #debug-info {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: white;
+      font-family: monospace;
+      font-size: 16px;
+      background: rgba(0,0,0,0.7);
+      padding: 10px;
+      border-radius: 5px;
+      z-index: 9999;
+    }
   </style>
   <!-- Cast Receiver SDK -->
   <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
 </head>
 <body>
+  <div id="debug-info">
+    🚀 SoluCast Receiver v1.0.1<br>
+    Waiting for connection...
+  </div>
   <div id="iframe-container">
     <iframe id="viewer-frame" src="" allow="autoplay"></iframe>
   </div>
 
   <script>
+    // Helper to update debug info on screen
+    function updateDebug(message) {
+      const debugDiv = document.getElementById('debug-info');
+      debugDiv.innerHTML += '<br>' + message;
+      // Auto-hide after viewer loads
+      setTimeout(() => {
+        if (document.getElementById('viewer-frame').src) {
+          debugDiv.style.display = 'none';
+        }
+      }, 5000);
+    }
+  </script>
+  <script>
+    console.log('🚀 SoluCast Receiver HTML loaded - v1.0.1');
+    updateDebug('✅ Receiver loaded');
+
     const context = cast.framework.CastReceiverContext.getInstance();
     const playerManager = context.getPlayerManager();
 
+    console.log('📡 Cast context obtained');
+    updateDebug('✅ Cast context ready');
+
     // Listen for custom messages from sender
     context.addCustomMessageListener('urn:x-cast:com.solucast.viewer', (customEvent) => {
-      console.log('Received custom message:', customEvent.data);
+      console.log('📨 Received custom message:', customEvent.data);
+      updateDebug('📨 Message received');
 
       const data = customEvent.data;
 
       if (data.type === 'LOAD_VIEWER') {
         // Load the viewer page in the iframe
         const viewerUrl = data.url;
-        console.log('Loading viewer URL:', viewerUrl);
-        document.getElementById('viewer-frame').src = viewerUrl;
+        console.log('🔗 Loading viewer URL:', viewerUrl);
+        updateDebug('🔗 Loading: ' + viewerUrl);
+
+        const iframe = document.getElementById('viewer-frame');
+        iframe.src = viewerUrl;
+        console.log('✅ Iframe src set to:', iframe.src);
+        updateDebug('✅ Viewer loading...');
       }
+    });
+
+    // Add error listener for iframe
+    window.addEventListener('message', (event) => {
+      console.log('💬 Message from iframe:', event.data, 'origin:', event.origin);
+    });
+
+    // Log when ready state changes
+    context.addEventListener(cast.framework.system.EventType.READY, () => {
+      console.log('✅ Receiver is READY');
+      updateDebug('✅ Ready for casting');
+    });
+
+    context.addEventListener(cast.framework.system.EventType.ERROR, (event) => {
+      console.error('❌ Receiver error:', event);
+      updateDebug('❌ Error: ' + JSON.stringify(event));
     });
 
     // Start the receiver
     const options = new cast.framework.CastReceiverOptions();
     options.disableIdleTimeout = true; // Keep receiver alive
 
-    context.start(options);
-
-    console.log('SoluCast Receiver initialized');
+    try {
+      context.start(options);
+      console.log('✅ SoluCast Receiver started successfully - v1.0.1');
+      updateDebug('✅ Receiver started');
+    } catch (error) {
+      console.error('❌ Failed to start receiver:', error);
+      updateDebug('❌ Start failed: ' + error.message);
+    }
   </script>
 </body>
 </html>

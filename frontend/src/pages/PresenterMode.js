@@ -115,6 +115,9 @@ function PresenterMode() {
   // Chromecast state
   const [castAvailable, setCastAvailable] = useState(false);
   const [castConnected, setCastConnected] = useState(false);
+  const castSessionRef = useRef(null); // Store active cast session
+  const reconnectAttempts = useRef(0); // Track reconnection attempts
+  const maxReconnectAttempts = 5; // Maximum auto-reconnect attempts
 
   // Quick Slide state
   const [showQuickSlideModal, setShowQuickSlideModal] = useState(false);
@@ -421,56 +424,6 @@ function PresenterMode() {
       loadSong(location.state.songId);
     }
   }, [location.state, location.search, room?.id]);
-
-  // Initialize Chromecast
-  useEffect(() => {
-    console.log('🎬 Setting up Chromecast...');
-
-    // Define the callback that Cast SDK will call when ready
-    window['__onGCastApiAvailable'] = (isAvailable) => {
-      console.log('📡 Cast API available callback fired:', isAvailable);
-
-      if (isAvailable) {
-        const cast = window.chrome.cast;
-
-        // SoluCast Custom Receiver Application ID from Google Cast Console
-        const applicationID = 'A91753A6';
-
-        const sessionRequest = new cast.SessionRequest(applicationID);
-        const apiConfig = new cast.ApiConfig(
-          sessionRequest,
-          (session) => {
-            console.log('✅ Cast session started:', session);
-            setCastConnected(true);
-          },
-          (status) => {
-            console.log('📺 Cast receiver status:', status);
-            if (status === cast.ReceiverAvailability.AVAILABLE) {
-              console.log('✅ Chromecast device found!');
-              setCastAvailable(true);
-            } else {
-              console.log('❌ No Chromecast device available');
-              setCastAvailable(false);
-            }
-          }
-        );
-
-        cast.initialize(apiConfig, () => {
-          console.log('✅ Cast SDK initialized successfully');
-        }, (error) => {
-          console.error('❌ Cast initialization error:', error);
-        });
-      }
-    };
-
-    // If Cast SDK is already loaded, trigger the callback manually
-    if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
-      console.log('✅ Cast SDK already loaded, initializing now...');
-      window['__onGCastApiAvailable'](true);
-    } else {
-      console.log('⏳ Waiting for Cast SDK to load...');
-    }
-  }, []);
 
   const loadSetlist = async (setlistId) => {
     try {
@@ -872,6 +825,101 @@ function PresenterMode() {
     setPendingLoadAction(null);
   };
 
+  // Auto-reconnect to Chromecast after unexpected disconnect
+  const attemptReconnect = useCallback(() => {
+    if (reconnectAttempts.current >= maxReconnectAttempts) {
+      console.log('❌ Max reconnection attempts reached');
+      setError('Chromecast disconnected. Please reconnect manually.');
+      reconnectAttempts.current = 0;
+      return;
+    }
+
+    reconnectAttempts.current += 1;
+    const delay = Math.min(1000 * reconnectAttempts.current, 5000); // Exponential backoff up to 5s
+
+    console.log(`🔄 Attempting to reconnect to Chromecast (attempt ${reconnectAttempts.current}/${maxReconnectAttempts}) in ${delay}ms...`);
+
+    setTimeout(() => {
+      if (!window.chrome?.cast || !roomPin) {
+        console.error('Cast SDK not available for reconnection');
+        return;
+      }
+
+      const cast = window.chrome.cast;
+      cast.requestSession((session) => {
+        console.log('✅ Reconnected to Chromecast successfully');
+        reconnectAttempts.current = 0; // Reset counter on successful reconnect
+        if (setupCastSessionRef.current) {
+          setupCastSessionRef.current(session);
+        }
+      }, (error) => {
+        console.error('❌ Reconnection failed:', error);
+        if (error.code !== 'cancel') {
+          attemptReconnect(); // Try again
+        }
+      });
+    }, delay);
+  }, [roomPin]);
+
+  const setupCastSessionRef = useRef(null);
+
+  // Setup cast session with listeners
+  const setupCastSession = useCallback((session) => {
+    console.log('✅ Setting up cast session with listeners');
+    castSessionRef.current = session;
+    setCastConnected(true);
+    reconnectAttempts.current = 0; // Reset reconnection counter
+
+    // Listen for session updates (disconnection, etc.)
+    session.addUpdateListener((isAlive) => {
+      console.log('📡 Cast session update - isAlive:', isAlive);
+
+      if (!isAlive) {
+        console.log('⚠️ Cast session disconnected unexpectedly');
+        castSessionRef.current = null;
+        setCastConnected(false);
+
+        // Attempt automatic reconnection
+        attemptReconnect();
+      }
+    });
+
+    // Construct the viewer URL with the room PIN
+    const hostname = window.location.hostname;
+
+    // Check if accessing via localhost - Chromecast can't access localhost
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      console.error('❌ Cannot cast from localhost');
+      setError('To use Chromecast, please access this page using your computer\'s IP address (e.g., http://192.168.1.x:3000) instead of localhost.');
+      session.stop();
+      return;
+    }
+
+    const viewerUrl = `${window.location.origin}/viewer?pin=${roomPin}`;
+
+    // Send custom message to receiver to load the viewer page
+    const namespace = 'urn:x-cast:com.solucast.viewer';
+    const message = {
+      type: 'LOAD_VIEWER',
+      url: viewerUrl
+    };
+
+    session.sendMessage(
+      namespace,
+      message,
+      () => {
+        console.log('✅ Successfully sent viewer URL to Chromecast');
+      },
+      (error) => {
+        console.error('❌ Error sending message to Chromecast:', error);
+        setError('Failed to load viewer on Chromecast');
+      }
+    );
+  }, [roomPin, attemptReconnect]);
+
+  // Store the function in ref to avoid circular dependency
+  setupCastSessionRef.current = setupCastSession;
+
   // Handle Chromecast
   const handleCast = () => {
     if (!window.chrome || !window.chrome.cast || !roomPin) {
@@ -882,39 +930,7 @@ function PresenterMode() {
     const cast = window.chrome.cast;
     cast.requestSession((session) => {
       console.log('✅ Cast session established:', session);
-      setCastConnected(true);
-
-      // Construct the viewer URL with the room PIN
-      const hostname = window.location.hostname;
-
-      // Check if accessing via localhost - Chromecast can't access localhost
-      if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        console.error('❌ Cannot cast from localhost');
-        setError('To use Chromecast, please access this page using your computer\'s IP address (e.g., http://192.168.1.x:3000) instead of localhost.');
-        session.stop();
-        return;
-      }
-
-      const viewerUrl = `${window.location.origin}/viewer?pin=${roomPin}`;
-
-      // Send custom message to receiver to load the viewer page
-      const namespace = 'urn:x-cast:com.solucast.viewer';
-      const message = {
-        type: 'LOAD_VIEWER',
-        url: viewerUrl
-      };
-
-      session.sendMessage(
-        namespace,
-        message,
-        () => {
-          console.log('✅ Successfully sent viewer URL to Chromecast');
-        },
-        (error) => {
-          console.error('❌ Error sending message to Chromecast:', error);
-          setError('Failed to load viewer on Chromecast');
-        }
-      );
+      setupCastSession(session);
     }, (error) => {
       console.error('❌ Error launching cast:', error);
       if (error.code !== 'cancel') {
@@ -922,6 +938,56 @@ function PresenterMode() {
       }
     });
   };
+
+  // Initialize Chromecast SDK
+  useEffect(() => {
+    console.log('🎬 Setting up Chromecast...');
+
+    // Define the callback that Cast SDK will call when ready
+    window['__onGCastApiAvailable'] = (isAvailable) => {
+      console.log('📡 Cast API available callback fired:', isAvailable);
+
+      if (isAvailable) {
+        const cast = window.chrome.cast;
+
+        // SoluCast Custom Receiver Application ID from Google Cast Console
+        const applicationID = 'A91753A6';
+
+        const sessionRequest = new cast.SessionRequest(applicationID);
+        const apiConfig = new cast.ApiConfig(
+          sessionRequest,
+          (session) => {
+            console.log('✅ Existing cast session found:', session);
+            setupCastSession(session);
+          },
+          (status) => {
+            console.log('📺 Cast receiver status:', status);
+            if (status === cast.ReceiverAvailability.AVAILABLE) {
+              console.log('✅ Chromecast device found!');
+              setCastAvailable(true);
+            } else {
+              console.log('❌ No Chromecast device available');
+              setCastAvailable(false);
+            }
+          }
+        );
+
+        cast.initialize(apiConfig, () => {
+          console.log('✅ Cast SDK initialized successfully');
+        }, (error) => {
+          console.error('❌ Cast initialization error:', error);
+        });
+      }
+    };
+
+    // If Cast SDK is already loaded, trigger the callback manually
+    if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
+      console.log('✅ Cast SDK already loaded, initializing now...');
+      window['__onGCastApiAvailable'](true);
+    } else {
+      console.log('⏳ Waiting for Cast SDK to load...');
+    }
+  }, [setupCastSession]);
 
   const handleLoadSetlist = async (setlistId) => {
     setLoadSetlistLoading(true);

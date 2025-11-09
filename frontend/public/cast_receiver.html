@@ -21,6 +21,11 @@
       height: 100%;
       border: none;
     }
+    .error-display {
+      color: #ff6b6b;
+      font-size: 18px;
+      margin-top: 10px;
+    }
     #debug-info {
       position: absolute;
       top: 20px;
@@ -39,7 +44,7 @@
 </head>
 <body>
   <div id="debug-info">
-    🚀 SoluCast Receiver v1.0.1<br>
+    🚀 SoluCast Receiver v1.0.2<br>
     Waiting for connection...
   </div>
   <div id="iframe-container">
@@ -48,19 +53,23 @@
 
   <script>
     // Helper to update debug info on screen
-    function updateDebug(message) {
+    function updateDebug(message, isError = false) {
       const debugDiv = document.getElementById('debug-info');
-      debugDiv.innerHTML += '<br>' + message;
-      // Auto-hide after viewer loads
-      setTimeout(() => {
-        if (document.getElementById('viewer-frame').src) {
-          debugDiv.style.display = 'none';
-        }
-      }, 5000);
+      const className = isError ? ' class="error-display"' : '';
+      debugDiv.innerHTML += '<br><span' + className + '>' + message + '</span>';
+
+      // Don't auto-hide if there's an error, otherwise hide after 10 seconds
+      if (!isError) {
+        setTimeout(() => {
+          if (document.getElementById('viewer-frame').src && !debugDiv.innerHTML.includes('error-display')) {
+            debugDiv.style.display = 'none';
+          }
+        }, 10000);
+      }
     }
   </script>
   <script>
-    console.log('🚀 SoluCast Receiver HTML loaded - v1.0.1');
+    console.log('🚀 SoluCast Receiver HTML loaded - v1.0.2');
     updateDebug('✅ Receiver loaded');
 
     const context = cast.framework.CastReceiverContext.getInstance();
@@ -83,6 +92,32 @@
         updateDebug('🔗 Loading: ' + viewerUrl);
 
         const iframe = document.getElementById('viewer-frame');
+
+        // Add load and error listeners
+        iframe.onload = function() {
+          console.log('✅ Iframe loaded successfully');
+          updateDebug('✅ Viewer loaded!');
+
+          // Check iframe content after a delay
+          setTimeout(() => {
+            try {
+              const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+              if (iframeDoc) {
+                console.log('📄 Iframe document:', iframeDoc.title, 'body:', iframeDoc.body?.innerHTML?.substring(0, 100));
+                updateDebug('📄 Document: ' + (iframeDoc.title || 'No title'));
+              }
+            } catch (e) {
+              console.log('⚠️ Cannot access iframe content (cross-origin):', e.message);
+              updateDebug('⚠️ Cross-origin frame (expected)');
+            }
+          }, 2000);
+        };
+
+        iframe.onerror = function(e) {
+          console.error('❌ Iframe load error:', e);
+          updateDebug('❌ Iframe failed to load', true);
+        };
+
         iframe.src = viewerUrl;
         console.log('✅ Iframe src set to:', iframe.src);
         updateDebug('✅ Viewer loading...');
@@ -111,11 +146,11 @@
 
     try {
       context.start(options);
-      console.log('✅ SoluCast Receiver started successfully - v1.0.1');
+      console.log('✅ SoluCast Receiver started successfully - v1.0.2');
       updateDebug('✅ Receiver started');
     } catch (error) {
       console.error('❌ Failed to start receiver:', error);
-      updateDebug('❌ Start failed: ' + error.message);
+      updateDebug('❌ Start failed: ' + error.message, true);
     }
   </script>
 </body>

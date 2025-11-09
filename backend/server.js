@@ -1,13 +1,16 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const session = require('express-session');
 const multer = require('multer');
 const compression = require('compression');
 const helmet = require('helmet');
-const connectDB = require('./config/database');
+const { sequelize, Room, Song } = require('./models');
 const passport = require('./config/passport');
 
 // Import routes
@@ -19,18 +22,50 @@ const adminRoutes = require('./routes/admin');
 const mediaRoutes = require('./routes/media');
 const bibleRoutes = require('./routes/bible');
 
-// Import models
-const Room = require('./models/Room');
-const Song = require('./models/Song');
-
 // Import cleanup job
 const cleanupTemporarySetlists = require('./jobs/cleanupTemporarySetlists');
 
 const app = express();
-const server = http.createServer(app);
+
+// In development, allow any origin for local network testing (Chromecast)
+// In production, use specific allowed origins
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
+// Create HTTPS server in development for Chromecast support
+let server;
+if (isDevelopment) {
+  try {
+    const certPath = path.join(__dirname, 'certs', 'cert.pem');
+    const keyPath = path.join(__dirname, 'certs', 'key.pem');
+
+    if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+      const httpsOptions = {
+        key: fs.readFileSync(keyPath),
+        cert: fs.readFileSync(certPath)
+      };
+      server = https.createServer(httpsOptions, app);
+      console.log('🔒 HTTPS server created for development');
+    } else {
+      server = http.createServer(app);
+      console.log('📦 HTTP server created (certificates not found)');
+    }
+  } catch (error) {
+    console.error('Error loading SSL certificates:', error);
+    server = http.createServer(app);
+    console.log('📦 HTTP server created (fallback)');
+  }
+} else {
+  server = http.createServer(app);
+  console.log('📦 HTTP server created for production');
+}
+
 const allowedOrigins = [
   'http://localhost:3456',
+  'https://localhost:3456',
+  'http://localhost:3000',
+  'https://localhost:3000',
   'http://10.100.102.27:3456',
+  'https://10.100.102.27:3456',
   'https://main.d390gabr466gfy.amplifyapp.com',
   'https://d125ckyjvo1azi.cloudfront.net',
   'https://solupresenter-frontend.onrender.com',
@@ -39,16 +74,27 @@ const allowedOrigins = [
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
+const corsOptions = {
+  origin: isDevelopment ? true : allowedOrigins, // Allow all origins in development
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+};
+
 const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ['GET', 'POST'],
-    credentials: true
-  }
+  cors: corsOptions
 });
 
-// Connect to MongoDB
-connectDB();
+// Connect to PostgreSQL
+sequelize.authenticate()
+  .then(() => {
+    console.log('✅ PostgreSQL connection established successfully');
+    // Don't sync in production or development - database is already set up
+    console.log('✅ Database models ready');
+  })
+  .catch(err => {
+    console.error('❌ Unable to connect to PostgreSQL:', err);
+    process.exit(1);
+  });
 
 // Middleware
 app.use(helmet({
@@ -56,10 +102,7 @@ app.use(helmet({
   contentSecurityPolicy: false // Disable CSP for now (can be configured later)
 })); // Security headers
 app.use(compression()); // Enable gzip compression
-app.use(cors({
-  origin: allowedOrigins,
-  credentials: true
-}));
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -126,7 +169,7 @@ io.on('connection', (socket) => {
     try {
       const { userId, roomId } = data;
 
-      const room = await Room.findById(roomId);
+      const room = await Room.findByPk(roomId);
       if (!room) {
         socket.emit('error', { message: 'Room not found' });
         return;
@@ -152,9 +195,10 @@ io.on('connection', (socket) => {
     try {
       const { pin } = data;
 
-      const room = await Room.findOne({ pin: pin.toUpperCase(), isActive: true })
-        .select('pin currentSlide currentImageUrl currentBibleData backgroundImage viewerCount')
-        .lean();
+      const room = await Room.findOne({
+        where: { pin: pin.toUpperCase(), isActive: true },
+        attributes: ['id', 'pin', 'currentSlide', 'currentImageUrl', 'currentBibleData', 'backgroundImage', 'viewerCount']
+      });
 
       if (!room) {
         socket.emit('error', { message: 'Room not found or inactive' });
@@ -172,7 +216,7 @@ io.on('connection', (socket) => {
       viewerRooms.set(socket.id, room.pin);
 
       // Increment viewer count (atomic operation)
-      await Room.findByIdAndUpdate(room._id, { $inc: { viewerCount: 1 } });
+      await Room.increment('viewerCount', { where: { id: room.id } });
 
       // Fetch current slide data if available
       let slideData = null;
@@ -195,9 +239,10 @@ io.on('connection', (socket) => {
         }
         // Otherwise, fetch song from database (only needed fields)
         else if (room.currentSlide.songId) {
-          const song = await Song.findById(room.currentSlide.songId)
-            .select('title slides')
-            .lean();
+          const song = await Song.findByPk(room.currentSlide.songId, {
+            attributes: ['title', 'slides'],
+            raw: true
+          });
           if (song && song.slides[room.currentSlide.slideIndex]) {
             slideData = {
               slide: song.slides[room.currentSlide.slideIndex],
@@ -210,14 +255,17 @@ io.on('connection', (socket) => {
       }
 
       // Send current slide to viewer
-      socket.emit('viewer:joined', {
+      const viewerJoinedData = {
         roomPin: room.pin,
         currentSlide: room.currentSlide,
         slideData: slideData,
         imageUrl: imageUrl,
-        isBlank: room.currentSlide.isBlank,
+        isBlank: room.currentSlide?.isBlank || false,
         backgroundImage: room.backgroundImage || ''
-      });
+      };
+
+      console.log(`📤 Sending to viewer:`, JSON.stringify(viewerJoinedData, null, 2));
+      socket.emit('viewer:joined', viewerJoinedData);
 
       // Notify operator of viewer count
       io.to(`room:${room.pin}`).emit('room:viewerCount', { count: room.viewerCount + 1 });
@@ -235,10 +283,11 @@ io.on('connection', (socket) => {
     try {
       const { roomId, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData, slideData } = data;
 
-      // Quick lookup to get room pin and background (using lean for speed)
-      const room = await Room.findById(roomId)
-        .select('pin backgroundImage')
-        .lean();
+      // Quick lookup to get room pin and background
+      const room = await Room.findByPk(roomId, {
+        attributes: ['id', 'pin', 'backgroundImage'],
+        raw: true
+      });
 
       if (!room) {
         socket.emit('error', { message: 'Room not found' });
@@ -276,7 +325,10 @@ io.on('connection', (socket) => {
           };
         } else if (songId) {
           // Fallback: Fetch song from database (for backward compatibility)
-          const song = await Song.findById(songId).select('title slides').lean();
+          const song = await Song.findByPk(songId, {
+            attributes: ['title', 'slides'],
+            raw: true
+          });
           if (song && song.slides[slideIndex]) {
             broadcastSlideData = {
               slide: song.slides[slideIndex],
@@ -302,7 +354,7 @@ io.on('connection', (socket) => {
       // 💾 Save to database asynchronously (don't block broadcast)
       setImmediate(async () => {
         try {
-          const roomToUpdate = await Room.findById(roomId);
+          const roomToUpdate = await Room.findByPk(roomId);
           if (roomToUpdate) {
             roomToUpdate.currentSlide = currentSlideData;
             roomToUpdate.currentImageUrl = imageUrl || null;
@@ -327,7 +379,7 @@ io.on('connection', (socket) => {
     try {
       const { roomId, backgroundImage } = data;
 
-      const room = await Room.findById(roomId);
+      const room = await Room.findByPk(roomId);
 
       if (!room) {
         socket.emit('error', { message: 'Room not found' });
@@ -356,7 +408,7 @@ io.on('connection', (socket) => {
     try {
       const { roomId, quickSlideText } = data;
 
-      const room = await Room.findById(roomId);
+      const room = await Room.findByPk(roomId);
 
       if (!room) {
         socket.emit('error', { message: 'Room not found' });
@@ -386,11 +438,12 @@ io.on('connection', (socket) => {
       const roomPin = viewerRooms.get(socket.id);
       if (roomPin) {
         // Atomic decrement of viewer count
-        const room = await Room.findOneAndUpdate(
-          { pin: roomPin },
-          { $inc: { viewerCount: -1 } },
-          { new: true }
-        ).select('viewerCount');
+        await Room.decrement('viewerCount', { where: { pin: roomPin } });
+
+        const room = await Room.findOne({
+          where: { pin: roomPin },
+          attributes: ['viewerCount']
+        });
 
         if (room) {
           // Notify operator of viewer count

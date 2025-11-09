@@ -82,16 +82,30 @@ function ViewerPage() {
       // Set the room background
       setBackgroundImage(data.backgroundImage || '');
 
-      // Check if we have slideData or need to handle currentSlide structure
-      if (data.slideData) {
+      // Handle all possible current slide states
+      if (data.isBlank) {
+        // Blank slide
+        setCurrentSlide({ isBlank: true });
+        setImageUrl(null);
+      } else if (data.imageUrl) {
+        // Image-only slide
+        setImageUrl(data.imageUrl);
+        setCurrentSlide(null);
+      } else if (data.slideData) {
+        // Regular text slide
         setCurrentSlide(data.slideData);
-      } else if (data.currentSlide && !data.currentSlide.isBlank && data.currentSlide.songId) {
-        // We have a currentSlide from room but need to fetch the song data
-        // This will be handled by the initial slide:update event
-        setCurrentSlide(null);
+        setImageUrl(null);
       } else {
+        // No active slide yet
         setCurrentSlide(null);
+        setImageUrl(null);
       }
+
+      // Set display mode if available
+      if (data.currentSlide?.displayMode) {
+        setDisplayMode(data.currentSlide.displayMode);
+      }
+
       setError('');
     });
 

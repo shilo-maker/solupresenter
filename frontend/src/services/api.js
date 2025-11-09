@@ -1,6 +1,21 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+// Dynamically determine API URL based on current hostname
+// This allows the app to work both on localhost and when accessed via IP address
+const getApiUrl = () => {
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+
+  // Use the current hostname with backend port
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+  const backendPort = 5000;
+
+  return `${protocol}//${hostname}:${backendPort}`;
+};
+
+const API_URL = getApiUrl();
 
 const api = axios.create({
   baseURL: API_URL

@@ -1,101 +1,118 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/sequelize');
 
-const roomSchema = new mongoose.Schema({
-  pin: {
-    type: String,
-    required: true,
-    unique: true,
-    uppercase: true,
-    length: 4
+const Room = sequelize.define('Room', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
   },
-  operator: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+  pin: {
+    type: DataTypes.STRING(4),
+    allowNull: false,
+    unique: true,
+    set(value) {
+      this.setDataValue('pin', value.toUpperCase());
+    }
+  },
+  operatorId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
   },
   isActive: {
-    type: Boolean,
-    default: true
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
   },
   currentSlide: {
-    songId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Song',
-      default: null
-    },
-    slideIndex: {
-      type: Number,
-      default: 0
-    },
-    displayMode: {
-      type: String,
-      enum: ['original', 'bilingual'],
-      default: 'bilingual'
-    },
-    isBlank: {
-      type: Boolean,
-      default: false
+    type: DataTypes.JSONB,
+    defaultValue: {
+      songId: null,
+      slideIndex: 0,
+      displayMode: 'bilingual',
+      isBlank: false
     }
   },
   currentImageUrl: {
-    type: String,
-    default: null
+    type: DataTypes.STRING,
+    allowNull: true
   },
   currentBibleData: {
-    type: mongoose.Schema.Types.Mixed,
-    default: null
+    type: DataTypes.JSONB,
+    allowNull: true
   },
   backgroundImage: {
-    type: String,
-    default: ''
+    type: DataTypes.STRING,
+    defaultValue: ''
   },
   quickSlideText: {
-    type: String,
-    default: ''
+    type: DataTypes.STRING,
+    defaultValue: ''
   },
   viewerCount: {
-    type: Number,
-    default: 0
+    type: DataTypes.INTEGER,
+    defaultValue: 0
   },
-  temporarySetlist: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Setlist',
-    default: null
+  temporarySetlistId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'Setlists',
+      key: 'id'
+    }
   },
-  linkedPermanentSetlist: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Setlist',
-    default: null
+  linkedPermanentSetlistId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'Setlists',
+      key: 'id'
+    }
   },
   lastActivity: {
-    type: Date,
-    default: Date.now
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   },
   expiresAt: {
-    type: Date,
-    default: function() {
-      return new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 hours from now
-    }
+    type: DataTypes.DATE,
+    defaultValue: () => new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 hours from now
   }
+}, {
+  tableName: 'rooms',
+  timestamps: true,
+  createdAt: 'createdAt',
+  updatedAt: false,
+  indexes: [
+    {
+      fields: ['pin'],
+      unique: true
+    },
+    {
+      fields: ['operatorId']
+    },
+    {
+      fields: ['isActive']
+    },
+    {
+      fields: ['pin', 'isActive']
+    },
+    {
+      fields: ['lastActivity']
+    },
+    {
+      fields: ['expiresAt']
+    }
+  ]
 });
 
-// Indexes for optimized queries
-roomSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-// Note: pin index is created automatically by unique constraint
-roomSchema.index({ operator: 1 }); // For user's rooms
-roomSchema.index({ isActive: 1 }); // For active rooms
-roomSchema.index({ pin: 1, isActive: 1 }); // Compound for viewer joins
-roomSchema.index({ lastActivity: -1 }); // For sorting by activity
-
-// Update lastActivity and expiresAt
-roomSchema.methods.updateActivity = function() {
-  this.lastActivity = Date.now();
+// Method to update activity
+Room.prototype.updateActivity = async function() {
+  this.lastActivity = new Date();
   this.expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000); // Reset to 2 hours from now
-  return this.save();
+  return await this.save();
 };
 
-module.exports = mongoose.model('Room', roomSchema);
+module.exports = Room;

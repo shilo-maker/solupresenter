@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const Song = require('../models/Song');
+const { Song, User } = require('../models');
+const { Op } = require('sequelize');
 const { authenticateToken } = require('../middleware/auth');
 
 // Helper function to detect and extract primary language text from title
@@ -38,16 +39,22 @@ const upload = multer({
 // Get all songs (public + user's personal songs)
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const songs = await Song.find({
-      $or: [
-        { isPublic: true },
-        { createdBy: req.user._id }
-      ]
-    })
-    .select('_id title originalLanguage tags isPublic createdBy usageCount updatedAt slides')
-    .populate('createdBy', 'email')
-    .sort({ title: 1 })
-    .lean();
+    const songs = await Song.findAll({
+      where: {
+        [Op.or]: [
+          { isPublic: true },
+          { createdById: req.user.id }
+        ]
+      },
+      attributes: ['id', 'title', 'originalLanguage', 'tags', 'isPublic', 'createdById', 'usageCount', 'updatedAt', 'slides'],
+      include: [{
+        model: User,
+        as: 'creator',
+        attributes: ['email']
+      }],
+      order: [['title', 'ASC']],
+      raw: false
+    });
 
     // Prevent caching to ensure fresh song list
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -66,30 +73,39 @@ router.get('/search', authenticateToken, async (req, res) => {
   try {
     const { query, tags, language } = req.query;
 
-    let filter = {
-      $or: [
+    let whereConditions = {
+      [Op.or]: [
         { isPublic: true },
-        { createdBy: req.user._id }
+        { createdBy: req.user.id }
       ]
     };
 
     if (query) {
-      filter.$text = { $search: query };
+      // Sequelize doesn't have built-in text search like MongoDB
+      // Using LIKE for basic text search on title
+      whereConditions.title = { [Op.like]: `%${query}%` };
     }
 
     if (tags) {
-      filter.tags = { $in: tags.split(',') };
+      // For JSON/JSONB array fields, use contains or overlaps
+      whereConditions.tags = { [Op.overlap]: tags.split(',') };
     }
 
     if (language) {
-      filter.originalLanguage = language;
+      whereConditions.originalLanguage = language;
     }
 
-    const songs = await Song.find(filter)
-      .select('_id title originalLanguage tags isPublic createdBy usageCount updatedAt slides')
-      .populate('createdBy', 'email')
-      .sort(query ? { score: { $meta: 'textScore' } } : { title: 1 })
-      .lean();
+    const songs = await Song.findAll({
+      where: whereConditions,
+      attributes: ['id', 'title', 'originalLanguage', 'tags', 'isPublic', 'createdBy', 'usageCount', 'updatedAt', 'slides'],
+      include: [{
+        model: User,
+        as: 'creator',
+        attributes: ['email']
+      }],
+      order: [['title', 'ASC']],
+      raw: false
+    });
 
     res.json({ songs });
   } catch (error) {
@@ -110,14 +126,24 @@ router.get('/meta/tags', authenticateToken, async (req, res) => {
       return res.json({ tags: tagsCache.data });
     }
 
-    const tags = await Song.distinct('tags', {
-      $or: [
-        { isPublic: true },
-        { createdBy: req.user._id }
-      ]
+    // Sequelize doesn't have a direct distinct for JSON array fields
+    // We need to fetch all songs and extract unique tags
+    const songs = await Song.findAll({
+      where: {
+        [Op.or]: [
+          { isPublic: true },
+          { createdBy: req.user.id }
+        ]
+      },
+      attributes: ['tags'],
+      raw: true
     });
 
-    const sortedTags = tags.sort();
+    // Flatten all tags and get unique values
+    const allTags = songs.flatMap(song => song.tags || []);
+    const uniqueTags = [...new Set(allTags)];
+    const sortedTags = uniqueTags.sort();
+
     tagsCache = { data: sortedTags, timestamp: now };
 
     res.json({ tags: sortedTags });
@@ -282,7 +308,7 @@ router.post('/bulk-import', authenticateToken, upload.array('songFiles', 50), as
           originalLanguage: 'he', // Default to Hebrew, user can change later
           slides,
           tags: [],
-          createdBy: req.user._id,
+          createdBy: req.user.id,
           isPublic: false,
           isPendingApproval: false,
           backgroundImage: ''
@@ -290,7 +316,7 @@ router.post('/bulk-import', authenticateToken, upload.array('songFiles', 50), as
 
         results.successful.push({
           filename: file.originalname,
-          songId: song._id,
+          songId: song.id,
           title: song.title,
           slideCount: slides.length
         });
@@ -331,7 +357,13 @@ router.post('/bulk-import', authenticateToken, upload.array('songFiles', 50), as
 // Get single song
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const song = await Song.findById(req.params.id).populate('createdBy', 'email');
+    const song = await Song.findByPk(req.params.id, {
+      include: [{
+        model: User,
+        as: 'creator',
+        attributes: ['email']
+      }]
+    });
 
     if (!song) {
       console.log(`Song not found: ${req.params.id}`);
@@ -339,7 +371,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     }
 
     // Check access permission (allow access if no creator or if public or if user owns it)
-    if (!song.isPublic && song.createdBy && song.createdBy._id.toString() !== req.user._id.toString()) {
+    if (!song.isPublic && song.createdBy && song.createdBy.toString() !== req.user.id.toString()) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -364,7 +396,7 @@ router.post('/', authenticateToken, async (req, res) => {
       originalLanguage,
       slides,
       tags: tags || [],
-      createdBy: req.user._id,
+      createdBy: req.user.id,
       isPendingApproval: submitForApproval || false,
       isPublic: false,
       backgroundImage: backgroundImage || ''
@@ -380,7 +412,7 @@ router.post('/', authenticateToken, async (req, res) => {
 // Update song (creates personal copy if editing public song)
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const originalSong = await Song.findById(req.params.id);
+    const originalSong = await Song.findByPk(req.params.id);
 
     if (!originalSong) {
       return res.status(404).json({ error: 'Song not found' });
@@ -400,7 +432,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // If editing a public song that user doesn't own
     // Admin users can edit directly, non-admin users get a personal copy
     const isAdmin = req.user.role === 'admin' || req.user.isAdmin;
-    if (originalSong.isPublic && originalSong.createdBy && originalSong.createdBy.toString() !== req.user._id.toString()) {
+    if (originalSong.isPublic && originalSong.createdBy && originalSong.createdBy.toString() !== req.user.id.toString()) {
       if (!isAdmin) {
         // Non-admin users: create a personal copy
         const personalCopy = await Song.create({
@@ -408,7 +440,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
           originalLanguage: originalLanguage !== undefined ? originalLanguage : originalSong.originalLanguage,
           slides: slides !== undefined ? slides : originalSong.slides,
           tags: tags !== undefined ? tags : originalSong.tags,
-          createdBy: req.user._id,
+          createdBy: req.user.id,
           isPublic: false,
           isPendingApproval: false,
           backgroundImage: backgroundImage !== undefined ? backgroundImage : originalSong.backgroundImage
@@ -422,7 +454,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     // If user owns the song, update it
     // If createdBy is null (migrated songs), allow admin users to edit
-    if (originalSong.createdBy && originalSong.createdBy.toString() !== req.user._id.toString()) {
+    if (originalSong.createdBy && originalSong.createdBy.toString() !== req.user.id.toString()) {
       // Check if user is admin (already checked above, but double-check for security)
       if (!isAdmin) {
         return res.status(403).json({ error: 'Access denied' });
@@ -476,17 +508,17 @@ router.put('/:id', authenticateToken, async (req, res) => {
 // Delete song (only own songs)
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const song = await Song.findById(req.params.id);
+    const song = await Song.findByPk(req.params.id);
 
     if (!song) {
       return res.status(404).json({ error: 'Song not found' });
     }
 
-    if (song.createdBy.toString() !== req.user._id.toString()) {
+    if (song.createdBy.toString() !== req.user.id.toString()) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    await song.deleteOne();
+    await song.destroy();
 
     res.json({ message: 'Song deleted successfully' });
   } catch (error) {

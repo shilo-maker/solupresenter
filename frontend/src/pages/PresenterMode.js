@@ -198,6 +198,7 @@ function PresenterMode() {
   // Add Bible passage to setlist
   const addBibleToSetlist = (passage) => {
     setSetlist([...setlist, { type: 'bible', data: passage }]);
+    setHasUnsavedChanges(true);
   };
 
   // When Bible book or chapter changes, fetch verses
@@ -225,7 +226,7 @@ function PresenterMode() {
 
   // Manual save function for setlist
   const handleManualSaveSetlist = async () => {
-    if (!room || !room._id || !room.temporarySetlist) {
+    if (!room || !room.id || !room.temporarySetlist) {
       setError('No active setlist to save');
       return;
     }
@@ -236,18 +237,18 @@ function PresenterMode() {
         if (item.type === 'song') {
           return {
             type: 'song',
-            song: item.data._id,
+            song: item.data.id,
             order: index
           };
         } else if (item.type === 'image') {
           return {
             type: 'image',
-            image: item.data._id,
+            image: item.data.id,
             order: index
           };
         } else if (item.type === 'bible') {
           // Extract Bible data from the item
-          const bibleId = item.data._id; // e.g., "bible-Genesis-1"
+          const bibleId = item.data.id; // e.g., "bible-Genesis-1"
           const parts = bibleId.replace('bible-', '').split('-');
           const book = parts.slice(0, -1).join('-'); // Book name might have hyphens
           const chapter = parseInt(parts[parts.length - 1]);
@@ -271,7 +272,7 @@ function PresenterMode() {
         return null;
       }).filter(Boolean);
 
-      await api.put(`/api/rooms/${room._id}/setlist`, { items });
+      await api.put(`/api/rooms/${room.id}/setlist`, { items });
       console.log('✅ Setlist saved to backend');
       setHasUnsavedChanges(false);
     } catch (error) {
@@ -289,19 +290,11 @@ function PresenterMode() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Track setlist changes to detect unsaved changes
-  useEffect(() => {
-    // Skip marking as unsaved on initial load or when setlist is empty
-    if (setlist.length > 0 && room && room._id) {
-      setHasUnsavedChanges(true);
-    }
-  }, [setlist]);
-
   useEffect(() => {
     console.log('🔄 PresenterMode useEffect triggered', {
       loading,
       hasUser: !!user,
-      userId: user?._id,
+      userId: user?.id,
       roomCreated
     });
 
@@ -312,7 +305,7 @@ function PresenterMode() {
     }
 
     // Only create room once user is loaded and room hasn't been created yet
-    if (!user || !user._id) {
+    if (!user || !user.id) {
       console.log('❌ No user found after auth loaded');
       return;
     }
@@ -328,7 +321,7 @@ function PresenterMode() {
 
     const createOrGetRoom = async () => {
       try {
-        console.log('🏠 Creating room for user:', user._id);
+        console.log('🏠 Creating room for user:', user.id);
         const response = await api.post('/api/rooms/create');
         console.log('✅ Room created successfully:', response.data);
         setRoom(response.data.room);
@@ -341,6 +334,7 @@ function PresenterMode() {
         if (setlistToLoad && setlistToLoad.items) {
           const setlistType = response.data.room.linkedPermanentSetlist ? 'permanent' : 'temporary';
           console.log(`📋 Loading ${setlistType} setlist from room:`, setlistToLoad);
+          console.log('📋 First item:', setlistToLoad.items[0]);
 
           // Store the linked setlist name if it's a permanent setlist
           if (response.data.room.linkedPermanentSetlist && setlistToLoad.name) {
@@ -373,7 +367,7 @@ function PresenterMode() {
         }
 
         // Join as operator and listen for join confirmation with quickSlideText
-        socketService.operatorJoinRoom(user._id, response.data.room._id);
+        socketService.operatorJoinRoom(user.id, response.data.room.id);
 
         // Listen for operator:joined event to restore quickSlideText
         socketService.onOperatorJoined((data) => {
@@ -403,7 +397,7 @@ function PresenterMode() {
   // Load setlist or song if passed via location state or URL params
   useEffect(() => {
     // Wait for room to be ready before loading setlist
-    if (!room?._id) {
+    if (!room?.id) {
       console.log('⏳ Waiting for room to be ready before loading setlist...');
       return;
     }
@@ -422,7 +416,7 @@ function PresenterMode() {
     } else if (location.state?.songId) {
       loadSong(location.state.songId);
     }
-  }, [location.state, location.search, room?._id]);
+  }, [location.state, location.search, room?.id]);
 
   // Initialize Chromecast
   useEffect(() => {
@@ -476,7 +470,7 @@ function PresenterMode() {
 
   const loadSetlist = async (setlistId) => {
     try {
-      if (!room?._id) {
+      if (!room?.id) {
         console.error('❌ Cannot load setlist: room not ready');
         setError('Room not ready. Please wait a moment and try again.');
         return;
@@ -484,7 +478,7 @@ function PresenterMode() {
 
       // Link this setlist to the room (replaces any previous link)
       try {
-        await api.post(`/api/rooms/${room._id}/link-setlist`, { setlistId });
+        await api.post(`/api/rooms/${room.id}/link-setlist`, { setlistId });
         console.log('✅ Linked setlist to room');
 
         // Update local room state
@@ -585,7 +579,7 @@ function PresenterMode() {
     setShowBackgroundModal(false);
 
     if (room) {
-      socketService.operatorUpdateBackground(room._id, backgroundUrl);
+      socketService.operatorUpdateBackground(room.id, backgroundUrl);
     }
   };
 
@@ -675,6 +669,7 @@ function PresenterMode() {
 
   const addToSetlist = (song) => {
     setSetlist([...setlist, { type: 'song', data: song }]);
+    setHasUnsavedChanges(true);
   };
 
   // Parse express text into slides
@@ -746,14 +741,17 @@ function PresenterMode() {
 
   const addImageToSetlist = (image) => {
     setSetlist([...setlist, { type: 'image', data: image }]);
+    setHasUnsavedChanges(true);
   };
 
   const addBlankToSetlist = () => {
     setSetlist([...setlist, { type: 'blank', data: null }]);
+    setHasUnsavedChanges(true);
   };
 
   const removeFromSetlist = (index) => {
     setSetlist(setlist.filter((_, i) => i !== index));
+    setHasUnsavedChanges(true);
   };
 
   const moveSetlistItem = (fromIndex, toIndex) => {
@@ -761,6 +759,7 @@ function PresenterMode() {
     const [movedItem] = newSetlist.splice(fromIndex, 1);
     newSetlist.splice(toIndex, 0, movedItem);
     setSetlist(newSetlist);
+    setHasUnsavedChanges(true);
   };
 
   const handleOpenSaveModal = () => {
@@ -793,7 +792,7 @@ function PresenterMode() {
 
     setSaveSetlistLoading(true);
     try {
-      const response = await api.post(`/api/rooms/${room._id}/save-setlist`, {
+      const response = await api.post(`/api/rooms/${room.id}/save-setlist`, {
         name: generatedName
       });
 
@@ -882,6 +881,16 @@ function PresenterMode() {
       setCastConnected(true);
 
       // Construct the viewer URL with the room PIN
+      const hostname = window.location.hostname;
+
+      // Check if accessing via localhost - Chromecast can't access localhost
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        console.error('❌ Cannot cast from localhost');
+        setError('To use Chromecast, please access this page using your computer\'s IP address (e.g., http://192.168.1.x:3000) instead of localhost.');
+        session.stop();
+        return;
+      }
+
       const viewerUrl = `${window.location.origin}/viewer?pin=${roomPin}`;
 
       // Send custom message to receiver to load the viewer page
@@ -913,7 +922,7 @@ function PresenterMode() {
   const handleLoadSetlist = async (setlistId) => {
     setLoadSetlistLoading(true);
     try {
-      const response = await api.post(`/api/rooms/${room._id}/link-setlist`, {
+      const response = await api.post(`/api/rooms/${room.id}/link-setlist`, {
         setlistId
       });
 
@@ -989,7 +998,7 @@ function PresenterMode() {
     } else {
       // Fallback: fetch full song details if slides are missing (backward compatibility)
       try {
-        const response = await api.get(`/api/songs/${song._id}`);
+        const response = await api.get(`/api/songs/${song.id}`);
         const fullSong = response.data.song;
         selectItem({ type: 'song', data: fullSong });
       } catch (error) {
@@ -1024,8 +1033,8 @@ function PresenterMode() {
 
     // Send slide data directly to avoid backend DB queries
     const payload = {
-      roomId: room._id,
-      songId: (song?.isTemporary || song?.isBible) ? null : (song?._id || null),
+      roomId: room.id,
+      songId: (song?.isTemporary || song?.isBible) ? null : (song?.id || null),
       slideIndex,
       displayMode: mode,
       isBlank
@@ -1054,7 +1063,7 @@ function PresenterMode() {
 
     console.log('📤 Sending image slide update to backend');
     socketService.operatorUpdateSlide({
-      roomId: room._id,
+      roomId: room.id,
       songId: null,
       slideIndex: 0,
       displayMode: displayMode,
@@ -1121,16 +1130,18 @@ function PresenterMode() {
     };
 
     // Update or add to setlist
-    const existingIndex = setlist.findIndex(item => item.data?._id === 'quick-live');
+    const existingIndex = setlist.findIndex(item => item.data?.id === 'quick-live');
     if (existingIndex >= 0) {
       // Update existing quick slide
       const newSetlist = [...setlist];
       newSetlist[existingIndex] = { type: 'song', data: quickSong };
       setSetlist(newSetlist);
+      setHasUnsavedChanges(true);
       console.log('⚡ Quick Slide: Updated existing slide in setlist');
     } else {
       // Add new quick slide to setlist
       setSetlist([...setlist, { type: 'song', data: quickSong }]);
+      setHasUnsavedChanges(true);
       console.log('⚡ Quick Slide: Added new slide to setlist');
     }
 
@@ -1195,7 +1206,7 @@ function PresenterMode() {
 
     const currentItemIndex = setlist.findIndex(item => {
       if (item.type === 'song' && currentItem.type === 'song') {
-        return item.data?._id === currentItem.data?._id;
+        return item.data?.id === currentItem.data?.id;
       }
       return item === currentItem;
     });
@@ -1223,7 +1234,7 @@ function PresenterMode() {
 
     const currentItemIndex = setlist.findIndex(item => {
       if (item.type === 'song' && currentItem.type === 'song') {
-        return item.data?._id === currentItem.data?._id;
+        return item.data?.id === currentItem.data?.id;
       }
       return item === currentItem;
     });
@@ -1246,7 +1257,7 @@ function PresenterMode() {
 
     const currentItemIndex = setlist.findIndex(item => {
       if (item.type === 'song' && currentItem.type === 'song') {
-        return item.data?._id === currentItem.data?._id;
+        return item.data?.id === currentItem.data?.id;
       }
       return item === currentItem;
     });
@@ -1263,7 +1274,7 @@ function PresenterMode() {
 
     const currentItemIndex = setlist.findIndex(item => {
       if (item.type === 'song' && currentItem.type === 'song') {
-        return item.data?._id === currentItem.data?._id;
+        return item.data?.id === currentItem.data?.id;
       }
       return item === currentItem;
     });
@@ -1641,9 +1652,9 @@ function PresenterMode() {
             )}
           </div>
 
-          <div style={{ padding: '10px' }}>
+          <div style={{ padding: '10px', backgroundColor: 'white' }}>
             {activeResourcePanel === 'songs' ? (
-              <div style={{ height: '220px' }}>
+              <div style={{ height: '220px', backgroundColor: 'white' }}>
                 {songsLoading ? (
                   <div style={{ textAlign: 'center', color: '#666', padding: '40px' }}>
                     <div className="spinner-border text-primary" role="status" style={{ marginBottom: '10px' }}>
@@ -1664,72 +1675,61 @@ function PresenterMode() {
                   >
                     {({ index, style }) => {
                       const song = searchResults[index];
+                      const isSelected = currentSong && currentSong.id && currentSong.id === song.id;
                       return (
                         <div
                           style={{
                             ...(style || {}),
-                            padding: '8px 10px',
-                            backgroundColor: currentSong?._id === song._id ? '#007bff' : 'white',
-                            color: currentSong?._id === song._id ? 'white' : '#000',
+                            padding: '4px 8px',
                             display: 'flex',
-                            justifyContent: 'space-between',
+                            gap: '8px',
                             alignItems: 'center',
-                            cursor: 'pointer',
-                            borderRadius: '4px',
-                            marginBottom: '4px',
-                            border: currentSong?._id === song._id ? '2px solid #0056b3' : '1px solid #ddd',
                             boxSizing: 'border-box'
                           }}
-                          onClick={() => selectSong(song)}
                         >
-                          <span style={{ fontSize: '0.95rem' }}>{song.title}</span>
-                          <Button
-                            variant="primary"
-                            size="sm"
+                          <div
+                            onClick={() => selectSong(song)}
                             style={{
+                              flex: 1,
+                              padding: '10px 14px',
+                              background: isSelected ? 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)' : 'white',
+                              color: isSelected ? 'white' : '#333',
                               borderRadius: '8px',
-                              width: '36px',
-                              height: '36px',
-                              padding: '0',
-                              fontSize: '1.3rem',
-                              fontWeight: '600',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              background: currentSong?._id === song._id ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                              border: 'none',
-                              boxShadow: '0 2px 8px rgba(102, 126, 234, 0.4)',
+                              cursor: 'pointer',
+                              fontSize: '0.95rem',
+                              fontWeight: isSelected ? '500' : '400',
+                              border: isSelected ? 'none' : '1px solid #e0e0e0',
                               transition: 'all 0.2s ease',
-                              cursor: 'pointer'
+                              boxShadow: isSelected ? '0 2px 8px rgba(0,123,255,0.25)' : 'none'
                             }}
                             onMouseEnter={(e) => {
-                              e.currentTarget.style.transform = 'scale(1.1)';
-                              e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.6)';
+                              if (!isSelected) {
+                                e.currentTarget.style.borderColor = '#FF8C42';
+                                e.currentTarget.style.color = '#FF8C42';
+                              }
                             }}
                             onMouseLeave={(e) => {
-                              e.currentTarget.style.transform = 'scale(1)';
-                              e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.4)';
+                              if (!isSelected) {
+                                e.currentTarget.style.borderColor = '#e0e0e0';
+                                e.currentTarget.style.color = '#333';
+                              }
                             }}
-                            onMouseDown={(e) => {
-                              e.currentTarget.style.transform = 'scale(0.9)';
-                              e.currentTarget.style.boxShadow = '0 1px 4px rgba(102, 126, 234, 0.3)';
-                            }}
-                            onMouseUp={(e) => {
-                              e.currentTarget.style.transform = 'scale(1.1)';
-                              e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.6)';
-                            }}
+                          >
+                            {song.title}
+                          </div>
+                          <Button
+                            variant="success"
                             onClick={(e) => {
                               e.stopPropagation();
                               addToSetlist(song);
-
-                              // Pulse animation on click
-                              const button = e.currentTarget;
-                              button.style.animation = 'none';
-                              setTimeout(() => {
-                                if (button && button.style) {
-                                  button.style.animation = 'pulse 0.4s ease';
-                                }
-                              }, 10);
+                            }}
+                            style={{
+                              width: '36px',
+                              height: '36px',
+                              fontSize: '1.3rem',
+                              fontWeight: '600',
+                              flexShrink: 0,
+                              padding: '0'
                             }}
                           >
                             +
@@ -1920,7 +1920,7 @@ function PresenterMode() {
                     const isGradient = image.url.startsWith('linear-gradient');
                     return (
                       <div
-                        key={image._id}
+                        key={image.id}
                         style={{
                           padding: '8px 10px',
                           backgroundColor: 'white',
@@ -2179,7 +2179,7 @@ function PresenterMode() {
                       if (confirmNew) {
                         try {
                           // Unlink the setlist
-                          await api.post(`/api/rooms/${room._id}/unlink-setlist`);
+                          await api.post(`/api/rooms/${room.id}/unlink-setlist`);
 
                           // Clear the local state
                           setRoom(prevRoom => ({
@@ -2738,8 +2738,8 @@ function PresenterMode() {
           // Save current text from textarea to state and server
           const currentText = getCurrentQuickSlideText();
           setQuickSlideText(currentText);
-          if (room?._id) {
-            socketService.operatorUpdateQuickSlideText(room._id, currentText);
+          if (room?.id) {
+            socketService.operatorUpdateQuickSlideText(room.id, currentText);
           }
           setShowQuickSlideModal(false);
           setIsQuickSlideLive(false);
@@ -2871,8 +2871,8 @@ function PresenterMode() {
               // Save current text from textarea to state and server
               const currentText = getCurrentQuickSlideText();
               setQuickSlideText(currentText);
-              if (room?._id) {
-                socketService.operatorUpdateQuickSlideText(room._id, currentText);
+              if (room?.id) {
+                socketService.operatorUpdateQuickSlideText(room.id, currentText);
               }
               setShowQuickSlideModal(false);
               setIsQuickSlideLive(false);
@@ -2916,7 +2916,7 @@ function PresenterMode() {
             {media.map((item) => {
               const isGradient = item.url.startsWith('linear-gradient');
               return (
-                <Col key={item._id} xs={6} md={4} lg={3}>
+                <Col key={item.id} xs={6} md={4} lg={3}>
                   <div
                     onClick={() => handleBackgroundChange(item.url)}
                     style={{
@@ -3223,7 +3223,7 @@ Praise the LORD"
             <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
               {availableSetlists.map((setlist) => (
                 <div
-                  key={setlist._id}
+                  key={setlist.id}
                   style={{
                     padding: '12px',
                     marginBottom: '8px',
@@ -3241,7 +3241,7 @@ Praise the LORD"
                     e.currentTarget.style.backgroundColor = 'white';
                     e.currentTarget.style.borderColor = '#ddd';
                   }}
-                  onClick={() => handleLoadSetlist(setlist._id)}
+                  onClick={() => handleLoadSetlist(setlist.id)}
                 >
                   <div style={{ fontWeight: '500', marginBottom: '4px' }}>
                     {setlist.name}

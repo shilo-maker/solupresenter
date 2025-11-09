@@ -27,7 +27,10 @@
       "Bash(\"C:\\Users\\shilo\\AppData\\Roaming\\Python\\Python312\\Scripts\\eb.exe\" status)",
       "Bash(\"C:\\Users\\shilo\\AppData\\Roaming\\Python\\Python312\\Scripts\\eb.exe\" logs --all)",
       "Bash(curl -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OGU3YWQyMjliMzQ4NjBlYThjMGI0ZDYiLCJpYXQiOjE3NjAyMjAxNTUsImV4cCI6MTc2MDgyNDk1NX0.a8agDq70-P893Y0WuVg4jnbvtD2vyO_W8NoDCKG4NNk\" http://localhost:5000/api/songs)",
-      "Bash(dir /b \"C:\\Users\\shilo\\Documents\\solupresenter\\frontend\\src\\pages\")"
+      "Bash(dir /b \"C:\\Users\\shilo\\Documents\\solupresenter\\frontend\\src\\pages\")",
+      "Bash(curl:*)",
+      "Bash(dir backend*.db backend*.sqlite 2)",
+      "Bash(nul)"
     ],
     "deny": [],
     "ask": []

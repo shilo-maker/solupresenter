@@ -33,7 +33,7 @@ function SetlistList() {
 
     try {
       await api.delete(`/api/setlists/${id}`);
-      setSetlists(setlists.filter(s => s._id !== id));
+      setSetlists(setlists.filter(s => s.id !== id));
     } catch (error) {
       console.error('Error deleting setlist:', error);
       alert(error.response?.data?.error || 'Failed to delete setlist');
@@ -78,7 +78,7 @@ function SetlistList() {
       ) : (
         <Row>
           {setlists.map((setlist) => (
-            <Col md={6} lg={4} key={setlist._id} className="mb-4">
+            <Col md={6} lg={4} key={setlist.id} className="mb-4">
               <Card className="h-100">
                 <Card.Body>
                   <Card.Title>{setlist.name}</Card.Title>
@@ -118,13 +118,13 @@ function SetlistList() {
                   )}
 
                   <div className="d-grid gap-2">
-                    <Button variant="primary" size="sm" onClick={() => navigate(`/setlists/${setlist._id}`)}>
+                    <Button variant="primary" size="sm" onClick={() => navigate(`/setlists/${setlist.id}`)}>
                       View Details
                     </Button>
-                    <Button variant="outline-primary" size="sm" onClick={() => navigate(`/setlists/${setlist._id}/edit`)}>
+                    <Button variant="outline-primary" size="sm" onClick={() => navigate(`/setlists/${setlist.id}/edit`)}>
                       Edit
                     </Button>
-                    <Button variant="outline-danger" size="sm" onClick={() => deleteSetlist(setlist._id)}>
+                    <Button variant="outline-danger" size="sm" onClick={() => deleteSetlist(setlist.id)}>
                       Delete
                     </Button>
                   </div>

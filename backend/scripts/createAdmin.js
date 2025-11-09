@@ -1,7 +1,6 @@
 require('dotenv').config();
-const mongoose = require('mongoose');
 const readline = require('readline');
-const User = require('../models/User');
+const { sequelize, User } = require('../models');
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -12,12 +11,15 @@ const question = (query) => new Promise((resolve) => rl.question(query, resolve)
 
 async function createAdmin() {
   try {
-    // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('Connected to MongoDB');
+    // Connect to PostgreSQL
+    await sequelize.authenticate();
+    console.log('Connected to PostgreSQL');
+
+    // Sync models
+    await sequelize.sync();
 
     // Check if admin already exists
-    const existingAdmin = await User.findOne({ role: 'admin' });
+    const existingAdmin = await User.findOne({ where: { role: 'admin' } });
     if (existingAdmin) {
       console.log('\n⚠️  An admin account already exists:');
       console.log('Email:', existingAdmin.email);
@@ -47,7 +49,7 @@ async function createAdmin() {
     }
 
     // Check if email already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const existingUser = await User.findOne({ where: { email: email.toLowerCase() } });
     if (existingUser) {
       console.error('❌ Email already registered');
       process.exit(1);
@@ -58,7 +60,8 @@ async function createAdmin() {
       email: email.toLowerCase(),
       password,
       authProvider: 'local',
-      role: 'admin'
+      role: 'admin',
+      isEmailVerified: true // Admins don't need email verification
     });
 
     console.log('\n✅ Admin account created successfully!');

@@ -1,30 +1,52 @@
 const express = require('express');
 const router = express.Router();
-const Room = require('../models/Room');
-const User = require('../models/User');
-const Setlist = require('../models/Setlist');
+const { Room, User, Setlist, Song, Media } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 const { generateUniquePin } = require('../utils/generatePin');
+
+// Helper function to populate setlist items with full data
+async function populateSetlistItems(setlist) {
+  if (!setlist || !setlist.items) return setlist;
+
+  const populatedItems = await Promise.all(setlist.items.map(async (item) => {
+    if (item.type === 'song') {
+      // Handle both songId and song fields (song field might contain the ID)
+      const songId = item.songId || item.song;
+      if (songId) {
+        const song = await Song.findByPk(songId);
+        return { ...item, song };
+      }
+    } else if (item.type === 'image') {
+      // Handle both imageId and image fields
+      const imageId = item.imageId || item.image;
+      if (imageId) {
+        const image = await Media.findByPk(imageId);
+        return { ...item, image };
+      }
+    }
+    return item;
+  }));
+
+  return {
+    ...setlist.toJSON(),
+    items: populatedItems
+  };
+}
 
 // Create or get active room for operator
 router.post('/create', authenticateToken, async (req, res) => {
   try {
     // Check if user already has an active room
-    let room = await Room.findOne({ operator: req.user._id, isActive: true })
-      .populate({
-        path: 'temporarySetlist',
-        populate: [
-          { path: 'items.song' },
-          { path: 'items.image' }
-        ]
-      })
-      .populate({
-        path: 'linkedPermanentSetlist',
-        populate: [
-          { path: 'items.song' },
-          { path: 'items.image' }
-        ]
-      });
+    let room = await Room.findOne({
+      where: {
+        operatorId: req.user.id,
+        isActive: true
+      },
+      include: [
+        { association: 'temporarySetlist' },
+        { association: 'linkedPermanentSetlist' }
+      ]
+    });
 
     if (room) {
       // If room exists but temporary setlist was deleted, recreate it
@@ -32,27 +54,36 @@ router.post('/create', authenticateToken, async (req, res) => {
         const temporarySetlist = await Setlist.create({
           name: `Presentation ${room.pin}`,
           items: [],
-          createdBy: req.user._id,
+          createdById: req.user.id,
           isTemporary: true,
-          linkedRoom: room._id
+          linkedRoomId: room.id
         });
 
-        room.temporarySetlist = temporarySetlist._id;
+        room.temporarySetlistId = temporarySetlist.id;
         await room.save();
 
-        // Populate the newly created setlist
-        await room.populate({
-          path: 'temporarySetlist',
-          populate: [
-            { path: 'items.song' },
-            { path: 'items.image' }
+        // Reload the room with the newly created setlist
+        room = await Room.findByPk(room.id, {
+          include: [
+            { association: 'temporarySetlist' }
           ]
         });
       }
 
-      // Update activity and return existing room
+      // Update activity
       await room.updateActivity();
-      return res.json({ room });
+
+      // Populate setlist items with full data
+      const roomData = room.toJSON();
+      if (roomData.temporarySetlist) {
+        roomData.temporarySetlist = await populateSetlistItems(room.temporarySetlist);
+      }
+      if (roomData.linkedPermanentSetlist) {
+        roomData.linkedPermanentSetlist = await populateSetlistItems(room.linkedPermanentSetlist);
+        console.log('📋 Populated linked setlist:', JSON.stringify(roomData.linkedPermanentSetlist.items[0], null, 2));
+      }
+
+      return res.json({ room: roomData });
     }
 
     // Generate unique PIN
@@ -62,35 +93,42 @@ router.post('/create', authenticateToken, async (req, res) => {
     const temporarySetlist = await Setlist.create({
       name: `Presentation ${pin}`,
       items: [],
-      createdBy: req.user._id,
+      createdById: req.user.id,
       isTemporary: true
     });
 
     // Create new room
     room = await Room.create({
       pin,
-      operator: req.user._id,
+      operatorId: req.user.id,
       isActive: true,
-      temporarySetlist: temporarySetlist._id
+      temporarySetlistId: temporarySetlist.id
     });
 
     // Link the setlist to the room
-    temporarySetlist.linkedRoom = room._id;
+    temporarySetlist.linkedRoom = room.id;
     await temporarySetlist.save();
 
-    // Populate the temporary setlist and its items before returning
-    await room.populate({
-      path: 'temporarySetlist',
-      populate: [
-        { path: 'items.song' },
-        { path: 'items.image' }
+    // Reload the room with populated associations
+    room = await Room.findByPk(room.id, {
+      include: [
+        { association: 'temporarySetlist' }
       ]
     });
 
     // Update user's active room
-    await User.findByIdAndUpdate(req.user._id, { activeRoom: room._id });
+    await User.update(
+      { activeRoomId: room.id },
+      { where: { id: req.user.id } }
+    );
 
-    res.status(201).json({ room });
+    // Populate setlist items with full data
+    const roomData = room.toJSON();
+    if (roomData.temporarySetlist) {
+      roomData.temporarySetlist = await populateSetlistItems(room.temporarySetlist);
+    }
+
+    res.status(201).json({ room: roomData });
   } catch (error) {
     console.error('Error creating room:', error);
     res.status(500).json({ error: 'Failed to create room' });
@@ -101,9 +139,17 @@ router.post('/create', authenticateToken, async (req, res) => {
 router.get('/join/:pin', async (req, res) => {
   try {
     const room = await Room.findOne({
-      pin: req.params.pin.toUpperCase(),
-      isActive: true
-    }).populate('currentSlide.songId');
+      where: {
+        pin: req.params.pin.toUpperCase(),
+        isActive: true
+      },
+      include: [
+        {
+          association: 'currentSlide',
+          include: [{ association: 'songId', model: Song }]
+        }
+      ]
+    });
 
     if (!room) {
       return res.status(404).json({ error: 'Room not found or inactive' });
@@ -120,17 +166,18 @@ router.get('/join/:pin', async (req, res) => {
 router.get('/my-room', authenticateToken, async (req, res) => {
   try {
     const room = await Room.findOne({
-      operator: req.user._id,
-      isActive: true
-    })
-      .populate('currentSlide.songId')
-      .populate({
-        path: 'temporarySetlist',
-        populate: [
-          { path: 'items.song' },
-          { path: 'items.image' }
-        ]
-      });
+      where: {
+        operatorId: req.user.id,
+        isActive: true
+      },
+      include: [
+        {
+          association: 'currentSlide',
+          include: [{ association: 'songId', model: Song }]
+        },
+        { association: 'temporarySetlist' }
+      ]
+    });
 
     if (!room) {
       return res.status(404).json({ error: 'No active room found' });
@@ -146,27 +193,18 @@ router.get('/my-room', authenticateToken, async (req, res) => {
 // Update temporary setlist (or permanent if linked)
 router.put('/:id/setlist', authenticateToken, async (req, res) => {
   try {
-    const room = await Room.findById(req.params.id)
-      .populate({
-        path: 'temporarySetlist',
-        populate: [
-          { path: 'items.song' },
-          { path: 'items.image' }
-        ]
-      })
-      .populate({
-        path: 'linkedPermanentSetlist',
-        populate: [
-          { path: 'items.song' },
-          { path: 'items.image' }
-        ]
-      });
+    const room = await Room.findByPk(req.params.id, {
+      include: [
+        { association: 'temporarySetlist' },
+        { association: 'linkedPermanentSetlist' }
+      ]
+    });
 
     if (!room) {
       return res.status(404).json({ error: 'Room not found' });
     }
 
-    if (room.operator.toString() !== req.user._id.toString()) {
+    if (room.operatorId.toString() !== req.user.id.toString()) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -177,16 +215,10 @@ router.put('/:id/setlist', authenticateToken, async (req, res) => {
       room.linkedPermanentSetlist.items = items;
       await room.linkedPermanentSetlist.save();
 
-      // Re-populate after save
-      await room.populate({
-        path: 'linkedPermanentSetlist',
-        populate: [
-          { path: 'items.song' },
-          { path: 'items.image' }
-        ]
-      });
+      // Reload the setlist
+      const updatedSetlist = await Setlist.findByPk(room.linkedPermanentSetlist.id);
 
-      res.json({ setlist: room.linkedPermanentSetlist, isPermanent: true });
+      res.json({ setlist: updatedSetlist, isPermanent: true });
     } else {
       // Otherwise, save to temporary setlist
       if (!room.temporarySetlist) {
@@ -196,16 +228,10 @@ router.put('/:id/setlist', authenticateToken, async (req, res) => {
       room.temporarySetlist.items = items;
       await room.temporarySetlist.save();
 
-      // Re-populate after save
-      await room.populate({
-        path: 'temporarySetlist',
-        populate: [
-          { path: 'items.song' },
-          { path: 'items.image' }
-        ]
-      });
+      // Reload the setlist
+      const updatedSetlist = await Setlist.findByPk(room.temporarySetlist.id);
 
-      res.json({ setlist: room.temporarySetlist, isPermanent: false });
+      res.json({ setlist: updatedSetlist, isPermanent: false });
     }
   } catch (error) {
     console.error('Error updating setlist:', error);
@@ -216,20 +242,17 @@ router.put('/:id/setlist', authenticateToken, async (req, res) => {
 // Convert temporary setlist to permanent
 router.post('/:id/save-setlist', authenticateToken, async (req, res) => {
   try {
-    const room = await Room.findById(req.params.id)
-      .populate({
-        path: 'temporarySetlist',
-        populate: [
-          { path: 'items.song' },
-          { path: 'items.image' }
-        ]
-      });
+    const room = await Room.findByPk(req.params.id, {
+      include: [
+        { association: 'temporarySetlist' }
+      ]
+    });
 
     if (!room) {
       return res.status(404).json({ error: 'Room not found' });
     }
 
-    if (room.operator.toString() !== req.user._id.toString()) {
+    if (room.operatorId.toString() !== req.user.id.toString()) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -246,21 +269,21 @@ router.post('/:id/save-setlist', authenticateToken, async (req, res) => {
     const permanentSetlist = await Setlist.create({
       name: name.trim(),
       items: room.temporarySetlist.items,
-      createdBy: req.user._id,
+      createdById: req.user.id,
       isTemporary: false,
-      linkedRoom: null
+      linkedRoomId: null
     });
 
     // Link the permanent setlist to the room
-    room.linkedPermanentSetlist = permanentSetlist._id;
+    room.linkedPermanentSetlistId = permanentSetlist.id;
     await room.save();
 
     res.json({
       message: 'Setlist saved successfully',
       setlist: permanentSetlist,
       room: {
-        _id: room._id,
-        linkedPermanentSetlist: permanentSetlist._id
+        id: room.id,
+        linkedPermanentSetlist: permanentSetlist.id
       }
     });
   } catch (error) {
@@ -272,13 +295,13 @@ router.post('/:id/save-setlist', authenticateToken, async (req, res) => {
 // Link a setlist to room (replaces any previous link)
 router.post('/:id/link-setlist', authenticateToken, async (req, res) => {
   try {
-    const room = await Room.findById(req.params.id);
+    const room = await Room.findByPk(req.params.id);
 
     if (!room) {
       return res.status(404).json({ error: 'Room not found' });
     }
 
-    if (room.operator.toString() !== req.user._id.toString()) {
+    if (room.operatorId.toString() !== req.user.id.toString()) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -287,37 +310,40 @@ router.post('/:id/link-setlist', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Setlist ID is required' });
     }
 
-    // Verify the setlist exists and populate it
-    const setlist = await Setlist.findById(setlistId)
-      .populate('items.song')
-      .populate('items.image');
+    // Verify the setlist exists
+    const setlist = await Setlist.findByPk(setlistId);
+
     if (!setlist) {
       return res.status(404).json({ error: 'Setlist not found' });
     }
 
     // Link the setlist to the room (replaces any previous link)
-    room.linkedPermanentSetlist = setlistId;
+    room.linkedPermanentSetlistId = setlistId;
     await room.save();
 
     // Convert setlist items to the format expected by the frontend
-    const songs = setlist.items.map(item => {
-      if (item.type === 'song') {
-        return { type: 'song', data: item.song };
-      } else if (item.type === 'image') {
-        return { type: 'image', data: item.image };
+    // Fetch full data for each item from the database
+    const songs = await Promise.all(setlist.items.map(async (item) => {
+      if (item.type === 'song' && item.song) {
+        const songData = await Song.findByPk(item.song);
+        return { type: 'song', data: songData };
+      } else if (item.type === 'image' && item.image) {
+        const imageData = await Media.findByPk(item.image);
+        return { type: 'image', data: imageData };
       } else if (item.type === 'bible') {
-        return { type: 'bible', data: item.bible };
+        // Bible data is stored directly in the item
+        return { type: 'bible', data: item.bibleData || item };
       } else if (item.type === 'blank') {
         return { type: 'blank', data: {} };
       }
       return item;
-    });
+    }));
 
     const responseData = {
       message: 'Setlist linked successfully',
       room: { linkedPermanentSetlist: setlistId },
       setlist: {
-        _id: setlist._id,
+        id: setlist.id,
         name: setlist.name,
         songs
       }
@@ -335,18 +361,18 @@ router.post('/:id/link-setlist', authenticateToken, async (req, res) => {
 // Unlink setlist from room
 router.post('/:id/unlink-setlist', authenticateToken, async (req, res) => {
   try {
-    const room = await Room.findById(req.params.id);
+    const room = await Room.findByPk(req.params.id);
 
     if (!room) {
       return res.status(404).json({ error: 'Room not found' });
     }
 
-    if (room.operator.toString() !== req.user._id.toString()) {
+    if (room.operatorId.toString() !== req.user.id.toString()) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
     // Unlink the setlist
-    room.linkedPermanentSetlist = null;
+    room.linkedPermanentSetlistId = null;
     await room.save();
 
     res.json({ message: 'Setlist unlinked successfully' });
@@ -359,26 +385,31 @@ router.post('/:id/unlink-setlist', authenticateToken, async (req, res) => {
 // Close room
 router.post('/:id/close', authenticateToken, async (req, res) => {
   try {
-    const room = await Room.findById(req.params.id);
+    const room = await Room.findByPk(req.params.id);
 
     if (!room) {
       return res.status(404).json({ error: 'Room not found' });
     }
 
-    if (room.operator.toString() !== req.user._id.toString()) {
+    if (room.operatorId.toString() !== req.user.id.toString()) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
     // Delete the temporary setlist if it exists
     if (room.temporarySetlist) {
-      await Setlist.findByIdAndDelete(room.temporarySetlist);
+      await Setlist.destroy({
+        where: { id: room.temporarySetlist }
+      });
     }
 
     room.isActive = false;
     await room.save();
 
     // Clear user's active room
-    await User.findByIdAndUpdate(req.user._id, { activeRoom: null });
+    await User.update(
+      { activeRoomId: null },
+      { where: { id: req.user.id } }
+    );
 
     res.json({ message: 'Room closed successfully' });
   } catch (error) {

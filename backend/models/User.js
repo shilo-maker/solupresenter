@@ -1,88 +1,114 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
 const bcrypt = require('bcryptjs');
+const sequelize = require('../config/sequelize');
 
-const userSchema = new mongoose.Schema({
+const User = sequelize.define('User', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
+  },
   email: {
-    type: String,
-    required: true,
+    type: DataTypes.STRING,
+    allowNull: false,
     unique: true,
-    lowercase: true,
-    trim: true
+    validate: {
+      isEmail: true
+    },
+    set(value) {
+      this.setDataValue('email', value.toLowerCase().trim());
+    }
   },
   password: {
-    type: String,
-    required: function() {
-      return this.authProvider === 'local';
-    }
+    type: DataTypes.STRING,
+    allowNull: true
   },
   authProvider: {
-    type: String,
-    enum: ['local', 'google'],
-    default: 'local'
+    type: DataTypes.ENUM('local', 'google'),
+    defaultValue: 'local',
+    allowNull: false
   },
   googleId: {
-    type: String,
-    sparse: true
+    type: DataTypes.STRING,
+    unique: true,
+    allowNull: true
   },
   role: {
-    type: String,
-    enum: ['operator', 'admin'],
-    default: 'operator'
+    type: DataTypes.ENUM('operator', 'admin'),
+    defaultValue: 'operator',
+    allowNull: false
   },
   preferences: {
-    defaultLanguage: {
-      type: String,
-      default: 'en'
+    type: DataTypes.JSONB,
+    defaultValue: {
+      defaultLanguage: 'en'
     }
   },
-  activeRoom: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Room',
-    default: null
+  activeRoomId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'Rooms',
+      key: 'id'
+    }
   },
   isEmailVerified: {
-    type: Boolean,
-    default: false
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
   emailVerificationToken: {
-    type: String,
-    default: null
+    type: DataTypes.STRING,
+    allowNull: true
   },
   emailVerificationExpires: {
-    type: Date,
-    default: null
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
+    type: DataTypes.DATE,
+    allowNull: true
+  }
+}, {
+  tableName: 'users',
+  timestamps: true,
+  createdAt: 'createdAt',
+  updatedAt: false,
+  indexes: [
+    {
+      fields: ['email']
+    },
+    {
+      fields: ['emailVerificationToken']
+    },
+    {
+      fields: ['activeRoomId']
+    },
+    {
+      fields: ['googleId'],
+      unique: true,
+      where: {
+        googleId: { [sequelize.Sequelize.Op.ne]: null }
+      }
+    }
+  ],
+  hooks: {
+    beforeCreate: async (user) => {
+      if (user.password && user.authProvider === 'local') {
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(user.password, salt);
+      }
+    },
+    beforeUpdate: async (user) => {
+      if (user.changed('password') && user.password && user.authProvider === 'local') {
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(user.password, salt);
+      }
+    }
   }
 });
 
-// Hash password before saving
-userSchema.pre('save', async function(next) {
-  if (!this.isModified('password') || this.authProvider !== 'local') {
-    return next();
-  }
-
-  try {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Method to compare password
-userSchema.methods.comparePassword = async function(candidatePassword) {
-  if (this.authProvider !== 'local') {
+// Instance method to compare password
+User.prototype.comparePassword = async function(candidatePassword) {
+  if (this.authProvider !== 'local' || !this.password) {
     return false;
   }
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Indexes for optimized queries
-userSchema.index({ emailVerificationToken: 1 }); // For verification lookups
-userSchema.index({ activeRoom: 1 }); // For room-user queries
-
-module.exports = mongoose.model('User', userSchema);
+module.exports = User;

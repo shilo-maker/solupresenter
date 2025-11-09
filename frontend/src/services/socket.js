@@ -1,6 +1,21 @@
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+// Dynamically determine Socket URL based on current hostname
+// This allows the app to work both on localhost and when accessed via IP address
+const getSocketUrl = () => {
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+
+  // Use the current hostname with backend port
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+  const backendPort = 5000;
+
+  return `${protocol}//${hostname}:${backendPort}`;
+};
+
+const SOCKET_URL = getSocketUrl();
 
 class SocketService {
   constructor() {

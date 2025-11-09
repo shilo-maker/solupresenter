@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
-const BibleVerse = require('../models/BibleVerse');
+const { BibleVerse } = require('../models');
+const { Op } = require('sequelize');
 
 // Helper function to convert number to Hebrew numerals
 function toHebrewNumeral(num) {
@@ -149,10 +150,14 @@ router.get('/verses/:bookName/:chapter', async (req, res) => {
     }
 
     // Query verses from local database
-    const dbVerses = await BibleVerse.find({
-      book: bookName,
-      chapter: chapterNum
-    }).sort({ verse: 1 }).lean();
+    const dbVerses = await BibleVerse.findAll({
+      where: {
+        book: bookName,
+        chapter: chapterNum
+      },
+      order: [['verse', 'ASC']],
+      raw: true
+    });
 
     if (dbVerses.length === 0) {
       return res.status(404).json({ error: 'Chapter not found in database' });

@@ -1,15 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const Song = require('../models/Song');
-const User = require('../models/User');
+const { Song, User } = require('../models');
+const { Op } = require('sequelize');
 const { authenticateToken, isAdmin } = require('../middleware/auth');
 
 // Get all pending songs
 router.get('/pending-songs', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const songs = await Song.find({ isPendingApproval: true })
-      .populate('createdBy', 'email')
-      .sort({ createdAt: -1 });
+    const songs = await Song.findAll({
+      where: { isPendingApproval: true },
+      include: [{
+        model: User,
+        as: 'creator',
+        attributes: ['email']
+      }],
+      order: [['createdAt', 'DESC']]
+    });
 
     res.json({ songs });
   } catch (error) {
@@ -21,7 +27,7 @@ router.get('/pending-songs', authenticateToken, isAdmin, async (req, res) => {
 // Approve song
 router.post('/approve-song/:id', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const song = await Song.findById(req.params.id);
+    const song = await Song.findByPk(req.params.id);
 
     if (!song) {
       return res.status(404).json({ error: 'Song not found' });
@@ -29,7 +35,7 @@ router.post('/approve-song/:id', authenticateToken, isAdmin, async (req, res) =>
 
     song.isPendingApproval = false;
     song.isPublic = true;
-    song.approvedBy = req.user._id;
+    song.approvedBy = req.user.id;
     song.approvedAt = new Date();
 
     await song.save();
@@ -44,7 +50,7 @@ router.post('/approve-song/:id', authenticateToken, isAdmin, async (req, res) =>
 // Reject song
 router.post('/reject-song/:id', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const song = await Song.findById(req.params.id);
+    const song = await Song.findByPk(req.params.id);
 
     if (!song) {
       return res.status(404).json({ error: 'Song not found' });
@@ -74,10 +80,10 @@ router.post('/create-public-song', authenticateToken, isAdmin, async (req, res) 
       originalLanguage,
       slides,
       tags: tags || [],
-      createdBy: req.user._id,
+      createdBy: req.user.id,
       isPublic: true,
       isPendingApproval: false,
-      approvedBy: req.user._id,
+      approvedBy: req.user.id,
       approvedAt: new Date()
     });
 
@@ -93,9 +99,10 @@ router.post('/create-public-song', authenticateToken, isAdmin, async (req, res) 
 // Get all users
 router.get('/users', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const users = await User.find()
-      .select('-password')
-      .sort({ createdAt: -1 });
+    const users = await User.findAll({
+      attributes: { exclude: ['password'] },
+      order: [['createdAt', 'DESC']]
+    });
 
     res.json({ users });
   } catch (error) {
@@ -107,14 +114,14 @@ router.get('/users', authenticateToken, isAdmin, async (req, res) => {
 // Toggle user admin status
 router.post('/users/:id/toggle-admin', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = await User.findByPk(req.params.id);
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Prevent admins from removing their own admin status
-    if (user._id.toString() === req.user._id.toString()) {
+    if (user.id === req.user.id) {
       return res.status(400).json({ error: 'Cannot modify your own admin status' });
     }
 
@@ -124,7 +131,7 @@ router.post('/users/:id/toggle-admin', authenticateToken, isAdmin, async (req, r
 
     res.json({
       user: {
-        _id: user._id,
+        id: user.id,
         email: user.email,
         role: user.role
       },
@@ -139,18 +146,18 @@ router.post('/users/:id/toggle-admin', authenticateToken, isAdmin, async (req, r
 // Delete user
 router.delete('/users/:id', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = await User.findByPk(req.params.id);
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Prevent admins from deleting themselves
-    if (user._id.toString() === req.user._id.toString()) {
+    if (user.id === req.user.id) {
       return res.status(400).json({ error: 'Cannot delete your own account' });
     }
 
-    await User.findByIdAndDelete(req.params.id);
+    await user.destroy();
 
     res.json({ message: 'User deleted successfully' });
   } catch (error) {

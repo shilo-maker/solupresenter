@@ -1,43 +1,67 @@
+databases:
+  # PostgreSQL Database
+  - name: solupresenter-db
+    region: frankfurt
+    plan: starter
+    databaseName: solupresenter
+    user: solupresenter
+
 services:
   # Backend API Service
   - type: web
     name: solupresenter-backend
-    env: node
+    runtime: node
     region: frankfurt
+    plan: starter
     buildCommand: cd backend && npm install
     startCommand: cd backend && npm start
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 5000
-      - key: MONGODB_URI
-        sync: false  # Add this in Render dashboard
+      - key: DATABASE_URL
+        fromDatabase:
+          name: solupresenter-db
+          property: connectionString
       - key: SESSION_SECRET
-        sync: false  # Add this in Render dashboard
+        generateValue: true
       - key: JWT_SECRET
-        sync: false  # Add this in Render dashboard
-      - key: EMAIL_USER
-        sync: false  # Add this in Render dashboard (if used)
-      - key: EMAIL_PASS
-        sync: false  # Add this in Render dashboard (if used)
+        generateValue: true
+      - key: RESEND_API_KEY
+        sync: false  # Add this manually in Render dashboard
+      - key: EMAIL_FROM
+        value: SoluPresenter <noreply@soluisrael.org>
+      - key: GOOGLE_CLIENT_ID
+        sync: false  # Optional - Add if using Google OAuth
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false  # Optional - Add if using Google OAuth
+      - key: GOOGLE_CALLBACK_URL
+        sync: false  # Optional - Add if using Google OAuth
       - key: FRONTEND_URL
-        value: https://solupresenter.onrender.com
+        fromService:
+          type: web
+          name: solupresenter-frontend
+          envVarKey: RENDER_EXTERNAL_URL
 
   # Frontend Static Site
   - type: web
     name: solupresenter-frontend
-    env: static
+    runtime: static
     region: frankfurt
+    plan: starter
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/build
-    envVars:
-      - key: REACT_APP_API_URL
-        fromService:
-          type: web
-          name: solupresenter-backend
-          envVarKey: RENDER_EXTERNAL_URL
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
+    pullRequestPreviewsEnabled: true

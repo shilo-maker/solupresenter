@@ -1,101 +1,113 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/sequelize');
 
-const slideSchema = new mongoose.Schema({
-  originalText: {
-    type: String,
-    required: true
+const Song = sequelize.define('Song', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
   },
-  transliteration: {
-    type: String,
-    default: ''
-  },
-  translation: {
-    type: String,
-    default: ''
-  },
-  translationOverflow: {
-    type: String,
-    default: ''
-  },
-  verseType: {
-    type: String,
-    default: ''
-  }
-}, { _id: false });
-
-const songSchema = new mongoose.Schema({
   title: {
-    type: String,
-    required: true,
-    trim: true
+    type: DataTypes.STRING,
+    allowNull: false,
+    set(value) {
+      this.setDataValue('title', value.trim());
+    }
   },
   originalLanguage: {
-    type: String,
-    required: false,  // Allow null for migrated songs without language
-    default: 'he',    // Default to Hebrew for new songs
-    enum: ['he', 'en', 'es', 'fr', 'de', 'ru', 'ar', 'other']
+    type: DataTypes.ENUM('he', 'en', 'es', 'fr', 'de', 'ru', 'ar', 'other'),
+    defaultValue: 'he',
+    allowNull: true
   },
-  slides: [slideSchema],
-  tags: [{
-    type: String,
-    trim: true,
-    lowercase: true
-  }],
+  slides: {
+    type: DataTypes.JSONB,
+    defaultValue: [],
+    allowNull: false,
+    comment: 'Array of slide objects with originalText, transliteration, translation, translationOverflow, verseType'
+  },
+  tags: {
+    // Use JSON for cross-database compatibility (works in both SQLite and PostgreSQL)
+    type: DataTypes.JSON,
+    defaultValue: [],
+    get() {
+      const rawValue = this.getDataValue('tags');
+      // Ensure we always return an array
+      return Array.isArray(rawValue) ? rawValue : [];
+    },
+    set(value) {
+      if (Array.isArray(value)) {
+        const normalized = value.map(tag => tag.toLowerCase().trim());
+        this.setDataValue('tags', normalized);
+      } else {
+        this.setDataValue('tags', []);
+      }
+    }
+  },
   isPublic: {
-    type: Boolean,
-    default: false
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
   isPendingApproval: {
-    type: Boolean,
-    default: false
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: false,  // Allow null for migrated songs
-    default: null
+  createdById: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
   },
   usageCount: {
-    type: Number,
-    default: 0
+    type: DataTypes.INTEGER,
+    defaultValue: 0
   },
-  approvedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    default: null
+  approvedById: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
   },
   approvedAt: {
-    type: Date,
-    default: null
+    type: DataTypes.DATE,
+    allowNull: true
   },
   backgroundImage: {
-    type: String,
-    default: ''
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
+    type: DataTypes.STRING,
+    defaultValue: ''
   }
+}, {
+  tableName: 'songs',
+  timestamps: true,
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  indexes: [
+    // Basic indexes that work in both SQLite and PostgreSQL
+    {
+      fields: ['title']
+    },
+    {
+      fields: ['isPublic', 'createdById']
+    },
+    {
+      fields: ['createdById']
+    },
+    {
+      fields: ['originalLanguage']
+    },
+    {
+      fields: ['isPendingApproval']
+    },
+    {
+      fields: ['updatedAt']
+    },
+    {
+      fields: ['usageCount']
+    }
+  ]
 });
 
-// Update the updatedAt timestamp before saving
-songSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
-
-// Indexes for optimized queries
-songSchema.index({ title: 'text', 'slides.originalText': 'text' });
-songSchema.index({ tags: 1 });
-songSchema.index({ isPublic: 1, createdBy: 1 });
-songSchema.index({ createdBy: 1 }); // For user's own songs
-songSchema.index({ originalLanguage: 1 }); // For language filtering
-songSchema.index({ isPendingApproval: 1 }); // For admin approval queue
-songSchema.index({ updatedAt: -1 }); // For sorting by recent
-songSchema.index({ usageCount: -1 }); // For popular songs
-
-module.exports = mongoose.model('Song', songSchema);
+module.exports = Song;

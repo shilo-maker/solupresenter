@@ -3,6 +3,14 @@ node_modules/
 *.log
 .DS_Store
 
+# SQLite database (local development)
+database.sqlite
+database.sqlite-shm
+database.sqlite-wal
+
+# SSL Certificates (local development)
+certs/
+
 # Elastic Beanstalk Files
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml

@@ -17,7 +17,7 @@ const generateUniquePin = async (RoomModel) => {
 
   while (!isUnique) {
     pin = generatePin();
-    const existingRoom = await RoomModel.findOne({ pin });
+    const existingRoom = await RoomModel.findOne({ where: { pin } });
     if (!existingRoom) {
       isUnique = true;
     }

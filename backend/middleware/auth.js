@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const { User } = require('../models');
 
 // Middleware to verify JWT token
 const authenticateToken = async (req, res, next) => {
@@ -12,7 +12,7 @@ const authenticateToken = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId);
+    const user = await User.findByPk(decoded.userId);
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid token' });

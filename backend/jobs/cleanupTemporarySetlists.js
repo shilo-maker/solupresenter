@@ -1,5 +1,4 @@
-const Setlist = require('../models/Setlist');
-const Room = require('../models/Room');
+const { Setlist, Room } = require('../models');
 
 /**
  * Cleanup temporary setlists that are linked to expired/deleted rooms
@@ -10,29 +9,31 @@ async function cleanupTemporarySetlists() {
     console.log('🧹 Starting cleanup of temporary setlists...');
 
     // Find all temporary setlists
-    const temporarySetlists = await Setlist.find({ isTemporary: true });
+    const temporarySetlists = await Setlist.findAll({ where: { isTemporary: true } });
 
     let deletedCount = 0;
 
     for (const setlist of temporarySetlists) {
       // Check if the linked room still exists and is active
-      if (setlist.linkedRoom) {
+      if (setlist.linkedRoomId) {
         const room = await Room.findOne({
-          _id: setlist.linkedRoom,
-          isActive: true
+          where: {
+            id: setlist.linkedRoomId,
+            isActive: true
+          }
         });
 
         // If room doesn't exist or is inactive, delete the setlist
         if (!room) {
-          await Setlist.findByIdAndDelete(setlist._id);
+          await setlist.destroy();
           deletedCount++;
-          console.log(`  ✓ Deleted orphaned temporary setlist: ${setlist.name} (${setlist._id})`);
+          console.log(`  ✓ Deleted orphaned temporary setlist: ${setlist.name} (${setlist.id})`);
         }
       } else {
-        // If linkedRoom is null, this is an orphaned setlist, delete it
-        await Setlist.findByIdAndDelete(setlist._id);
+        // If linkedRoomId is null, this is an orphaned setlist, delete it
+        await setlist.destroy();
         deletedCount++;
-        console.log(`  ✓ Deleted orphaned temporary setlist (no linked room): ${setlist.name} (${setlist._id})`);
+        console.log(`  ✓ Deleted orphaned temporary setlist (no linked room): ${setlist.name} (${setlist.id})`);
       }
     }
 

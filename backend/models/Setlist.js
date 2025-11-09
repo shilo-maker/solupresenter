@@ -1,99 +1,83 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/sequelize');
 
-const setlistItemSchema = new mongoose.Schema({
-  type: {
-    type: String,
-    enum: ['song', 'blank', 'image', 'bible'],
-    required: true
+const Setlist = sequelize.define('Setlist', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
   },
-  song: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Song',
-    required: function() {
-      return this.type === 'song';
-    }
-  },
-  image: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Media',
-    required: function() {
-      return this.type === 'image';
-    }
-  },
-  bibleData: {
-    type: {
-      book: String,
-      chapter: Number,
-      title: String,
-      slides: [{
-        originalText: String,
-        translation: String,
-        verseNumber: Number,
-        reference: String,
-        hebrewReference: String
-      }]
-    },
-    required: function() {
-      return this.type === 'bible';
-    }
-  },
-  order: {
-    type: Number,
-    required: true
-  }
-}, { _id: false });
-
-const setlistSchema = new mongoose.Schema({
   name: {
-    type: String,
-    required: true,
-    trim: true
+    type: DataTypes.STRING,
+    allowNull: false,
+    set(value) {
+      this.setDataValue('name', value.trim());
+    }
   },
-  items: [setlistItemSchema],
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+  items: {
+    type: DataTypes.JSONB,
+    defaultValue: [],
+    allowNull: false,
+    comment: 'Array of setlist items with type (song/blank/image/bible), song/image/bibleData, and order'
+  },
+  createdById: {
+    type: DataTypes.UUID,
+    allowNull: false,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
   },
   isTemporary: {
-    type: Boolean,
-    default: false
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
-  linkedRoom: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Room',
-    default: null
+  linkedRoomId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'Rooms',
+      key: 'id'
+    }
   },
   usageCount: {
-    type: Number,
-    default: 0
+    type: DataTypes.INTEGER,
+    defaultValue: 0
   },
   shareToken: {
-    type: String,
+    type: DataTypes.STRING,
     unique: true,
-    sparse: true
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
+    allowNull: true
   }
+}, {
+  tableName: 'setlists',
+  timestamps: true,
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  indexes: [
+    {
+      fields: ['createdById']
+    },
+    {
+      fields: ['isTemporary']
+    },
+    {
+      fields: ['isTemporary', 'createdAt']
+    },
+    {
+      fields: ['linkedRoomId']
+    },
+    {
+      fields: ['updatedAt']
+    },
+    {
+      fields: ['shareToken'],
+      unique: true,
+      where: {
+        shareToken: { [sequelize.Sequelize.Op.ne]: null }
+      }
+    }
+  ]
 });
 
-// Update the updatedAt timestamp before saving
-setlistSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
-
-// Indexes for optimized queries
-setlistSchema.index({ createdBy: 1 }); // For user's setlists
-setlistSchema.index({ isTemporary: 1 }); // For cleanup jobs
-setlistSchema.index({ isTemporary: 1, createdAt: -1 }); // Compound for cleanup
-setlistSchema.index({ linkedRoom: 1 }); // For room-setlist queries
-setlistSchema.index({ updatedAt: -1 }); // For sorting by recent
-
-module.exports = mongoose.model('Setlist', setlistSchema);
+module.exports = Setlist;

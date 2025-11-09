@@ -9,6 +9,7 @@
     "create-admin": "node scripts/createAdmin.js",
     "import-songs": "node scripts/importSongs.js",
     "backup": "node scripts/backupDatabase.js",
+    "migrate": "node scripts/migrateToPostgres.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -31,8 +32,12 @@
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "passport-local": "^1.0.0",
+    "pg": "^8.16.3",
+    "pg-hstore": "^2.3.4",
     "resend": "^6.1.2",
-    "socket.io": "^4.8.1"
+    "sequelize": "^6.37.7",
+    "socket.io": "^4.8.1",
+    "sqlite3": "^5.1.7"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

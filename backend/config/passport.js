@@ -1,7 +1,7 @@
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const User = require('../models/User');
+const { User } = require('../models');
 
 // Local Strategy
 passport.use(new LocalStrategy(
@@ -11,7 +11,7 @@ passport.use(new LocalStrategy(
   },
   async (email, password, done) => {
     try {
-      const user = await User.findOne({ email: email.toLowerCase() });
+      const user = await User.findOne({ where: { email: email.toLowerCase() } });
 
       if (!user) {
         return done(null, false, { message: 'Invalid email or password' });
@@ -41,14 +41,14 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     async (accessToken, refreshToken, profile, done) => {
       try {
         // Check if user already exists
-        let user = await User.findOne({ googleId: profile.id });
+        let user = await User.findOne({ where: { googleId: profile.id } });
 
         if (user) {
           return done(null, user);
         }
 
         // Check if email already exists with different provider
-        user = await User.findOne({ email: profile.emails[0].value.toLowerCase() });
+        user = await User.findOne({ where: { email: profile.emails[0].value.toLowerCase() } });
 
         if (user) {
           // Link Google account to existing user
@@ -62,7 +62,8 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
         user = await User.create({
           email: profile.emails[0].value.toLowerCase(),
           googleId: profile.id,
-          authProvider: 'google'
+          authProvider: 'google',
+          isEmailVerified: true // Google accounts are pre-verified
         });
 
         return done(null, user);
@@ -81,7 +82,7 @@ passport.serializeUser((user, done) => {
 // Deserialize user
 passport.deserializeUser(async (id, done) => {
   try {
-    const user = await User.findById(id);
+    const user = await User.findByPk(id);
     done(null, user);
   } catch (error) {
     done(error);

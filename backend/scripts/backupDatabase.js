@@ -3,17 +3,14 @@ const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
 
-// Import models
-const User = require('../models/User');
-const Song = require('../models/Song');
-const Room = require('../models/Room');
-const Setlist = require('../models/Setlist');
-
 async function backupDatabase() {
   try {
     console.log('🔌 Connecting to MongoDB...');
     await mongoose.connect(process.env.MONGODB_URI);
     console.log('✅ Connected to MongoDB');
+
+    // Get database reference
+    const db = mongoose.connection.db;
 
     // Create backup directory with timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -27,7 +24,7 @@ async function backupDatabase() {
 
     // Backup Users
     console.log('💾 Backing up Users...');
-    const users = await User.find({}).lean();
+    const users = await db.collection('users').find({}).toArray();
     fs.writeFileSync(
       path.join(backupDir, 'users.json'),
       JSON.stringify(users, null, 2)
@@ -36,7 +33,7 @@ async function backupDatabase() {
 
     // Backup Songs
     console.log('💾 Backing up Songs...');
-    const songs = await Song.find({}).lean();
+    const songs = await db.collection('songs').find({}).toArray();
     fs.writeFileSync(
       path.join(backupDir, 'songs.json'),
       JSON.stringify(songs, null, 2)
@@ -45,7 +42,7 @@ async function backupDatabase() {
 
     // Backup Rooms
     console.log('💾 Backing up Rooms...');
-    const rooms = await Room.find({}).lean();
+    const rooms = await db.collection('rooms').find({}).toArray();
     fs.writeFileSync(
       path.join(backupDir, 'rooms.json'),
       JSON.stringify(rooms, null, 2)
@@ -54,12 +51,30 @@ async function backupDatabase() {
 
     // Backup Setlists
     console.log('💾 Backing up Setlists...');
-    const setlists = await Setlist.find({}).lean();
+    const setlists = await db.collection('setlists').find({}).toArray();
     fs.writeFileSync(
       path.join(backupDir, 'setlists.json'),
       JSON.stringify(setlists, null, 2)
     );
     console.log(`✅ Backed up ${setlists.length} setlists`);
+
+    // Backup Media
+    console.log('💾 Backing up Media...');
+    const media = await db.collection('media').find({}).toArray();
+    fs.writeFileSync(
+      path.join(backupDir, 'media.json'),
+      JSON.stringify(media, null, 2)
+    );
+    console.log(`✅ Backed up ${media.length} media items`);
+
+    // Backup Bible Verses
+    console.log('💾 Backing up Bible Verses...');
+    const bibleverses = await db.collection('bibleverses').find({}).toArray();
+    fs.writeFileSync(
+      path.join(backupDir, 'bibleverses.json'),
+      JSON.stringify(bibleverses, null, 2)
+    );
+    console.log(`✅ Backed up ${bibleverses.length} Bible verses`);
 
     // Create backup metadata
     const metadata = {
@@ -68,7 +83,9 @@ async function backupDatabase() {
         users: users.length,
         songs: songs.length,
         rooms: rooms.length,
-        setlists: setlists.length
+        setlists: setlists.length,
+        media: media.length,
+        bibleverses: bibleverses.length
       },
       mongoUri: process.env.MONGODB_URI.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@') // Hide password
     };
@@ -85,6 +102,8 @@ async function backupDatabase() {
     console.log(`   Songs: ${songs.length}`);
     console.log(`   Rooms: ${rooms.length}`);
     console.log(`   Setlists: ${setlists.length}`);
+    console.log(`   Media: ${media.length}`);
+    console.log(`   Bible Verses: ${bibleverses.length}`);
 
     process.exit(0);
   } catch (error) {

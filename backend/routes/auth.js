@@ -3,7 +3,8 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const passport = require('passport');
 const rateLimit = require('express-rate-limit');
-const User = require('../models/User');
+const { Op } = require('sequelize');
+const { User } = require('../models');
 const { generateVerificationToken, sendVerificationEmail } = require('../utils/emailService');
 
 // Rate limiter for auth endpoints (prevent brute force attacks)
@@ -46,7 +47,7 @@ router.post('/register', registerLimiter, async (req, res) => {
     }
 
     // Check if user already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const existingUser = await User.findOne({ where: { email: email.toLowerCase() } });
     if (existingUser) {
       return res.status(400).json({ error: 'Email already registered' });
     }
@@ -77,7 +78,7 @@ router.post('/register', registerLimiter, async (req, res) => {
       message: 'Registration successful! Please check your email to verify your account.',
       requiresVerification: true,
       user: {
-        _id: user._id,
+        _id: user.id,
         email: user.email,
         role: user.role,
         isEmailVerified: user.isEmailVerified
@@ -110,12 +111,12 @@ router.post('/login', authLimiter, (req, res, next) => {
       });
     }
 
-    const token = generateToken(user._id);
+    const token = generateToken(user.id);
 
     res.json({
       token,
       user: {
-        _id: user._id,
+        _id: user.id,
         email: user.email,
         role: user.role,
         isEmailVerified: user.isEmailVerified
@@ -134,7 +135,7 @@ router.get('/google', passport.authenticate('google', {
 router.get('/google/callback',
   passport.authenticate('google', { session: false, failureRedirect: '/login' }),
   (req, res) => {
-    const token = generateToken(req.user._id);
+    const token = generateToken(req.user.id);
 
     // Redirect to frontend with token
     res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
@@ -148,8 +149,10 @@ router.get('/verify-email/:token', async (req, res) => {
 
     // Find user with this token
     const user = await User.findOne({
-      emailVerificationToken: token,
-      emailVerificationExpires: { $gt: Date.now() }
+      where: {
+        emailVerificationToken: token,
+        emailVerificationExpires: { [Op.gt]: Date.now() }
+      }
     });
 
     if (!user) {
@@ -163,13 +166,13 @@ router.get('/verify-email/:token', async (req, res) => {
     await user.save();
 
     // Generate JWT token for auto-login
-    const authToken = generateToken(user._id);
+    const authToken = generateToken(user.id);
 
     res.json({
       message: 'Email verified successfully!',
       token: authToken,
       user: {
-        _id: user._id,
+        _id: user.id,
         email: user.email,
         role: user.role,
         isEmailVerified: user.isEmailVerified
@@ -190,7 +193,7 @@ router.post('/resend-verification', async (req, res) => {
       return res.status(400).json({ error: 'Email is required' });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findOne({ where: { email: email.toLowerCase() } });
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -229,13 +232,28 @@ router.get('/me', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId).select('-password');
+    const user = await User.findByPk(decoded.userId, {
+      attributes: { exclude: ['password'] }
+    });
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json({ user });
+    // Return user with _id for backward compatibility with frontend
+    res.json({
+      user: {
+        _id: user.id,
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        isAdmin: user.role === 'admin',
+        isEmailVerified: user.isEmailVerified,
+        authProvider: user.authProvider,
+        preferences: user.preferences,
+        activeRoomId: user.activeRoomId
+      }
+    });
   } catch (error) {
     res.status(401).json({ error: 'Invalid token' });
   }

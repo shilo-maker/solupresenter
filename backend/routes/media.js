@@ -3,7 +3,8 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const Media = require('../models/Media');
+const { Media, User } = require('../models');
+const { Op } = require('sequelize');
 const { authenticateToken, isAdmin } = require('../middleware/auth');
 
 // Configure multer for file uploads
@@ -45,12 +46,20 @@ const upload = multer({
 // Get all media (public + user's personal media)
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const media = await Media.find({
-      $or: [
-        { isPublic: true },
-        { uploadedBy: req.user._id }
-      ]
-    }).populate('uploadedBy', 'email').sort({ createdAt: -1 });
+    const media = await Media.findAll({
+      where: {
+        [Op.or]: [
+          { isPublic: true },
+          { uploadedById: req.user.id }
+        ]
+      },
+      include: [{
+        model: User,
+        as: 'uploader',
+        attributes: ['email']
+      }],
+      order: [['createdAt', 'DESC']]
+    });
 
     res.json({ media });
   } catch (error) {
@@ -76,7 +85,7 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
       type: 'image',
       url: fileUrl,
       thumbnailUrl: fileUrl, // Use same URL for thumbnail (could optimize later)
-      uploadedBy: req.user._id,
+      uploadedBy: req.user.id,
       isPublic: false
     });
 
@@ -107,7 +116,7 @@ router.post('/', authenticateToken, async (req, res) => {
       type,
       url,
       thumbnailUrl: thumbnailUrl || '',
-      uploadedBy: req.user._id,
+      uploadedBy: req.user.id,
       isPublic: false
     });
 
@@ -121,13 +130,13 @@ router.post('/', authenticateToken, async (req, res) => {
 // Delete media (only own media)
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const media = await Media.findById(req.params.id);
+    const media = await Media.findByPk(req.params.id);
 
     if (!media) {
       return res.status(404).json({ error: 'Media not found' });
     }
 
-    if (media.uploadedBy.toString() !== req.user._id.toString()) {
+    if (media.uploadedBy !== req.user.id) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -139,7 +148,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    await media.deleteOne();
+    await media.destroy();
 
     res.json({ message: 'Media deleted successfully' });
   } catch (error) {
@@ -151,7 +160,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 // Admin: Make media public
 router.post('/:id/make-public', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const media = await Media.findById(req.params.id);
+    const media = await Media.findByPk(req.params.id);
 
     if (!media) {
       return res.status(404).json({ error: 'Media not found' });

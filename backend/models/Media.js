@@ -1,41 +1,59 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/sequelize');
 
-const mediaSchema = new mongoose.Schema({
+const Media = sequelize.define('Media', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
+  },
   name: {
-    type: String,
-    required: true,
-    trim: true
+    type: DataTypes.STRING,
+    allowNull: false,
+    set(value) {
+      this.setDataValue('name', value.trim());
+    }
   },
   type: {
-    type: String,
-    enum: ['image', 'video'],
-    required: true
+    type: DataTypes.ENUM('image', 'video'),
+    allowNull: false
   },
   url: {
-    type: String,
-    required: true
+    type: DataTypes.STRING,
+    allowNull: false
   },
   thumbnailUrl: {
-    type: String,
-    default: ''
+    type: DataTypes.STRING,
+    defaultValue: ''
   },
   isPublic: {
-    type: Boolean,
-    default: false
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
-  uploadedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
+  uploadedById: {
+    type: DataTypes.UUID,
+    allowNull: false,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
   }
+}, {
+  tableName: 'media',
+  timestamps: true,
+  createdAt: 'createdAt',
+  updatedAt: false,
+  indexes: [
+    {
+      fields: ['name']
+    },
+    {
+      fields: ['isPublic', 'uploadedById']
+    },
+    {
+      fields: ['uploadedById']
+    }
+  ]
 });
 
-// Index for searching
-mediaSchema.index({ name: 'text' });
-mediaSchema.index({ isPublic: 1, uploadedBy: 1 });
-
-module.exports = mongoose.model('Media', mediaSchema);
+module.exports = Media;

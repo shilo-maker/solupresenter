@@ -1,58 +1,70 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/sequelize');
 
-const bibleVerseSchema = new mongoose.Schema({
-  // Book information
+const BibleVerse = sequelize.define('BibleVerse', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
+  },
   book: {
-    type: String,
-    required: true,
-    index: true
+    type: DataTypes.STRING,
+    allowNull: false
   },
   bookNumber: {
-    type: Number,
-    required: true
+    type: DataTypes.INTEGER,
+    allowNull: false
   },
   testament: {
-    type: String,
-    enum: ['old', 'new'],
-    required: true,
-    index: true
+    type: DataTypes.ENUM('old', 'new'),
+    allowNull: false
   },
-
-  // Chapter and verse
   chapter: {
-    type: Number,
-    required: true,
-    index: true
+    type: DataTypes.INTEGER,
+    allowNull: false
   },
   verse: {
-    type: Number,
-    required: true
+    type: DataTypes.INTEGER,
+    allowNull: false
   },
-
-  // Text content
   hebrewText: {
-    type: String,
-    default: ''
+    type: DataTypes.TEXT,
+    defaultValue: ''
   },
   englishText: {
-    type: String,
-    default: ''
+    type: DataTypes.TEXT,
+    defaultValue: ''
   },
-
-  // For easy querying
   reference: {
-    type: String,
-    required: true,
-    index: true  // e.g., "Genesis 1:1" or "John 3:16"
+    type: DataTypes.STRING,
+    allowNull: false,
+    comment: 'e.g., "Genesis 1:1" or "John 3:16"'
   }
 }, {
-  timestamps: true
+  tableName: 'bible_verses',
+  timestamps: true,
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  indexes: [
+    {
+      fields: ['book']
+    },
+    {
+      fields: ['testament']
+    },
+    {
+      fields: ['chapter']
+    },
+    {
+      fields: ['reference']
+    },
+    {
+      fields: ['book', 'chapter', 'verse']
+    },
+    {
+      fields: ['testament', 'bookNumber', 'chapter', 'verse']
+    }
+  ]
 });
-
-// Compound index for efficient queries
-bibleVerseSchema.index({ book: 1, chapter: 1, verse: 1 });
-bibleVerseSchema.index({ testament: 1, bookNumber: 1, chapter: 1, verse: 1 });
-
-const BibleVerse = mongoose.model('BibleVerse', bibleVerseSchema);
 
 module.exports = BibleVerse;

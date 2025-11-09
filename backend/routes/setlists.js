@@ -1,19 +1,20 @@
 const express = require('express');
 const router = express.Router();
-const Setlist = require('../models/Setlist');
+const { Setlist, Song, User, Room, Media } = require('../models');
+const { Op } = require('sequelize');
 const { authenticateToken } = require('../middleware/auth');
 const crypto = require('crypto');
 
 // Get all user's setlists (only permanent ones)
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const setlists = await Setlist.find({
-      createdBy: req.user._id,
-      isTemporary: false  // Only show permanent setlists
-    })
-      .populate('items.song')
-      .populate('items.image')
-      .sort({ updatedAt: -1 });
+    const setlists = await Setlist.findAll({
+      where: {
+        createdById: req.user.id,
+        isTemporary: false  // Only show permanent setlists
+      },
+      order: [['updatedAt', 'DESC']]
+    });
 
     res.json({ setlists });
   } catch (error) {
@@ -25,19 +26,49 @@ router.get('/', authenticateToken, async (req, res) => {
 // Get single setlist
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const setlist = await Setlist.findById(req.params.id)
-      .populate('items.song')
-      .populate('items.image');
+    const setlist = await Setlist.findByPk(req.params.id, {
+      include: [
+        {
+          model: Song,
+          as: 'itemSongs',
+          through: { attributes: [] }
+        },
+        {
+          model: Media,
+          as: 'itemImages',
+          through: { attributes: [] }
+        }
+      ]
+    });
 
     if (!setlist) {
       return res.status(404).json({ error: 'Setlist not found' });
     }
 
-    if (setlist.createdBy.toString() !== req.user._id.toString()) {
+    if (setlist.createdById !== req.user.id) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    res.json({ setlist });
+    // Populate song and image data for each item
+    const populatedItems = await Promise.all(
+      (setlist.items || []).map(async (item) => {
+        if (item.type === 'song' && item.song) {
+          const songData = await Song.findByPk(item.song);
+          return { ...item, song: songData };
+        } else if (item.type === 'image' && item.image) {
+          const imageData = await Media.findByPk(item.image);
+          return { ...item, image: imageData };
+        }
+        return item;
+      })
+    );
+
+    const setlistWithPopulatedItems = {
+      ...setlist.toJSON(),
+      items: populatedItems
+    };
+
+    res.json({ setlist: setlistWithPopulatedItems });
   } catch (error) {
     console.error('Error fetching setlist:', error);
     res.status(500).json({ error: 'Failed to fetch setlist' });
@@ -47,15 +78,46 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Get setlist by share token
 router.get('/shared/:token', authenticateToken, async (req, res) => {
   try {
-    const setlist = await Setlist.findOne({ shareToken: req.params.token })
-      .populate('items.song')
-      .populate('items.image');
+    const setlist = await Setlist.findOne({
+      where: { shareToken: req.params.token },
+      include: [
+        {
+          model: Song,
+          as: 'itemSongs',
+          through: { attributes: [] }
+        },
+        {
+          model: Media,
+          as: 'itemImages',
+          through: { attributes: [] }
+        }
+      ]
+    });
 
     if (!setlist) {
       return res.status(404).json({ error: 'Setlist not found' });
     }
 
-    res.json({ setlist });
+    // Populate song and image data for each item
+    const populatedItems = await Promise.all(
+      (setlist.items || []).map(async (item) => {
+        if (item.type === 'song' && item.song) {
+          const songData = await Song.findByPk(item.song);
+          return { ...item, song: songData };
+        } else if (item.type === 'image' && item.image) {
+          const imageData = await Media.findByPk(item.image);
+          return { ...item, image: imageData };
+        }
+        return item;
+      })
+    );
+
+    const setlistWithPopulatedItems = {
+      ...setlist.toJSON(),
+      items: populatedItems
+    };
+
+    res.json({ setlist: setlistWithPopulatedItems });
   } catch (error) {
     console.error('Error fetching shared setlist:', error);
     res.status(500).json({ error: 'Failed to fetch setlist' });
@@ -74,7 +136,7 @@ router.post('/', authenticateToken, async (req, res) => {
     const setlist = await Setlist.create({
       name,
       items: items || [],
-      createdBy: req.user._id
+      createdById: req.user.id
     });
 
     res.status(201).json({ setlist });
@@ -87,13 +149,13 @@ router.post('/', authenticateToken, async (req, res) => {
 // Update setlist
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const setlist = await Setlist.findById(req.params.id);
+    const setlist = await Setlist.findByPk(req.params.id);
 
     if (!setlist) {
       return res.status(404).json({ error: 'Setlist not found' });
     }
 
-    if (setlist.createdBy.toString() !== req.user._id.toString()) {
+    if (setlist.createdById !== req.user.id) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -104,9 +166,20 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     await setlist.save();
 
-    const updatedSetlist = await Setlist.findById(setlist._id)
-      .populate('items.song')
-      .populate('items.image');
+    const updatedSetlist = await Setlist.findByPk(setlist.id, {
+      include: [
+        {
+          model: Song,
+          as: 'itemSongs',
+          through: { attributes: [] }
+        },
+        {
+          model: Media,
+          as: 'itemImages',
+          through: { attributes: [] }
+        }
+      ]
+    });
 
     res.json({ setlist: updatedSetlist });
   } catch (error) {
@@ -118,17 +191,17 @@ router.put('/:id', authenticateToken, async (req, res) => {
 // Delete setlist
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const setlist = await Setlist.findById(req.params.id);
+    const setlist = await Setlist.findByPk(req.params.id);
 
     if (!setlist) {
       return res.status(404).json({ error: 'Setlist not found' });
     }
 
-    if (setlist.createdBy.toString() !== req.user._id.toString()) {
+    if (setlist.createdById !== req.user.id) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    await setlist.deleteOne();
+    await setlist.destroy();
 
     res.json({ message: 'Setlist deleted successfully' });
   } catch (error) {
@@ -140,13 +213,13 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 // Generate share link
 router.post('/:id/share', authenticateToken, async (req, res) => {
   try {
-    const setlist = await Setlist.findById(req.params.id);
+    const setlist = await Setlist.findByPk(req.params.id);
 
     if (!setlist) {
       return res.status(404).json({ error: 'Setlist not found' });
     }
 
-    if (setlist.createdBy.toString() !== req.user._id.toString()) {
+    if (setlist.createdById !== req.user.id) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -169,7 +242,7 @@ router.post('/:id/share', authenticateToken, async (req, res) => {
 // Increment usage count
 router.post('/:id/use', authenticateToken, async (req, res) => {
   try {
-    const setlist = await Setlist.findById(req.params.id);
+    const setlist = await Setlist.findByPk(req.params.id);
 
     if (!setlist) {
       return res.status(404).json({ error: 'Setlist not found' });

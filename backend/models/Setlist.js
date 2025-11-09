@@ -22,11 +22,7 @@ const Setlist = sequelize.define('Setlist', {
   },
   createdById: {
     type: DataTypes.UUID,
-    allowNull: false,
-    references: {
-      model: 'Users',
-      key: 'id'
-    }
+    allowNull: false
   },
   isTemporary: {
     type: DataTypes.BOOLEAN,
@@ -34,11 +30,7 @@ const Setlist = sequelize.define('Setlist', {
   },
   linkedRoomId: {
     type: DataTypes.UUID,
-    allowNull: true,
-    references: {
-      model: 'Rooms',
-      key: 'id'
-    }
+    allowNull: true
   },
   usageCount: {
     type: DataTypes.INTEGER,

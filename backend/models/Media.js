@@ -32,11 +32,7 @@ const Media = sequelize.define('Media', {
   },
   uploadedById: {
     type: DataTypes.UUID,
-    allowNull: false,
-    references: {
-      model: 'Users',
-      key: 'id'
-    }
+    allowNull: false
   }
 }, {
   tableName: 'media',

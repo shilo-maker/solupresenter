@@ -53,11 +53,7 @@ const Song = sequelize.define('Song', {
   },
   createdById: {
     type: DataTypes.UUID,
-    allowNull: true,
-    references: {
-      model: 'Users',
-      key: 'id'
-    }
+    allowNull: true
   },
   usageCount: {
     type: DataTypes.INTEGER,
@@ -65,11 +61,7 @@ const Song = sequelize.define('Song', {
   },
   approvedById: {
     type: DataTypes.UUID,
-    allowNull: true,
-    references: {
-      model: 'Users',
-      key: 'id'
-    }
+    allowNull: true
   },
   approvedAt: {
     type: DataTypes.DATE,

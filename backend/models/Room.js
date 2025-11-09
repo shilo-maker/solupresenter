@@ -17,11 +17,7 @@ const Room = sequelize.define('Room', {
   },
   operatorId: {
     type: DataTypes.UUID,
-    allowNull: false,
-    references: {
-      model: 'Users',
-      key: 'id'
-    }
+    allowNull: false
   },
   isActive: {
     type: DataTypes.BOOLEAN,
@@ -58,19 +54,11 @@ const Room = sequelize.define('Room', {
   },
   temporarySetlistId: {
     type: DataTypes.UUID,
-    allowNull: true,
-    references: {
-      model: 'Setlists',
-      key: 'id'
-    }
+    allowNull: true
   },
   linkedPermanentSetlistId: {
     type: DataTypes.UUID,
-    allowNull: true,
-    references: {
-      model: 'Setlists',
-      key: 'id'
-    }
+    allowNull: true
   },
   lastActivity: {
     type: DataTypes.DATE,

@@ -86,9 +86,10 @@ const io = new Server(server, {
 
 // Connect to PostgreSQL
 sequelize.authenticate()
-  .then(() => {
+  .then(async () => {
     console.log('✅ PostgreSQL connection established successfully');
-    // Don't sync in production or development - database is already set up
+    // Sync database schema (create tables if they don't exist)
+    await sequelize.sync({ alter: false });
     console.log('✅ Database models ready');
   })
   .catch(err => {

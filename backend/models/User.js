@@ -46,11 +46,7 @@ const User = sequelize.define('User', {
   },
   activeRoomId: {
     type: DataTypes.UUID,
-    allowNull: true,
-    references: {
-      model: 'Rooms',
-      key: 'id'
-    }
+    allowNull: true
   },
   isEmailVerified: {
     type: DataTypes.BOOLEAN,

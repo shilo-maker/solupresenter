@@ -79,6 +79,7 @@ router.post('/register', registerLimiter, async (req, res) => {
       requiresVerification: true,
       user: {
         _id: user.id,
+        id: user.id,
         email: user.email,
         role: user.role,
         isEmailVerified: user.isEmailVerified
@@ -117,6 +118,7 @@ router.post('/login', authLimiter, (req, res, next) => {
       token,
       user: {
         _id: user.id,
+        id: user.id,
         email: user.email,
         role: user.role,
         isEmailVerified: user.isEmailVerified

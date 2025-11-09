@@ -66,17 +66,30 @@ function ViewerPage() {
   }, []);
 
   useEffect(() => {
+    // Send status to parent (for Chromecast receiver debugging)
+    const sendStatusToParent = (message) => {
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'viewer-status', message }, '*');
+      }
+      console.log('📱 Viewer status:', message);
+    };
+
+    sendStatusToParent('Viewer page loaded');
+
     socketService.connect();
+    sendStatusToParent('Socket connecting...');
 
     // Subscribe to connection status changes
     const unsubscribe = socketService.onConnectionStatusChange((status, currentLatency) => {
       setConnectionStatus(status);
       setLatency(currentLatency);
+      sendStatusToParent(`Socket ${status}, latency: ${currentLatency}ms`);
     });
 
     // Set up event listeners first
     socketService.onViewerJoined(async (data) => {
       console.log('Viewer joined, received data:', data);
+      sendStatusToParent('Viewer joined room successfully!');
       setJoined(true);
 
       // Set the room background
@@ -144,10 +157,14 @@ function ViewerPage() {
     const urlPin = params.get('pin');
     if (urlPin) {
       setPin(urlPin.toUpperCase());
+      sendStatusToParent(`Auto-joining with PIN: ${urlPin.toUpperCase()}`);
       // Auto-join with the PIN from URL after a short delay to ensure socket is connected
       setTimeout(() => {
+        sendStatusToParent('Attempting to join room...');
         socketService.viewerJoinRoom(urlPin.toUpperCase());
       }, 500);
+    } else {
+      sendStatusToParent('No PIN in URL, waiting for manual input');
     }
 
     return () => {

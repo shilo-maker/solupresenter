@@ -44,7 +44,7 @@
 </head>
 <body>
   <div id="debug-info">
-    🚀 SoluCast Receiver v1.0.2<br>
+    🚀 SoluCast Receiver v1.0.3<br>
     Waiting for connection...
   </div>
   <div id="iframe-container">
@@ -69,7 +69,7 @@
     }
   </script>
   <script>
-    console.log('🚀 SoluCast Receiver HTML loaded - v1.0.2');
+    console.log('🚀 SoluCast Receiver HTML loaded - v1.0.3');
     updateDebug('✅ Receiver loaded');
 
     const context = cast.framework.CastReceiverContext.getInstance();
@@ -124,9 +124,16 @@
       }
     });
 
-    // Add error listener for iframe
+    // Listen for messages from the viewer iframe
     window.addEventListener('message', (event) => {
       console.log('💬 Message from iframe:', event.data, 'origin:', event.origin);
+
+      // Display viewer status messages on screen
+      if (event.data && event.data.type === 'viewer-status') {
+        const message = event.data.message;
+        console.log('📱 Viewer status:', message);
+        updateDebug('📱 ' + message);
+      }
     });
 
     // Log when ready state changes
@@ -146,7 +153,7 @@
 
     try {
       context.start(options);
-      console.log('✅ SoluCast Receiver started successfully - v1.0.2');
+      console.log('✅ SoluCast Receiver started successfully - v1.0.3');
       updateDebug('✅ Receiver started');
     } catch (error) {
       console.error('❌ Failed to start receiver:', error);

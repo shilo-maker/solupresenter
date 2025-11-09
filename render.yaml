@@ -2,7 +2,7 @@ databases:
   # PostgreSQL Database
   - name: solupresenter-db
     region: frankfurt
-    plan: starter
+    plan: standard
     databaseName: solupresenter
     user: solupresenter
 
@@ -12,7 +12,7 @@ services:
     name: solupresenter-backend
     runtime: node
     region: frankfurt
-    plan: starter
+    plan: standard
     buildCommand: cd backend && npm install
     startCommand: cd backend && npm start
     healthCheckPath: /health
@@ -49,7 +49,7 @@ services:
   - type: web
     name: solupresenter-frontend
     runtime: static
-    plan: starter
+    plan: standard
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/build
     headers:

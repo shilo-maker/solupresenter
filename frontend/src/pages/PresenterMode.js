@@ -32,16 +32,17 @@ function PresenterMode() {
   const [room, setRoom] = useState(null);
   const [roomPin, setRoomPin] = useState('');
   const [roomCreated, setRoomCreated] = useState(false);
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
 
   // Song search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [allSongs, setAllSongs] = useState([]);
-  const [songsLoading, setSongsLoading] = useState(false);
+  const [songsLoading, setSongsLoading] = useState(true);
 
   // Image search state
   const [imageSearchResults, setImageSearchResults] = useState([]);
-  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaLoading, setMediaLoading] = useState(true);
 
   // Setlist state (contains items with type: 'song', 'blank', or 'image')
   const [setlist, setSetlist] = useState([]);
@@ -321,12 +322,14 @@ function PresenterMode() {
 
     const createOrGetRoom = async () => {
       try {
+        setIsCreatingRoom(true);
         console.log('🏠 Creating room for user:', user.id);
         const response = await api.post('/api/rooms/create');
         console.log('✅ Room created successfully:', response.data);
         setRoom(response.data.room);
         setRoomPin(response.data.room.pin);
         setRoomCreated(true);
+        setIsCreatingRoom(false);
 
         // Load setlist from room - prioritize permanent over temporary
         const setlistToLoad = response.data.room.linkedPermanentSetlist || response.data.room.temporarySetlist;
@@ -381,6 +384,7 @@ function PresenterMode() {
         console.error('❌ Error creating room:', error);
         console.error('Error details:', error.response?.data);
         setError('Failed to create room: ' + (error.response?.data?.error || error.message));
+        setIsCreatingRoom(false);
       }
     };
 
@@ -1448,7 +1452,7 @@ function PresenterMode() {
               Share this Room PIN with viewers
             </div>
           </>
-        ) : (
+        ) : isCreatingRoom ? (
           <div style={{ marginTop: '40px', textAlign: 'center' }}>
             <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem', marginBottom: '15px' }}>
               <span className="visually-hidden">Loading...</span>
@@ -1457,7 +1461,7 @@ function PresenterMode() {
               Creating your presentation room...
             </div>
           </div>
-        )}
+        ) : null}
 
         {roomPin && (
           <div style={{ marginTop: '20px' }}>

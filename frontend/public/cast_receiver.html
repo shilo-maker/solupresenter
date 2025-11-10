@@ -21,50 +21,11 @@
       height: 100%;
       border: none;
     }
-    #debug-overlay {
-      position: fixed;
-      top: 20px;
-      left: 20px;
-      background: rgba(0, 0, 0, 0.95);
-      color: #0f0;
-      padding: 20px;
-      font-family: 'Courier New', monospace;
-      font-size: 18px;
-      width: 600px;
-      max-height: 80vh;
-      overflow-y: auto;
-      z-index: 9999;
-      border: 2px solid #0f0;
-      border-radius: 5px;
-      word-wrap: break-word;
-      word-break: break-word;
-      /* Stays visible - no auto-hide */
-    }
-    #debug-overlay .log-entry {
-      margin: 5px 0;
-      padding: 5px;
-      border-bottom: 1px solid #333;
-    }
-    #debug-overlay .log-entry.error {
-      color: #f00;
-    }
-    #debug-overlay .log-entry.success {
-      color: #0f0;
-    }
-    #debug-overlay .log-entry.info {
-      color: #ff0;
-    }
   </style>
   <!-- Cast Receiver SDK -->
   <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
 </head>
 <body>
-  <!-- Debug overlay -->
-  <div id="debug-overlay">
-    <h3>🔍 SoluCast Debug Console</h3>
-    <div id="debug-logs"></div>
-  </div>
-
   <div id="iframe-container">
     <iframe id="viewer-frame" src="" allow="autoplay"></iframe>
   </div>
@@ -75,37 +36,11 @@
   </video>
 
   <script>
-    // Debug logging function
-    const debugLog = (message, type = 'info') => {
-      const timestamp = new Date().toLocaleTimeString();
-      const logContainer = document.getElementById('debug-logs');
-      const debugOverlay = document.getElementById('debug-overlay');
-      const entry = document.createElement('div');
-      entry.className = `log-entry ${type}`;
-      entry.textContent = `[${timestamp}] ${message}`;
-      logContainer.appendChild(entry);
-
-      // Don't limit entries - keep all logs for debugging
-      // while (logContainer.children.length > 20) {
-      //   logContainer.removeChild(logContainer.firstChild);
-      // }
-
-      // Auto-scroll to bottom of the debug overlay
-      setTimeout(() => {
-        if (debugOverlay) {
-          debugOverlay.scrollTop = debugOverlay.scrollHeight;
-        }
-      }, 0);
-
-      // Also log to console
-      console.log(`[${type.toUpperCase()}] ${message}`);
-    };
-
-    debugLog('🚀 Receiver starting...', 'info');
+    console.log('🚀 Receiver starting...');
 
     // Global error handler to prevent crashes
     window.addEventListener('error', (event) => {
-      debugLog(`❌ Window error: ${event.error?.message || event.message}`, 'error');
+      console.error(`❌ Window error: ${event.error?.message || event.message}`);
       console.error('Window error:', event.error);
       // Don't let errors crash the receiver
       event.preventDefault();
@@ -113,113 +48,73 @@
     });
 
     window.addEventListener('unhandledrejection', (event) => {
-      debugLog(`❌ Promise rejection: ${event.reason}`, 'error');
+      console.error(`❌ Promise rejection: ${event.reason}`);
       console.error('Unhandled promise rejection:', event.reason);
       event.preventDefault();
       return true;
     });
 
-    debugLog('📡 Initializing Cast SDK...', 'info');
+    console.log('📡 Initializing Cast SDK...');
     const context = cast.framework.CastReceiverContext.getInstance();
     const playerManager = context.getPlayerManager();
-    debugLog('✅ Cast SDK initialized', 'success');
+    console.log('✅ Cast SDK initialized');
 
     // Ensure screensaver prevention video is playing
     const preventScreensaver = () => {
       const video = document.getElementById('screensaver-prevention');
       if (video) {
         video.play().catch(e => {
-          debugLog(`⚠️ Video play failed: ${e.message}`, 'error');
+          console.error(`⚠️ Video play failed: ${e.message}`);
         });
       }
     };
 
-    debugLog('👂 Setting up message listener...', 'info');
+    console.log('👂 Setting up message listener...');
     // Listen for custom messages from sender
     context.addCustomMessageListener('urn:x-cast:com.solucast.viewer', (customEvent) => {
-      debugLog('📨 Received message from sender', 'info');
+      console.log('📨 Received message from sender');
       const data = customEvent.data;
-      debugLog(`Message type: ${data.type}`, 'info');
+      console.log(`Message type: ${data.type}`);
 
       if (data.type === 'LOAD_VIEWER') {
         // Load the viewer page in the iframe
         const viewerUrl = data.url;
-        debugLog(`📺 Loading viewer URL: ${viewerUrl}`, 'success');
+        console.log(`📺 Loading viewer URL: ${viewerUrl}`);
 
         const iframe = document.getElementById('viewer-frame');
         iframe.src = viewerUrl;
 
         // Add iframe load event listeners
         iframe.onload = () => {
-          debugLog('✅ Iframe loaded successfully', 'success');
+          console.log('✅ Iframe loaded successfully');
 
           // Try to listen for errors from iframe
           try {
             iframe.contentWindow.addEventListener('error', (e) => {
-              debugLog(`❌ Iframe JS error: ${e.message}`, 'error');
+              console.error(`❌ Iframe JS error: ${e.message}`);
             });
             iframe.contentWindow.addEventListener('unhandledrejection', (e) => {
-              debugLog(`❌ Iframe Promise rejection: ${e.reason}`, 'error');
+              console.error(`❌ Iframe Promise rejection: ${e.reason}`);
             });
-            debugLog('👂 Listening for iframe errors', 'info');
+            console.log('👂 Listening for iframe errors');
           } catch (e) {
-            debugLog(`⚠️ Cannot listen to iframe errors: ${e.message}`, 'error');
+            console.error(`⚠️ Cannot listen to iframe errors: ${e.message}`);
           }
         };
 
         iframe.onerror = (e) => {
-          debugLog(`❌ Iframe error: ${e.message || 'Unknown error'}`, 'error');
+          console.error(`❌ Iframe error: ${e.message || 'Unknown error'}`);
         };
 
         // Set the iframe source
         iframe.src = viewerUrl;
-        debugLog('⏳ Iframe src set, waiting for load...', 'info');
-
-        // Log iframe dimensions and position
-        setTimeout(() => {
-          const rect = iframe.getBoundingClientRect();
-          debugLog(`📐 Iframe position: ${rect.x}, ${rect.y}`, 'info');
-          debugLog(`📐 Iframe size: ${rect.width}x${rect.height}`, 'info');
-          debugLog(`📐 Iframe visibility: ${window.getComputedStyle(iframe).visibility}`, 'info');
-          debugLog(`📐 Iframe opacity: ${window.getComputedStyle(iframe).opacity}`, 'info');
-          debugLog(`📐 Iframe z-index: ${window.getComputedStyle(iframe).zIndex}`, 'info');
-        }, 500);
+        console.log('⏳ Iframe src set, waiting for load...');
 
         // Start screensaver prevention
         setTimeout(() => {
           preventScreensaver();
-          debugLog('🎥 Screensaver prevention started', 'success');
+          console.log('🎥 Screensaver prevention started');
         }, 1000);
-
-        // Check iframe content after 3 seconds
-        setTimeout(() => {
-          try {
-            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-            if (iframeDoc) {
-              debugLog(`📄 Iframe has document, readyState: ${iframeDoc.readyState}`, 'info');
-              debugLog(`📄 Iframe body exists: ${!!iframeDoc.body}`, 'info');
-            } else {
-              debugLog('⚠️ Cannot access iframe document (CORS?)', 'error');
-            }
-          } catch (e) {
-            debugLog(`⚠️ Cannot check iframe: ${e.message}`, 'error');
-          }
-        }, 3000);
-
-        // Check if React has loaded after 5 seconds
-        setTimeout(() => {
-          debugLog('🔍 Checking if ViewerPage loaded...', 'info');
-          debugLog('⚠️ If you don\'t see ViewerPage messages above, React didn\'t load!', 'error');
-        }, 5000);
-
-        // Check if iframe is actually visible on screen
-        setTimeout(() => {
-          const container = document.getElementById('iframe-container');
-          const containerRect = container.getBoundingClientRect();
-          debugLog(`📦 Container position: ${containerRect.x}, ${containerRect.y}`, 'info');
-          debugLog(`📦 Container size: ${containerRect.width}x${containerRect.height}`, 'info');
-          debugLog(`📦 Container z-index: ${window.getComputedStyle(container).zIndex}`, 'info');
-        }, 3500);
       }
     });
 
@@ -236,25 +131,25 @@
 
         // Log every 12th keepalive (once per minute)
         if (keepaliveCount % 12 === 0) {
-          debugLog('💓 Keepalive ping', 'info');
+          console.log('💓 Keepalive ping');
         }
       } catch (e) {
-        debugLog(`❌ Keepalive error: ${e.message}`, 'error');
+        console.error(`❌ Keepalive error: ${e.message}`);
       }
     }, 5000);
 
     // Start the receiver
-    debugLog('🎬 Starting receiver with options...', 'info');
+    console.log('🎬 Starting receiver with options...');
     const options = new cast.framework.CastReceiverOptions();
     options.disableIdleTimeout = true; // Disable idle timeout
     options.maxInactivity = 3600; // Keep alive for 1 hour of inactivity
 
     try {
       context.start(options);
-      debugLog('✅ Receiver started successfully!', 'success');
-      debugLog('⏳ Waiting for connection from sender...', 'info');
+      console.log('✅ Receiver started successfully!');
+      console.log('⏳ Waiting for connection from sender...');
     } catch (e) {
-      debugLog(`❌ Failed to start receiver: ${e.message}`, 'error');
+      console.error(`❌ Failed to start receiver: ${e.message}`);
       console.error('Failed to start receiver:', e);
     }
   </script>

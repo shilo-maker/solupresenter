@@ -164,6 +164,12 @@ function Login() {
                 />
               </Form.Group>
 
+              <div className="d-flex justify-content-end mb-3">
+                <Link to="/forgot-password" style={{ fontSize: '0.9rem' }}>
+                  Forgot password?
+                </Link>
+              </div>
+
               <Button
                 type="submit"
                 variant="primary"

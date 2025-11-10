@@ -5,7 +5,7 @@ const passport = require('passport');
 const rateLimit = require('express-rate-limit');
 const { Op } = require('sequelize');
 const { User } = require('../models');
-const { generateVerificationToken, sendVerificationEmail } = require('../utils/emailService');
+const { generateVerificationToken, sendVerificationEmail, sendPasswordResetEmail } = require('../utils/emailService');
 
 // Rate limiter for auth endpoints (prevent brute force attacks)
 // Only enabled in production
@@ -258,6 +258,103 @@ router.get('/me', async (req, res) => {
     });
   } catch (error) {
     res.status(401).json({ error: 'Invalid token' });
+  }
+});
+
+// Request password reset
+router.post('/forgot-password', authLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const user = await User.findOne({ where: { email: email.toLowerCase() } });
+
+    // Always return success message to prevent email enumeration
+    const successMessage = 'If an account exists with that email, a password reset link has been sent.';
+
+    if (!user) {
+      return res.json({ message: successMessage });
+    }
+
+    // Only allow password reset for local auth users
+    if (user.authProvider !== 'local') {
+      return res.json({ message: successMessage });
+    }
+
+    // Generate reset token
+    const resetToken = generateVerificationToken();
+    const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    user.passwordResetToken = resetToken;
+    user.passwordResetExpires = resetExpires;
+    await user.save();
+
+    // Send password reset email
+    try {
+      await sendPasswordResetEmail(user, resetToken);
+    } catch (emailError) {
+      console.error('Failed to send password reset email:', emailError);
+      // Still return success to prevent information disclosure
+    }
+
+    res.json({ message: successMessage });
+  } catch (error) {
+    console.error('Password reset request error:', error);
+    res.status(500).json({ error: 'Server error processing request' });
+  }
+});
+
+// Reset password with token
+router.post('/reset-password', authLimiter, async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({ error: 'Token and password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    // Find user with valid reset token
+    const user = await User.findOne({
+      where: {
+        passwordResetToken: token,
+        passwordResetExpires: { [Op.gt]: Date.now() }
+      }
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    // Update password
+    user.password = password;
+    user.passwordResetToken = null;
+    user.passwordResetExpires = null;
+    await user.save();
+
+    // Generate JWT token for auto-login
+    const authToken = generateToken(user.id);
+
+    res.json({
+      message: 'Password reset successfully!',
+      token: authToken,
+      user: {
+        _id: user.id,
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        isEmailVerified: user.isEmailVerified
+      }
+    });
+  } catch (error) {
+    console.error('Password reset error:', error);
+    res.status(500).json({ error: 'Server error resetting password' });
   }
 });
 

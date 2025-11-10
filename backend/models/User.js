@@ -59,6 +59,14 @@ const User = sequelize.define('User', {
   emailVerificationExpires: {
     type: DataTypes.DATE,
     allowNull: true
+  },
+  passwordResetToken: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  passwordResetExpires: {
+    type: DataTypes.DATE,
+    allowNull: true
   }
 }, {
   tableName: 'users',
@@ -71,6 +79,9 @@ const User = sequelize.define('User', {
     },
     {
       fields: ['emailVerificationToken']
+    },
+    {
+      fields: ['passwordResetToken']
     },
     {
       fields: ['activeRoomId']

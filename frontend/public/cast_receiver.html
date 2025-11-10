@@ -169,6 +169,16 @@
         iframe.src = viewerUrl;
         debugLog('⏳ Iframe src set, waiting for load...', 'info');
 
+        // Log iframe dimensions and position
+        setTimeout(() => {
+          const rect = iframe.getBoundingClientRect();
+          debugLog(`📐 Iframe position: ${rect.x}, ${rect.y}`, 'info');
+          debugLog(`📐 Iframe size: ${rect.width}x${rect.height}`, 'info');
+          debugLog(`📐 Iframe visibility: ${window.getComputedStyle(iframe).visibility}`, 'info');
+          debugLog(`📐 Iframe opacity: ${window.getComputedStyle(iframe).opacity}`, 'info');
+          debugLog(`📐 Iframe z-index: ${window.getComputedStyle(iframe).zIndex}`, 'info');
+        }, 500);
+
         // Start screensaver prevention
         setTimeout(() => {
           preventScreensaver();
@@ -189,6 +199,15 @@
             debugLog(`⚠️ Cannot check iframe: ${e.message}`, 'error');
           }
         }, 3000);
+
+        // Check if iframe is actually visible on screen
+        setTimeout(() => {
+          const container = document.getElementById('iframe-container');
+          const containerRect = container.getBoundingClientRect();
+          debugLog(`📦 Container position: ${containerRect.x}, ${containerRect.y}`, 'info');
+          debugLog(`📦 Container size: ${containerRect.width}x${containerRect.height}`, 'info');
+          debugLog(`📦 Container z-index: ${window.getComputedStyle(container).zIndex}`, 'info');
+        }, 3500);
       }
     });
 

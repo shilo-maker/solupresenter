@@ -21,30 +21,10 @@ function ViewerPage() {
   const [showControls, setShowControls] = useState(false);
   const [imageUrl, setImageUrl] = useState(null); // For image-only slides
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [debugLogs, setDebugLogs] = useState([]); // Debug logs for troubleshooting
 
   // Refs for click outside detection
   const controlsRef = useRef(null);
   const settingsButtonRef = useRef(null);
-
-  // Ref for debug logs container
-  const debugLogsRef = useRef(null);
-
-  // Helper function to add debug logs
-  const addDebugLog = (message, type = 'info') => {
-    const timestamp = new Date().toLocaleTimeString();
-    setDebugLogs(prev => {
-      const newLogs = [...prev, { timestamp, message, type }];
-      // Auto-scroll to bottom after state update
-      setTimeout(() => {
-        if (debugLogsRef.current) {
-          debugLogsRef.current.scrollTop = debugLogsRef.current.scrollHeight;
-        }
-      }, 0);
-      return newLogs;
-    });
-    console.log(`[${type.toUpperCase()}] ${message}`);
-  };
 
   // Handle click outside to close controls panel
   useEffect(() => {
@@ -86,23 +66,23 @@ function ViewerPage() {
   }, []);
 
   useEffect(() => {
-    addDebugLog('🚀 Component mounted', 'success');
-    addDebugLog(`📍 URL: ${window.location.href}`, 'info');
+    console.log('🚀 Component mounted');
+    console.log(`📍 URL: ${window.location.href}`);
 
     socketService.connect();
-    addDebugLog('🔌 Connecting to socket...', 'info');
+    console.log('🔌 Connecting to socket...');
 
     // Subscribe to connection status changes
     const unsubscribe = socketService.onConnectionStatusChange((status, currentLatency) => {
-      addDebugLog(`🔌 Connection: ${status} (${currentLatency}ms)`, status === 'connected' ? 'success' : 'info');
+      console.log(`🔌 Connection: ${status} (${currentLatency}ms)`);
       setConnectionStatus(status);
       setLatency(currentLatency);
     });
 
     // Set up event listeners first
     socketService.onViewerJoined(async (data) => {
-      addDebugLog('✅ Joined room successfully!', 'success');
-      addDebugLog(`📊 Room data received: ${JSON.stringify(data.currentSlide)}`, 'info');
+      console.log('✅ Joined room successfully!');
+      console.log(`📊 Room data received: ${JSON.stringify(data.currentSlide)}`);
       setJoined(true);
 
       // Set the room background
@@ -138,16 +118,16 @@ function ViewerPage() {
     socketService.onSlideUpdate((data) => {
       // If it's a blank slide, set currentSlide with isBlank flag
       if (data.isBlank) {
-        addDebugLog('📨 Slide update: BLANK', 'info');
+        console.log('📨 Slide update: BLANK');
         setCurrentSlide({ isBlank: true });
         setImageUrl(null);
       } else if (data.imageUrl) {
         // Image-only slide
-        addDebugLog('📨 Slide update: IMAGE', 'info');
+        console.log('📨 Slide update: IMAGE');
         setImageUrl(data.imageUrl);
         setCurrentSlide(null);
       } else {
-        addDebugLog('📨 Slide update: TEXT', 'info');
+        console.log('📨 Slide update: TEXT');
         setCurrentSlide(data.slideData);
         setImageUrl(null);
       }
@@ -159,12 +139,12 @@ function ViewerPage() {
     });
 
     socketService.onBackgroundUpdate((data) => {
-      addDebugLog('🎨 Background updated', 'info');
+      console.log('🎨 Background updated');
       setBackgroundImage(data.backgroundImage || '');
     });
 
     socketService.onError((error) => {
-      addDebugLog(`❌ Error: ${error.message}`, 'error');
+      console.error(`❌ Error: ${error.message}`);
       setError(error.message);
     });
 
@@ -172,15 +152,15 @@ function ViewerPage() {
     const params = new URLSearchParams(location.search);
     const urlPin = params.get('pin');
     if (urlPin) {
-      addDebugLog(`🔑 PIN found in URL: ${urlPin.toUpperCase()}`, 'success');
+      console.log(`🔑 PIN found in URL: ${urlPin.toUpperCase()}`);
       setPin(urlPin.toUpperCase());
       // Auto-join with the PIN from URL after a short delay to ensure socket is connected
       setTimeout(() => {
-        addDebugLog(`🚪 Auto-joining room: ${urlPin.toUpperCase()}`, 'info');
+        console.log(`🚪 Auto-joining room: ${urlPin.toUpperCase()}`);
         socketService.viewerJoinRoom(urlPin.toUpperCase());
       }, 500);
     } else {
-      addDebugLog('⚠️ No PIN in URL - waiting for manual entry', 'info');
+      console.log('⚠️ No PIN in URL - waiting for manual entry');
     }
 
     return () => {
@@ -747,62 +727,6 @@ function ViewerPage() {
           overflow: 'hidden'
         }}
       >
-        {/* Debug Overlay - Always visible, auto-scrolls to bottom */}
-        {debugLogs.length > 0 && (
-          <div style={{
-            position: 'fixed',
-            top: '20px',
-            right: '20px',
-            backgroundColor: 'rgba(0, 0, 0, 0.95)',
-            color: '#0f0',
-            padding: '15px',
-            borderRadius: '8px',
-            fontSize: '16px',
-            width: '500px',
-            maxHeight: '70vh',
-            zIndex: 9999,
-            border: '2px solid #0f0',
-            fontFamily: 'monospace',
-            display: 'flex',
-            flexDirection: 'column'
-          }}>
-            <div style={{
-              fontWeight: 'bold',
-              marginBottom: '10px',
-              borderBottom: '1px solid #0f0',
-              paddingBottom: '5px',
-              color: '#0ff',
-              fontSize: '18px',
-              flexShrink: 0
-            }}>
-              🔍 Viewer Debug Console
-            </div>
-            <div
-              ref={debugLogsRef}
-              style={{
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                flex: 1,
-                wordWrap: 'break-word',
-                wordBreak: 'break-word'
-              }}
-            >
-              {debugLogs.map((log, index) => (
-                <div key={index} style={{
-                  marginBottom: '8px',
-                  padding: '5px',
-                  borderBottom: '1px solid #333',
-                  color: log.type === 'error' ? '#f00' : log.type === 'success' ? '#0f0' : '#ff0',
-                  lineHeight: '1.4',
-                  whiteSpace: 'pre-wrap'
-                }}>
-                  [{log.timestamp}] {log.message}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         <ConnectionStatus status={connectionStatus} latency={latency} />
 
       {/* Settings Button - Bottom Left */}

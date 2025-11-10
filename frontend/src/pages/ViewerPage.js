@@ -21,10 +21,18 @@ function ViewerPage() {
   const [showControls, setShowControls] = useState(false);
   const [imageUrl, setImageUrl] = useState(null); // For image-only slides
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [debugLogs, setDebugLogs] = useState([]); // Debug logs for troubleshooting
 
   // Refs for click outside detection
   const controlsRef = useRef(null);
   const settingsButtonRef = useRef(null);
+
+  // Helper function to add debug logs
+  const addDebugLog = (message, type = 'info') => {
+    const timestamp = new Date().toLocaleTimeString();
+    setDebugLogs(prev => [...prev.slice(-19), { timestamp, message, type }]);
+    console.log(`[${type.toUpperCase()}] ${message}`);
+  };
 
   // Handle click outside to close controls panel
   useEffect(() => {
@@ -66,17 +74,23 @@ function ViewerPage() {
   }, []);
 
   useEffect(() => {
+    addDebugLog('🚀 Component mounted', 'success');
+    addDebugLog(`📍 URL: ${window.location.href}`, 'info');
+
     socketService.connect();
+    addDebugLog('🔌 Connecting to socket...', 'info');
 
     // Subscribe to connection status changes
     const unsubscribe = socketService.onConnectionStatusChange((status, currentLatency) => {
+      addDebugLog(`🔌 Connection: ${status} (${currentLatency}ms)`, status === 'connected' ? 'success' : 'info');
       setConnectionStatus(status);
       setLatency(currentLatency);
     });
 
     // Set up event listeners first
     socketService.onViewerJoined(async (data) => {
-      console.log('Viewer joined, received data:', data);
+      addDebugLog('✅ Joined room successfully!', 'success');
+      addDebugLog(`📊 Room data received: ${JSON.stringify(data.currentSlide)}`, 'info');
       setJoined(true);
 
       // Set the room background
@@ -110,16 +124,18 @@ function ViewerPage() {
     });
 
     socketService.onSlideUpdate((data) => {
-      console.log('Slide update received:', data);
       // If it's a blank slide, set currentSlide with isBlank flag
       if (data.isBlank) {
+        addDebugLog('📨 Slide update: BLANK', 'info');
         setCurrentSlide({ isBlank: true });
         setImageUrl(null);
       } else if (data.imageUrl) {
         // Image-only slide
+        addDebugLog('📨 Slide update: IMAGE', 'info');
         setImageUrl(data.imageUrl);
         setCurrentSlide(null);
       } else {
+        addDebugLog('📨 Slide update: TEXT', 'info');
         setCurrentSlide(data.slideData);
         setImageUrl(null);
       }
@@ -131,11 +147,12 @@ function ViewerPage() {
     });
 
     socketService.onBackgroundUpdate((data) => {
-      console.log('Background update received:', data);
+      addDebugLog('🎨 Background updated', 'info');
       setBackgroundImage(data.backgroundImage || '');
     });
 
     socketService.onError((error) => {
+      addDebugLog(`❌ Error: ${error.message}`, 'error');
       setError(error.message);
     });
 
@@ -143,11 +160,15 @@ function ViewerPage() {
     const params = new URLSearchParams(location.search);
     const urlPin = params.get('pin');
     if (urlPin) {
+      addDebugLog(`🔑 PIN found in URL: ${urlPin.toUpperCase()}`, 'success');
       setPin(urlPin.toUpperCase());
       // Auto-join with the PIN from URL after a short delay to ensure socket is connected
       setTimeout(() => {
+        addDebugLog(`🚪 Auto-joining room: ${urlPin.toUpperCase()}`, 'info');
         socketService.viewerJoinRoom(urlPin.toUpperCase());
       }, 500);
+    } else {
+      addDebugLog('⚠️ No PIN in URL - waiting for manual entry', 'info');
     }
 
     return () => {
@@ -696,6 +717,12 @@ function ViewerPage() {
             background-position: 0% 50%;
           }
         }
+        @keyframes debugFadeOut {
+          to {
+            opacity: 0;
+            pointer-events: none;
+          }
+        }
       `}</style>
       <div
         style={{
@@ -714,6 +741,47 @@ function ViewerPage() {
           overflow: 'hidden'
         }}
       >
+        {/* Debug Overlay - Auto-hides after 10 seconds */}
+        {debugLogs.length > 0 && (
+          <div style={{
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            color: '#0f0',
+            padding: '15px',
+            borderRadius: '8px',
+            fontSize: '14px',
+            maxWidth: '400px',
+            maxHeight: '60vh',
+            overflowY: 'auto',
+            zIndex: 9999,
+            border: '2px solid #0f0',
+            fontFamily: 'monospace',
+            animation: 'debugFadeOut 1s ease-in-out 10s forwards'
+          }}>
+            <div style={{
+              fontWeight: 'bold',
+              marginBottom: '10px',
+              borderBottom: '1px solid #0f0',
+              paddingBottom: '5px',
+              color: '#0ff'
+            }}>
+              🔍 Viewer Debug Console
+            </div>
+            {debugLogs.map((log, index) => (
+              <div key={index} style={{
+                marginBottom: '5px',
+                padding: '3px',
+                borderBottom: '1px solid #333',
+                color: log.type === 'error' ? '#f00' : log.type === 'success' ? '#0f0' : '#ff0'
+              }}>
+                [{log.timestamp}] {log.message}
+              </div>
+            ))}
+          </div>
+        )}
+
         <ConnectionStatus status={connectionStatus} latency={latency} />
 
       {/* Settings Button - Bottom Left */}

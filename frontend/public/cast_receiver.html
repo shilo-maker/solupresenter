@@ -146,7 +146,26 @@
         const viewerUrl = data.url;
         debugLog(`📺 Loading viewer URL: ${viewerUrl}`, 'success');
 
+        // TEST: First try loading a simple test page to verify iframe works
         const iframe = document.getElementById('viewer-frame');
+
+        // Write a simple test HTML directly to iframe
+        debugLog('🧪 Testing iframe with simple HTML first...', 'info');
+        const testHtml = `
+          <!DOCTYPE html>
+          <html>
+          <head><style>body { background: linear-gradient(45deg, red, blue); color: white; font-size: 50px; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }</style></head>
+          <body>TEST - IFRAME WORKS! 🎉</body>
+          </html>
+        `;
+        iframe.srcdoc = testHtml;
+
+        // After 3 seconds, load the actual viewer URL
+        setTimeout(() => {
+          debugLog('🔄 Now loading actual viewer URL...', 'info');
+          iframe.removeAttribute('srcdoc');
+          iframe.src = viewerUrl;
+        }, 3000);
 
         // Add iframe load event listeners
         iframe.onload = () => {

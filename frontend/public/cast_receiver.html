@@ -101,48 +101,6 @@
       }
     };
 
-    // Register as active media player to prevent screensaver
-    const playerManager = context.getPlayerManager();
-
-    // Create a fake media session that signals active playback
-    const setupMediaSession = () => {
-      try {
-        console.log('🎬 Setting up media session to prevent screensaver...');
-
-        // Create media information that mimics a live stream
-        const mediaInformation = new cast.framework.messages.MediaInformation();
-        mediaInformation.contentId = 'solucast-live-presentation';
-        mediaInformation.contentType = 'application/x-mpegURL'; // HLS stream type
-        mediaInformation.streamType = cast.framework.messages.StreamType.LIVE;
-        mediaInformation.metadata = new cast.framework.messages.GenericMediaMetadata();
-        mediaInformation.metadata.title = 'SoluCast Presentation';
-        mediaInformation.metadata.subtitle = 'Live Presentation Session';
-
-        // Set duration to indicate ongoing live content
-        mediaInformation.duration = null; // null = live/infinite content
-
-        // Load the media info to signal active playback
-        const loadRequestData = new cast.framework.messages.LoadRequestData();
-        loadRequestData.media = mediaInformation;
-        loadRequestData.autoplay = true;
-        loadRequestData.currentTime = 0;
-
-        playerManager.load(loadRequestData);
-
-        // Set player state to PLAYING
-        playerManager.setMediaPlaybackInfoHandler(() => {
-          return {
-            playbackRate: 1,
-            supportedPlaybackRates: [1]
-          };
-        });
-
-        console.log('✅ Media session registered - Chromecast should treat this as active media');
-      } catch (e) {
-        console.error(`❌ Failed to setup media session: ${e.message}`);
-        console.error('Media session error:', e);
-      }
-    };
 
     console.log('👂 Setting up message listener...');
     // Listen for custom messages from sender
@@ -175,9 +133,6 @@
           } catch (e) {
             console.error(`⚠️ Cannot listen to iframe errors: ${e.message}`);
           }
-
-          // Setup media session after iframe loads
-          setupMediaSession();
         };
 
         iframe.onerror = (e) => {

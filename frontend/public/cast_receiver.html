@@ -28,11 +28,47 @@
       opacity: 0.01;
       pointer-events: none;
     }
+    #debug-overlay {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #0f0;
+      padding: 20px;
+      font-family: 'Courier New', monospace;
+      font-size: 18px;
+      max-width: 600px;
+      max-height: 80vh;
+      overflow-y: auto;
+      z-index: 9999;
+      border: 2px solid #0f0;
+      border-radius: 5px;
+    }
+    #debug-overlay .log-entry {
+      margin: 5px 0;
+      padding: 5px;
+      border-bottom: 1px solid #333;
+    }
+    #debug-overlay .log-entry.error {
+      color: #f00;
+    }
+    #debug-overlay .log-entry.success {
+      color: #0f0;
+    }
+    #debug-overlay .log-entry.info {
+      color: #ff0;
+    }
   </style>
   <!-- Cast Receiver SDK -->
   <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
 </head>
 <body>
+  <!-- Debug overlay -->
+  <div id="debug-overlay">
+    <h3>🔍 SoluCast Debug Console</h3>
+    <div id="debug-logs"></div>
+  </div>
+
   <div id="iframe-container">
     <iframe id="viewer-frame" src="" allow="autoplay"></iframe>
   </div>
@@ -44,8 +80,32 @@
   </video>
 
   <script>
+    // Debug logging function
+    const debugLog = (message, type = 'info') => {
+      const timestamp = new Date().toLocaleTimeString();
+      const logContainer = document.getElementById('debug-logs');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.textContent = `[${timestamp}] ${message}`;
+      logContainer.appendChild(entry);
+
+      // Keep only last 20 entries
+      while (logContainer.children.length > 20) {
+        logContainer.removeChild(logContainer.firstChild);
+      }
+
+      // Auto-scroll to bottom
+      logContainer.scrollTop = logContainer.scrollHeight;
+
+      // Also log to console
+      console.log(`[${type.toUpperCase()}] ${message}`);
+    };
+
+    debugLog('🚀 Receiver starting...', 'info');
+
     // Global error handler to prevent crashes
     window.addEventListener('error', (event) => {
+      debugLog(`❌ Window error: ${event.error?.message || event.message}`, 'error');
       console.error('Window error:', event.error);
       // Don't let errors crash the receiver
       event.preventDefault();
@@ -53,57 +113,80 @@
     });
 
     window.addEventListener('unhandledrejection', (event) => {
+      debugLog(`❌ Promise rejection: ${event.reason}`, 'error');
       console.error('Unhandled promise rejection:', event.reason);
       event.preventDefault();
       return true;
     });
 
+    debugLog('📡 Initializing Cast SDK...', 'info');
     const context = cast.framework.CastReceiverContext.getInstance();
     const playerManager = context.getPlayerManager();
+    debugLog('✅ Cast SDK initialized', 'success');
 
     // Ensure screensaver prevention video is playing
     const preventScreensaver = () => {
       const video = document.getElementById('screensaver-prevention');
       if (video) {
-        video.play().catch(e => console.log('Video play failed:', e));
+        video.play().catch(e => {
+          debugLog(`⚠️ Video play failed: ${e.message}`, 'error');
+        });
       }
     };
 
+    debugLog('👂 Setting up message listener...', 'info');
     // Listen for custom messages from sender
     context.addCustomMessageListener('urn:x-cast:com.solucast.viewer', (customEvent) => {
+      debugLog('📨 Received message from sender', 'info');
       const data = customEvent.data;
+      debugLog(`Message type: ${data.type}`, 'info');
 
       if (data.type === 'LOAD_VIEWER') {
         // Load the viewer page in the iframe
         const viewerUrl = data.url;
+        debugLog(`📺 Loading viewer URL: ${viewerUrl}`, 'success');
         document.getElementById('viewer-frame').src = viewerUrl;
 
         // Start screensaver prevention
-        setTimeout(preventScreensaver, 1000);
+        setTimeout(() => {
+          preventScreensaver();
+          debugLog('🎥 Screensaver prevention started', 'success');
+        }, 1000);
       }
     });
 
     // Keepalive mechanism - prevent Chromecast from disconnecting
     // Also ensure video keeps playing every 5 seconds
+    let keepaliveCount = 0;
     setInterval(() => {
       try {
+        keepaliveCount++;
         // Touch the context to keep it alive
         context.setApplicationState('SoluCast Active');
         // Ensure video is still playing
         preventScreensaver();
+
+        // Log every 12th keepalive (once per minute)
+        if (keepaliveCount % 12 === 0) {
+          debugLog('💓 Keepalive ping', 'info');
+        }
       } catch (e) {
-        console.error('Keepalive error:', e);
+        debugLog(`❌ Keepalive error: ${e.message}`, 'error');
       }
     }, 5000);
 
     // Start the receiver
+    debugLog('🎬 Starting receiver with options...', 'info');
     const options = new cast.framework.CastReceiverOptions();
     options.disableIdleTimeout = true; // Disable idle timeout
     options.maxInactivity = 3600; // Keep alive for 1 hour of inactivity
 
     try {
       context.start(options);
+      debugLog('✅ Receiver started successfully!', 'success');
+      debugLog('⏳ Waiting for connection from sender...', 'info');
     } catch (e) {
+      debugLog(`❌ Failed to start receiver: ${e.message}`, 'error');
       console.error('Failed to start receiver:', e);
     }
   </script>

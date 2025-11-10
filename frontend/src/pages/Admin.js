@@ -205,10 +205,10 @@ function Admin() {
                 </thead>
                 <tbody>
                   {users.map((u) => (
-                    <tr key={u._id}>
+                    <tr key={u.id}>
                       <td>
                         {u.email}
-                        {u._id === user._id && (
+                        {u.id === user.id && (
                           <Badge bg="info" className="ms-2">You</Badge>
                         )}
                       </td>
@@ -223,20 +223,20 @@ function Admin() {
                         {new Date(u.createdAt).toLocaleDateString()}
                       </td>
                       <td>
-                        {u._id !== user._id && (
+                        {u.id !== user.id && (
                           <>
                             <Button
                               size="sm"
                               variant={u.role === 'admin' ? "outline-warning" : "outline-success"}
                               className="me-2"
-                              onClick={() => toggleUserAdmin(u._id)}
+                              onClick={() => toggleUserAdmin(u.id)}
                             >
                               {u.role === 'admin' ? 'Remove Admin' : 'Make Admin'}
                             </Button>
                             <Button
                               size="sm"
                               variant="outline-danger"
-                              onClick={() => deleteUser(u._id)}
+                              onClick={() => deleteUser(u.id)}
                             >
                               Delete
                             </Button>

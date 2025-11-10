@@ -4,38 +4,22 @@
   <meta charset="UTF-8">
   <title>SoluCast Receiver</title>
   <style>
-    html, body {
+    body {
       margin: 0;
       padding: 0;
-      width: 100%;
-      height: 100%;
       background: #000;
       overflow: hidden;
     }
     #iframe-container {
-      position: fixed;
-      top: 0;
-      left: 0;
       width: 100vw;
       height: 100vh;
       margin: 0;
       padding: 0;
     }
     iframe {
-      position: absolute;
-      top: 0;
-      left: 0;
       width: 100%;
       height: 100%;
-      border: 5px solid red; /* Temporary: verify iframe is visible */
-    }
-    #screensaver-prevention {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      opacity: 0.01;
-      pointer-events: none;
-      z-index: -1; /* Behind everything */
+      border: none;
     }
     #debug-overlay {
       position: fixed;

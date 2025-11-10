@@ -895,7 +895,12 @@ function PresenterMode() {
       return;
     }
 
-    const viewerUrl = `${window.location.origin}/viewer?pin=${roomPin}`;
+    // Use Render.com URL for Chromecast to avoid X-Frame-Options issues
+    // Render adds X-Frame-Options: SAMEORIGIN which blocks cross-origin iframe loading
+    const origin = window.location.origin.includes('solucast.app')
+      ? 'https://solupresenter-frontend-4rn5.onrender.com'
+      : window.location.origin;
+    const viewerUrl = `${origin}/viewer?pin=${roomPin}`;
 
     // Send custom message to receiver to load the viewer page
     const namespace = 'urn:x-cast:com.solucast.viewer';

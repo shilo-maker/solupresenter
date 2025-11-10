@@ -50,7 +50,7 @@ services:
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/build
     headers:
-      # Removed X-Frame-Options to allow Chromecast iframe loading
+      # X-Frame-Options intentionally not set to allow Chromecast iframe embedding
       - path: /*
         name: X-Content-Type-Options
         value: nosniff

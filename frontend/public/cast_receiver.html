@@ -4,19 +4,27 @@
   <meta charset="UTF-8">
   <title>SoluCast Receiver</title>
   <style>
-    body {
+    html, body {
       margin: 0;
       padding: 0;
+      width: 100%;
+      height: 100%;
       background: #000;
       overflow: hidden;
     }
     #iframe-container {
+      position: fixed;
+      top: 0;
+      left: 0;
       width: 100vw;
       height: 100vh;
       margin: 0;
       padding: 0;
     }
     iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 100%;
       height: 100%;
       border: none;
@@ -159,6 +167,19 @@
         // Add iframe load event listeners
         iframe.onload = () => {
           debugLog('✅ Iframe loaded successfully', 'success');
+
+          // Try to listen for errors from iframe
+          try {
+            iframe.contentWindow.addEventListener('error', (e) => {
+              debugLog(`❌ Iframe JS error: ${e.message}`, 'error');
+            });
+            iframe.contentWindow.addEventListener('unhandledrejection', (e) => {
+              debugLog(`❌ Iframe Promise rejection: ${e.reason}`, 'error');
+            });
+            debugLog('👂 Listening for iframe errors', 'info');
+          } catch (e) {
+            debugLog(`⚠️ Cannot listen to iframe errors: ${e.message}`, 'error');
+          }
         };
 
         iframe.onerror = (e) => {
@@ -199,6 +220,12 @@
             debugLog(`⚠️ Cannot check iframe: ${e.message}`, 'error');
           }
         }, 3000);
+
+        // Check if React has loaded after 5 seconds
+        setTimeout(() => {
+          debugLog('🔍 Checking if ViewerPage loaded...', 'info');
+          debugLog('⚠️ If you don\'t see ViewerPage messages above, React didn\'t load!', 'error');
+        }, 5000);
 
         // Check if iframe is actually visible on screen
         setTimeout(() => {

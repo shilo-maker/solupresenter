@@ -32,25 +32,20 @@
       position: fixed;
       top: 20px;
       left: 20px;
-      background: rgba(0, 0, 0, 0.8);
+      background: rgba(0, 0, 0, 0.95);
       color: #0f0;
       padding: 20px;
       font-family: 'Courier New', monospace;
       font-size: 18px;
-      max-width: 600px;
+      width: 600px;
       max-height: 80vh;
       overflow-y: auto;
       z-index: 9999;
       border: 2px solid #0f0;
       border-radius: 5px;
-      /* Auto-hide after 10 seconds */
-      animation: fadeOut 1s ease-in-out 10s forwards;
-    }
-    @keyframes fadeOut {
-      to {
-        opacity: 0;
-        pointer-events: none;
-      }
+      word-wrap: break-word;
+      word-break: break-word;
+      /* Stays visible - no auto-hide */
     }
     #debug-overlay .log-entry {
       margin: 5px 0;
@@ -92,18 +87,23 @@
     const debugLog = (message, type = 'info') => {
       const timestamp = new Date().toLocaleTimeString();
       const logContainer = document.getElementById('debug-logs');
+      const debugOverlay = document.getElementById('debug-overlay');
       const entry = document.createElement('div');
       entry.className = `log-entry ${type}`;
       entry.textContent = `[${timestamp}] ${message}`;
       logContainer.appendChild(entry);
 
-      // Keep only last 20 entries
-      while (logContainer.children.length > 20) {
-        logContainer.removeChild(logContainer.firstChild);
-      }
+      // Don't limit entries - keep all logs for debugging
+      // while (logContainer.children.length > 20) {
+      //   logContainer.removeChild(logContainer.firstChild);
+      // }
 
-      // Auto-scroll to bottom
-      logContainer.scrollTop = logContainer.scrollHeight;
+      // Auto-scroll to bottom of the debug overlay
+      setTimeout(() => {
+        if (debugOverlay) {
+          debugOverlay.scrollTop = debugOverlay.scrollHeight;
+        }
+      }, 0);
 
       // Also log to console
       console.log(`[${type.toUpperCase()}] ${message}`);

@@ -89,7 +89,8 @@ sequelize.authenticate()
   .then(async () => {
     console.log('✅ PostgreSQL connection established successfully');
     // Sync database schema (create tables if they don't exist)
-    await sequelize.sync({ alter: false });
+    // Use alter: true to add new columns to existing tables
+    await sequelize.sync({ alter: true });
     console.log('✅ Database models ready');
   })
   .catch(err => {

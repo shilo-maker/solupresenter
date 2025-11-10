@@ -217,24 +217,6 @@
       }
     }, 5000);
 
-    // Refresh iframe every 9 minutes to prevent screensaver
-    // This triggers network activity, page rendering, and resource loading
-    // which may signal to Chromecast OS that content is active
-    setInterval(() => {
-      try {
-        const iframe = document.getElementById('viewer-frame');
-        if (iframe && iframe.src && iframe.src !== '') {
-          console.log('🔄 Refreshing viewer iframe to prevent screensaver (9min interval)');
-          // Store current src
-          const currentSrc = iframe.src;
-          // Reload by setting src to itself
-          iframe.src = currentSrc;
-        }
-      } catch (e) {
-        console.error(`❌ Iframe refresh error: ${e.message}`);
-      }
-    }, 540000); // 9 minutes (540,000ms)
-
     // Start the receiver
     console.log('🎬 Starting receiver with options...');
     const options = new cast.framework.CastReceiverOptions();

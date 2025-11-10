@@ -22,8 +22,9 @@ const adminRoutes = require('./routes/admin');
 const mediaRoutes = require('./routes/media');
 const bibleRoutes = require('./routes/bible');
 
-// Import cleanup job
+// Import cleanup jobs
 const cleanupTemporarySetlists = require('./jobs/cleanupTemporarySetlists');
+const cleanupExpiredRooms = require('./jobs/cleanupExpiredRooms');
 
 const app = express();
 
@@ -475,15 +476,19 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 
-  // Defer cleanup job to run 30 seconds after startup (faster cold starts)
+  // Defer cleanup jobs to run 30 seconds after startup (faster cold starts)
   setTimeout(() => {
     cleanupTemporarySetlists();
+    cleanupExpiredRooms();
     console.log('✅ Initial cleanup completed');
   }, 30000);
 
-  // Schedule cleanup job to run every hour
-  setInterval(cleanupTemporarySetlists, 60 * 60 * 1000); // 1 hour
-  console.log('✅ Scheduled temporary setlist cleanup job (runs every hour)');
+  // Schedule cleanup jobs
+  setInterval(cleanupTemporarySetlists, 60 * 60 * 1000); // Run every hour
+  setInterval(cleanupExpiredRooms, 15 * 60 * 1000); // Run every 15 minutes
+  console.log('✅ Scheduled cleanup jobs:');
+  console.log('   - Temporary setlists: every hour');
+  console.log('   - Expired rooms: every 15 minutes');
 });
 
 module.exports = { app, server, io };

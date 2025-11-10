@@ -1052,7 +1052,7 @@ function PresenterMode() {
 
     if (item.type === 'song' || item.type === 'bible') {
       setCurrentSong(item.data);
-      setCurrentSlideIndex(0);
+      setCurrentSlideIndex(null); // Don't highlight any slide until user clicks
       // Don't auto-transmit - wait for user to click on a slide
       // updateSlide will be called when user clicks selectSlide()
     } else if (item.type === 'image') {

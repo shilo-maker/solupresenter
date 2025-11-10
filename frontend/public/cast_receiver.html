@@ -145,13 +145,42 @@
         // Load the viewer page in the iframe
         const viewerUrl = data.url;
         debugLog(`📺 Loading viewer URL: ${viewerUrl}`, 'success');
-        document.getElementById('viewer-frame').src = viewerUrl;
+
+        const iframe = document.getElementById('viewer-frame');
+
+        // Add iframe load event listeners
+        iframe.onload = () => {
+          debugLog('✅ Iframe loaded successfully', 'success');
+        };
+
+        iframe.onerror = (e) => {
+          debugLog(`❌ Iframe error: ${e.message || 'Unknown error'}`, 'error');
+        };
+
+        // Set the iframe source
+        iframe.src = viewerUrl;
+        debugLog('⏳ Iframe src set, waiting for load...', 'info');
 
         // Start screensaver prevention
         setTimeout(() => {
           preventScreensaver();
           debugLog('🎥 Screensaver prevention started', 'success');
         }, 1000);
+
+        // Check iframe content after 3 seconds
+        setTimeout(() => {
+          try {
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            if (iframeDoc) {
+              debugLog(`📄 Iframe has document, readyState: ${iframeDoc.readyState}`, 'info');
+              debugLog(`📄 Iframe body exists: ${!!iframeDoc.body}`, 'info');
+            } else {
+              debugLog('⚠️ Cannot access iframe document (CORS?)', 'error');
+            }
+          } catch (e) {
+            debugLog(`⚠️ Cannot check iframe: ${e.message}`, 'error');
+          }
+        }, 3000);
       }
     });
 

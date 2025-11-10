@@ -925,58 +925,6 @@ function PresenterMode() {
   // Store the function in ref to avoid circular dependency
   setupCastSessionRef.current = setupCastSession;
 
-  // Auto-reconnect every 9 minutes to prevent Chromecast screensaver
-  // This disconnects and immediately reconnects the Cast session, which resets
-  // the idle timer on Chromecast and prevents the backdrop from appearing at 10 minutes
-  useEffect(() => {
-    if (!castConnected || !castSessionRef.current) {
-      return; // Only run when connected
-    }
-
-    console.log('⏰ Setting up 9-minute auto-reconnect timer to prevent screensaver');
-
-    const reconnectInterval = setInterval(() => {
-      if (castSessionRef.current && castConnected) {
-        console.log('🔄 Auto-reconnecting to Chromecast to prevent screensaver (9min)');
-
-        const currentSession = castSessionRef.current;
-
-        // Stop current session
-        currentSession.stop(
-          () => {
-            console.log('✅ Session stopped, reconnecting...');
-
-            // Wait a moment, then reconnect
-            setTimeout(() => {
-              if (window.chrome?.cast && roomPin) {
-                const cast = window.chrome.cast;
-                cast.requestSession((newSession) => {
-                  console.log('✅ Auto-reconnected successfully');
-                  setupCastSession(newSession);
-                }, (error) => {
-                  console.error('❌ Auto-reconnect failed:', error);
-                  if (error.code !== 'cancel') {
-                    // Try the normal reconnect mechanism
-                    attemptReconnect();
-                  }
-                });
-              }
-            }, 1000); // Wait 1 second before reconnecting
-          },
-          (error) => {
-            console.error('❌ Failed to stop session for reconnect:', error);
-          }
-        );
-      }
-    }, 540000); // 9 minutes (540,000ms)
-
-    // Cleanup interval on unmount or disconnect
-    return () => {
-      console.log('🧹 Cleaning up auto-reconnect timer');
-      clearInterval(reconnectInterval);
-    };
-  }, [castConnected, roomPin, setupCastSession, attemptReconnect]);
-
   // Handle Chromecast
   const handleCast = () => {
     if (!window.chrome || !window.chrome.cast || !roomPin) {

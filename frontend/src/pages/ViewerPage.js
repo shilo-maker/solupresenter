@@ -27,10 +27,22 @@ function ViewerPage() {
   const controlsRef = useRef(null);
   const settingsButtonRef = useRef(null);
 
+  // Ref for debug logs container
+  const debugLogsRef = useRef(null);
+
   // Helper function to add debug logs
   const addDebugLog = (message, type = 'info') => {
     const timestamp = new Date().toLocaleTimeString();
-    setDebugLogs(prev => [...prev.slice(-19), { timestamp, message, type }]);
+    setDebugLogs(prev => {
+      const newLogs = [...prev, { timestamp, message, type }];
+      // Auto-scroll to bottom after state update
+      setTimeout(() => {
+        if (debugLogsRef.current) {
+          debugLogsRef.current.scrollTop = debugLogsRef.current.scrollHeight;
+        }
+      }, 0);
+      return newLogs;
+    });
     console.log(`[${type.toUpperCase()}] ${message}`);
   };
 
@@ -717,12 +729,6 @@ function ViewerPage() {
             background-position: 0% 50%;
           }
         }
-        @keyframes debugFadeOut {
-          to {
-            opacity: 0;
-            pointer-events: none;
-          }
-        }
       `}</style>
       <div
         style={{
@@ -741,44 +747,59 @@ function ViewerPage() {
           overflow: 'hidden'
         }}
       >
-        {/* Debug Overlay - Auto-hides after 10 seconds */}
+        {/* Debug Overlay - Always visible, auto-scrolls to bottom */}
         {debugLogs.length > 0 && (
           <div style={{
             position: 'fixed',
             top: '20px',
             right: '20px',
-            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            backgroundColor: 'rgba(0, 0, 0, 0.95)',
             color: '#0f0',
             padding: '15px',
             borderRadius: '8px',
-            fontSize: '14px',
-            maxWidth: '400px',
-            maxHeight: '60vh',
-            overflowY: 'auto',
+            fontSize: '16px',
+            width: '500px',
+            maxHeight: '70vh',
             zIndex: 9999,
             border: '2px solid #0f0',
             fontFamily: 'monospace',
-            animation: 'debugFadeOut 1s ease-in-out 10s forwards'
+            display: 'flex',
+            flexDirection: 'column'
           }}>
             <div style={{
               fontWeight: 'bold',
               marginBottom: '10px',
               borderBottom: '1px solid #0f0',
               paddingBottom: '5px',
-              color: '#0ff'
+              color: '#0ff',
+              fontSize: '18px',
+              flexShrink: 0
             }}>
               🔍 Viewer Debug Console
             </div>
-            {debugLogs.map((log, index) => (
-              <div key={index} style={{
-                marginBottom: '5px',
-                padding: '3px',
-                borderBottom: '1px solid #333',
-                color: log.type === 'error' ? '#f00' : log.type === 'success' ? '#0f0' : '#ff0'
-              }}>
-                [{log.timestamp}] {log.message}
-              </div>
-            ))}
+            <div
+              ref={debugLogsRef}
+              style={{
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                flex: 1,
+                wordWrap: 'break-word',
+                wordBreak: 'break-word'
+              }}
+            >
+              {debugLogs.map((log, index) => (
+                <div key={index} style={{
+                  marginBottom: '8px',
+                  padding: '5px',
+                  borderBottom: '1px solid #333',
+                  color: log.type === 'error' ? '#f00' : log.type === 'success' ? '#0f0' : '#ff0',
+                  lineHeight: '1.4',
+                  whiteSpace: 'pre-wrap'
+                }}>
+                  [{log.timestamp}] {log.message}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

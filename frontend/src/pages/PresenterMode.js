@@ -895,7 +895,12 @@ function PresenterMode() {
       return;
     }
 
-    const viewerUrl = `${window.location.origin}/viewer?pin=${roomPin}`;
+    // TEMPORARY: Use Render.com URL directly to bypass Cloudflare X-Frame-Options header
+    // This can be reverted once Cloudflare cache clears (or manually purged)
+    const origin = window.location.origin === 'https://solucast.app'
+      ? 'https://solupresenter-frontend.onrender.com'
+      : window.location.origin;
+    const viewerUrl = `${origin}/viewer?pin=${roomPin}`;
 
     // Send custom message to receiver to load the viewer page
     const namespace = 'urn:x-cast:com.solucast.viewer';

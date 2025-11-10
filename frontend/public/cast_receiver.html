@@ -43,6 +43,14 @@
       z-index: 9999;
       border: 2px solid #0f0;
       border-radius: 5px;
+      /* Auto-hide after 10 seconds */
+      animation: fadeOut 1s ease-in-out 10s forwards;
+    }
+    @keyframes fadeOut {
+      to {
+        opacity: 0;
+        pointer-events: none;
+      }
     }
     #debug-overlay .log-entry {
       margin: 5px 0;

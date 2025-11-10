@@ -105,6 +105,39 @@ async function cleanupUsers() {
     });
     console.log();
 
+    // First, reassign all media to the admin user
+    console.log('📦 Reassigning media files to admin user...');
+    const [mediaUpdateCount] = await sequelize.query(`
+      UPDATE media
+      SET "uploadedById" = :adminId
+      WHERE "uploadedById" != :adminId
+    `, {
+      replacements: { adminId: adminUser.id }
+    });
+    console.log(`✅ Reassigned media files\n`);
+
+    // Also reassign any songs created by users to be deleted
+    console.log('🎵 Reassigning songs to admin user...');
+    const [songsUpdateCount] = await sequelize.query(`
+      UPDATE songs
+      SET "createdById" = :adminId
+      WHERE "createdById" != :adminId
+    `, {
+      replacements: { adminId: adminUser.id }
+    });
+    console.log(`✅ Reassigned songs\n`);
+
+    // Reassign setlists
+    console.log('📋 Reassigning setlists to admin user...');
+    const [setlistsUpdateCount] = await sequelize.query(`
+      UPDATE setlists
+      SET "createdById" = :adminId
+      WHERE "createdById" != :adminId
+    `, {
+      replacements: { adminId: adminUser.id }
+    });
+    console.log(`✅ Reassigned setlists\n`);
+
     // Perform the deletion
     console.log('🗑️  Deleting users...');
     const deletedCount = await User.destroy({

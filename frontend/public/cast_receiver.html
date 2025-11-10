@@ -21,6 +21,22 @@
       height: 100%;
       border: none;
     }
+    /* Subtle pulsing animation for screensaver prevention */
+    @keyframes subtlePulse {
+      0%, 100% { opacity: 0.08; transform: scale(1); }
+      50% { opacity: 0.12; transform: scale(1.05); }
+    }
+    #screensaver-prevention {
+      animation: subtlePulse 8s ease-in-out infinite;
+    }
+    /* Heartbeat element animation */
+    @keyframes heartbeatGlow {
+      0%, 100% { opacity: 0.005; }
+      50% { opacity: 0.015; }
+    }
+    #heartbeat {
+      animation: heartbeatGlow 3s ease-in-out infinite;
+    }
   </style>
   <!-- Cast Receiver SDK -->
   <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
@@ -30,10 +46,18 @@
     <iframe id="viewer-frame" src="" allow="autoplay"></iframe>
   </div>
 
-  <!-- Invisible video to prevent screensaver -->
-  <video id="screensaver-prevention" loop muted autoplay playsinline style="position: absolute; width: 1px; height: 1px; opacity: 0.01; pointer-events: none; z-index: -1;">
+  <!-- Semi-invisible video to prevent screensaver - larger with subtle animation -->
+  <video id="screensaver-prevention" loop muted autoplay playsinline style="position: absolute; bottom: 5px; right: 5px; width: 50px; height: 50px; pointer-events: none; z-index: 9999; border-radius: 4px;">
     <source src="data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAr9tZGF0AAACrgYF//+q3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE1MiByMjg1NCBlOWE1OTAzIC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyAtIENvcHlsZWZ0IDIwMDMtMjAxNyAtIGh0dHA6Ly93d3cudmlkZW9sYW4ub3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTEgcmVmPTMgZGVibG9jaz0xOjA6MCBhbmFseXNlPTB4MzoweDExMyBtZT1oZXggc3VibWU9NyBwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0xIG1lX3JhbmdlPTE2IGNocm9tYV9tZT0xIHRyZWxsaXM9MSA4eDhkY3Q9MSBjcW09MCBkZWFkem9uZT0yMSwxMSBmYXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0tMiB0aHJlYWRzPTEgbG9va2FoZWFkX3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxhY2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0zIGJfcHlyYW1pZD0yIGJfYWRhcHQ9MSBiX2JpYXM9MCBkaXJlY3Q9MSB3ZWlnaHRiPTEgb3Blbl9nb3A9MCB3ZWlnaHRwPTIga2V5aW50PTI1MCBrZXlpbnRfbWluPTEgc2NlbmVjdXQ9NDAgaW50cmFfcmVmcmVzaD0wIHJjX2xvb2thaGVhZD00MCByYz1jcmYgbWJ0cmVlPTEgY3JmPTIzLjAgcWNvbXA9MC42MCBxcG1pbj0wIHFwbWF4PTY5IHFwc3RlcD00IGlwX3JhdGlvPTEuNDAgYXE9MToxLjAwAIAAAAAwZYiEACD/2lu4PtiAGCZiIJmO35BneLS4/AKawbwF3gS81VgCN/Hreo0IAAADAAADAAAGBsZYgAg//X2NXAAACglBmiRsQT/+1gAAAAkBnkJ5Cf8AAAYIAAAACQJ5DqQp/AAAA" type="video/mp4">
   </video>
+
+  <!-- Hidden heartbeat element that updates periodically with animation -->
+  <div id="heartbeat" style="position: absolute; bottom: 0; left: 0; width: 2px; height: 2px; pointer-events: none; z-index: -1; color: white; font-size: 1px; background: rgba(255,255,255,0.01);"></div>
+
+  <!-- Inaudible audio stream to signal active playback -->
+  <audio id="audio-keepalive" loop autoplay style="display: none;">
+    <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=" type="audio/wav">
+  </audio>
 
   <script>
     console.log('🚀 Receiver starting...');
@@ -59,12 +83,20 @@
     const playerManager = context.getPlayerManager();
     console.log('✅ Cast SDK initialized');
 
-    // Ensure screensaver prevention video is playing
+    // Ensure screensaver prevention video and audio are playing
     const preventScreensaver = () => {
       const video = document.getElementById('screensaver-prevention');
       if (video) {
         video.play().catch(e => {
           console.error(`⚠️ Video play failed: ${e.message}`);
+        });
+      }
+
+      const audio = document.getElementById('audio-keepalive');
+      if (audio) {
+        audio.volume = 0.01; // Set to 1% volume - essentially inaudible
+        audio.play().catch(e => {
+          console.error(`⚠️ Audio play failed: ${e.message}`);
         });
       }
     };
@@ -110,13 +142,45 @@
         iframe.src = viewerUrl;
         console.log('⏳ Iframe src set, waiting for load...');
 
-        // Start screensaver prevention
+        // Start screensaver prevention (video + audio)
         setTimeout(() => {
           preventScreensaver();
-          console.log('🎥 Screensaver prevention started');
+          console.log('🎥🔊 Screensaver prevention started (video + audio)');
         }, 1000);
       }
     });
+
+    // Visual heartbeat - update DOM every minute to signal activity
+    setInterval(() => {
+      try {
+        const heartbeatEl = document.getElementById('heartbeat');
+        if (heartbeatEl) {
+          heartbeatEl.textContent = Date.now();
+          heartbeatEl.style.width = (Math.random() * 2 + 1) + 'px'; // Vary width slightly
+        }
+      } catch (e) {
+        console.error(`❌ Heartbeat error: ${e.message}`);
+      }
+    }, 60000); // Every minute
+
+    // Iframe touch - periodically touch the iframe to signal activity
+    // This doesn't reload or interrupt, just signals that something is happening
+    setInterval(() => {
+      try {
+        const iframe = document.getElementById('viewer-frame');
+        if (iframe && iframe.src) {
+          // Trigger a subtle style change that won't affect display
+          const currentOpacity = iframe.style.opacity || '1';
+          iframe.style.opacity = currentOpacity === '1' ? '0.9999' : '1';
+          // Reset it immediately so it's imperceptible
+          setTimeout(() => {
+            iframe.style.opacity = '1';
+          }, 10);
+        }
+      } catch (e) {
+        console.error(`❌ Iframe touch error: ${e.message}`);
+      }
+    }, 45000); // Every 45 seconds
 
     // Keepalive mechanism - prevent Chromecast from disconnecting
     // Also ensure video keeps playing every 5 seconds
@@ -125,9 +189,23 @@
       try {
         keepaliveCount++;
         // Touch the context to keep it alive
-        context.setApplicationState('SoluCast Active');
+        context.setApplicationState(`SoluCast Active - ${Date.now()}`);
         // Ensure video is still playing
         preventScreensaver();
+
+        // Send periodic system messages to keep the connection alive
+        if (context.getSenders().length > 0) {
+          context.getSenders().forEach(sender => {
+            try {
+              context.sendCustomMessage('urn:x-cast:com.solucast.viewer', sender.id, {
+                type: 'KEEPALIVE',
+                timestamp: Date.now()
+              });
+            } catch (e) {
+              // Ignore send errors
+            }
+          });
+        }
 
         // Log every 12th keepalive (once per minute)
         if (keepaliveCount % 12 === 0) {

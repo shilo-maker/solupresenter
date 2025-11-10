@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Form, Button, Alert, Card, Container } from 'react-bootstrap';
-import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
 
 function ResetPassword() {
@@ -11,7 +10,6 @@ function ResetPassword() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { setAuthToken } = useAuth();
   const token = searchParams.get('token');
 
   useEffect(() => {
@@ -49,8 +47,9 @@ function ResetPassword() {
 
       // Auto-login after successful password reset
       if (response.data.token) {
-        setAuthToken(response.data.token, response.data.user);
-        navigate('/operator');
+        localStorage.setItem('token', response.data.token);
+        // Redirect to operator page - the AuthProvider will pick up the token
+        window.location.href = '/operator';
       }
     } catch (err) {
       console.error('Password reset error:', err);

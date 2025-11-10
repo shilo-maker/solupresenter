@@ -898,7 +898,7 @@ function PresenterMode() {
     // TEMPORARY: Use Render.com URL directly to bypass Cloudflare X-Frame-Options header
     // This can be reverted once Cloudflare cache clears (or manually purged)
     const origin = window.location.origin === 'https://solucast.app'
-      ? 'https://solupresenter-frontend.onrender.com'
+      ? 'https://solupresenter-frontend-4rn5.onrender.com'
       : window.location.origin;
     const viewerUrl = `${origin}/viewer?pin=${roomPin}`;
 

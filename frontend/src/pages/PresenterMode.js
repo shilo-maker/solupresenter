@@ -925,6 +925,33 @@ function PresenterMode() {
   // Store the function in ref to avoid circular dependency
   setupCastSessionRef.current = setupCastSession;
 
+  // Show warning to operator every 9 minutes about Chromecast screensaver
+  useEffect(() => {
+    if (!castConnected) {
+      return; // Only run when connected
+    }
+
+    console.log('⏰ Setting up 9-minute screensaver warning timer');
+
+    const warningInterval = setInterval(() => {
+      if (castConnected) {
+        console.log('⚠️ Showing screensaver warning (9min)');
+        setError('Chromecast screensaver may appear soon. Press any button on the Chromecast remote to keep it active.');
+
+        // Auto-dismiss after 10 seconds
+        setTimeout(() => {
+          setError(null);
+        }, 10000);
+      }
+    }, 540000); // 9 minutes (540,000ms)
+
+    // Cleanup interval on unmount or disconnect
+    return () => {
+      console.log('🧹 Cleaning up screensaver warning timer');
+      clearInterval(warningInterval);
+    };
+  }, [castConnected]);
+
   // Handle Chromecast
   const handleCast = () => {
     if (!window.chrome || !window.chrome.cast || !roomPin) {

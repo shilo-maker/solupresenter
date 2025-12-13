@@ -2855,7 +2855,7 @@ function PresenterMode() {
 
         {slideSectionOpen && currentSong && (
           <div>
-            <div style={{
+            <div className="dark-scrollbar" style={{
               padding: '8px',
               display: 'grid',
               gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
@@ -2865,32 +2865,32 @@ function PresenterMode() {
               alignContent: 'start'
             }}>
             {currentSong.slides.map((slide, index) => {
-              // Function to get background color based on verse type
-              const getBackgroundColor = (verseType, isSelected) => {
-                if (isSelected) return '#f0f8ff'; // Light blue for selected
+              // Function to get border color based on verse type
+              const getBorderColor = (verseType, isSelected) => {
+                if (isSelected) return '#007bff'; // Blue for selected
 
                 switch(verseType) {
                   case 'Intro':
-                    return '#f0f0f0'; // Light gray
+                    return 'rgba(255,255,255,0.4)';
                   case 'Verse1':
                   case 'Verse2':
                   case 'Verse3':
                   case 'Verse4':
-                    return '#fff8e1'; // Light yellow
+                    return 'rgba(255,193,7,0.6)'; // Yellow
                   case 'PreChorus':
-                    return '#fce4ec'; // Light pink
+                    return 'rgba(233,30,99,0.5)'; // Pink
                   case 'Chorus':
-                    return '#e1f5fe'; // Light cyan
+                    return 'rgba(3,169,244,0.6)'; // Cyan
                   case 'Bridge':
-                    return '#f3e5f5'; // Light purple
+                    return 'rgba(156,39,176,0.5)'; // Purple
                   case 'Instrumental':
-                    return '#e8f5e9'; // Light green
+                    return 'rgba(76,175,80,0.5)'; // Green
                   case 'Outro':
-                    return '#fff3e0'; // Light orange
+                    return 'rgba(255,152,0,0.6)'; // Orange
                   case 'Tag':
-                    return '#ede7f6'; // Light indigo
+                    return 'rgba(103,58,183,0.5)'; // Indigo
                   default:
-                    return 'white'; // Default white
+                    return 'rgba(255,255,255,0.3)';
                 }
               };
 
@@ -2899,11 +2899,11 @@ function PresenterMode() {
                 key={index}
                 onClick={() => selectSlide(index)}
                 style={{
-                  border: currentSlideIndex === index ? '2px solid #007bff' : '1px solid #ddd',
+                  border: currentSlideIndex === index ? '2px solid #007bff' : `1px solid ${getBorderColor(slide.verseType, false)}`,
                   borderRadius: '6px',
                   padding: '6px 8px',
                   cursor: 'pointer',
-                  backgroundColor: getBackgroundColor(slide.verseType, currentSlideIndex === index),
+                  backgroundColor: currentSlideIndex === index ? 'rgba(0,123,255,0.2)' : 'transparent',
                   transition: 'border 0.05s ease, background-color 0.05s ease',
                   userSelect: 'none'
                 }}
@@ -2915,7 +2915,7 @@ function PresenterMode() {
                 }}
               >
                 <div style={{
-                  color: '#007bff',
+                  color: currentSlideIndex === index ? '#4da3ff' : 'rgba(255,255,255,0.7)',
                   fontWeight: 'bold',
                   marginBottom: '4px',
                   fontSize: '0.75rem'
@@ -2926,22 +2926,22 @@ function PresenterMode() {
                     ? `${slide.verseType} - Slide ${index + 1}`
                     : `Slide ${index + 1}`}
                 </div>
-                <div style={{ fontSize: '0.85rem', lineHeight: '1.3' }}>
+                <div style={{ fontSize: '0.85rem', lineHeight: '1.3', color: 'white' }}>
                   <div style={{ marginBottom: '2px' }}>
                     {slide.originalText}
                   </div>
                   {slide.transliteration && (
-                    <div style={{ marginBottom: '2px' }}>
+                    <div style={{ marginBottom: '2px', color: 'rgba(255,255,255,0.85)' }}>
                       {slide.transliteration}
                     </div>
                   )}
                   {slide.translation && (
-                    <div style={{ marginBottom: '2px' }}>
+                    <div style={{ marginBottom: '2px', color: 'rgba(255,255,255,0.85)' }}>
                       {slide.translation}
                     </div>
                   )}
                   {slide.translationOverflow && (
-                    <div style={{ marginBottom: '2px' }}>
+                    <div style={{ marginBottom: '2px', color: 'rgba(255,255,255,0.85)' }}>
                       {slide.translationOverflow}
                     </div>
                   )}

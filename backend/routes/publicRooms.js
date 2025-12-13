@@ -112,13 +112,12 @@ router.get('/search', async (req, res) => {
     const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('postgres');
     const likeOp = isPostgres ? Op.iLike : Op.like;
 
+    // Exact match only (case-insensitive) for privacy - no partial matches
     const publicRooms = await PublicRoom.findAll({
       where: {
         [Op.or]: [
           { name: { [likeOp]: searchTerm } },
-          { name: { [likeOp]: `%${searchTerm}%` } },
-          { slug: searchSlug },
-          { slug: { [likeOp]: `%${searchSlug}%` } }
+          { slug: searchSlug }
         ]
       },
       include: [{

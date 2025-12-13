@@ -2805,10 +2805,10 @@ function PresenterMode() {
             const getButtonColor = (verseType) => {
               switch(verseType) {
                 case 'Intro': return 'rgba(255,255,255,0.3)';
-                case 'Verse1':
-                case 'Verse2':
-                case 'Verse3':
-                case 'Verse4': return 'rgba(255,193,7,0.7)';
+                case 'Verse1': return 'rgba(255,193,7,0.8)';   // Bright yellow
+                case 'Verse2': return 'rgba(255,167,38,0.8)';  // Orange-yellow
+                case 'Verse3': return 'rgba(255,213,79,0.8)';  // Light yellow
+                case 'Verse4': return 'rgba(251,192,45,0.8)';  // Golden yellow
                 case 'PreChorus': return 'rgba(233,30,99,0.6)';
                 case 'Chorus': return 'rgba(3,169,244,0.7)';
                 case 'Bridge': return 'rgba(156,39,176,0.6)';
@@ -2960,10 +2960,13 @@ function PresenterMode() {
                   case 'Intro':
                     return 'rgba(255,255,255,0.4)';
                   case 'Verse1':
+                    return 'rgba(255,193,7,0.6)'; // Bright yellow
                   case 'Verse2':
+                    return 'rgba(255,167,38,0.6)'; // Orange-yellow
                   case 'Verse3':
+                    return 'rgba(255,213,79,0.6)'; // Light yellow
                   case 'Verse4':
-                    return 'rgba(255,193,7,0.6)'; // Yellow
+                    return 'rgba(251,192,45,0.6)'; // Golden yellow
                   case 'PreChorus':
                     return 'rgba(233,30,99,0.5)'; // Pink
                   case 'Chorus':

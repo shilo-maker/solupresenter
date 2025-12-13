@@ -2782,6 +2782,7 @@ function PresenterMode() {
                 verseSections.push({ type: slide.verseType, index });
               }
             });
+            console.log('Verse sections found:', verseSections.length, verseSections.map(s => s.type));
 
             // Helper to abbreviate verse types
             const getAbbreviation = (verseType) => {

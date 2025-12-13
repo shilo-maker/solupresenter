@@ -26,7 +26,7 @@ function Dashboard() {
         <Col md={6}>
           <Card className="h-100">
             <Card.Body>
-              <Card.Title>Start Presentation</Card.Title>
+              <Card.Title>Operator</Card.Title>
               <Card.Text>
                 Create a room and start presenting immediately. Share the PIN with viewers to join.
               </Card.Text>

@@ -1550,17 +1550,18 @@ function PresenterMode() {
           gap: '15px'
         }}>
           <Button
-            variant="outline-secondary"
+            variant="link"
             onClick={() => navigate('/dashboard')}
             style={{
               padding: '8px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              color: 'white'
             }}
             title="Dashboard"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
               <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
             </svg>
           </Button>
@@ -1600,12 +1601,12 @@ function PresenterMode() {
                   </svg>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '0.75rem', color: '#333' }}>Broadcasting to</div>
+                  <div style={{ fontSize: '0.75rem', color: 'white' }}>Broadcasting to</div>
                   <div style={{ fontWeight: '600', color: selectedPublicRoom ? '#28a745' : '#0d6efd', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {selectedPublicRoom ? selectedPublicRoom.name : `Private Room (${roomPin})`}
                   </div>
                 </div>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="#333" style={{ transform: showRoomSelector ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style={{ transform: showRoomSelector ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
                   <path d="M7 10l5 5 5-5z"/>
                 </svg>
               </div>
@@ -1705,7 +1706,7 @@ function PresenterMode() {
 
         {isCreatingRoom && !roomPin && (
           <div style={{ marginTop: '20px', textAlign: 'center' }}>
-            <div style={{ fontSize: '0.9rem', color: '#333' }}>
+            <div style={{ fontSize: '0.9rem', color: 'white' }}>
               Creating your presentation room...
             </div>
           </div>
@@ -2296,7 +2297,7 @@ function PresenterMode() {
         <div style={{
           backgroundColor: 'transparent',
           borderRadius: '15px',
-          border: '1px solid #ddd',
+          border: '1px solid rgba(255,255,255,0.5)',
           overflow: 'hidden'
         }}>
           <div
@@ -2331,7 +2332,7 @@ function PresenterMode() {
                 }}
                 style={{
                   fontSize: '1.1rem',
-                  color: '#333',
+                  color: 'white',
                   transition: 'transform 0.2s ease',
                   cursor: 'pointer',
                   padding: '4px'
@@ -2363,7 +2364,7 @@ function PresenterMode() {
                   <span style={{
                     fontSize: '1.05rem',
                     fontWeight: '600',
-                    color: '#000',
+                    color: 'white',
                     letterSpacing: '0.3px'
                   }}>
                     Setlist
@@ -2378,7 +2379,7 @@ function PresenterMode() {
                 style={{
                   border: 'none',
                   background: 'transparent',
-                  color: '#333',
+                  color: 'white',
                   padding: '6px 10px',
                   fontSize: '1.4rem',
                   lineHeight: '1',
@@ -2388,12 +2389,12 @@ function PresenterMode() {
                   transition: 'all 0.2s ease'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#F7FAFC';
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.2)';
                   e.currentTarget.style.color = '#FF8C42';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = '#333';
+                  e.currentTarget.style.color = 'white';
                 }}
               >
                 ⋮
@@ -2562,7 +2563,7 @@ function PresenterMode() {
           {setlistSectionOpen && (
             <div style={{ padding: '10px' }}>
               {setlist.length === 0 ? (
-                <p style={{ textAlign: 'center', color: '#333' }}>
+                <p style={{ textAlign: 'center', color: 'white' }}>
                   No songs in setlist. Add songs from above.
                 </p>
               ) : (
@@ -2633,11 +2634,11 @@ function PresenterMode() {
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '6px' }}>
-                          <span style={{ fontSize: '1rem', color: '#333', cursor: 'grab', fontWeight: '600' }}>
+                          <span style={{ fontSize: '1rem', color: 'white', cursor: 'grab', fontWeight: '600' }}>
                             ⋮⋮
                           </span>
                           <span
-                            style={{ fontSize: '0.9rem', cursor: 'pointer', flex: 1, fontWeight: '600', color: '#000' }}
+                            style={{ fontSize: '0.9rem', cursor: 'pointer', flex: 1, fontWeight: '600', color: 'white' }}
                             onClick={() => selectItem(item)}
                           >
                             {index + 1}. {display.title}

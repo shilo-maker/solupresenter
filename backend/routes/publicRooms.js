@@ -98,14 +98,27 @@ router.get('/search', async (req, res) => {
       return res.json({ publicRooms: [] });
     }
 
-    const searchTerm = q.trim().toLowerCase();
+    const searchTerm = q.trim();
+    // Convert search term to slug format for slug matching
+    const searchSlug = searchTerm
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '');
 
-    // Exact match only (case-insensitive) for privacy - no partial matches
+    // Case-insensitive search on both name and slug
+    // Use iLike for PostgreSQL (case-insensitive), like for SQLite
+    const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('postgres');
+    const likeOp = isPostgres ? Op.iLike : Op.like;
+
     const publicRooms = await PublicRoom.findAll({
       where: {
         [Op.or]: [
-          { name: { [Op.like]: searchTerm } },
-          { slug: { [Op.like]: searchTerm } }
+          { name: { [likeOp]: searchTerm } },
+          { name: { [likeOp]: `%${searchTerm}%` } },
+          { slug: searchSlug },
+          { slug: { [likeOp]: `%${searchSlug}%` } }
         ]
       },
       include: [{

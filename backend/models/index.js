@@ -23,9 +23,10 @@ Setlist.belongsTo(Room, { as: 'linkedRoom', foreignKey: 'linkedRoomId' });
 Media.belongsTo(User, { as: 'uploader', foreignKey: 'uploadedById' });
 
 // PublicRoom relationships
-PublicRoom.belongsTo(User, { as: 'owner', foreignKey: 'ownerId' });
-PublicRoom.belongsTo(Room, { as: 'activeRoom', foreignKey: 'activeRoomId' });
-User.hasMany(PublicRoom, { as: 'publicRooms', foreignKey: 'ownerId' });
+// Using constraints: false to avoid ALTER TABLE issues with PostgreSQL during sync
+PublicRoom.belongsTo(User, { as: 'owner', foreignKey: 'ownerId', constraints: false });
+PublicRoom.belongsTo(Room, { as: 'activeRoom', foreignKey: 'activeRoomId', constraints: false });
+User.hasMany(PublicRoom, { as: 'publicRooms', foreignKey: 'ownerId', constraints: false });
 
 // Export models and sequelize instance
 module.exports = {

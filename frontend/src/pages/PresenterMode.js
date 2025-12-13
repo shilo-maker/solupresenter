@@ -2632,8 +2632,8 @@ function PresenterMode() {
               gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
               gap: '6px',
               maxHeight: 'calc(100vh - 200px)',
-              minHeight: 'calc(100vh - 100px)',
-              overflowY: 'auto'
+              overflowY: 'auto',
+              alignContent: 'start'
             }}>
             {currentSong.slides.map((slide, index) => {
               // Function to get background color based on verse type

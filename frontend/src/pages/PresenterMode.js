@@ -11,7 +11,7 @@ function PresenterMode() {
   const location = useLocation();
   const { user, loading, isAdmin } = useAuth();
 
-  // Add pulse animation keyframes
+  // Add pulse animation keyframes and custom scrollbar styles
   useEffect(() => {
     const style = document.createElement('style');
     style.innerHTML = `
@@ -19,6 +19,28 @@ function PresenterMode() {
         0% { transform: scale(1); }
         50% { transform: scale(1.15); }
         100% { transform: scale(1); }
+      }
+
+      /* Custom scrollbar for dark theme */
+      .dark-scrollbar::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      .dark-scrollbar::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+      }
+      .dark-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+      }
+      .dark-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.5);
+      }
+      /* Firefox scrollbar */
+      .dark-scrollbar {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1);
       }
     `;
     document.head.appendChild(style);
@@ -2043,7 +2065,7 @@ function PresenterMode() {
                 )}
               </div>
             ) : activeResourcePanel === 'bible' ? (
-              <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+              <div className="dark-scrollbar" style={{ maxHeight: '220px', overflowY: 'auto' }}>
                 <div style={{ marginBottom: '15px' }}>
                   {/* Side-by-side Book and Chapter selectors (stacks on mobile) */}
                   <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '10px', marginBottom: '15px' }}>
@@ -2205,7 +2227,7 @@ function PresenterMode() {
                 )}
               </div>
             ) : (
-              <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+              <div className="dark-scrollbar" style={{ maxHeight: '220px', overflowY: 'auto' }}>
                 {mediaLoading ? (
                   <div style={{ textAlign: 'center', color: 'white', padding: '40px' }}>
                     <div className="spinner-border text-light" role="status" style={{ marginBottom: '10px' }}>
@@ -2597,7 +2619,7 @@ function PresenterMode() {
                   No songs in setlist. Add songs from above.
                 </p>
               ) : (
-                <div style={{
+                <div className="dark-scrollbar" style={{
                   maxHeight: '220px',
                   overflowY: 'auto',
                   paddingRight: '5px'

@@ -1535,7 +1535,7 @@ function PresenterMode() {
       }}>
       {/* Back Button and Room PIN Display at Top */}
       <div style={{
-        backgroundColor: 'white',
+        backgroundColor: 'transparent',
         borderRadius: '15px',
         padding: '20px',
         marginBottom: '20px',
@@ -1577,9 +1577,8 @@ function PresenterMode() {
                   padding: '12px 16px',
                   borderRadius: '10px',
                   cursor: 'pointer',
-                  background: 'white',
+                  background: 'transparent',
                   border: selectedPublicRoom ? '2px solid #28a745' : '2px solid #0d6efd',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                 }}
               >
                 <div style={{
@@ -1601,12 +1600,12 @@ function PresenterMode() {
                   </svg>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '0.75rem', color: '#666' }}>Broadcasting to</div>
+                  <div style={{ fontSize: '0.75rem', color: '#333' }}>Broadcasting to</div>
                   <div style={{ fontWeight: '600', color: selectedPublicRoom ? '#28a745' : '#0d6efd', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {selectedPublicRoom ? selectedPublicRoom.name : `Private Room (${roomPin})`}
                   </div>
                 </div>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="#666" style={{ transform: showRoomSelector ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#333" style={{ transform: showRoomSelector ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
                   <path d="M7 10l5 5 5-5z"/>
                 </svg>
               </div>
@@ -1706,7 +1705,7 @@ function PresenterMode() {
 
         {isCreatingRoom && !roomPin && (
           <div style={{ marginTop: '20px', textAlign: 'center' }}>
-            <div style={{ fontSize: '0.9rem', color: '#666' }}>
+            <div style={{ fontSize: '0.9rem', color: '#333' }}>
               Creating your presentation room...
             </div>
           </div>
@@ -2295,8 +2294,9 @@ function PresenterMode() {
 
         {/* Setlist Section */}
         <div style={{
-          backgroundColor: 'white',
+          backgroundColor: 'transparent',
           borderRadius: '15px',
+          border: '1px solid #ddd',
           overflow: 'hidden'
         }}>
           <div
@@ -2305,7 +2305,7 @@ function PresenterMode() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              backgroundColor: '#f8f9fa',
+              backgroundColor: 'transparent',
               flexWrap: 'wrap',
               gap: '6px'
             }}
@@ -2331,7 +2331,7 @@ function PresenterMode() {
                 }}
                 style={{
                   fontSize: '1.1rem',
-                  color: '#718096',
+                  color: '#333',
                   transition: 'transform 0.2s ease',
                   cursor: 'pointer',
                   padding: '4px'
@@ -2363,7 +2363,7 @@ function PresenterMode() {
                   <span style={{
                     fontSize: '1.05rem',
                     fontWeight: '600',
-                    color: '#4A5568',
+                    color: '#000',
                     letterSpacing: '0.3px'
                   }}>
                     Setlist
@@ -2378,7 +2378,7 @@ function PresenterMode() {
                 style={{
                   border: 'none',
                   background: 'transparent',
-                  color: '#4A5568',
+                  color: '#333',
                   padding: '6px 10px',
                   fontSize: '1.4rem',
                   lineHeight: '1',
@@ -2393,7 +2393,7 @@ function PresenterMode() {
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = '#4A5568';
+                  e.currentTarget.style.color = '#333';
                 }}
               >
                 ⋮
@@ -2562,7 +2562,7 @@ function PresenterMode() {
           {setlistSectionOpen && (
             <div style={{ padding: '10px' }}>
               {setlist.length === 0 ? (
-                <p style={{ textAlign: 'center', color: '#666' }}>
+                <p style={{ textAlign: 'center', color: '#333' }}>
                   No songs in setlist. Add songs from above.
                 </p>
               ) : (
@@ -2576,29 +2576,29 @@ function PresenterMode() {
                       if (item.type === 'song') {
                         return {
                           title: item.data?.title || 'Unknown Song',
-                          bgColor: '#f8f9fa',
+                          bgColor: 'transparent',
                           borderLeft: '4px solid #667eea'
                         };
                       } else if (item.type === 'bible') {
                         return {
                           title: item.data?.title || 'Bible Passage',
-                          bgColor: '#f3e5f5',
+                          bgColor: 'transparent',
                           borderLeft: '4px solid #764ba2'
                         };
                       } else if (item.type === 'image') {
                         return {
                           title: item.data?.name || 'Image Slide',
-                          bgColor: '#e7f3ff',
+                          bgColor: 'transparent',
                           borderLeft: '4px solid #4facfe'
                         };
                       } else if (item.type === 'blank') {
                         return {
                           title: 'Blank Slide',
-                          bgColor: '#fff3e0',
+                          bgColor: 'transparent',
                           borderLeft: '4px solid #f093fb'
                         };
                       }
-                      return { title: 'Unknown', bgColor: '#f8f9fa', borderLeft: '4px solid #718096' };
+                      return { title: 'Unknown', bgColor: 'transparent', borderLeft: '4px solid #718096' };
                     };
 
                     const display = getItemDisplay();
@@ -2633,11 +2633,11 @@ function PresenterMode() {
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '6px' }}>
-                          <span style={{ fontSize: '1rem', color: '#718096', cursor: 'grab', fontWeight: '600' }}>
+                          <span style={{ fontSize: '1rem', color: '#333', cursor: 'grab', fontWeight: '600' }}>
                             ⋮⋮
                           </span>
                           <span
-                            style={{ fontSize: '0.9rem', cursor: 'pointer', flex: 1, fontWeight: '500', color: '#2d3748' }}
+                            style={{ fontSize: '0.9rem', cursor: 'pointer', flex: 1, fontWeight: '600', color: '#000' }}
                             onClick={() => selectItem(item)}
                           >
                             {index + 1}. {display.title}

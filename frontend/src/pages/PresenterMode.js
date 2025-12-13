@@ -1886,26 +1886,55 @@ function PresenterMode() {
               </Button>
             </div>
 
-            {/* Search bar */}
-            <div style={{ flex: '1 1 200px', minWidth: '200px' }}>
-              <InputGroup size="sm">
-                <InputGroup.Text>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
-                  </svg>
-                </InputGroup.Text>
-                <Form.Control
-                  type="text"
-                  placeholder={
-                    activeResourcePanel === 'bible'
-                      ? "e.g. John 3"
-                      : "Search..."
-                  }
-                  value={searchQuery}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  style={{ fontSize: '0.95rem' }}
-                />
-              </InputGroup>
+            {/* Search bar - Glassmorphic style */}
+            <div style={{ flex: '1 1 200px', minWidth: '200px', position: 'relative' }}>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                fill="rgba(255,255,255,0.6)"
+                viewBox="0 0 16 16"
+                style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  pointerEvents: 'none'
+                }}
+              >
+                <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+              </svg>
+              <input
+                type="text"
+                placeholder={
+                  activeResourcePanel === 'bible'
+                    ? "e.g. John 3"
+                    : "Search..."
+                }
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  backdropFilter: 'blur(10px)',
+                  border: '2px solid rgba(255, 255, 255, 0.2)',
+                  borderRadius: '10px',
+                  padding: '10px 14px 10px 36px',
+                  color: 'white',
+                  fontSize: '0.95rem',
+                  fontWeight: '400',
+                  outline: 'none',
+                  transition: 'all 0.3s ease'
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = 'rgba(255, 255, 255, 0.4)';
+                  e.target.style.boxShadow = '0 0 15px rgba(255, 255, 255, 0.15)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                  e.target.style.boxShadow = 'none';
+                }}
+              />
             </div>
 
             {/* New button */}

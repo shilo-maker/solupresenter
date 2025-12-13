@@ -42,6 +42,7 @@ const SetlistView = lazy(() => import('./pages/SetlistView'));
 const SetlistEdit = lazy(() => import('./pages/SetlistEdit'));
 const Admin = lazy(() => import('./pages/Admin'));
 const MediaLibrary = lazy(() => import('./pages/MediaLibrary'));
+const Settings = lazy(() => import('./pages/Settings'));
 
 function App() {
   return (
@@ -159,6 +160,16 @@ function App() {
             element={
               <PrivateRoute>
                 <MediaLibrary />
+              </PrivateRoute>
+            }
+          />
+
+          {/* Settings Route */}
+          <Route
+            path="/settings"
+            element={
+              <PrivateRoute>
+                <Settings />
               </PrivateRoute>
             }
           />

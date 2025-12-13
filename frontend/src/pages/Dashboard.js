@@ -98,6 +98,20 @@ function Dashboard() {
             </Card>
           </Col>
         )}
+
+        <Col md={6}>
+          <Card className="h-100">
+            <Card.Body>
+              <Card.Title>Settings</Card.Title>
+              <Card.Text>
+                Configure public room names so viewers can find and join your presentations by name.
+              </Card.Text>
+              <Button variant="secondary" onClick={() => navigate('/settings')}>
+                Settings
+              </Button>
+            </Card.Body>
+          </Card>
+        </Col>
       </Row>
     </Container>
   );

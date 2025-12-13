@@ -3,7 +3,7 @@ import { Form, Button, InputGroup, Modal, Row, Col, Alert, Badge, Dropdown } fro
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FixedSizeList } from 'react-window';
 import { useAuth } from '../contexts/AuthContext';
-import api, { getFullImageUrl } from '../services/api';
+import api, { getFullImageUrl, publicRoomAPI, roomAPI } from '../services/api';
 import socketService from '../services/socket';
 
 function PresenterMode() {
@@ -33,6 +33,11 @@ function PresenterMode() {
   const [roomPin, setRoomPin] = useState('');
   const [roomCreated, setRoomCreated] = useState(false);
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+
+  // Public room state
+  const [publicRooms, setPublicRooms] = useState([]);
+  const [selectedPublicRoom, setSelectedPublicRoom] = useState(null);
+  const [linkedPublicRoomName, setLinkedPublicRoomName] = useState('');
 
   // Song search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -401,6 +406,13 @@ function PresenterMode() {
     };
   }, [user, loading, roomCreated]);
 
+  // Fetch public rooms when room is created
+  useEffect(() => {
+    if (room?.id) {
+      fetchPublicRooms();
+    }
+  }, [room?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Load setlist or song if passed via location state or URL params
   useEffect(() => {
     // Wait for room to be ready before loading setlist
@@ -537,6 +549,52 @@ function PresenterMode() {
 
     if (room) {
       socketService.operatorUpdateBackground(room.id, backgroundUrl);
+    }
+  };
+
+  const fetchPublicRooms = async () => {
+    try {
+      const response = await publicRoomAPI.getMyRooms();
+      const rooms = response.data.publicRooms || [];
+      setPublicRooms(rooms);
+
+      // Check if any public room is linked to the current active room
+      if (room?.id) {
+        const linkedRoom = rooms.find(pr => pr.activeRoomId === room.id);
+        if (linkedRoom) {
+          setSelectedPublicRoom(linkedRoom);
+          setLinkedPublicRoomName(linkedRoom.name);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching public rooms:', error);
+    }
+  };
+
+  const handlePublicRoomChange = async (publicRoomId) => {
+    if (!room) return;
+
+    try {
+      const response = await roomAPI.linkPublicRoom(room.id, publicRoomId || null);
+      if (publicRoomId && response.data.publicRoom) {
+        setSelectedPublicRoom(response.data.publicRoom);
+        setLinkedPublicRoomName(response.data.publicRoom.name);
+      } else {
+        setSelectedPublicRoom(null);
+        setLinkedPublicRoomName('');
+      }
+
+      // Clear selected song and broadcast blank when changing rooms
+      setCurrentSong(null);
+      setCurrentSlideIndex(0);
+      setIsBlankActive(true);
+      updateSlide(null, 0, displayMode, true);
+
+      // Refresh public rooms to update their status
+      fetchPublicRooms();
+    } catch (error) {
+      console.error('Error linking public room:', error);
+      setError('Failed to link public room');
     }
   };
 
@@ -1471,10 +1529,17 @@ function PresenterMode() {
           style={{
             position: 'absolute',
             left: '20px',
-            top: '20px'
+            top: '20px',
+            padding: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
           }}
+          title="Dashboard"
         >
-          Dashboard
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+          </svg>
         </Button>
         <div style={{
           position: 'absolute',
@@ -1538,17 +1603,149 @@ function PresenterMode() {
         </div>
         {roomPin ? (
           <>
+            {/* Room Selection Card */}
             <div style={{
-              fontSize: '3rem',
-              fontWeight: 'bold',
-              letterSpacing: '0.5rem',
-              color: '#333',
-              marginTop: '40px'
+              background: '#f8f9fa',
+              borderRadius: '12px',
+              padding: '20px',
+              marginTop: '30px',
+              maxWidth: '400px',
+              margin: '30px auto 0'
             }}>
-              {roomPin}
-            </div>
-            <div style={{ fontSize: '0.9rem', color: '#666', marginTop: '5px' }}>
-              Share this Room PIN with viewers
+              {publicRooms.length > 0 ? (
+                <>
+                  <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '15px', fontWeight: '500' }}>
+                    Broadcast Mode
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {/* Private Room Option */}
+                    <div
+                      onClick={() => handlePublicRoomChange(null)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '12px 15px',
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        background: !selectedPublicRoom ? 'white' : 'transparent',
+                        border: !selectedPublicRoom ? '2px solid #0d6efd' : '2px solid transparent',
+                        boxShadow: !selectedPublicRoom ? '0 2px 8px rgba(13, 110, 253, 0.15)' : 'none'
+                      }}
+                    >
+                      <div style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        background: !selectedPublicRoom ? '#0d6efd' : '#dee2e6',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill={!selectedPublicRoom ? 'white' : '#6c757d'}>
+                          <path d="M12 2C9.24 2 7 4.24 7 7v5H6c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v5H9V7c0-1.66 1.34-3 3-3z"/>
+                        </svg>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: '600', color: !selectedPublicRoom ? '#0d6efd' : '#495057', fontSize: '0.95rem' }}>
+                          Private Room
+                        </div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 'bold', letterSpacing: '0.2rem' }}>
+                          {roomPin}
+                        </div>
+                      </div>
+                      {!selectedPublicRoom && (
+                        <Badge bg="primary" style={{ fontSize: '0.7rem' }}>Active</Badge>
+                      )}
+                    </div>
+                    {/* Public Room Options */}
+                    {publicRooms.map((pr) => (
+                      <div
+                        key={pr.id}
+                        onClick={() => handlePublicRoomChange(pr.id)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          padding: '12px 15px',
+                          borderRadius: '10px',
+                          cursor: 'pointer',
+                          background: selectedPublicRoom?.id === pr.id ? 'white' : 'transparent',
+                          border: selectedPublicRoom?.id === pr.id ? '2px solid #28a745' : '2px solid transparent',
+                          boxShadow: selectedPublicRoom?.id === pr.id ? '0 2px 8px rgba(40, 167, 69, 0.15)' : 'none'
+                        }}
+                      >
+                        <div style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '50%',
+                          background: selectedPublicRoom?.id === pr.id ? '#28a745' : '#dee2e6',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill={selectedPublicRoom?.id === pr.id ? 'white' : '#6c757d'}>
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                          </svg>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: '600', color: selectedPublicRoom?.id === pr.id ? '#28a745' : '#495057', fontSize: '0.95rem' }}>
+                            {pr.name}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#6c757d' }}>
+                            Public room
+                          </div>
+                        </div>
+                        {selectedPublicRoom?.id === pr.id && (
+                          <Badge bg="success" style={{ fontSize: '0.7rem' }}>Active</Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: '15px', textAlign: 'center' }}>
+                    <Button variant="link" size="sm" onClick={() => navigate('/settings')} style={{ fontSize: '0.85rem', textDecoration: 'none' }}>
+                      + Add more rooms
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '12px 15px',
+                    borderRadius: '10px',
+                    background: 'white',
+                    border: '2px solid #0d6efd'
+                  }}>
+                    <div style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      background: '#0d6efd',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+                        <path d="M12 2C9.24 2 7 4.24 7 7v5H6c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v5H9V7c0-1.66 1.34-3 3-3z"/>
+                      </svg>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: '600', color: '#333' }}>Private Room</div>
+                      <div style={{ fontSize: '1.5rem', fontWeight: 'bold', letterSpacing: '0.3rem', color: '#0d6efd' }}>
+                        {roomPin}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: '15px', textAlign: 'center' }}>
+                    <Button variant="link" size="sm" onClick={() => navigate('/settings')} style={{ fontSize: '0.85rem', textDecoration: 'none' }}>
+                      Create a public room name →
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           </>
         ) : isCreatingRoom ? (
@@ -1568,7 +1765,7 @@ function PresenterMode() {
               <Button
                 variant="primary"
                 onClick={() => {
-                  const shareUrl = `${window.location.origin}/viewer?pin=${roomPin}`;
+                  const shareUrl = selectedPublicRoom?.slug ? `${window.location.origin}/viewer?room=${selectedPublicRoom.slug}` : `${window.location.origin}/viewer?pin=${roomPin}`;
 
                   // Try modern clipboard API first, fallback to older method
                   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1614,7 +1811,7 @@ function PresenterMode() {
               <Button
                 variant="success"
                 onClick={() => {
-                  const shareUrl = `${window.location.origin}/viewer?pin=${roomPin}`;
+                  const shareUrl = selectedPublicRoom?.slug ? `${window.location.origin}/viewer?room=${selectedPublicRoom.slug}` : `${window.location.origin}/viewer?pin=${roomPin}`;
                   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareUrl)}`;
                   window.open(whatsappUrl, '_blank');
                 }}
@@ -1643,7 +1840,7 @@ function PresenterMode() {
               marginTop: '10px',
               wordBreak: 'break-all'
             }}>
-              {`${window.location.origin}/viewer?pin=${roomPin}`}
+              {selectedPublicRoom?.slug ? `${window.location.origin}/viewer?room=${selectedPublicRoom.slug}` : `${window.location.origin}/viewer?pin=${roomPin}`}
             </div>
           </div>
         )}

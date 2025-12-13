@@ -10,7 +10,7 @@ const session = require('express-session');
 const multer = require('multer');
 const compression = require('compression');
 const helmet = require('helmet');
-const { sequelize, Room, Song } = require('./models');
+const { sequelize, Room, Song, PublicRoom } = require('./models');
 const passport = require('./config/passport');
 
 // Import routes
@@ -21,6 +21,7 @@ const setlistRoutes = require('./routes/setlists');
 const adminRoutes = require('./routes/admin');
 const mediaRoutes = require('./routes/media');
 const bibleRoutes = require('./routes/bible');
+const publicRoomsRoutes = require('./routes/publicRooms');
 
 // Import cleanup jobs
 const cleanupTemporarySetlists = require('./jobs/cleanupTemporarySetlists');
@@ -85,6 +86,9 @@ const io = new Server(server, {
   cors: corsOptions
 });
 
+// Make io accessible to routes
+app.set('io', io);
+
 // Connect to PostgreSQL
 sequelize.authenticate()
   .then(async () => {
@@ -135,6 +139,7 @@ app.use('/api/setlists', setlistRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/bible', bibleRoutes);
+app.use('/api/public-rooms', publicRoomsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -196,12 +201,43 @@ io.on('connection', (socket) => {
   // Viewer joins a room
   socket.on('viewer:join', async (data) => {
     try {
-      const { pin } = data;
+      const { pin, slug } = data || {};
 
-      const room = await Room.findOne({
-        where: { pin: pin.toUpperCase(), isActive: true },
-        attributes: ['id', 'pin', 'currentSlide', 'currentImageUrl', 'currentBibleData', 'backgroundImage', 'viewerCount']
-      });
+      // Validate that either pin or slug is provided
+      if (!pin && !slug) {
+        socket.emit('error', { message: 'Room PIN or name is required' });
+        return;
+      }
+
+      let room;
+
+      // If slug is provided, look up the public room first
+      if (slug) {
+        const publicRoom = await PublicRoom.findOne({
+          where: { slug: slug.toLowerCase() }
+        });
+
+        if (!publicRoom) {
+          socket.emit('error', { message: 'Room not found' });
+          return;
+        }
+
+        if (!publicRoom.activeRoomId) {
+          socket.emit('error', { message: 'Room is not currently live', roomName: publicRoom.name });
+          return;
+        }
+
+        room = await Room.findOne({
+          where: { id: publicRoom.activeRoomId, isActive: true },
+          attributes: ['id', 'pin', 'currentSlide', 'currentImageUrl', 'currentBibleData', 'backgroundImage', 'viewerCount']
+        });
+      } else {
+        // Otherwise, look up by PIN
+        room = await Room.findOne({
+          where: { pin: pin.toUpperCase(), isActive: true },
+          attributes: ['id', 'pin', 'currentSlide', 'currentImageUrl', 'currentBibleData', 'backgroundImage', 'viewerCount']
+        });
+      }
 
       if (!room) {
         socket.emit('error', { message: 'Room not found or inactive' });

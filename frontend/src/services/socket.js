@@ -246,8 +246,36 @@ class SocketService {
 
   // Viewer methods
   viewerJoinRoom(pin) {
-    if (this.socket) {
+    if (!this.socket) {
+      console.error('❌ No socket available for viewer to join');
+      return;
+    }
+
+    if (this.socket.connected) {
       this.socket.emit('viewer:join', { pin });
+    } else {
+      console.log('⏳ Socket not connected yet, waiting...');
+      this.socket.once('connect', () => {
+        console.log('✅ Socket connected, now joining room by PIN');
+        this.socket.emit('viewer:join', { pin });
+      });
+    }
+  }
+
+  viewerJoinRoomBySlug(slug) {
+    if (!this.socket) {
+      console.error('❌ No socket available for viewer to join');
+      return;
+    }
+
+    if (this.socket.connected) {
+      this.socket.emit('viewer:join', { slug });
+    } else {
+      console.log('⏳ Socket not connected yet, waiting...');
+      this.socket.once('connect', () => {
+        console.log('✅ Socket connected, now joining room by slug');
+        this.socket.emit('viewer:join', { slug });
+      });
     }
   }
 
@@ -285,6 +313,12 @@ class SocketService {
   onBackgroundUpdate(callback) {
     if (this.socket) {
       this.socket.on('background:update', callback);
+    }
+  }
+
+  onRoomClosed(callback) {
+    if (this.socket) {
+      this.socket.on('room:closed', callback);
     }
   }
 

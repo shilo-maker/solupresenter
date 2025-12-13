@@ -74,10 +74,20 @@ export const songAPI = {
 
 // Room endpoints
 export const roomAPI = {
-  create: () => api.post('/api/rooms/create'),
+  create: (publicRoomId) => api.post('/api/rooms/create', { publicRoomId }),
   joinByPin: (pin) => api.get(`/api/rooms/join/${pin}`),
   getMyRoom: () => api.get('/api/rooms/my-room'),
-  close: (id) => api.post(`/api/rooms/${id}/close`)
+  close: (id) => api.post(`/api/rooms/${id}/close`),
+  linkPublicRoom: (id, publicRoomId) => api.post(`/api/rooms/${id}/link-public-room`, { publicRoomId })
+};
+
+// Public Room endpoints
+export const publicRoomAPI = {
+  getMyRooms: () => api.get('/api/public-rooms/my-rooms'),
+  create: (name) => api.post('/api/public-rooms', { name }),
+  delete: (id) => api.delete(`/api/public-rooms/${id}`),
+  search: (q) => api.get('/api/public-rooms/search', { params: { q } }),
+  joinBySlug: (slug) => api.get(`/api/public-rooms/join/${slug}`)
 };
 
 // Setlist endpoints

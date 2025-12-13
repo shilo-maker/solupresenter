@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Room, User, Setlist, Song, Media } = require('../models');
+const { Room, User, Setlist, Song, Media, PublicRoom } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 const { generateUniquePin } = require('../utils/generatePin');
 
@@ -36,6 +36,8 @@ async function populateSetlistItems(setlist) {
 // Create or get active room for operator
 router.post('/create', authenticateToken, async (req, res) => {
   try {
+    const { publicRoomId } = req.body || {};
+
     // Check if user already has an active room
     let room = await Room.findOne({
       where: {
@@ -121,6 +123,17 @@ router.post('/create', authenticateToken, async (req, res) => {
       { activeRoomId: room.id },
       { where: { id: req.user.id } }
     );
+
+    // Link public room if provided
+    if (publicRoomId) {
+      const publicRoom = await PublicRoom.findOne({
+        where: { id: publicRoomId, ownerId: req.user.id }
+      });
+      if (publicRoom) {
+        publicRoom.activeRoomId = room.id;
+        await publicRoom.save();
+      }
+    }
 
     // Populate setlist items with full data
     const roomData = room.toJSON();
@@ -382,6 +395,65 @@ router.post('/:id/unlink-setlist', authenticateToken, async (req, res) => {
   }
 });
 
+// Link a public room to the active room
+router.post('/:id/link-public-room', authenticateToken, async (req, res) => {
+  try {
+    const room = await Room.findByPk(req.params.id);
+
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    if (room.operatorId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { publicRoomId } = req.body;
+
+    // Notify all current viewers that the broadcast is changing and disconnect them
+    const io = req.app.get('io');
+    if (io) {
+      console.log(`📢 Emitting room:closed to room:${room.pin} - broadcast room changed`);
+      io.to(`room:${room.pin}`).emit('room:closed', {
+        message: 'The presenter has changed the broadcast room'
+      });
+    }
+
+    // Reset viewer count since all viewers are being disconnected
+    await Room.update({ viewerCount: 0 }, { where: { id: room.id } });
+
+    // First, unlink any existing public room from this room
+    await PublicRoom.update(
+      { activeRoomId: null },
+      { where: { activeRoomId: room.id } }
+    );
+
+    // If publicRoomId is provided, link the new public room
+    if (publicRoomId) {
+      const publicRoom = await PublicRoom.findOne({
+        where: { id: publicRoomId, ownerId: req.user.id }
+      });
+
+      if (!publicRoom) {
+        return res.status(404).json({ error: 'Public room not found' });
+      }
+
+      publicRoom.activeRoomId = room.id;
+      await publicRoom.save();
+
+      res.json({
+        message: 'Public room linked successfully',
+        publicRoom: { id: publicRoom.id, name: publicRoom.name, slug: publicRoom.slug }
+      });
+    } else {
+      res.json({ message: 'Public room unlinked successfully' });
+    }
+  } catch (error) {
+    console.error('Error linking public room:', error);
+    res.status(500).json({ error: 'Failed to link public room' });
+  }
+});
+
 // Close room
 router.post('/:id/close', authenticateToken, async (req, res) => {
   try {
@@ -402,6 +474,14 @@ router.post('/:id/close', authenticateToken, async (req, res) => {
       });
     }
 
+    // Notify all viewers in the room that it's closing
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`room:${room.pin}`).emit('room:closed', {
+        message: 'The presenter has ended the session'
+      });
+    }
+
     room.isActive = false;
     await room.save();
 
@@ -409,6 +489,12 @@ router.post('/:id/close', authenticateToken, async (req, res) => {
     await User.update(
       { activeRoomId: null },
       { where: { id: req.user.id } }
+    );
+
+    // Clear any public room links to this room
+    await PublicRoom.update(
+      { activeRoomId: null },
+      { where: { activeRoomId: room.id } }
     );
 
     res.json({ message: 'Room closed successfully' });

@@ -5,6 +5,7 @@ const Room = require('./Room');
 const Setlist = require('./Setlist');
 const Media = require('./Media');
 const BibleVerse = require('./BibleVerse');
+const PublicRoom = require('./PublicRoom');
 
 // Define relationships
 User.hasOne(Room, { as: 'activeRoom', foreignKey: 'operatorId' });
@@ -21,6 +22,11 @@ Setlist.belongsTo(Room, { as: 'linkedRoom', foreignKey: 'linkedRoomId' });
 
 Media.belongsTo(User, { as: 'uploader', foreignKey: 'uploadedById' });
 
+// PublicRoom relationships
+PublicRoom.belongsTo(User, { as: 'owner', foreignKey: 'ownerId' });
+PublicRoom.belongsTo(Room, { as: 'activeRoom', foreignKey: 'activeRoomId' });
+User.hasMany(PublicRoom, { as: 'publicRooms', foreignKey: 'ownerId' });
+
 // Export models and sequelize instance
 module.exports = {
   sequelize,
@@ -29,5 +35,6 @@ module.exports = {
   Room,
   Setlist,
   Media,
-  BibleVerse
+  BibleVerse,
+  PublicRoom
 };

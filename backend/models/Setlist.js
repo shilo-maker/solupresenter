@@ -77,4 +77,11 @@ const Setlist = sequelize.define('Setlist', {
   ]
 });
 
+// Override toJSON to include _id in serialized output (for MongoDB-style frontend compatibility)
+Setlist.prototype.toJSON = function() {
+  const values = Object.assign({}, this.get());
+  values._id = values.id;
+  return values;
+};
+
 module.exports = Setlist;

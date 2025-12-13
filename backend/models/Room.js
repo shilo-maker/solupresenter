@@ -108,4 +108,11 @@ Room.prototype.updateActivity = async function() {
   return await this.save();
 };
 
+// Override toJSON to include _id in serialized output (for MongoDB-style frontend compatibility)
+Room.prototype.toJSON = function() {
+  const values = Object.assign({}, this.get());
+  values._id = values.id;
+  return values;
+};
+
 module.exports = Room;

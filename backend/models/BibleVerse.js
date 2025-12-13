@@ -67,4 +67,11 @@ const BibleVerse = sequelize.define('BibleVerse', {
   ]
 });
 
+// Override toJSON to include _id in serialized output (for MongoDB-style frontend compatibility)
+BibleVerse.prototype.toJSON = function() {
+  const values = Object.assign({}, this.get());
+  values._id = values.id;
+  return values;
+};
+
 module.exports = BibleVerse;

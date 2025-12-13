@@ -57,4 +57,11 @@ const Media = sequelize.define('Media', {
   ]
 });
 
+// Override toJSON to include _id in serialized output (for MongoDB-style frontend compatibility)
+Media.prototype.toJSON = function() {
+  const values = Object.assign({}, this.get());
+  values._id = values.id;
+  return values;
+};
+
 module.exports = Media;

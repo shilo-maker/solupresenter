@@ -58,4 +58,11 @@ const PublicRoom = sequelize.define('PublicRoom', {
   ]
 });
 
+// Override toJSON to include _id in serialized output (for MongoDB-style frontend compatibility)
+PublicRoom.prototype.toJSON = function() {
+  const values = Object.assign({}, this.get());
+  values._id = values.id;
+  return values;
+};
+
 module.exports = PublicRoom;

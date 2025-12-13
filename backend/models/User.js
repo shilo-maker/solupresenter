@@ -123,4 +123,15 @@ User.prototype.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
+// Override toJSON to include _id in serialized output (for MongoDB-style frontend compatibility)
+User.prototype.toJSON = function() {
+  const values = Object.assign({}, this.get());
+  values._id = values.id;
+  // Don't expose sensitive fields
+  delete values.password;
+  delete values.emailVerificationToken;
+  delete values.passwordResetToken;
+  return values;
+};
+
 module.exports = User;

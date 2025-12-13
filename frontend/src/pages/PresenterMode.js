@@ -2743,7 +2743,7 @@ function PresenterMode() {
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              flex: '1 1 auto',
+              flex: '0 1 auto',
               minWidth: '0',
               overflow: 'hidden'
             }}
@@ -2770,6 +2770,93 @@ function PresenterMode() {
                 : 'No Item Selected'}
             </span>
           </div>
+
+          {/* Verse/Section Navigation Buttons */}
+          {currentSong && currentSong.slides && (() => {
+            // Get unique verse sections with their first occurrence index
+            const verseSections = [];
+            const seenTypes = new Set();
+            currentSong.slides.forEach((slide, index) => {
+              if (slide.verseType && !seenTypes.has(slide.verseType)) {
+                seenTypes.add(slide.verseType);
+                verseSections.push({ type: slide.verseType, index });
+              }
+            });
+
+            // Helper to abbreviate verse types
+            const getAbbreviation = (verseType) => {
+              switch(verseType) {
+                case 'Intro': return 'In';
+                case 'Verse1': return 'V1';
+                case 'Verse2': return 'V2';
+                case 'Verse3': return 'V3';
+                case 'Verse4': return 'V4';
+                case 'PreChorus': return 'PC';
+                case 'Chorus': return 'Ch';
+                case 'Bridge': return 'Br';
+                case 'Instrumental': return '🎸';
+                case 'Outro': return 'Out';
+                case 'Tag': return 'Tag';
+                default: return verseType?.substring(0, 2) || '?';
+              }
+            };
+
+            // Helper to get button color based on verse type
+            const getButtonColor = (verseType) => {
+              switch(verseType) {
+                case 'Intro': return 'rgba(255,255,255,0.3)';
+                case 'Verse1':
+                case 'Verse2':
+                case 'Verse3':
+                case 'Verse4': return 'rgba(255,193,7,0.7)';
+                case 'PreChorus': return 'rgba(233,30,99,0.6)';
+                case 'Chorus': return 'rgba(3,169,244,0.7)';
+                case 'Bridge': return 'rgba(156,39,176,0.6)';
+                case 'Instrumental': return 'rgba(76,175,80,0.6)';
+                case 'Outro': return 'rgba(255,152,0,0.7)';
+                case 'Tag': return 'rgba(103,58,183,0.6)';
+                default: return 'rgba(255,255,255,0.3)';
+              }
+            };
+
+            if (verseSections.length <= 1) return null;
+
+            return (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                flexWrap: 'wrap',
+                flex: '1 1 auto',
+                justifyContent: 'center'
+              }}>
+                {verseSections.map((section, idx) => (
+                  <button
+                    key={idx}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      selectSlide(section.index);
+                    }}
+                    title={section.type}
+                    style={{
+                      padding: '2px 6px',
+                      fontSize: '0.7rem',
+                      fontWeight: 'bold',
+                      border: currentSlideIndex === section.index ? '2px solid white' : '1px solid rgba(255,255,255,0.4)',
+                      borderRadius: '4px',
+                      backgroundColor: getButtonColor(section.type),
+                      color: 'white',
+                      cursor: 'pointer',
+                      minWidth: '28px',
+                      textAlign: 'center'
+                    }}
+                  >
+                    {getAbbreviation(section.type)}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Controls */}
           <div style={{

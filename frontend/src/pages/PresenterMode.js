@@ -22,23 +22,27 @@ function PresenterMode() {
       }
 
       /* Custom scrollbar for dark theme */
-      .dark-scrollbar::-webkit-scrollbar {
+      .dark-scrollbar::-webkit-scrollbar,
+      .dark-scrollbar *::-webkit-scrollbar {
         width: 8px;
         height: 8px;
       }
-      .dark-scrollbar::-webkit-scrollbar-track {
+      .dark-scrollbar::-webkit-scrollbar-track,
+      .dark-scrollbar *::-webkit-scrollbar-track {
         background: rgba(255, 255, 255, 0.1);
         border-radius: 4px;
       }
-      .dark-scrollbar::-webkit-scrollbar-thumb {
+      .dark-scrollbar::-webkit-scrollbar-thumb,
+      .dark-scrollbar *::-webkit-scrollbar-thumb {
         background: rgba(255, 255, 255, 0.3);
         border-radius: 4px;
       }
-      .dark-scrollbar::-webkit-scrollbar-thumb:hover {
+      .dark-scrollbar::-webkit-scrollbar-thumb:hover,
+      .dark-scrollbar *::-webkit-scrollbar-thumb:hover {
         background: rgba(255, 255, 255, 0.5);
       }
       /* Firefox scrollbar */
-      .dark-scrollbar {
+      .dark-scrollbar, .dark-scrollbar * {
         scrollbar-width: thin;
         scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1);
       }
@@ -1978,7 +1982,7 @@ function PresenterMode() {
 
           <div style={{ padding: '10px', backgroundColor: 'transparent' }}>
             {activeResourcePanel === 'songs' ? (
-              <div style={{ height: '220px', backgroundColor: 'transparent' }}>
+              <div className="dark-scrollbar" style={{ height: '220px', backgroundColor: 'transparent' }}>
                 {songsLoading ? (
                   <div style={{ textAlign: 'center', color: 'white', padding: '40px' }}>
                     <div className="spinner-border text-light" role="status" style={{ marginBottom: '10px' }}>
@@ -1996,6 +2000,7 @@ function PresenterMode() {
                     itemCount={searchResults.length}
                     itemSize={52}
                     width="100%"
+                    className="dark-scrollbar"
                   >
                     {({ index, style }) => {
                       const song = searchResults[index];

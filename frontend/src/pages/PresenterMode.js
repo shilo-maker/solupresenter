@@ -1842,14 +1842,15 @@ function PresenterMode() {
       }}>
         {/* Song Search Section */}
         <div style={{
-          backgroundColor: 'white',
+          backgroundColor: 'transparent',
           borderRadius: '15px',
+          border: '1px solid rgba(255,255,255,0.5)',
           overflow: 'hidden'
         }}>
           <div
             style={{
               padding: '8px 12px',
-              backgroundColor: '#f8f9fa',
+              backgroundColor: 'transparent',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -1860,7 +1861,7 @@ function PresenterMode() {
             {/* Title with collapse toggle */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '0 0 auto', flexWrap: 'wrap' }}>
               <Button
-                variant={activeResourcePanel === 'songs' ? 'primary' : 'outline-secondary'}
+                variant={activeResourcePanel === 'songs' ? 'primary' : 'outline-light'}
                 size="sm"
                 onClick={() => switchResourcePanel('songs')}
                 style={{ fontWeight: '500' }}
@@ -1868,7 +1869,7 @@ function PresenterMode() {
                 Songs
               </Button>
               <Button
-                variant={activeResourcePanel === 'images' ? 'primary' : 'outline-secondary'}
+                variant={activeResourcePanel === 'images' ? 'primary' : 'outline-light'}
                 size="sm"
                 onClick={() => switchResourcePanel('images')}
                 style={{ fontWeight: '500' }}
@@ -1876,7 +1877,7 @@ function PresenterMode() {
                 Images
               </Button>
               <Button
-                variant={activeResourcePanel === 'bible' ? 'primary' : 'outline-secondary'}
+                variant={activeResourcePanel === 'bible' ? 'primary' : 'outline-light'}
                 size="sm"
                 onClick={() => switchResourcePanel('bible')}
                 style={{ fontWeight: '500' }}
@@ -1924,18 +1925,18 @@ function PresenterMode() {
             )}
           </div>
 
-          <div style={{ padding: '10px', backgroundColor: 'white' }}>
+          <div style={{ padding: '10px', backgroundColor: 'transparent' }}>
             {activeResourcePanel === 'songs' ? (
-              <div style={{ height: '220px', backgroundColor: 'white' }}>
+              <div style={{ height: '220px', backgroundColor: 'transparent' }}>
                 {songsLoading ? (
-                  <div style={{ textAlign: 'center', color: '#666', padding: '40px' }}>
-                    <div className="spinner-border text-primary" role="status" style={{ marginBottom: '10px' }}>
+                  <div style={{ textAlign: 'center', color: 'white', padding: '40px' }}>
+                    <div className="spinner-border text-light" role="status" style={{ marginBottom: '10px' }}>
                       <span className="visually-hidden">Loading...</span>
                     </div>
                     <div>Loading songs...</div>
                   </div>
                 ) : searchResults.length === 0 ? (
-                  <p style={{ textAlign: 'center', color: '#666', fontSize: '0.9rem' }}>
+                  <p style={{ textAlign: 'center', color: 'white', fontSize: '0.9rem' }}>
                     {searchQuery ? 'No songs match your search' : 'No songs available'}
                   </p>
                 ) : (
@@ -1964,26 +1965,26 @@ function PresenterMode() {
                             style={{
                               flex: 1,
                               padding: '10px 14px',
-                              background: isSelected ? 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)' : 'white',
-                              color: isSelected ? 'white' : '#333',
+                              background: isSelected ? 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)' : 'transparent',
+                              color: 'white',
                               borderRadius: '8px',
                               cursor: 'pointer',
                               fontSize: '0.95rem',
                               fontWeight: isSelected ? '500' : '400',
-                              border: isSelected ? 'none' : '1px solid #e0e0e0',
+                              border: isSelected ? '2px solid var(--color-primary)' : '1px solid rgba(255,255,255,0.3)',
                               transition: 'all 0.2s ease',
                               boxShadow: isSelected ? '0 2px 8px rgba(0,123,255,0.25)' : 'none'
                             }}
                             onMouseEnter={(e) => {
                               if (!isSelected) {
                                 e.currentTarget.style.borderColor = '#FF8C42';
-                                e.currentTarget.style.color = '#FF8C42';
+                                e.currentTarget.style.background = 'rgba(255,140,66,0.2)';
                               }
                             }}
                             onMouseLeave={(e) => {
                               if (!isSelected) {
-                                e.currentTarget.style.borderColor = '#e0e0e0';
-                                e.currentTarget.style.color = '#333';
+                                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)';
+                                e.currentTarget.style.background = 'transparent';
                               }
                             }}
                           >
@@ -2018,7 +2019,7 @@ function PresenterMode() {
                   {/* Side-by-side Book and Chapter selectors (stacks on mobile) */}
                   <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '10px', marginBottom: '15px' }}>
                     <div style={{ flex: isMobile ? '1' : '2' }}>
-                      <Form.Label style={{ fontSize: '0.85rem', fontWeight: '500', marginBottom: '6px', display: 'block' }}>
+                      <Form.Label style={{ fontSize: '0.85rem', fontWeight: '500', marginBottom: '6px', display: 'block', color: 'white' }}>
                         Book
                       </Form.Label>
                       <Form.Select
@@ -2114,7 +2115,7 @@ function PresenterMode() {
                     </div>
 
                     <div style={{ flex: isMobile ? '1' : '1' }}>
-                      <Form.Label style={{ fontSize: '0.85rem', fontWeight: '500', marginBottom: '6px', display: 'block' }}>
+                      <Form.Label style={{ fontSize: '0.85rem', fontWeight: '500', marginBottom: '6px', display: 'block', color: 'white' }}>
                         Chapter
                       </Form.Label>
                       <Form.Select
@@ -2139,7 +2140,7 @@ function PresenterMode() {
                   </div>
 
                   {selectedBibleBook && selectedBibleChapter && !bibleLoading && bibleVerses.length > 0 && (
-                    <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #ddd' }}>
+                    <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.3)' }}>
                       <Button
                         variant="primary"
                         size="sm"
@@ -2163,13 +2164,13 @@ function PresenterMode() {
                 </div>
 
                 {bibleLoading && (
-                  <div style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
+                  <div style={{ textAlign: 'center', color: 'white', padding: '20px' }}>
                     Loading verses...
                   </div>
                 )}
 
                 {!bibleLoading && bibleVerses.length === 0 && selectedBibleBook && selectedBibleChapter && (
-                  <div style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
+                  <div style={{ textAlign: 'center', color: 'white', padding: '20px' }}>
                     Select a book and chapter to load verses
                   </div>
                 )}
@@ -2177,14 +2178,14 @@ function PresenterMode() {
             ) : (
               <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
                 {mediaLoading ? (
-                  <div style={{ textAlign: 'center', color: '#666', padding: '40px' }}>
-                    <div className="spinner-border text-primary" role="status" style={{ marginBottom: '10px' }}>
+                  <div style={{ textAlign: 'center', color: 'white', padding: '40px' }}>
+                    <div className="spinner-border text-light" role="status" style={{ marginBottom: '10px' }}>
                       <span className="visually-hidden">Loading...</span>
                     </div>
                     <div>Loading media library...</div>
                   </div>
                 ) : imageSearchResults.length === 0 ? (
-                  <p style={{ textAlign: 'center', color: '#666', fontSize: '0.9rem' }}>
+                  <p style={{ textAlign: 'center', color: 'white', fontSize: '0.9rem' }}>
                     {searchQuery ? 'No images match your search' : 'No images available'}
                   </p>
                 ) : (
@@ -2195,14 +2196,14 @@ function PresenterMode() {
                         key={image.id}
                         style={{
                           padding: '8px 10px',
-                          backgroundColor: 'white',
+                          backgroundColor: 'transparent',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '8px',
                           cursor: 'pointer',
                           borderRadius: '4px',
                           marginBottom: '4px',
-                          border: '1px solid #ddd'
+                          border: '1px solid rgba(255,255,255,0.3)'
                         }}
                       >
                         <div
@@ -2217,7 +2218,7 @@ function PresenterMode() {
                           }}
                         />
                         <span
-                          style={{ fontSize: '0.95rem', flex: 1 }}
+                          style={{ fontSize: '0.95rem', flex: 1, color: 'white' }}
                           onClick={() => selectItem({ type: 'image', data: image })}
                         >
                           {image.name}

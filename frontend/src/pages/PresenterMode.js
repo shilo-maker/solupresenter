@@ -2720,14 +2720,15 @@ function PresenterMode() {
 
       {/* Slide Preview Section */}
       <div style={{
-        backgroundColor: 'white',
+        backgroundColor: 'transparent',
         borderRadius: '15px',
+        border: '1px solid rgba(255,255,255,0.5)',
         overflow: 'hidden'
       }}>
         <div
           style={{
             padding: '15px 20px',
-            backgroundColor: '#f8f9fa',
+            backgroundColor: 'transparent',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -2747,7 +2748,7 @@ function PresenterMode() {
               overflow: 'hidden'
             }}
           >
-            <span style={{ fontSize: '1.5rem', marginRight: '10px', flexShrink: 0 }}>
+            <span style={{ fontSize: '1.5rem', marginRight: '10px', flexShrink: 0, color: 'white' }}>
               {slideSectionOpen ? '▼' : '▶'}
             </span>
             <span style={{
@@ -2755,7 +2756,8 @@ function PresenterMode() {
               fontWeight: '500',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
+              whiteSpace: 'nowrap',
+              color: 'white'
             }}>
               {currentItem
                 ? currentItem.type === 'song'
@@ -2780,7 +2782,7 @@ function PresenterMode() {
               // Mobile: 3-dot menu
               <Dropdown align="end" drop="down">
                 <Dropdown.Toggle
-                  variant="secondary"
+                  variant="outline-light"
                   size="sm"
                   style={{
                     fontSize: '1.2rem',
@@ -2968,7 +2970,7 @@ function PresenterMode() {
               marginTop: '15px',
               textAlign: 'center',
               fontSize: '1.1rem',
-              color: '#666'
+              color: 'white'
             }}>
               {currentItem.data?.name}
             </div>
@@ -2976,7 +2978,7 @@ function PresenterMode() {
         )}
 
         {slideSectionOpen && !currentItem && (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
+          <div style={{ padding: '40px', textAlign: 'center', color: 'white' }}>
             Select a song or item to view
           </div>
         )}

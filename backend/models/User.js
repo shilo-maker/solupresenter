@@ -73,6 +73,11 @@ const User = sequelize.define('User', {
   timestamps: true,
   createdAt: 'createdAt',
   updatedAt: false,
+  getterMethods: {
+    _id() {
+      return this.id;
+    }
+  },
   indexes: [
     {
       fields: ['email']

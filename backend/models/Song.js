@@ -76,6 +76,12 @@ const Song = sequelize.define('Song', {
   timestamps: true,
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
+  getterMethods: {
+    // Add _id getter for backwards compatibility with MongoDB-style frontend code
+    _id() {
+      return this.id;
+    }
+  },
   indexes: [
     // Basic indexes that work in both SQLite and PostgreSQL
     {

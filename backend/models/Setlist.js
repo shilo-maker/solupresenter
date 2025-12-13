@@ -46,6 +46,11 @@ const Setlist = sequelize.define('Setlist', {
   timestamps: true,
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
+  getterMethods: {
+    _id() {
+      return this.id;
+    }
+  },
   indexes: [
     {
       fields: ['createdById']

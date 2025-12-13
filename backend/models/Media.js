@@ -39,6 +39,11 @@ const Media = sequelize.define('Media', {
   timestamps: true,
   createdAt: 'createdAt',
   updatedAt: false,
+  getterMethods: {
+    _id() {
+      return this.id;
+    }
+  },
   indexes: [
     {
       fields: ['name']

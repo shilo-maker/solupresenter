@@ -1870,8 +1870,10 @@ function PresenterMode() {
         <div style={{
           backgroundColor: 'transparent',
           borderRadius: '15px',
-          border: '1px solid rgba(255,255,255,0.5)',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          borderRight: isMobile ? 'none' : '1px solid rgba(255,255,255,0.6)',
+          boxShadow: isMobile ? 'none' : '1px 0 8px rgba(255,255,255,0.15)',
+          paddingRight: isMobile ? '0' : '12px'
         }}>
           <div
             style={{
@@ -2354,8 +2356,10 @@ function PresenterMode() {
         <div style={{
           backgroundColor: 'transparent',
           borderRadius: '15px',
-          border: '1px solid rgba(255,255,255,0.5)',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          borderTop: isMobile ? '1px solid rgba(255,255,255,0.6)' : 'none',
+          boxShadow: isMobile ? '0 -1px 8px rgba(255,255,255,0.15)' : 'none',
+          paddingTop: isMobile ? '12px' : '0'
         }}>
           <div
             style={{
@@ -2722,8 +2726,10 @@ function PresenterMode() {
       <div style={{
         backgroundColor: 'transparent',
         borderRadius: '15px',
-        border: '1px solid rgba(255,255,255,0.5)',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        borderTop: '1px solid rgba(255,255,255,0.6)',
+        boxShadow: '0 -1px 8px rgba(255,255,255,0.15)',
+        paddingTop: '12px'
       }}>
         <div
           style={{

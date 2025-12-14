@@ -1936,8 +1936,6 @@ function PresenterMode() {
           backgroundColor: 'transparent',
           borderRadius: '15px',
           overflow: 'hidden',
-          borderRight: isMobile ? 'none' : '1px solid rgba(255,255,255,0.6)',
-          boxShadow: isMobile ? 'none' : '1px 0 8px rgba(255,255,255,0.15)',
           paddingRight: isMobile ? '0' : '12px'
         }}>
           <div
@@ -2423,8 +2421,10 @@ function PresenterMode() {
           borderRadius: '15px',
           overflow: 'hidden',
           borderTop: isMobile ? '1px solid rgba(255,255,255,0.6)' : 'none',
-          boxShadow: isMobile ? '0 -1px 8px rgba(255,255,255,0.15)' : 'none',
-          paddingTop: isMobile ? '12px' : '0'
+          borderLeft: isMobile ? 'none' : '1px solid rgba(255,255,255,0.6)',
+          boxShadow: isMobile ? '0 -1px 8px rgba(255,255,255,0.15)' : '-1px 0 8px rgba(255,255,255,0.15)',
+          paddingTop: isMobile ? '12px' : '0',
+          paddingLeft: isMobile ? '0' : '12px'
         }}>
           <div
             style={{

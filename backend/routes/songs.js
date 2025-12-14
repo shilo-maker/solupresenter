@@ -76,15 +76,9 @@ router.get('/search', authenticateToken, async (req, res) => {
     let whereConditions = {
       [Op.or]: [
         { isPublic: true },
-        { createdBy: req.user.id }
+        { createdById: req.user.id }
       ]
     };
-
-    if (query) {
-      // Sequelize doesn't have built-in text search like MongoDB
-      // Using LIKE for basic text search on title
-      whereConditions.title = { [Op.like]: `%${query}%` };
-    }
 
     if (tags) {
       // For JSON/JSONB array fields, use contains or overlaps
@@ -95,17 +89,58 @@ router.get('/search', authenticateToken, async (req, res) => {
       whereConditions.originalLanguage = language;
     }
 
-    const songs = await Song.findAll({
+    // Fetch all accessible songs (we'll filter and sort by relevance in JS)
+    const allSongs = await Song.findAll({
       where: whereConditions,
-      attributes: ['id', 'title', 'originalLanguage', 'tags', 'isPublic', 'createdBy', 'usageCount', 'updatedAt', 'slides'],
+      attributes: ['id', 'title', 'originalLanguage', 'tags', 'isPublic', 'createdById', 'usageCount', 'updatedAt', 'slides'],
       include: [{
         model: User,
         as: 'creator',
         attributes: ['email']
       }],
-      order: [['title', 'ASC']],
       raw: false
     });
+
+    let songs = allSongs;
+
+    // If there's a search query, filter and prioritize results
+    if (query) {
+      const searchTerm = query.toLowerCase();
+
+      // Helper to check if lyrics contain the search term
+      const lyricsContain = (slides) => {
+        if (!slides || !Array.isArray(slides)) return false;
+        return slides.some(slide =>
+          (slide.originalText && slide.originalText.toLowerCase().includes(searchTerm)) ||
+          (slide.transliteration && slide.transliteration.toLowerCase().includes(searchTerm)) ||
+          (slide.translation && slide.translation.toLowerCase().includes(searchTerm)) ||
+          (slide.translationOverflow && slide.translationOverflow.toLowerCase().includes(searchTerm))
+        );
+      };
+
+      // Filter songs that match either title or lyrics
+      const matchingSongs = allSongs.filter(song => {
+        const titleMatch = song.title.toLowerCase().includes(searchTerm);
+        const lyricsMatch = lyricsContain(song.slides);
+        return titleMatch || lyricsMatch;
+      });
+
+      // Sort: title matches first, then lyrics-only matches, alphabetically within each group
+      songs = matchingSongs.sort((a, b) => {
+        const aTitleMatch = a.title.toLowerCase().includes(searchTerm);
+        const bTitleMatch = b.title.toLowerCase().includes(searchTerm);
+
+        // Title matches come first
+        if (aTitleMatch && !bTitleMatch) return -1;
+        if (!aTitleMatch && bTitleMatch) return 1;
+
+        // Within same priority, sort alphabetically by title
+        return a.title.localeCompare(b.title);
+      });
+    } else {
+      // No search query - just sort alphabetically
+      songs = allSongs.sort((a, b) => a.title.localeCompare(b.title));
+    }
 
     res.json({ songs });
   } catch (error) {
@@ -132,7 +167,7 @@ router.get('/meta/tags', authenticateToken, async (req, res) => {
       where: {
         [Op.or]: [
           { isPublic: true },
-          { createdBy: req.user.id }
+          { createdById: req.user.id }
         ]
       },
       attributes: ['tags'],
@@ -308,7 +343,7 @@ router.post('/bulk-import', authenticateToken, upload.array('songFiles', 50), as
           originalLanguage: 'he', // Default to Hebrew, user can change later
           slides,
           tags: [],
-          createdBy: req.user.id,
+          createdById: req.user.id,
           isPublic: false,
           isPendingApproval: false,
           backgroundImage: ''
@@ -371,7 +406,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     }
 
     // Check access permission (allow access if no creator or if public or if user owns it)
-    if (!song.isPublic && song.createdBy && song.createdBy.toString() !== req.user.id.toString()) {
+    if (!song.isPublic && song.createdById && song.createdById.toString() !== req.user.id.toString()) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -396,7 +431,7 @@ router.post('/', authenticateToken, async (req, res) => {
       originalLanguage,
       slides,
       tags: tags || [],
-      createdBy: req.user.id,
+      createdById: req.user.id,
       isPendingApproval: submitForApproval || false,
       isPublic: false,
       backgroundImage: backgroundImage || ''
@@ -432,7 +467,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // If editing a public song that user doesn't own
     // Admin users can edit directly, non-admin users get a personal copy
     const isAdmin = req.user.role === 'admin' || req.user.isAdmin;
-    if (originalSong.isPublic && originalSong.createdBy && originalSong.createdBy.toString() !== req.user.id.toString()) {
+    if (originalSong.isPublic && originalSong.createdById && originalSong.createdById.toString() !== req.user.id.toString()) {
       if (!isAdmin) {
         // Non-admin users: create a personal copy
         const personalCopy = await Song.create({
@@ -440,7 +475,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
           originalLanguage: originalLanguage !== undefined ? originalLanguage : originalSong.originalLanguage,
           slides: slides !== undefined ? slides : originalSong.slides,
           tags: tags !== undefined ? tags : originalSong.tags,
-          createdBy: req.user.id,
+          createdById: req.user.id,
           isPublic: false,
           isPendingApproval: false,
           backgroundImage: backgroundImage !== undefined ? backgroundImage : originalSong.backgroundImage
@@ -453,16 +488,16 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     // If user owns the song, update it
-    // If createdBy is null (migrated songs), allow admin users to edit
-    if (originalSong.createdBy && originalSong.createdBy.toString() !== req.user.id.toString()) {
+    // If createdById is null (migrated songs), allow admin users to edit
+    if (originalSong.createdById && originalSong.createdById.toString() !== req.user.id.toString()) {
       // Check if user is admin (already checked above, but double-check for security)
       if (!isAdmin) {
         return res.status(403).json({ error: 'Access denied' });
       }
     }
 
-    // If createdBy is null and user is not admin, deny access
-    if (!originalSong.createdBy && !isAdmin) {
+    // If createdById is null and user is not admin, deny access
+    if (!originalSong.createdById && !isAdmin) {
       return res.status(403).json({ error: 'Access denied - song has no owner' });
     }
 
@@ -514,7 +549,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Song not found' });
     }
 
-    if (song.createdBy.toString() !== req.user.id.toString()) {
+    if (song.createdById && song.createdById.toString() !== req.user.id.toString()) {
       return res.status(403).json({ error: 'Access denied' });
     }
 

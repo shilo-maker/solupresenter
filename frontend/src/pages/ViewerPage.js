@@ -631,7 +631,7 @@ function ViewerPage() {
             }
           }
         `}</style>
-        {/* Login Button - Top Right */}
+        {/* Login/Operator Button - Top Right */}
         <Button
           variant="light"
           style={{
@@ -643,9 +643,9 @@ function ViewerPage() {
             fontSize: '1rem',
             fontWeight: '500'
           }}
-          onClick={() => window.location.href = '/login'}
+          onClick={() => window.location.href = localStorage.getItem('token') ? '/operator' : '/login'}
         >
-          LOGIN
+          {localStorage.getItem('token') ? 'OPERATOR' : 'LOGIN'}
         </Button>
 
         {/* Centered Content */}

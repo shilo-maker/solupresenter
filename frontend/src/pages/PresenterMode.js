@@ -65,24 +65,29 @@ function PresenterMode() {
   const [selectedPublicRoom, setSelectedPublicRoom] = useState(null);
   const [linkedPublicRoomName, setLinkedPublicRoomName] = useState('');
   const [showRoomSelector, setShowRoomSelector] = useState(false);
+  const [showGearMenu, setShowGearMenu] = useState(false);
   const roomSelectorRef = useRef(null);
+  const gearMenuRef = useRef(null);
 
-  // Close room selector when clicking outside
+  // Close room selector and gear menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (roomSelectorRef.current && !roomSelectorRef.current.contains(event.target)) {
         setShowRoomSelector(false);
       }
+      if (gearMenuRef.current && !gearMenuRef.current.contains(event.target)) {
+        setShowGearMenu(false);
+      }
     };
 
-    if (showRoomSelector) {
+    if (showRoomSelector || showGearMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showRoomSelector]);
+  }, [showRoomSelector, showGearMenu]);
 
   // Song search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -1575,22 +1580,82 @@ function PresenterMode() {
           justifyContent: 'space-between',
           gap: '15px'
         }}>
-          <Button
-            variant="link"
-            onClick={() => navigate('/dashboard')}
-            style={{
-              padding: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white'
-            }}
-            title="Dashboard"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-              <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-            </svg>
-          </Button>
+          <div ref={gearMenuRef} style={{ position: 'relative' }}>
+            <Button
+              variant="link"
+              onClick={() => setShowGearMenu(!showGearMenu)}
+              style={{
+                padding: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white'
+              }}
+              title="Menu"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/>
+              </svg>
+            </Button>
+
+            {/* Gear Dropdown Menu */}
+            {showGearMenu && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: '0',
+                marginTop: '8px',
+                backgroundColor: 'rgba(30, 30, 40, 0.95)',
+                borderRadius: '10px',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+                backdropFilter: 'blur(10px)',
+                overflow: 'hidden',
+                zIndex: 1000,
+                minWidth: '160px'
+              }}>
+                <div
+                  onClick={() => { navigate('/dashboard'); setShowGearMenu(false); }}
+                  style={{
+                    padding: '12px 16px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    color: 'white',
+                    transition: 'background-color 0.2s',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+                    <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
+                  </svg>
+                  <span style={{ fontWeight: '500' }}>Dashboard</span>
+                </div>
+                <div
+                  onClick={() => { navigate('/'); setShowGearMenu(false); }}
+                  style={{
+                    padding: '12px 16px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    color: 'white',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+                    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+                  </svg>
+                  <span style={{ fontWeight: '500' }}>Home</span>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Room Selection Dropdown - Center */}
           {roomPin ? (

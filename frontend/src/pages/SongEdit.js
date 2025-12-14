@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Form, Badge, Alert, Spinner } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Form, Badge, Alert, Spinner, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 
@@ -24,6 +24,7 @@ function SongEdit() {
   const [isPersonalCopy, setIsPersonalCopy] = useState(false);
   const [expressMode, setExpressMode] = useState(false);
   const [expressText, setExpressText] = useState('');
+  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   const languages = [
     { code: 'he', name: 'Hebrew (עברית)' },
@@ -233,11 +234,11 @@ function SongEdit() {
 
       if (response.data.message === 'Personal copy created') {
         setIsPersonalCopy(true);
-        alert('A personal copy has been created since you were editing a public song');
-        navigate(`/songs/${response.data.song._id}`);
+        setToast({ show: true, message: 'A personal copy has been created since you were editing a public song', variant: 'info' });
+        setTimeout(() => navigate(`/songs/${response.data.song._id}`), 1500);
       } else {
-        alert('Song updated successfully!');
-        navigate(`/songs/${id}`);
+        setToast({ show: true, message: 'Song updated successfully!', variant: 'success' });
+        setTimeout(() => navigate(`/songs/${id}`), 1500);
       }
     } catch (error) {
       console.error('Error updating song:', error);
@@ -267,15 +268,38 @@ function SongEdit() {
   }
 
   return (
-    <Container className="py-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Edit Song</h2>
-        <Button variant="outline-secondary" onClick={() => navigate(`/songs/${id}`)}>
-          Cancel
-        </Button>
-      </div>
+    <>
+      {/* Toast Notification */}
+      <ToastContainer
+        position="top-center"
+        className="p-3"
+        style={{ position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 9999 }}
+      >
+        <Toast
+          show={toast.show}
+          onClose={() => setToast({ ...toast, show: false })}
+          delay={3000}
+          autohide
+          bg={toast.variant}
+        >
+          <Toast.Header closeButton={false}>
+            <strong className="me-auto">{toast.variant === 'success' ? 'Success' : 'Info'}</strong>
+          </Toast.Header>
+          <Toast.Body className={toast.variant === 'success' || toast.variant === 'info' ? 'text-white' : ''}>
+            {toast.variant === 'success' && '✓ '}{toast.message}
+          </Toast.Body>
+        </Toast>
+      </ToastContainer>
 
-      {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
+      <Container className="py-4">
+        <div className="d-flex justify-content-between align-items-center mb-4">
+          <h2>Edit Song</h2>
+          <Button variant="outline-secondary" onClick={() => navigate(`/songs/${id}`)}>
+            Cancel
+          </Button>
+        </div>
+
+        {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
 
       {isPersonalCopy && (
         <Alert variant="info">
@@ -537,7 +561,8 @@ function SongEdit() {
           </Col>
         </Row>
       </Form>
-    </Container>
+      </Container>
+    </>
   );
 }
 

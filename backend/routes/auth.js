@@ -27,9 +27,9 @@ const registerLimiter = process.env.NODE_ENV === 'production' ? rateLimit({
   legacyHeaders: false,
 }) : (req, res, next) => next(); // Skip rate limiting in development
 
-// Generate JWT token
+// Generate JWT token (30 days = ~1 month session)
 const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '30d' });
 };
 
 // Register with email/password

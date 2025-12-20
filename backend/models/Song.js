@@ -76,7 +76,8 @@ const Song = sequelize.define('Song', {
     allowNull: true,
     defaultValue: null,
     set(value) {
-      this.setDataValue('author', value ? value.trim() : null);
+      const trimmed = value ? value.trim() : null;
+      this.setDataValue('author', trimmed || null);
     }
   }
 }, {

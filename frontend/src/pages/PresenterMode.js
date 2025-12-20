@@ -2549,7 +2549,7 @@ function PresenterMode() {
         <div style={{
           backgroundColor: 'transparent',
           borderRadius: '15px',
-          overflow: 'hidden',
+          overflow: 'visible',
           borderTop: isMobile ? '1px solid rgba(255,255,255,0.6)' : 'none',
           borderLeft: isMobile ? 'none' : '1px solid rgba(255,255,255,0.6)',
           boxShadow: isMobile ? '0 -1px 8px rgba(255,255,255,0.15)' : '-1px 0 8px rgba(255,255,255,0.15)',
@@ -2663,7 +2663,8 @@ function PresenterMode() {
                   boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
                   padding: '8px',
                   minWidth: '180px',
-                  marginTop: '8px'
+                  marginTop: '8px',
+                  zIndex: 1050
                 }}
               >
                 <Dropdown.Item
@@ -2973,20 +2974,21 @@ function PresenterMode() {
                         onTouchMove={(e) => handleTouchMove(e, index)}
                         onTouchEnd={handleTouchEnd}
                         style={{
-                          padding: '5px 8px',
+                          padding: '10px 14px',
                           backgroundColor: touchDragIndex === index
                             ? 'rgba(102, 126, 234, 0.3)'
                             : touchHoldingIndex === index
                               ? 'rgba(102, 126, 234, 0.15)'
                               : display.bgColor,
-                          borderRadius: '4px',
+                          borderRadius: '8px',
                           borderLeft: display.borderLeft,
-                          marginBottom: '3px',
+                          marginBottom: '6px',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
                           cursor: 'grab',
                           transition: 'all 0.2s ease',
+                          border: '1px solid rgba(255,255,255,0.3)',
                           boxShadow: touchDragIndex === index
                             ? '0 4px 12px rgba(0, 0, 0, 0.3)'
                             : touchHoldingIndex === index
@@ -2997,17 +2999,19 @@ function PresenterMode() {
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.transform = 'translateX(2px)';
+                          e.currentTarget.style.borderColor = '#FF8C42';
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.transform = 'translateX(0)';
+                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)';
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '5px' }}>
-                          <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', cursor: 'grab' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '8px' }}>
+                          <span style={{ fontSize: '0.95rem', color: 'rgba(255,255,255,0.7)', cursor: 'grab' }}>
                             ⋮⋮
                           </span>
                           <span
-                            style={{ fontSize: '0.8rem', cursor: 'pointer', flex: 1, fontWeight: '500', color: 'white' }}
+                            style={{ fontSize: '0.95rem', cursor: 'pointer', flex: 1, fontWeight: '400', color: 'white' }}
                             onClick={() => selectItem(item)}
                           >
                             {index + 1}. {display.title}
@@ -3017,10 +3021,10 @@ function PresenterMode() {
                           onClick={() => removeFromSetlist(index)}
                           style={{
                             cursor: 'pointer',
-                            fontSize: '0.7rem',
+                            fontSize: '0.85rem',
                             color: '#ff6b6b',
-                            padding: '2px 6px',
-                            borderRadius: '3px',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
                             backgroundColor: 'rgba(255,107,107,0.15)'
                           }}
                         >

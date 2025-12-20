@@ -780,6 +780,9 @@ function PresenterMode() {
 
   // Parse express text into slides
   const parseExpressText = (text) => {
+    // Regex to match verse type tags like [Verse 1], [Chorus], [Bridge], etc.
+    const verseTypePattern = /^\[(verse\s*\d*|chorus|bridge|intro|outro|pre-?chorus|hook|tag|interlude|instrumental|ending)\]$/i;
+
     const slideBlocks = text.split(/\n\s*\n/); // Split by blank lines
 
     const parsedSlides = slideBlocks
@@ -787,11 +790,26 @@ function PresenterMode() {
         const lines = block.split('\n').map(line => line.trim()).filter(line => line);
         if (lines.length === 0) return null;
 
+        let verseType = '';
+        let contentLines = lines;
+
+        // Check if first line is a verse type tag
+        if (lines[0] && verseTypePattern.test(lines[0])) {
+          // Extract verse type without brackets
+          verseType = lines[0].slice(1, -1).trim();
+          // Remove the tag line from content
+          contentLines = lines.slice(1);
+        }
+
+        // If no content lines after removing tag, skip this block
+        if (contentLines.length === 0) return null;
+
         return {
-          originalText: lines[0] || '',
-          transliteration: lines[1] || '',
-          translation: lines[2] || '',
-          translationOverflow: lines[3] || ''
+          originalText: contentLines[0] || '',
+          transliteration: contentLines[1] || '',
+          translation: contentLines[2] || '',
+          translationOverflow: contentLines[3] || '',
+          verseType: verseType
         };
       })
       .filter(slide => slide !== null && slide.originalText);
@@ -800,7 +818,8 @@ function PresenterMode() {
       originalText: '',
       transliteration: '',
       translation: '',
-      translationOverflow: ''
+      translationOverflow: '',
+      verseType: ''
     }];
   };
 

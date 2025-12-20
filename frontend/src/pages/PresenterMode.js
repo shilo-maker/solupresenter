@@ -1670,7 +1670,6 @@ function PresenterMode() {
       <div style={{
         backgroundColor: 'transparent',
         borderRadius: '15px',
-        padding: '20px',
         marginBottom: '20px',
         textAlign: 'center',
         position: 'relative'
@@ -1679,10 +1678,12 @@ function PresenterMode() {
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '15px'
+          justifyContent: 'center',
+          width: '100%',
+          maxWidth: '100%',
+          overflow: 'hidden'
         }}>
-          <div ref={gearMenuRef} style={{ position: 'relative' }}>
+          <div ref={gearMenuRef} style={{ position: 'relative', width: '50px', flexShrink: 0 }}>
             <Button
               variant="link"
               onClick={() => setShowGearMenu(!showGearMenu)}
@@ -1761,7 +1762,7 @@ function PresenterMode() {
 
           {/* Room Selection Dropdown - Center */}
           {roomPin ? (
-            <div ref={roomSelectorRef} style={{ position: 'relative', flex: 1, maxWidth: '280px' }}>
+            <div ref={roomSelectorRef} style={{ position: 'relative', flex: '1 1 auto', maxWidth: '240px', margin: '0 10px' }}>
               <div
                 onClick={() => setShowRoomSelector(!showRoomSelector)}
                 style={{
@@ -1885,16 +1886,18 @@ function PresenterMode() {
               )}
             </div>
           ) : isCreatingRoom ? (
-            <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ flex: '1 1 auto', maxWidth: '240px', margin: '0 10px', textAlign: 'center' }}>
               <div className="spinner-border spinner-border-sm text-primary" role="status">
                 <span className="visually-hidden">Loading...</span>
               </div>
             </div>
           ) : (
-            <div style={{ flex: 1 }}></div>
+            <div style={{ flex: '1 1 auto', maxWidth: '240px', margin: '0 10px' }}></div>
           )}
 
-          <img src="/new_cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '40px', height: 'auto' }} />
+          <div style={{ width: '50px', flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+            <img src="/new_cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '40px', height: 'auto' }} />
+          </div>
         </div>
 
         {isCreatingRoom && !roomPin && (
@@ -2254,6 +2257,7 @@ function PresenterMode() {
                             style={{
                               width: '24px',
                               height: '34px',
+                              minHeight: '34px',
                               fontSize: '1rem',
                               fontWeight: '600',
                               flexShrink: 0,

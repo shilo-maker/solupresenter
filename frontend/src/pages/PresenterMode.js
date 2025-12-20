@@ -3374,32 +3374,54 @@ function PresenterMode() {
                 }
               };
 
+              const isSelected = currentSlideIndex === index;
+
               return (
               <div
                 key={index}
                 onClick={() => selectSlide(index)}
                 style={{
-                  border: currentSlideIndex === index ? '2px solid #007bff' : `1px solid ${getBorderColor(slide.verseType, false)}`,
+                  position: 'relative',
+                  border: isSelected ? '2px solid #00d4ff' : `1px solid ${getBorderColor(slide.verseType, false)}`,
                   borderRadius: '6px',
                   padding: '6px 8px',
+                  paddingLeft: isSelected ? '14px' : '8px',
                   cursor: 'pointer',
-                  backgroundColor: getBackgroundColor(slide.verseType, currentSlideIndex === index),
-                  transition: 'border 0.05s ease, background-color 0.05s ease',
-                  userSelect: 'none'
+                  backgroundColor: getBackgroundColor(slide.verseType, false),
+                  boxShadow: isSelected ? '0 0 12px rgba(0, 212, 255, 0.5), inset 0 0 20px rgba(0, 212, 255, 0.1)' : 'none',
+                  transition: 'all 0.15s ease',
+                  userSelect: 'none',
+                  transform: isSelected ? 'scale(1.02)' : 'scale(1)'
                 }}
                 onMouseDown={(e) => {
-                  e.currentTarget.style.transform = 'scale(0.98)';
+                  if (!isSelected) e.currentTarget.style.transform = 'scale(0.98)';
                 }}
                 onMouseUp={(e) => {
-                  e.currentTarget.style.transform = 'scale(1)';
+                  e.currentTarget.style.transform = isSelected ? 'scale(1.02)' : 'scale(1)';
                 }}
               >
+                {/* Left accent bar for selected slide */}
+                {isSelected && (
+                  <div style={{
+                    position: 'absolute',
+                    left: '0',
+                    top: '0',
+                    bottom: '0',
+                    width: '4px',
+                    background: 'linear-gradient(180deg, #00d4ff 0%, #0099ff 100%)',
+                    borderRadius: '6px 0 0 6px'
+                  }} />
+                )}
                 <div style={{
-                  color: currentSlideIndex === index ? '#4da3ff' : 'rgba(255,255,255,0.7)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  color: isSelected ? '#00d4ff' : 'rgba(255,255,255,0.7)',
                   fontWeight: 'bold',
                   marginBottom: '4px',
                   fontSize: '0.75rem'
                 }}>
+                  {isSelected && <span style={{ fontSize: '0.7rem' }}>▶</span>}
                   {currentSong.isBible
                     ? `Verse ${slide.verseNumber || index + 1}`
                     : slide.verseType

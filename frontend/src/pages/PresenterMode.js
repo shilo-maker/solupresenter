@@ -3301,13 +3301,11 @@ function PresenterMode() {
 
         {slideSectionOpen && currentSong && (
           <div>
-            <div className="dark-scrollbar" style={{
+            <div style={{
               padding: '8px',
               display: 'grid',
               gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
               gap: '6px',
-              maxHeight: 'calc(100vh - 200px)',
-              overflowY: 'auto',
               alignContent: 'start'
             }}>
             {currentSong.slides.map((slide, index) => {

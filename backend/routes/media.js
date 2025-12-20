@@ -3,31 +3,22 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const sharp = require('sharp');
 const { Media, User } = require('../models');
 const { Op } = require('sequelize');
 const { authenticateToken, isAdmin } = require('../middleware/auth');
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../uploads/backgrounds');
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // Generate unique filename: timestamp-randomstring-originalname
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
+// Ensure uploads directory exists
+const uploadDir = path.join(__dirname, '../uploads/backgrounds');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
+// Configure multer to use memory storage for processing with sharp
 const upload = multer({
-  storage: storage,
+  storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: 10 * 1024 * 1024 // 10MB limit for original upload
   },
   fileFilter: (req, file, cb) => {
     // Accept only image files
@@ -42,6 +33,52 @@ const upload = multer({
     }
   }
 });
+
+// Image compression settings
+const MAX_WIDTH = 1920;
+const MAX_HEIGHT = 1080;
+const WEBP_QUALITY = 80;
+
+/**
+ * Process and compress an image using sharp
+ * - Resize if larger than 1920x1080 (maintaining aspect ratio)
+ * - Convert to WebP format
+ * - Compress to 80% quality
+ */
+async function processImage(buffer, originalName) {
+  const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+  const outputFilename = `${uniqueSuffix}.webp`;
+  const outputPath = path.join(uploadDir, outputFilename);
+
+  // Get image metadata
+  const metadata = await sharp(buffer).metadata();
+
+  // Process the image
+  let processor = sharp(buffer);
+
+  // Resize if larger than max dimensions (maintain aspect ratio)
+  if (metadata.width > MAX_WIDTH || metadata.height > MAX_HEIGHT) {
+    processor = processor.resize(MAX_WIDTH, MAX_HEIGHT, {
+      fit: 'inside',
+      withoutEnlargement: true
+    });
+  }
+
+  // Convert to WebP with quality setting
+  const outputBuffer = await processor
+    .webp({ quality: WEBP_QUALITY })
+    .toBuffer();
+
+  // Write to disk
+  await fs.promises.writeFile(outputPath, outputBuffer);
+
+  return {
+    filename: outputFilename,
+    path: outputPath,
+    size: outputBuffer.length,
+    originalSize: buffer.length
+  };
+}
 
 // Get all media (public + user's personal media)
 router.get('/', authenticateToken, async (req, res) => {
@@ -70,6 +107,8 @@ router.get('/', authenticateToken, async (req, res) => {
 
 // Upload background image file
 router.post('/upload', authenticateToken, upload.single('file'), async (req, res) => {
+  let processedFile = null;
+
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -77,25 +116,37 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
 
     const { name } = req.body;
 
-    // Generate URL for the uploaded file
-    const fileUrl = `/uploads/backgrounds/${req.file.filename}`;
+    // Process and compress the image
+    console.log(`📷 Processing image: ${req.file.originalname} (${(req.file.size / 1024).toFixed(1)} KB)`);
+    processedFile = await processImage(req.file.buffer, req.file.originalname);
+    console.log(`✅ Compressed: ${(processedFile.originalSize / 1024).toFixed(1)} KB → ${(processedFile.size / 1024).toFixed(1)} KB (${Math.round((1 - processedFile.size / processedFile.originalSize) * 100)}% reduction)`);
+
+    // Generate URL for the processed file
+    const fileUrl = `/uploads/backgrounds/${processedFile.filename}`;
 
     const media = await Media.create({
       name: name || req.file.originalname,
       type: 'image',
       url: fileUrl,
-      thumbnailUrl: fileUrl, // Use same URL for thumbnail (could optimize later)
+      thumbnailUrl: fileUrl,
       uploadedById: req.user.id,
       isPublic: false,
-      fileSize: req.file.size
+      fileSize: processedFile.size
     });
 
-    res.status(201).json({ media });
+    res.status(201).json({
+      media,
+      compression: {
+        originalSize: processedFile.originalSize,
+        compressedSize: processedFile.size,
+        reduction: Math.round((1 - processedFile.size / processedFile.originalSize) * 100)
+      }
+    });
   } catch (error) {
     console.error('Error uploading media:', error);
-    // Delete uploaded file if database save failed
-    if (req.file) {
-      fs.unlink(req.file.path, (err) => {
+    // Delete processed file if database save failed
+    if (processedFile && processedFile.path) {
+      fs.unlink(processedFile.path, (err) => {
         if (err) console.error('Error deleting file:', err);
       });
     }

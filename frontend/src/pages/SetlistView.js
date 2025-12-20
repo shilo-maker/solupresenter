@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Card, Button, Badge, ListGroup, Row, Col, Spinner, Alert } from 'react-bootstrap';
+import { Container, Card, Button, Badge, ListGroup, Row, Col, Spinner, Alert, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
@@ -11,6 +11,7 @@ function SetlistView() {
   const [setlist, setSetlist] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   useEffect(() => {
     fetchSetlist();
@@ -74,7 +75,9 @@ function SetlistView() {
     );
   }
 
-  const isOwner = setlist.createdBy === user._id || setlist.createdBy._id === user._id;
+  const userId = user?.id || user?._id;
+  const createdById = setlist.createdById || setlist.createdBy?.id || setlist.createdBy?._id || setlist.createdBy;
+  const isOwner = createdById === userId;
 
   return (
     <Container className="py-4">
@@ -168,7 +171,7 @@ function SetlistView() {
                         <Button
                           variant="outline-primary"
                           size="sm"
-                          onClick={() => navigate(`/songs/${item.song._id}`)}
+                          onClick={() => navigate(`/songs/${item.song.id || item.song._id}`)}
                         >
                           View Song
                         </Button>

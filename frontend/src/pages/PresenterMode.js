@@ -1664,7 +1664,8 @@ function PresenterMode() {
       `}</style>
       <div style={{
         width: '100%',
-        maxWidth: '900px'
+        maxWidth: '900px',
+        overflow: 'visible'
       }}>
       {/* Back Button and Room PIN Display at Top */}
       <div style={{
@@ -1672,7 +1673,8 @@ function PresenterMode() {
         borderRadius: '15px',
         marginBottom: '20px',
         textAlign: 'center',
-        position: 'relative'
+        position: 'relative',
+        overflow: 'visible'
       }}>
         {/* Header Row: Gear - Broadcast Dropdown - Logo */}
         <div style={{
@@ -1680,9 +1682,10 @@ function PresenterMode() {
           alignItems: 'center',
           justifyContent: 'center',
           width: '100%',
-          maxWidth: '100%'
+          maxWidth: '100%',
+          overflow: 'visible'
         }}>
-          <div ref={gearMenuRef} style={{ position: 'relative', width: '50px', flexShrink: 0 }}>
+          <div ref={gearMenuRef} style={{ position: 'relative', width: '50px', flexShrink: 0, overflow: 'visible' }}>
             <Button
               variant="link"
               onClick={() => setShowGearMenu(!showGearMenu)}

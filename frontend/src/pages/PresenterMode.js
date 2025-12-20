@@ -1187,6 +1187,48 @@ function PresenterMode() {
     }
   };
 
+  // Touch-based drag and drop for mobile
+  const [touchDragIndex, setTouchDragIndex] = useState(null);
+  const [touchDragY, setTouchDragY] = useState(null);
+  const setlistContainerRef = useRef(null);
+
+  const handleTouchStart = (e, index) => {
+    setTouchDragIndex(index);
+    setTouchDragY(e.touches[0].clientY);
+  };
+
+  const handleTouchMove = (e, index) => {
+    if (touchDragIndex === null) return;
+    e.preventDefault();
+
+    const currentY = e.touches[0].clientY;
+    const container = setlistContainerRef.current;
+    if (!container) return;
+
+    const items = container.querySelectorAll('[data-setlist-item]');
+    let targetIndex = touchDragIndex;
+
+    items.forEach((item, idx) => {
+      const rect = item.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      if (currentY < midY && idx < touchDragIndex) {
+        targetIndex = idx;
+      } else if (currentY > midY && idx > touchDragIndex) {
+        targetIndex = idx;
+      }
+    });
+
+    if (targetIndex !== touchDragIndex) {
+      moveSetlistItem(touchDragIndex, targetIndex);
+      setTouchDragIndex(targetIndex);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setTouchDragIndex(null);
+    setTouchDragY(null);
+  };
+
   const selectItem = (item) => {
     setCurrentItem(item);
     setIsBlankActive(false);
@@ -2731,11 +2773,15 @@ function PresenterMode() {
                   No songs in setlist. Add songs from above.
                 </p>
               ) : (
-                <div className="dark-scrollbar" style={{
-                  maxHeight: isMobile ? 'none' : '220px',
-                  overflowY: isMobile ? 'visible' : 'auto',
-                  paddingRight: isMobile ? '0' : '5px'
-                }}>
+                <div
+                  ref={setlistContainerRef}
+                  className="dark-scrollbar"
+                  style={{
+                    maxHeight: isMobile ? 'none' : '220px',
+                    overflowY: isMobile ? 'visible' : 'auto',
+                    paddingRight: isMobile ? '0' : '5px'
+                  }}
+                >
                   {setlist.map((item, index) => {
                     const getItemDisplay = () => {
                       if (item.type === 'song') {
@@ -2771,13 +2817,17 @@ function PresenterMode() {
                     return (
                       <div
                         key={index}
-                        draggable
+                        data-setlist-item
+                        draggable={!isMobile}
                         onDragStart={(e) => handleDragStart(e, index)}
                         onDragOver={handleDragOver}
                         onDrop={(e) => handleDrop(e, index)}
+                        onTouchStart={(e) => handleTouchStart(e, index)}
+                        onTouchMove={(e) => handleTouchMove(e, index)}
+                        onTouchEnd={handleTouchEnd}
                         style={{
                           padding: '8px 10px',
-                          backgroundColor: display.bgColor,
+                          backgroundColor: touchDragIndex === index ? 'rgba(102, 126, 234, 0.3)' : display.bgColor,
                           borderRadius: '6px',
                           borderLeft: display.borderLeft,
                           marginBottom: '6px',
@@ -2786,7 +2836,9 @@ function PresenterMode() {
                           alignItems: 'center',
                           cursor: 'grab',
                           transition: 'all 0.2s ease',
-                          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+                          boxShadow: touchDragIndex === index ? '0 4px 12px rgba(0, 0, 0, 0.3)' : '0 1px 3px rgba(0, 0, 0, 0.1)',
+                          transform: touchDragIndex === index ? 'scale(1.02)' : 'none',
+                          touchAction: 'none'
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.transform = 'translateX(4px)';

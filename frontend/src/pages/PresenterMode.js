@@ -3318,6 +3318,37 @@ function PresenterMode() {
                 }
               };
 
+              const getBackgroundColor = (verseType, isSelected) => {
+                if (isSelected) return 'rgba(0,123,255,0.25)'; // Blue for selected
+
+                switch(verseType) {
+                  case 'Intro':
+                    return 'rgba(255,255,255,0.08)';
+                  case 'Verse1':
+                    return 'rgba(255,193,7,0.15)'; // Bright yellow
+                  case 'Verse2':
+                    return 'rgba(255,167,38,0.15)'; // Orange-yellow
+                  case 'Verse3':
+                    return 'rgba(255,213,79,0.15)'; // Light yellow
+                  case 'Verse4':
+                    return 'rgba(251,192,45,0.15)'; // Golden yellow
+                  case 'PreChorus':
+                    return 'rgba(233,30,99,0.12)'; // Pink
+                  case 'Chorus':
+                    return 'rgba(3,169,244,0.15)'; // Cyan
+                  case 'Bridge':
+                    return 'rgba(156,39,176,0.12)'; // Purple
+                  case 'Instrumental':
+                    return 'rgba(76,175,80,0.12)'; // Green
+                  case 'Outro':
+                    return 'rgba(255,152,0,0.15)'; // Orange
+                  case 'Tag':
+                    return 'rgba(103,58,183,0.12)'; // Indigo
+                  default:
+                    return 'transparent';
+                }
+              };
+
               return (
               <div
                 key={index}
@@ -3327,7 +3358,7 @@ function PresenterMode() {
                   borderRadius: '6px',
                   padding: '6px 8px',
                   cursor: 'pointer',
-                  backgroundColor: currentSlideIndex === index ? 'rgba(0,123,255,0.2)' : 'transparent',
+                  backgroundColor: getBackgroundColor(slide.verseType, currentSlideIndex === index),
                   transition: 'border 0.05s ease, background-color 0.05s ease',
                   userSelect: 'none'
                 }}

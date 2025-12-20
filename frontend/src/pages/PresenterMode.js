@@ -2862,7 +2862,15 @@ function PresenterMode() {
                     paddingRight: isMobile ? '0' : '5px'
                   }}
                 >
-                  {setlist.map((item, index) => {
+                  {(() => {
+                    let itemNumber = 0;
+                    return setlist.map((item, index) => {
+                    // Track item number (excluding sections)
+                    if (item.type !== 'section') {
+                      itemNumber++;
+                    }
+                    const currentItemNumber = itemNumber;
+
                     const getItemDisplay = () => {
                       if (item.type === 'song') {
                         return {
@@ -3014,7 +3022,7 @@ function PresenterMode() {
                             style={{ fontSize: '0.95rem', cursor: 'pointer', flex: 1, fontWeight: '400', color: 'white' }}
                             onClick={() => selectItem(item)}
                           >
-                            {index + 1}. {display.title}
+                            {currentItemNumber}. {display.title}
                           </span>
                         </div>
                         <span
@@ -3032,7 +3040,8 @@ function PresenterMode() {
                         </span>
                       </div>
                     );
-                  })}
+                  });
+                  })()}
                 </div>
               )}
             </div>

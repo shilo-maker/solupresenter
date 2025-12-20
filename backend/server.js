@@ -280,13 +280,14 @@ io.on('connection', (socket) => {
             displayMode: room.currentSlide.displayMode,
             songTitle: room.currentBibleData.title,
             backgroundImage: room.backgroundImage || '',
-            isBible: true
+            isBible: true,
+            originalLanguage: room.currentBibleData.originalLanguage || 'he'
           };
         }
         // Otherwise, fetch song from database (only needed fields)
         else if (room.currentSlide.songId) {
           const song = await Song.findByPk(room.currentSlide.songId, {
-            attributes: ['title', 'slides'],
+            attributes: ['title', 'slides', 'originalLanguage'],
             raw: true
           });
           if (song && song.slides[room.currentSlide.slideIndex]) {
@@ -294,7 +295,8 @@ io.on('connection', (socket) => {
               slide: song.slides[room.currentSlide.slideIndex],
               displayMode: room.currentSlide.displayMode,
               songTitle: song.title,
-              backgroundImage: room.backgroundImage || ''
+              backgroundImage: room.backgroundImage || '',
+              originalLanguage: song.originalLanguage || 'en'
             };
           }
         }
@@ -375,7 +377,8 @@ io.on('connection', (socket) => {
             displayMode: currentSlideData.displayMode,
             songTitle: bibleData.title,
             backgroundImage: backgroundImage || '',
-            isBible: true
+            isBible: true,
+            originalLanguage: bibleData.originalLanguage || 'he'
           };
         } else if (songId) {
           // Fallback: Fetch song from database (for backward compatibility)

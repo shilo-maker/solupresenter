@@ -85,7 +85,7 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
       type: 'image',
       url: fileUrl,
       thumbnailUrl: fileUrl, // Use same URL for thumbnail (could optimize later)
-      uploadedBy: req.user.id,
+      uploadedById: req.user.id,
       isPublic: false
     });
 
@@ -116,7 +116,7 @@ router.post('/', authenticateToken, async (req, res) => {
       type,
       url,
       thumbnailUrl: thumbnailUrl || '',
-      uploadedBy: req.user.id,
+      uploadedById: req.user.id,
       isPublic: false
     });
 
@@ -136,7 +136,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Media not found' });
     }
 
-    if (media.uploadedBy !== req.user.id) {
+    if (media.uploadedById !== req.user.id) {
       return res.status(403).json({ error: 'Access denied' });
     }
 

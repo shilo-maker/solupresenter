@@ -1189,19 +1189,52 @@ function PresenterMode() {
 
   // Touch-based drag and drop for mobile
   const [touchDragIndex, setTouchDragIndex] = useState(null);
-  const [touchDragY, setTouchDragY] = useState(null);
+  const [touchDragReady, setTouchDragReady] = useState(false);
+  const [touchHoldingIndex, setTouchHoldingIndex] = useState(null);
+  const touchStartPos = useRef(null);
+  const touchHoldTimer = useRef(null);
   const setlistContainerRef = useRef(null);
+  const TOUCH_HOLD_DELAY = 500; // ms to hold before drag is enabled
+  const TOUCH_MOVE_THRESHOLD = 10; // pixels of movement allowed during hold
 
   const handleTouchStart = (e, index) => {
-    setTouchDragIndex(index);
-    setTouchDragY(e.touches[0].clientY);
+    const touch = e.touches[0];
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    setTouchHoldingIndex(index);
+
+    // Start hold timer
+    touchHoldTimer.current = setTimeout(() => {
+      setTouchDragIndex(index);
+      setTouchDragReady(true);
+      setTouchHoldingIndex(null);
+      // Vibrate if supported to indicate drag mode activated
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+    }, TOUCH_HOLD_DELAY);
   };
 
   const handleTouchMove = (e, index) => {
-    if (touchDragIndex === null) return;
+    const touch = e.touches[0];
+    const currentY = touch.clientY;
+
+    // If still in hold phase, check if moved too much
+    if (touchHoldingIndex !== null && touchStartPos.current) {
+      const dx = Math.abs(touch.clientX - touchStartPos.current.x);
+      const dy = Math.abs(touch.clientY - touchStartPos.current.y);
+      if (dx > TOUCH_MOVE_THRESHOLD || dy > TOUCH_MOVE_THRESHOLD) {
+        // Moved too much, cancel hold
+        clearTimeout(touchHoldTimer.current);
+        setTouchHoldingIndex(null);
+        return;
+      }
+    }
+
+    // If drag not ready, allow normal scrolling
+    if (!touchDragReady || touchDragIndex === null) return;
+
     e.preventDefault();
 
-    const currentY = e.touches[0].clientY;
     const container = setlistContainerRef.current;
     if (!container) return;
 
@@ -1225,8 +1258,11 @@ function PresenterMode() {
   };
 
   const handleTouchEnd = () => {
+    clearTimeout(touchHoldTimer.current);
     setTouchDragIndex(null);
-    setTouchDragY(null);
+    setTouchDragReady(false);
+    setTouchHoldingIndex(null);
+    touchStartPos.current = null;
   };
 
   const selectItem = (item) => {
@@ -2827,7 +2863,11 @@ function PresenterMode() {
                         onTouchEnd={handleTouchEnd}
                         style={{
                           padding: '8px 10px',
-                          backgroundColor: touchDragIndex === index ? 'rgba(102, 126, 234, 0.3)' : display.bgColor,
+                          backgroundColor: touchDragIndex === index
+                            ? 'rgba(102, 126, 234, 0.3)'
+                            : touchHoldingIndex === index
+                              ? 'rgba(102, 126, 234, 0.15)'
+                              : display.bgColor,
                           borderRadius: '6px',
                           borderLeft: display.borderLeft,
                           marginBottom: '6px',
@@ -2836,7 +2876,11 @@ function PresenterMode() {
                           alignItems: 'center',
                           cursor: 'grab',
                           transition: 'all 0.2s ease',
-                          boxShadow: touchDragIndex === index ? '0 4px 12px rgba(0, 0, 0, 0.3)' : '0 1px 3px rgba(0, 0, 0, 0.1)',
+                          boxShadow: touchDragIndex === index
+                            ? '0 4px 12px rgba(0, 0, 0, 0.3)'
+                            : touchHoldingIndex === index
+                              ? '0 2px 8px rgba(102, 126, 234, 0.3)'
+                              : '0 1px 3px rgba(0, 0, 0, 0.1)',
                           transform: touchDragIndex === index ? 'scale(1.02)' : 'none',
                           touchAction: 'none'
                         }}

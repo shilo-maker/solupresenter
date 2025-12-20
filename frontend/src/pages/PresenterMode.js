@@ -1680,8 +1680,7 @@ function PresenterMode() {
           alignItems: 'center',
           justifyContent: 'center',
           width: '100%',
-          maxWidth: '100%',
-          overflow: 'hidden'
+          maxWidth: '100%'
         }}>
           <div ref={gearMenuRef} style={{ position: 'relative', width: '50px', flexShrink: 0 }}>
             <Button

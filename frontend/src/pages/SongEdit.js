@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Form, Badge, Alert, Spinner, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 function SongEdit() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState('');
@@ -25,6 +27,11 @@ function SongEdit() {
   const [expressMode, setExpressMode] = useState(false);
   const [expressText, setExpressText] = useState('');
   const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
+  const [isPublic, setIsPublic] = useState(false);
+  const [isPendingApproval, setIsPendingApproval] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+
+  const isAdmin = user?.role === 'admin';
 
   const languages = [
     { code: 'he', name: 'Hebrew (עברית)' },
@@ -53,6 +60,9 @@ function SongEdit() {
 
       setTitle(song.title);
       setOriginalLanguage(song.originalLanguage);
+      setIsPublic(song.isPublic || false);
+      setIsPendingApproval(song.isPendingApproval || false);
+      setIsOwner(song.createdById === user?.id || song.creator?.id === user?.id);
       const processedSlides = song.slides.length > 0 ? song.slides.map(slide => ({
         ...slide,
         verseType: slide.verseType || ''
@@ -229,7 +239,9 @@ function SongEdit() {
         title: title.trim(),
         originalLanguage,
         slides: validSlides,
-        tags
+        tags,
+        isPublic,
+        isPendingApproval
       });
 
       if (response.data.message === 'Personal copy created') {
@@ -540,6 +552,56 @@ function SongEdit() {
                 )}
               </Card.Body>
             </Card>
+
+            {/* Visibility Options - show for admins always, for owners when song is not public */}
+            {(isAdmin || (isOwner && !isPublic)) && (
+              <Card className="mb-4">
+                <Card.Header>
+                  <h5 className="mb-0">Visibility</h5>
+                </Card.Header>
+                <Card.Body>
+                  {isAdmin ? (
+                    <>
+                      <Form.Check
+                        type="switch"
+                        id="makePublic"
+                        label={isPublic ? "Public song (visible to all users)" : "Make this song public"}
+                        checked={isPublic}
+                        onChange={(e) => setIsPublic(e.target.checked)}
+                      />
+                      <Form.Text className="text-muted">
+                        {isPublic
+                          ? "Toggle off to make this song private"
+                          : "Toggle on to make this song visible to all users"}
+                      </Form.Text>
+                      {isPublic && (
+                        <Alert variant="success" className="mt-2 mb-0">
+                          <small>This song is currently public</small>
+                        </Alert>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Form.Check
+                        type="checkbox"
+                        id="submitForApproval"
+                        label="Submit for public approval"
+                        checked={isPendingApproval}
+                        onChange={(e) => setIsPendingApproval(e.target.checked)}
+                      />
+                      <Form.Text className="text-muted">
+                        An admin will review this song for inclusion in the public database
+                      </Form.Text>
+                      {isPendingApproval && (
+                        <Alert variant="info" className="mt-2 mb-0">
+                          <small>This song is pending approval</small>
+                        </Alert>
+                      )}
+                    </>
+                  )}
+                </Card.Body>
+              </Card>
+            )}
 
             {/* Submit Button */}
             <div className="d-grid gap-2">

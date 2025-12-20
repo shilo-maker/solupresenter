@@ -86,7 +86,8 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
       url: fileUrl,
       thumbnailUrl: fileUrl, // Use same URL for thumbnail (could optimize later)
       uploadedById: req.user.id,
-      isPublic: false
+      isPublic: false,
+      fileSize: req.file.size
     });
 
     res.status(201).json({ media });

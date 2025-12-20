@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Form, Tab, Tabs, Alert, Modal } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Form, Tab, Tabs, Alert, Modal, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import api, { getFullImageUrl } from '../services/api';
 import { gradientPresets } from '../utils/gradients';
@@ -11,6 +11,7 @@ function MediaLibrary() {
   const [error, setError] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [modalTab, setModalTab] = useState('gradient');
+  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   // Form states
   const [newMediaName, setNewMediaName] = useState('');
@@ -140,6 +141,13 @@ function MediaLibrary() {
 
   const isGradient = (url) => url.startsWith('linear-gradient');
 
+  const formatFileSize = (bytes) => {
+    if (!bytes) return null;
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
   return (
     <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
@@ -192,9 +200,16 @@ function MediaLibrary() {
                   <Card.Body>
                     <Card.Title style={{ fontSize: '0.9rem' }}>{item.name}</Card.Title>
                     <div className="d-flex justify-content-between align-items-center">
-                      <small className="text-muted">
-                        {isGradient(item.url) ? 'Gradient' : 'Image'}
-                      </small>
+                      <div>
+                        <small className="text-muted">
+                          {isGradient(item.url) ? 'Gradient' : 'Image'}
+                        </small>
+                        {item.fileSize && (
+                          <small className="text-muted ms-2">
+                            ({formatFileSize(item.fileSize)})
+                          </small>
+                        )}
+                      </div>
                       <Button
                         size="sm"
                         variant="outline-danger"

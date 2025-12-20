@@ -33,6 +33,12 @@ const Media = sequelize.define('Media', {
   uploadedById: {
     type: DataTypes.UUID,
     allowNull: false
+  },
+  fileSize: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    defaultValue: null,
+    comment: 'File size in bytes (null for gradients/URLs)'
   }
 }, {
   tableName: 'media',

@@ -785,34 +785,34 @@ function PresenterMode() {
 
     const slideBlocks = text.split(/\n\s*\n/); // Split by blank lines
 
-    const parsedSlides = slideBlocks
-      .map(block => {
-        const lines = block.split('\n').map(line => line.trim()).filter(line => line);
-        if (lines.length === 0) return null;
+    // Use reduce to track currentVerseType across slides
+    const parsedSlides = slideBlocks.reduce((acc, block) => {
+      const lines = block.split('\n').map(line => line.trim()).filter(line => line);
+      if (lines.length === 0) return acc;
 
-        let verseType = '';
-        let contentLines = lines;
+      let contentLines = lines;
 
-        // Check if first line is a verse type tag
-        if (lines[0] && verseTypePattern.test(lines[0])) {
-          // Extract verse type without brackets
-          verseType = lines[0].slice(1, -1).trim();
-          // Remove the tag line from content
-          contentLines = lines.slice(1);
-        }
+      // Check if first line is a verse type tag
+      if (lines[0] && verseTypePattern.test(lines[0])) {
+        // Extract verse type without brackets and update current
+        acc.currentVerseType = lines[0].slice(1, -1).trim();
+        // Remove the tag line from content
+        contentLines = lines.slice(1);
+      }
 
-        // If no content lines after removing tag, skip this block
-        if (contentLines.length === 0) return null;
+      // If no content lines after removing tag, skip this block
+      if (contentLines.length === 0) return acc;
 
-        return {
-          originalText: contentLines[0] || '',
-          transliteration: contentLines[1] || '',
-          translation: contentLines[2] || '',
-          translationOverflow: contentLines[3] || '',
-          verseType: verseType
-        };
-      })
-      .filter(slide => slide !== null && slide.originalText);
+      acc.slides.push({
+        originalText: contentLines[0] || '',
+        transliteration: contentLines[1] || '',
+        translation: contentLines[2] || '',
+        translationOverflow: contentLines[3] || '',
+        verseType: acc.currentVerseType // Use current (persisted) verse type
+      });
+
+      return acc;
+    }, { slides: [], currentVerseType: '' }).slides;
 
     return parsedSlides.length > 0 ? parsedSlides : [{
       originalText: '',

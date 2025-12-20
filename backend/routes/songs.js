@@ -46,7 +46,7 @@ router.get('/', authenticateToken, async (req, res) => {
           { createdById: req.user.id }
         ]
       },
-      attributes: ['id', 'title', 'originalLanguage', 'tags', 'isPublic', 'createdById', 'usageCount', 'updatedAt', 'slides'],
+      attributes: ['id', 'title', 'originalLanguage', 'tags', 'isPublic', 'createdById', 'usageCount', 'updatedAt', 'slides', 'author'],
       include: [{
         model: User,
         as: 'creator',
@@ -92,7 +92,7 @@ router.get('/search', authenticateToken, async (req, res) => {
     // Fetch all accessible songs (we'll filter and sort by relevance in JS)
     const allSongs = await Song.findAll({
       where: whereConditions,
-      attributes: ['id', 'title', 'originalLanguage', 'tags', 'isPublic', 'createdById', 'usageCount', 'updatedAt', 'slides'],
+      attributes: ['id', 'title', 'originalLanguage', 'tags', 'isPublic', 'createdById', 'usageCount', 'updatedAt', 'slides', 'author'],
       include: [{
         model: User,
         as: 'creator',
@@ -420,11 +420,14 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Create new song
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { title, originalLanguage, slides, tags, submitForApproval, backgroundImage } = req.body;
+    const { title, originalLanguage, slides, tags, submitForApproval, backgroundImage, author } = req.body;
 
     if (!title || !originalLanguage || !slides || slides.length === 0) {
       return res.status(400).json({ error: 'Title, language, and at least one slide are required' });
     }
+
+    // Admins create public songs automatically
+    const isAdmin = req.user.role === 'admin';
 
     const song = await Song.create({
       title,
@@ -432,9 +435,12 @@ router.post('/', authenticateToken, async (req, res) => {
       slides,
       tags: tags || [],
       createdById: req.user.id,
-      isPendingApproval: submitForApproval || false,
-      isPublic: false,
-      backgroundImage: backgroundImage || ''
+      isPendingApproval: isAdmin ? false : (submitForApproval || false),
+      isPublic: isAdmin,
+      approvedById: isAdmin ? req.user.id : null,
+      approvedAt: isAdmin ? new Date() : null,
+      backgroundImage: backgroundImage || '',
+      author: author || null
     });
 
     res.status(201).json({ song });
@@ -453,7 +459,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Song not found' });
     }
 
-    const { title, originalLanguage, slides, tags, backgroundImage } = req.body;
+    const { title, originalLanguage, slides, tags, backgroundImage, isPublic, isPendingApproval, author } = req.body;
 
     console.log('Received update request for song:', req.params.id);
     console.log('Request body:', JSON.stringify(req.body, null, 2));
@@ -478,7 +484,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
           createdById: req.user.id,
           isPublic: false,
           isPendingApproval: false,
-          backgroundImage: backgroundImage !== undefined ? backgroundImage : originalSong.backgroundImage
+          backgroundImage: backgroundImage !== undefined ? backgroundImage : originalSong.backgroundImage,
+          author: author !== undefined ? author : originalSong.author
         });
 
         console.log('Created personal copy with slides:', personalCopy.slides);
@@ -516,6 +523,25 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
     if (backgroundImage !== undefined) {
       originalSong.backgroundImage = backgroundImage;
+    }
+    if (author !== undefined) {
+      originalSong.author = author || null;
+    }
+
+    // Handle visibility changes
+    // Admins can directly make songs public
+    if (isAdmin && isPublic !== undefined) {
+      originalSong.isPublic = isPublic;
+      if (isPublic) {
+        originalSong.isPendingApproval = false;
+        originalSong.approvedById = req.user.id;
+        originalSong.approvedAt = new Date();
+      }
+    }
+    // Non-admins can submit for approval (only if they own the song)
+    if (!isAdmin && isPendingApproval !== undefined &&
+        originalSong.createdById && originalSong.createdById.toString() === req.user.id.toString()) {
+      originalSong.isPendingApproval = isPendingApproval;
     }
 
     console.log('Updating song with slides:', originalSong.slides);

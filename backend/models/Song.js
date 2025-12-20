@@ -70,6 +70,14 @@ const Song = sequelize.define('Song', {
   backgroundImage: {
     type: DataTypes.STRING,
     defaultValue: ''
+  },
+  author: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: null,
+    set(value) {
+      this.setDataValue('author', value ? value.trim() : null);
+    }
   }
 }, {
   tableName: 'songs',

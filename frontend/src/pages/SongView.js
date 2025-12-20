@@ -174,6 +174,13 @@ function SongView() {
                 <div>{song.originalLanguage ? languages[song.originalLanguage] : 'Unknown'}</div>
               </div>
 
+              {song.author && (
+                <div className="mb-3">
+                  <small className="text-muted">Author / Artist:</small>
+                  <div>{song.author}</div>
+                </div>
+              )}
+
               <div className="mb-3">
                 <small className="text-muted">Created By:</small>
                 <div>{song.createdBy ? song.createdBy.email : 'Unknown (Migrated Song)'}</div>

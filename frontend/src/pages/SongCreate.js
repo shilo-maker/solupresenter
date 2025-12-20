@@ -7,6 +7,7 @@ function SongCreate() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [title, setTitle] = useState(searchParams.get('title') || '');
+  const [author, setAuthor] = useState('');
   const [originalLanguage, setOriginalLanguage] = useState('he');
   const [slides, setSlides] = useState([{
     originalText: '',
@@ -195,6 +196,7 @@ function SongCreate() {
     try {
       const response = await api.post('/api/songs', {
         title: title.trim(),
+        author: author.trim() || null,
         originalLanguage,
         slides: validSlides,
         tags,
@@ -243,6 +245,16 @@ function SongCreate() {
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     required
+                  />
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Author / Artist</Form.Label>
+                  <Form.Control
+                    type="text"
+                    placeholder="Enter author or artist name (optional)"
+                    value={author}
+                    onChange={(e) => setAuthor(e.target.value)}
                   />
                 </Form.Group>
 

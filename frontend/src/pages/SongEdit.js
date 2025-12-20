@@ -11,6 +11,7 @@ function SongEdit() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState('');
+  const [author, setAuthor] = useState('');
   const [originalLanguage, setOriginalLanguage] = useState('he');
   const [slides, setSlides] = useState([{
     originalText: '',
@@ -62,6 +63,7 @@ function SongEdit() {
       console.log('Raw slides from database:', song.slides);
 
       setTitle(song.title);
+      setAuthor(song.author || '');
       setOriginalLanguage(song.originalLanguage);
       setIsPublic(song.isPublic || false);
       setIsPendingApproval(song.isPendingApproval || false);
@@ -240,6 +242,7 @@ function SongEdit() {
     try {
       const response = await api.put(`/api/songs/${id}`, {
         title: title.trim(),
+        author: author.trim() || null,
         originalLanguage,
         slides: validSlides,
         tags,
@@ -339,6 +342,16 @@ function SongEdit() {
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     required
+                  />
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Author / Artist</Form.Label>
+                  <Form.Control
+                    type="text"
+                    placeholder="Enter author or artist name (optional)"
+                    value={author}
+                    onChange={(e) => setAuthor(e.target.value)}
                   />
                 </Form.Group>
 

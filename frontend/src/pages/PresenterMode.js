@@ -103,6 +103,7 @@ function PresenterMode() {
   // Setlist state (contains items with type: 'song', 'blank', or 'image')
   const [setlist, setSetlist] = useState([]);
   const [currentItem, setCurrentItem] = useState(null); // Current setlist item (song or image)
+  const [selectedFromSetlist, setSelectedFromSetlist] = useState(false); // Track if selection came from setlist
 
   // Current song and slides
   const [currentSong, setCurrentSong] = useState(null);
@@ -1282,6 +1283,7 @@ function PresenterMode() {
   const selectItem = (item) => {
     setCurrentItem(item);
     setIsBlankActive(false);
+    setSelectedFromSetlist(true); // Mark as selected from setlist
 
     if (item.type === 'song' || item.type === 'bible') {
       setCurrentSong(item.data);
@@ -1304,12 +1306,14 @@ function PresenterMode() {
     // Check if song has slides (new optimized path)
     if (song.slides && song.slides.length > 0) {
       selectItem({ type: 'song', data: song });
+      setSelectedFromSetlist(false); // Override - selected from database
     } else {
       // Fallback: fetch full song details if slides are missing (backward compatibility)
       try {
         const response = await api.get(`/api/songs/${song.id}`);
         const fullSong = response.data.song;
         selectItem({ type: 'song', data: fullSong });
+        setSelectedFromSetlist(false); // Override - selected from database
       } catch (error) {
         console.error('Error fetching song details:', error);
         setError('Failed to load song details');
@@ -2199,7 +2203,7 @@ function PresenterMode() {
                   >
                     {({ index, style }) => {
                       const song = searchResults[index];
-                      const isSelected = currentSong && currentSong.id && currentSong.id === song.id;
+                      const isSelected = !selectedFromSetlist && currentSong && currentSong.id && currentSong.id === song.id;
                       return (
                         <div
                           style={{
@@ -2872,6 +2876,14 @@ function PresenterMode() {
                     }
                     const currentItemNumber = itemNumber;
 
+                    // Check if this item is selected (only show as selected if selection came from setlist)
+                    const isItemSelected = selectedFromSetlist && currentItem && (
+                      (item.type === 'song' && currentItem.type === 'song' && item.data?.id === currentItem.data?.id) ||
+                      (item.type === 'bible' && currentItem.type === 'bible' && item.data?.id === currentItem.data?.id) ||
+                      (item.type === 'image' && currentItem.type === 'image' && item.data?.id === currentItem.data?.id) ||
+                      (item.type === 'blank' && currentItem.type === 'blank')
+                    );
+
                     const getItemDisplay = () => {
                       if (item.type === 'song') {
                         return {
@@ -2988,7 +3000,12 @@ function PresenterMode() {
                             ? 'rgba(102, 126, 234, 0.3)'
                             : touchHoldingIndex === index
                               ? 'rgba(102, 126, 234, 0.15)'
-                              : display.bgColor,
+                              : isItemSelected
+                                ? 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)'
+                                : display.bgColor,
+                          background: isItemSelected && touchDragIndex !== index && touchHoldingIndex !== index
+                            ? 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)'
+                            : undefined,
                           borderRadius: '8px',
                           borderLeft: display.borderLeft,
                           marginBottom: '6px',
@@ -2997,12 +3014,14 @@ function PresenterMode() {
                           alignItems: 'center',
                           cursor: 'grab',
                           transition: 'all 0.2s ease',
-                          border: '1px solid rgba(255,255,255,0.3)',
+                          border: isItemSelected ? '2px solid var(--color-primary)' : '1px solid rgba(255,255,255,0.3)',
                           boxShadow: touchDragIndex === index
                             ? '0 4px 12px rgba(0, 0, 0, 0.3)'
                             : touchHoldingIndex === index
                               ? '0 2px 8px rgba(102, 126, 234, 0.3)'
-                              : 'none',
+                              : isItemSelected
+                                ? '0 2px 8px rgba(0,123,255,0.25)'
+                                : 'none',
                           transform: touchDragIndex === index ? 'scale(1.02)' : 'none',
                           touchAction: 'none'
                         }}

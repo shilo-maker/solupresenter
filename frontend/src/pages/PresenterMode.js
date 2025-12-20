@@ -122,6 +122,7 @@ function PresenterMode() {
 
   // Song creation state
   const [newSongTitle, setNewSongTitle] = useState('');
+  const [newSongLanguage, setNewSongLanguage] = useState('he');
   const [newSongExpressText, setNewSongExpressText] = useState('');
   const [createSongLoading, setCreateSongLoading] = useState(false);
 
@@ -823,7 +824,7 @@ function PresenterMode() {
 
       const response = await api.post('/api/songs', {
         title: newSongTitle,
-        originalLanguage: 'he',
+        originalLanguage: newSongLanguage,
         slides: parsedSlides,
         tags: []
       });
@@ -833,6 +834,7 @@ function PresenterMode() {
 
       // Reset form and close modal
       setNewSongTitle('');
+      setNewSongLanguage('he');
       setNewSongExpressText('');
       setShowCreateModal(false);
       setCreateModalView('choice');
@@ -3904,6 +3906,23 @@ function PresenterMode() {
               </Form.Group>
 
               <Form.Group className="mb-3">
+                <Form.Label>Language</Form.Label>
+                <Form.Select
+                  value={newSongLanguage}
+                  onChange={(e) => setNewSongLanguage(e.target.value)}
+                >
+                  <option value="he">Hebrew (עברית)</option>
+                  <option value="en">English</option>
+                  <option value="es">Spanish (Español)</option>
+                  <option value="fr">French (Français)</option>
+                  <option value="de">German (Deutsch)</option>
+                  <option value="ru">Russian (Русский)</option>
+                  <option value="ar">Arabic (العربية)</option>
+                  <option value="other">Other</option>
+                </Form.Select>
+              </Form.Group>
+
+              <Form.Group className="mb-3">
                 <Form.Label>Song Content</Form.Label>
                 <Form.Control
                   as="textarea"
@@ -3952,6 +3971,7 @@ Praise the LORD"
               setShowCreateModal(false);
               setCreateModalView('choice');
               setNewSongTitle('');
+              setNewSongLanguage('he');
               setNewSongExpressText('');
             }}
           >

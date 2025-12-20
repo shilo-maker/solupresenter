@@ -2193,7 +2193,7 @@ function PresenterMode() {
                   <FixedSizeList
                     height={220}
                     itemCount={searchResults.length}
-                    itemSize={52}
+                    itemSize={42}
                     width="100%"
                     className="dark-scrollbar"
                   >
@@ -2204,7 +2204,7 @@ function PresenterMode() {
                         <div
                           style={{
                             ...(style || {}),
-                            padding: '4px 8px',
+                            padding: '3px 8px',
                             display: 'flex',
                             gap: '8px',
                             alignItems: 'center',
@@ -2215,7 +2215,7 @@ function PresenterMode() {
                             onClick={() => selectSong(song)}
                             style={{
                               flex: 1,
-                              padding: '10px 14px',
+                              padding: '5px 7px',
                               background: isSelected ? 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)' : 'transparent',
                               color: 'white',
                               borderRadius: '8px',
@@ -2248,12 +2248,13 @@ function PresenterMode() {
                               addToSetlist(song);
                             }}
                             style={{
-                              width: '36px',
-                              height: '36px',
-                              fontSize: '1.3rem',
+                              width: '24px',
+                              height: '34px',
+                              fontSize: '1rem',
                               fontWeight: '600',
                               flexShrink: 0,
-                              padding: '0'
+                              padding: '0',
+                              lineHeight: '1'
                             }}
                           >
                             +
@@ -2857,7 +2858,7 @@ function PresenterMode() {
                   ref={setlistContainerRef}
                   className="dark-scrollbar"
                   style={{
-                    maxHeight: isMobile ? 'none' : '220px',
+                    maxHeight: isMobile ? 'none' : '280px',
                     overflowY: isMobile ? 'visible' : 'auto',
                     paddingRight: isMobile ? '0' : '5px'
                   }}
@@ -2982,7 +2983,7 @@ function PresenterMode() {
                         onTouchMove={(e) => handleTouchMove(e, index)}
                         onTouchEnd={handleTouchEnd}
                         style={{
-                          padding: '10px 14px',
+                          padding: '5px 7px',
                           backgroundColor: touchDragIndex === index
                             ? 'rgba(102, 126, 234, 0.3)'
                             : touchHoldingIndex === index

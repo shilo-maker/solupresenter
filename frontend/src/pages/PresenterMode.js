@@ -156,6 +156,10 @@ function PresenterMode() {
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
   const [pendingLoadAction, setPendingLoadAction] = useState(null);
 
+  // Section header state
+  const [showSectionModal, setShowSectionModal] = useState(false);
+  const [sectionTitleInput, setSectionTitleInput] = useState('');
+
   // Bible state
   const [bibleBooks, setBibleBooks] = useState([]);
   const [selectedBibleBook, setSelectedBibleBook] = useState('');
@@ -328,6 +332,12 @@ function PresenterMode() {
             type: 'blank',
             order: index
           };
+        } else if (item.type === 'section') {
+          return {
+            type: 'section',
+            sectionTitle: item.data.title,
+            order: index
+          };
         }
         return null;
       }).filter(Boolean);
@@ -421,6 +431,8 @@ function PresenterMode() {
               };
             } else if (item.type === 'blank') {
               return { type: 'blank', data: null };
+            } else if (item.type === 'section') {
+              return { type: 'section', data: { title: item.sectionTitle } };
             }
             return null;
           }).filter(Boolean);
@@ -537,6 +549,8 @@ function PresenterMode() {
               isBible: true
             }
           };
+        } else if (item.type === 'section') {
+          return { type: 'section', data: { title: item.sectionTitle } };
         }
         return null;
       }).filter(Boolean);
@@ -2798,6 +2812,35 @@ function PresenterMode() {
                     <span style={{ fontSize: '1.1rem' }}>📝</span> Save As...
                   </Dropdown.Item>
                 )}
+
+                <Dropdown.Item
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSectionTitleInput('');
+                    setShowSectionModal(true);
+                  }}
+                  style={{
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    fontSize: '0.95rem',
+                    fontWeight: '500',
+                    color: '#2D3748',
+                    transition: 'all 0.2s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#EDE9FE';
+                    e.currentTarget.style.color = '#7C3AED';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = '#2D3748';
+                  }}
+                >
+                  <span style={{ fontSize: '1.1rem' }}>📑</span> Add Section
+                </Dropdown.Item>
               </Dropdown.Menu>
             </Dropdown>
           </div>
@@ -2844,11 +2887,79 @@ function PresenterMode() {
                           bgColor: 'transparent',
                           borderLeft: '4px solid #f093fb'
                         };
+                      } else if (item.type === 'section') {
+                        return {
+                          title: item.data?.title || 'Section',
+                          bgColor: 'rgba(255, 255, 255, 0.1)',
+                          borderLeft: 'none',
+                          isSection: true
+                        };
                       }
                       return { title: 'Unknown', bgColor: 'transparent', borderLeft: '4px solid #718096' };
                     };
 
                     const display = getItemDisplay();
+
+                    // Render section headers differently - smaller than song items
+                    if (display.isSection) {
+                      return (
+                        <div
+                          key={index}
+                          data-setlist-item
+                          draggable={!isMobile}
+                          onDragStart={(e) => handleDragStart(e, index)}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, index)}
+                          onTouchStart={(e) => handleTouchStart(e, index)}
+                          onTouchMove={(e) => handleTouchMove(e, index)}
+                          onTouchEnd={handleTouchEnd}
+                          style={{
+                            padding: '3px 8px',
+                            backgroundColor: touchDragIndex === index
+                              ? 'rgba(102, 126, 234, 0.4)'
+                              : touchHoldingIndex === index
+                                ? 'rgba(102, 126, 234, 0.25)'
+                                : 'rgba(139, 92, 246, 0.3)',
+                            borderRadius: '3px',
+                            marginBottom: '2px',
+                            marginTop: index === 0 ? '0' : '6px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            cursor: 'grab',
+                            transition: 'all 0.2s ease',
+                            touchAction: 'none'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '5px' }}>
+                            <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)', cursor: 'grab' }}>
+                              ⋮⋮
+                            </span>
+                            <span style={{
+                              fontSize: '0.65rem',
+                              fontWeight: '600',
+                              color: 'rgba(255,255,255,0.85)',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.5px'
+                            }}>
+                              {display.title}
+                            </span>
+                          </div>
+                          <span
+                            onClick={() => removeFromSetlist(index)}
+                            style={{
+                              cursor: 'pointer',
+                              opacity: 0.5,
+                              fontSize: '0.6rem',
+                              color: 'white',
+                              padding: '1px 3px'
+                            }}
+                          >
+                            ✕
+                          </span>
+                        </div>
+                      );
+                    }
 
                     return (
                       <div
@@ -2862,15 +2973,15 @@ function PresenterMode() {
                         onTouchMove={(e) => handleTouchMove(e, index)}
                         onTouchEnd={handleTouchEnd}
                         style={{
-                          padding: '8px 10px',
+                          padding: '5px 8px',
                           backgroundColor: touchDragIndex === index
                             ? 'rgba(102, 126, 234, 0.3)'
                             : touchHoldingIndex === index
                               ? 'rgba(102, 126, 234, 0.15)'
                               : display.bgColor,
-                          borderRadius: '6px',
+                          borderRadius: '4px',
                           borderLeft: display.borderLeft,
-                          marginBottom: '6px',
+                          marginBottom: '3px',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
@@ -2880,37 +2991,41 @@ function PresenterMode() {
                             ? '0 4px 12px rgba(0, 0, 0, 0.3)'
                             : touchHoldingIndex === index
                               ? '0 2px 8px rgba(102, 126, 234, 0.3)'
-                              : '0 1px 3px rgba(0, 0, 0, 0.1)',
+                              : 'none',
                           transform: touchDragIndex === index ? 'scale(1.02)' : 'none',
                           touchAction: 'none'
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = 'translateX(4px)';
-                          e.currentTarget.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.15)';
+                          e.currentTarget.style.transform = 'translateX(2px)';
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.transform = 'translateX(0)';
-                          e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '6px' }}>
-                          <span style={{ fontSize: '1rem', color: 'white', cursor: 'grab', fontWeight: '600' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '5px' }}>
+                          <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', cursor: 'grab' }}>
                             ⋮⋮
                           </span>
                           <span
-                            style={{ fontSize: '0.9rem', cursor: 'pointer', flex: 1, fontWeight: '600', color: 'white' }}
+                            style={{ fontSize: '0.8rem', cursor: 'pointer', flex: 1, fontWeight: '500', color: 'white' }}
                             onClick={() => selectItem(item)}
                           >
                             {index + 1}. {display.title}
                           </span>
                         </div>
-                        <Button
-                          variant="danger"
-                          size="sm"
+                        <span
                           onClick={() => removeFromSetlist(index)}
+                          style={{
+                            cursor: 'pointer',
+                            fontSize: '0.7rem',
+                            color: '#ff6b6b',
+                            padding: '2px 6px',
+                            borderRadius: '3px',
+                            backgroundColor: 'rgba(255,107,107,0.15)'
+                          }}
                         >
-                          Remove
-                        </Button>
+                          ✕
+                        </span>
                       </div>
                     );
                   })}
@@ -3884,6 +3999,58 @@ Praise the LORD"
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowLoadSetlistModal(false)}>
             Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Add Section Modal */}
+      <Modal
+        show={showSectionModal}
+        onHide={() => setShowSectionModal(false)}
+        centered
+        size="sm"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title style={{ fontSize: '1.1rem' }}>Add Section</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form.Group>
+            <Form.Label>Section Title</Form.Label>
+            <Form.Control
+              type="text"
+              placeholder="e.g., Worship, Message, Ministry Time"
+              value={sectionTitleInput}
+              onChange={(e) => setSectionTitleInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && sectionTitleInput.trim()) {
+                  e.preventDefault();
+                  setSetlist([...setlist, { type: 'section', data: { title: sectionTitleInput.trim() } }]);
+                  setHasUnsavedChanges(true);
+                  setShowSectionModal(false);
+                  setSectionTitleInput('');
+                }
+              }}
+              autoFocus
+            />
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowSectionModal(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => {
+              if (sectionTitleInput.trim()) {
+                setSetlist([...setlist, { type: 'section', data: { title: sectionTitleInput.trim() } }]);
+                setHasUnsavedChanges(true);
+                setShowSectionModal(false);
+                setSectionTitleInput('');
+              }
+            }}
+            disabled={!sectionTitleInput.trim()}
+          >
+            Add Section
           </Button>
         </Modal.Footer>
       </Modal>

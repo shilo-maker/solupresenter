@@ -348,6 +348,8 @@ router.post('/:id/link-setlist', authenticateToken, async (req, res) => {
         return { type: 'bible', data: item.bibleData || item };
       } else if (item.type === 'blank') {
         return { type: 'blank', data: {} };
+      } else if (item.type === 'section') {
+        return { type: 'section', data: { title: item.sectionTitle } };
       }
       return item;
     }));

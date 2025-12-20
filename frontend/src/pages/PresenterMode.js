@@ -2730,9 +2730,9 @@ function PresenterMode() {
                 </p>
               ) : (
                 <div className="dark-scrollbar" style={{
-                  maxHeight: '220px',
-                  overflowY: 'auto',
-                  paddingRight: '5px'
+                  maxHeight: isMobile ? 'none' : '220px',
+                  overflowY: isMobile ? 'visible' : 'auto',
+                  paddingRight: isMobile ? '0' : '5px'
                 }}>
                   {setlist.map((item, index) => {
                     const getItemDisplay = () => {

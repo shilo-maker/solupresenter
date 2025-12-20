@@ -26,20 +26,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // Get single setlist
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const setlist = await Setlist.findByPk(req.params.id, {
-      include: [
-        {
-          model: Song,
-          as: 'itemSongs',
-          through: { attributes: [] }
-        },
-        {
-          model: Media,
-          as: 'itemImages',
-          through: { attributes: [] }
-        }
-      ]
-    });
+    const setlist = await Setlist.findByPk(req.params.id);
 
     if (!setlist) {
       return res.status(404).json({ error: 'Setlist not found' });
@@ -79,19 +66,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 router.get('/shared/:token', authenticateToken, async (req, res) => {
   try {
     const setlist = await Setlist.findOne({
-      where: { shareToken: req.params.token },
-      include: [
-        {
-          model: Song,
-          as: 'itemSongs',
-          through: { attributes: [] }
-        },
-        {
-          model: Media,
-          as: 'itemImages',
-          through: { attributes: [] }
-        }
-      ]
+      where: { shareToken: req.params.token }
     });
 
     if (!setlist) {
@@ -166,20 +141,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     await setlist.save();
 
-    const updatedSetlist = await Setlist.findByPk(setlist.id, {
-      include: [
-        {
-          model: Song,
-          as: 'itemSongs',
-          through: { attributes: [] }
-        },
-        {
-          model: Media,
-          as: 'itemImages',
-          through: { attributes: [] }
-        }
-      ]
-    });
+    const updatedSetlist = await Setlist.findByPk(setlist.id);
 
     res.json({ setlist: updatedSetlist });
   } catch (error) {

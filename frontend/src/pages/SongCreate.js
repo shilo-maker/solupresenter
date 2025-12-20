@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Form, Badge, Alert } from 'react-bootstrap';
-import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import { Container, Row, Col, Card, Button, Form, Badge, Alert, Toast, ToastContainer } from 'react-bootstrap';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import api, { soluflowAPI } from '../services/api';
 
 function SongCreate() {
   const navigate = useNavigate();
-  const [title, setTitle] = useState('');
+  const [searchParams] = useSearchParams();
+  const [title, setTitle] = useState(searchParams.get('title') || '');
   const [originalLanguage, setOriginalLanguage] = useState('he');
   const [slides, setSlides] = useState([{
     originalText: '',
@@ -20,8 +21,9 @@ function SongCreate() {
   const [submitForApproval, setSubmitForApproval] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [expressMode, setExpressMode] = useState(false);
+  const [expressMode, setExpressMode] = useState(searchParams.get('express') === 'true');
   const [expressText, setExpressText] = useState('');
+  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   const languages = [
     { code: 'he', name: 'Hebrew (עברית)' },
@@ -34,9 +36,22 @@ function SongCreate() {
     { code: 'other', name: 'Other' }
   ];
 
+  // Check if language needs transliteration/translation structure (Hebrew, Arabic)
+  const isTransliterationLanguage = originalLanguage === 'he' || originalLanguage === 'ar';
+
   useEffect(() => {
     fetchTags();
-  }, []);
+
+    // Check if coming from SoluFlow with pre-filled lyrics
+    if (searchParams.get('fromSoluflow') === 'true') {
+      const lyrics = sessionStorage.getItem('newSongLyrics');
+      if (lyrics) {
+        setExpressText(lyrics);
+        // Clear after reading
+        sessionStorage.removeItem('newSongLyrics');
+      }
+    }
+  }, [searchParams]);
 
   const fetchTags = async () => {
     try {
@@ -186,10 +201,28 @@ function SongCreate() {
         submitForApproval
       });
 
+      const newSongId = response.data.song.id || response.data.song._id;
+
+      // If this song was created from a SoluFlow "No Match" entry, auto-link it
+      const soluflowId = searchParams.get('soluflowId');
+      if (soluflowId) {
+        try {
+          await soluflowAPI.createMapping({
+            soluflowSongId: parseInt(soluflowId),
+            presenterSongId: newSongId,
+            matchType: 'manual'
+          });
+          console.log('Auto-linked SoluFlow song', soluflowId, 'to SoluPresenter song', newSongId);
+        } catch (linkError) {
+          console.error('Failed to auto-link SoluFlow song:', linkError);
+          // Don't fail the whole operation, song was created successfully
+        }
+      }
+
       alert(submitForApproval
         ? 'Song created and submitted for approval!'
         : 'Song created successfully!');
-      navigate(`/songs/${response.data.song._id}`);
+      navigate(`/songs/${newSongId}`);
     } catch (error) {
       console.error('Error creating song:', error);
       setError(error.response?.data?.error || 'Failed to create song');
@@ -273,20 +306,30 @@ function SongCreate() {
                     <Form.Text className="text-muted d-block mb-3">
                       <strong>Express Mode:</strong> Separate slides with blank lines.<br/>
                       Use [Verse1], [Chorus], [Bridge], etc. to mark sections (applies to all following slides until next marker).<br/>
-                      Within each slide:<br/>
-                      Line 1 = Original text (required)<br/>
-                      Line 2 = Transliteration (optional)<br/>
-                      Line 3 = Translation (optional)<br/>
-                      Line 4 = Translation overflow (optional)
+                      {isTransliterationLanguage ? (
+                        <>
+                          Within each slide:<br/>
+                          Line 1 = Original text (required)<br/>
+                          Line 2 = Transliteration (optional)<br/>
+                          Line 3 = Translation (optional)<br/>
+                          Line 4 = Translation overflow (optional)
+                        </>
+                      ) : (
+                        <>
+                          Each slide can have up to 4 lines of lyrics.
+                        </>
+                      )}
                     </Form.Text>
                     <Form.Group>
                       <Form.Control
                         as="textarea"
                         rows={20}
-                        placeholder="Example:&#10;&#10;[Verse1]&#10;שָׁלוֹם עֲלֵיכֶם&#10;Shalom Aleichem&#10;Peace be upon you&#10;&#10;[Chorus]&#10;מַלְאֲכֵי הַשָּׁרֵת&#10;Malachei HaShareit&#10;Angels of service"
+                        placeholder={isTransliterationLanguage
+                          ? "Example:\n\n[Verse1]\nשָׁלוֹם עֲלֵיכֶם\nShalom Aleichem\nPeace be upon you\n\n[Chorus]\nמַלְאֲכֵי הַשָּׁרֵת\nMalachei HaShareit\nAngels of service"
+                          : "Example:\n\n[Verse1]\nAmazing grace, how sweet the sound\nThat saved a wretch like me\n\n[Chorus]\nI once was lost, but now I'm found\nWas blind, but now I see"}
                         value={expressText}
                         onChange={(e) => setExpressText(e.target.value)}
-                        dir={originalLanguage === 'he' || originalLanguage === 'ar' ? 'rtl' : 'ltr'}
+                        dir={isTransliterationLanguage ? 'rtl' : 'ltr'}
                         style={{ fontFamily: 'monospace' }}
                       />
                     </Form.Group>
@@ -332,45 +375,45 @@ function SongCreate() {
                         </Form.Group>
 
                         <Form.Group className="mb-3">
-                          <Form.Label>Original Text * (Line 1)</Form.Label>
+                          <Form.Label>{isTransliterationLanguage ? 'Original Text *' : 'Lyrics *'}</Form.Label>
                           <Form.Control
                             as="textarea"
                             rows={2}
-                            placeholder="Enter original text"
+                            placeholder={isTransliterationLanguage ? "Enter original text" : "Enter lyrics"}
                             value={slide.originalText}
                             onChange={(e) => updateSlide(index, 'originalText', e.target.value)}
-                            dir={originalLanguage === 'he' || originalLanguage === 'ar' ? 'rtl' : 'ltr'}
+                            dir={isTransliterationLanguage ? 'rtl' : 'ltr'}
                           />
                         </Form.Group>
 
                         <Form.Group className="mb-3">
-                          <Form.Label>Transliteration (Line 2)</Form.Label>
+                          <Form.Label>{isTransliterationLanguage ? 'Transliteration' : 'Lyrics (continued)'}</Form.Label>
                           <Form.Control
                             as="textarea"
                             rows={2}
-                            placeholder="Enter transliteration (optional)"
+                            placeholder={isTransliterationLanguage ? "Enter transliteration (optional)" : "Additional lyrics (optional)"}
                             value={slide.transliteration}
                             onChange={(e) => updateSlide(index, 'transliteration', e.target.value)}
                           />
                         </Form.Group>
 
                         <Form.Group className="mb-3">
-                          <Form.Label>Translation (Line 3)</Form.Label>
+                          <Form.Label>{isTransliterationLanguage ? 'Translation' : 'Lyrics (continued)'}</Form.Label>
                           <Form.Control
                             as="textarea"
                             rows={2}
-                            placeholder="Enter translation (optional)"
+                            placeholder={isTransliterationLanguage ? "Enter translation (optional)" : "Additional lyrics (optional)"}
                             value={slide.translation}
                             onChange={(e) => updateSlide(index, 'translation', e.target.value)}
                           />
                         </Form.Group>
 
                         <Form.Group>
-                          <Form.Label>Translation Overflow (Line 4)</Form.Label>
+                          <Form.Label>{isTransliterationLanguage ? 'Translation Overflow' : 'Lyrics (continued)'}</Form.Label>
                           <Form.Control
                             as="textarea"
                             rows={2}
-                            placeholder="Additional translation text (optional)"
+                            placeholder={isTransliterationLanguage ? "Additional translation text (optional)" : "Additional lyrics (optional)"}
                             value={slide.translationOverflow}
                             onChange={(e) => updateSlide(index, 'translationOverflow', e.target.value)}
                           />

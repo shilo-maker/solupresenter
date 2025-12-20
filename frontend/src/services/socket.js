@@ -33,12 +33,15 @@ class SocketService {
       this.updateConnectionStatus('connecting');
 
       this.socket = io(SOCKET_URL, {
-        transports: ['websocket', 'polling'],
+        transports: ['websocket'],  // WebSocket only (faster, no polling overhead)
+        upgrade: false,             // Don't upgrade from polling
         reconnection: true,
         reconnectionAttempts: 10,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        timeout: 20000
+        reconnectionDelay: 500,     // Faster reconnection
+        reconnectionDelayMax: 3000,
+        timeout: 10000,             // Faster timeout
+        forceNew: false,
+        multiplex: true
       });
 
       this.socket.on('connect', () => {
@@ -168,25 +171,15 @@ class SocketService {
 
   operatorUpdateSlide(data) {
     if (!this.socket) {
-      console.error('❌ No socket available to send operator:updateSlide');
+      console.error('❌ No socket available');
       return;
     }
 
-    console.log('🔌 Socket status:', {
-      connected: this.socket.connected,
-      id: this.socket.id,
-      data
-    });
-
-    // If socket is connected, emit immediately
+    // Emit immediately if connected, otherwise queue for connection
     if (this.socket.connected) {
       this.socket.emit('operator:updateSlide', data);
-      console.log('📡 operator:updateSlide event emitted');
     } else {
-      // Otherwise, wait for connection before emitting
-      console.log('⏳ Socket not connected, waiting...');
       this.socket.once('connect', () => {
-        console.log('✅ Socket connected, now sending slide update');
         this.socket.emit('operator:updateSlide', data);
       });
     }

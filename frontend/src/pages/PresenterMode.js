@@ -1335,18 +1335,16 @@ function PresenterMode() {
   };
 
   const updateSlide = (song, slideIndex, mode, isBlank) => {
-    console.log('🎬 updateSlide called:', { room, song: song?.title, slideIndex, mode, isBlank });
-
     if (!room) {
       console.error('❌ Cannot update slide: room is null');
       return;
     }
 
-    console.log('📤 Sending slide update to backend');
-
     // Send slide data directly to avoid backend DB queries
     const payload = {
       roomId: room.id,
+      roomPin: room.pin,  // Send PIN to avoid DB lookup
+      backgroundImage: room.backgroundImage || '',  // Send background to avoid DB lookup
       songId: (song?.isTemporary || song?.isBible) ? null : (song?.id || null),
       slideIndex,
       displayMode: mode,
@@ -1359,7 +1357,8 @@ function PresenterMode() {
         slide: song.slides[slideIndex],
         title: song.title,
         isBible: song.isBible || false,
-        isTemporary: song.isTemporary || false
+        isTemporary: song.isTemporary || false,
+        originalLanguage: song.originalLanguage || 'en'
       };
     }
 
@@ -1367,16 +1366,15 @@ function PresenterMode() {
   };
 
   const updateImageSlide = (imageData) => {
-    console.log('🖼️ updateImageSlide called:', { room, image: imageData?.name });
-
     if (!room) {
       console.error('❌ Cannot update image slide: room is null');
       return;
     }
 
-    console.log('📤 Sending image slide update to backend');
     socketService.operatorUpdateSlide({
       roomId: room.id,
+      roomPin: room.pin,
+      backgroundImage: room.backgroundImage || '',
       songId: null,
       slideIndex: 0,
       displayMode: displayMode,

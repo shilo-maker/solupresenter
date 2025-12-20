@@ -161,23 +161,17 @@ function ViewerPage() {
     });
 
     socketService.onSlideUpdate((data) => {
-      lastActivityRef.current = Date.now(); // Reset inactivity timer
-      // If it's a blank slide, set currentSlide with isBlank flag
+      lastActivityRef.current = Date.now();
       if (data.isBlank) {
-        console.log('📨 Slide update: BLANK');
         setCurrentSlide({ isBlank: true });
         setImageUrl(null);
       } else if (data.imageUrl) {
-        // Image-only slide
-        console.log('📨 Slide update: IMAGE');
         setImageUrl(data.imageUrl);
         setCurrentSlide(null);
       } else {
-        console.log('📨 Slide update: TEXT');
         setCurrentSlide(data.slideData);
         setImageUrl(null);
       }
-      // Update background from the data (room background)
       if (data.backgroundImage !== undefined) {
         setBackgroundImage(data.backgroundImage || '');
       }
@@ -185,8 +179,7 @@ function ViewerPage() {
     });
 
     socketService.onBackgroundUpdate((data) => {
-      lastActivityRef.current = Date.now(); // Reset inactivity timer
-      console.log('🎨 Background updated');
+      lastActivityRef.current = Date.now();
       setBackgroundImage(data.backgroundImage || '');
     });
 
@@ -440,7 +433,10 @@ function ViewerPage() {
       );
     }
 
-    const { slide } = currentSlide;
+    const { slide, originalLanguage } = currentSlide;
+
+    // Check if language needs transliteration/translation structure (Hebrew, Arabic)
+    const isTransliterationLanguage = originalLanguage === 'he' || originalLanguage === 'ar';
 
     // Detect if text contains Hebrew characters
     const isHebrew = (text) => {
@@ -452,6 +448,14 @@ function ViewerPage() {
     const getTextDirection = (text) => {
       return isHebrew(text) ? 'rtl' : 'ltr';
     };
+
+    // Font size for lines - equal for English songs, bigger first line for Hebrew/Arabic
+    const line1FontSize = isTransliterationLanguage
+      ? `calc(clamp(2rem, 6vw, 6rem) * ${fontSize / 100})`
+      : `calc(clamp(1.8rem, 5vw, 5rem) * ${fontSize / 100})`;
+    const otherLinesFontSize = isTransliterationLanguage
+      ? `calc(clamp(1.5rem, 4.5vw, 4.5rem) * ${fontSize / 100})`
+      : `calc(clamp(1.8rem, 5vw, 5rem) * ${fontSize / 100})`;
 
     return (
       <div style={{
@@ -523,11 +527,11 @@ function ViewerPage() {
             width: '100%',
             maxWidth: '100%'
           }}>
-            {/* Line 1 - Original Text */}
+            {/* Line 1 - Original Text / Lyrics */}
             <div style={{
-              fontSize: `calc(clamp(2rem, 6vw, 6rem) * ${fontSize / 100})`,
+              fontSize: line1FontSize,
               lineHeight: 1.4,
-              fontWeight: '500',
+              fontWeight: isTransliterationLanguage ? '500' : '400',
               width: '100%',
               wordWrap: 'break-word',
               overflowWrap: 'break-word',
@@ -539,12 +543,12 @@ function ViewerPage() {
               {slide.originalText}
             </div>
 
-            {/* Line 2 - Transliteration */}
+            {/* Line 2 - Transliteration / Lyrics continued */}
             {slide.transliteration && (
               <div style={{
-                fontSize: `calc(clamp(1.5rem, 4.5vw, 4.5rem) * ${fontSize / 100})`,
+                fontSize: otherLinesFontSize,
                 lineHeight: 1.4,
-                opacity: 0.95,
+                opacity: isTransliterationLanguage ? 0.95 : 1,
                 width: '100%',
                 wordWrap: 'break-word',
                 overflowWrap: 'break-word',
@@ -557,7 +561,7 @@ function ViewerPage() {
               </div>
             )}
 
-            {/* Lines 3 & 4 - Translation (with tight spacing between overflow lines) */}
+            {/* Lines 3 & 4 - Translation / Lyrics continued */}
             {slide.translation && (
               <div style={{
                 display: 'flex',
@@ -565,11 +569,11 @@ function ViewerPage() {
                 gap: slide.translationOverflow ? 'clamp(0.1rem, 0.3vh, 0.3rem)' : '0',
                 width: '100%'
               }}>
-                {/* Line 3 - Translation */}
+                {/* Line 3 */}
                 <div style={{
-                  fontSize: `calc(clamp(1.5rem, 4.5vw, 4.5rem) * ${fontSize / 100})`,
+                  fontSize: otherLinesFontSize,
                   lineHeight: 1.4,
-                  opacity: 0.95,
+                  opacity: isTransliterationLanguage ? 0.95 : 1,
                   width: '100%',
                   wordWrap: 'break-word',
                   overflowWrap: 'break-word',
@@ -581,12 +585,12 @@ function ViewerPage() {
                   {slide.translation}
                 </div>
 
-                {/* Line 4 - Translation Overflow */}
+                {/* Line 4 */}
                 {slide.translationOverflow && (
                   <div style={{
-                    fontSize: `calc(clamp(1.5rem, 4.5vw, 4.5rem) * ${fontSize / 100})`,
+                    fontSize: otherLinesFontSize,
                     lineHeight: 1.4,
-                    opacity: 0.95,
+                    opacity: isTransliterationLanguage ? 0.95 : 1,
                     width: '100%',
                     wordWrap: 'break-word',
                     overflowWrap: 'break-word',

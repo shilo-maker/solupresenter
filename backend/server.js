@@ -22,6 +22,7 @@ const adminRoutes = require('./routes/admin');
 const mediaRoutes = require('./routes/media');
 const bibleRoutes = require('./routes/bible');
 const publicRoomsRoutes = require('./routes/publicRooms');
+const soluflowRoutes = require('./routes/soluflow');
 
 // Import cleanup jobs
 const cleanupTemporarySetlists = require('./jobs/cleanupTemporarySetlists');
@@ -83,7 +84,14 @@ const corsOptions = {
 };
 
 const io = new Server(server, {
-  cors: corsOptions
+  cors: corsOptions,
+  // Performance optimizations
+  pingInterval: 10000,        // Ping every 10s (faster disconnect detection)
+  pingTimeout: 5000,          // 5s timeout for pong response
+  perMessageDeflate: false,   // Disable compression (faster for small messages)
+  httpCompression: false,     // Disable HTTP compression
+  transports: ['websocket', 'polling'],  // Prefer WebSocket
+  allowUpgrades: true
 });
 
 // Make io accessible to routes
@@ -140,6 +148,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/bible', bibleRoutes);
 app.use('/api/public-rooms', publicRoomsRoutes);
+app.use('/api/soluflow', soluflowRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -318,19 +327,26 @@ io.on('connection', (socket) => {
 
   // Operator updates slide
   socket.on('operator:updateSlide', async (data) => {
-    console.log('📥 Received operator:updateSlide event:', data);
     try {
-      const { roomId, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData, slideData } = data;
+      const { roomId, roomPin, backgroundImage: clientBackgroundImage, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData, slideData } = data;
 
-      // Quick lookup to get room pin and background
-      const room = await Room.findByPk(roomId, {
-        attributes: ['id', 'pin', 'backgroundImage'],
-        raw: true
-      });
+      // Use PIN from client if available (fast path), otherwise query DB (fallback)
+      let pin = roomPin;
+      let backgroundImage = clientBackgroundImage;
 
-      if (!room) {
-        socket.emit('error', { message: 'Room not found' });
-        return;
+      if (!pin) {
+        // Fallback: Query DB for room info
+        const room = await Room.findByPk(roomId, {
+          attributes: ['id', 'pin', 'backgroundImage'],
+          raw: true
+        });
+
+        if (!room) {
+          socket.emit('error', { message: 'Room not found' });
+          return;
+        }
+        pin = room.pin;
+        backgroundImage = room.backgroundImage || '';
       }
 
       // Prepare slide data for broadcast
@@ -350,8 +366,9 @@ io.on('connection', (socket) => {
             slide: slideData.slide,
             displayMode: currentSlideData.displayMode,
             songTitle: slideData.title,
-            backgroundImage: room.backgroundImage || '',
-            isBible: slideData.isBible || false
+            backgroundImage: backgroundImage || '',
+            isBible: slideData.isBible || false,
+            originalLanguage: slideData.originalLanguage || 'en'
           };
         } else if (bibleData) {
           // Legacy: Use Bible data directly (for backward compatibility)
@@ -359,13 +376,13 @@ io.on('connection', (socket) => {
             slide: bibleData.slide,
             displayMode: currentSlideData.displayMode,
             songTitle: bibleData.title,
-            backgroundImage: room.backgroundImage || '',
+            backgroundImage: backgroundImage || '',
             isBible: true
           };
         } else if (songId) {
           // Fallback: Fetch song from database (for backward compatibility)
           const song = await Song.findByPk(songId, {
-            attributes: ['title', 'slides'],
+            attributes: ['title', 'slides', 'originalLanguage'],
             raw: true
           });
           if (song && song.slides[slideIndex]) {
@@ -373,22 +390,21 @@ io.on('connection', (socket) => {
               slide: song.slides[slideIndex],
               displayMode: currentSlideData.displayMode,
               songTitle: song.title,
-              backgroundImage: room.backgroundImage || ''
+              backgroundImage: backgroundImage || '',
+              originalLanguage: song.originalLanguage || 'en'
             };
           }
         }
       }
 
-      // 🚀 BROADCAST IMMEDIATELY (no await) - this is the key optimization!
-      io.to(`room:${room.pin}`).emit('slide:update', {
+      // 🚀 BROADCAST IMMEDIATELY - no DB query needed when PIN is provided!
+      io.to(`room:${pin}`).emit('slide:update', {
         currentSlide: currentSlideData,
         slideData: broadcastSlideData,
         isBlank,
         imageUrl: imageUrl || null,
-        backgroundImage: room.backgroundImage || ''
+        backgroundImage: backgroundImage || ''
       });
-
-      console.log(`⚡ Slide broadcast instantly to room ${room.pin}`, imageUrl ? `(image: ${imageUrl})` : slideData ? `(slide: ${slideData.title})` : bibleData ? `(Bible: ${bibleData.title})` : '');
 
       // 💾 Save to database asynchronously (don't block broadcast)
       setImmediate(async () => {
@@ -399,10 +415,9 @@ io.on('connection', (socket) => {
             roomToUpdate.currentImageUrl = imageUrl || null;
             roomToUpdate.currentBibleData = bibleData || slideData || null;
             await roomToUpdate.updateActivity();
-            console.log(`💾 Room state saved to DB for ${room.pin}`);
           }
         } catch (err) {
-          console.error('⚠️ Error saving room state to DB (broadcast already sent):', err);
+          console.error('⚠️ Error saving room state to DB:', err);
         }
       });
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Card, Button, Badge, Row, Col, Spinner, Alert } from 'react-bootstrap';
+import { Container, Card, Button, Badge, Row, Col, Spinner, Alert, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
@@ -11,6 +11,7 @@ function SongView() {
   const [song, setSong] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   const languages = {
     he: 'Hebrew (עברית)',
@@ -74,7 +75,12 @@ function SongView() {
     );
   }
 
-  const isOwner = song.createdBy && song.createdBy._id === user._id;
+  const userId = user?.id || user?._id;
+  const createdById = song.createdById || song.createdBy?.id || song.createdBy?._id;
+  const isOwner = createdById === userId;
+
+  // Check if language needs transliteration/translation structure (Hebrew, Arabic)
+  const isTransliterationLanguage = song.originalLanguage === 'he' || song.originalLanguage === 'ar';
 
   return (
     <Container className="py-4">
@@ -115,10 +121,10 @@ function SongView() {
               <Card.Body>
                 {slide.originalText && (
                   <div className="mb-3">
-                    <small className="text-muted">Original Text:</small>
+                    <small className="text-muted">{isTransliterationLanguage ? 'Original Text:' : 'Lyrics:'}</small>
                     <div
                       style={{ fontSize: '1.1rem', whiteSpace: 'pre-wrap' }}
-                      dir={song.originalLanguage === 'he' || song.originalLanguage === 'ar' ? 'rtl' : 'ltr'}
+                      dir={isTransliterationLanguage ? 'rtl' : 'ltr'}
                     >
                       {slide.originalText}
                     </div>
@@ -127,7 +133,7 @@ function SongView() {
 
                 {slide.transliteration && (
                   <div className="mb-3">
-                    <small className="text-muted">Transliteration:</small>
+                    <small className="text-muted">{isTransliterationLanguage ? 'Transliteration:' : ''}</small>
                     <div style={{ fontSize: '1rem', whiteSpace: 'pre-wrap' }}>
                       {slide.transliteration}
                     </div>
@@ -136,7 +142,7 @@ function SongView() {
 
                 {slide.translation && (
                   <div className="mb-3">
-                    <small className="text-muted">Translation:</small>
+                    <small className="text-muted">{isTransliterationLanguage ? 'Translation:' : ''}</small>
                     <div style={{ fontSize: '1rem', whiteSpace: 'pre-wrap' }}>
                       {slide.translation}
                     </div>
@@ -145,7 +151,7 @@ function SongView() {
 
                 {slide.translationOverflow && (
                   <div>
-                    <small className="text-muted">Translation (continued):</small>
+                    <small className="text-muted">{isTransliterationLanguage ? 'Translation (continued):' : ''}</small>
                     <div style={{ fontSize: '1rem', whiteSpace: 'pre-wrap' }}>
                       {slide.translationOverflow}
                     </div>

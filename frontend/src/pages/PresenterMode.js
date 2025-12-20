@@ -581,12 +581,31 @@ function PresenterMode() {
     }
   };
 
+  // Sort songs: Hebrew first, then other languages, alphabetically within each group
+  const sortSongsByLanguage = (songs) => {
+    return [...songs].sort((a, b) => {
+      const langA = a.originalLanguage || 'en';
+      const langB = b.originalLanguage || 'en';
+
+      // Hebrew and Arabic come first
+      const isHebrewA = langA === 'he' || langA === 'ar';
+      const isHebrewB = langB === 'he' || langB === 'ar';
+
+      if (isHebrewA && !isHebrewB) return -1;
+      if (!isHebrewA && isHebrewB) return 1;
+
+      // Within same language group, sort alphabetically by title
+      return a.title.localeCompare(b.title);
+    });
+  };
+
   const fetchSongs = async () => {
     setSongsLoading(true);
     try {
       const response = await api.get('/api/songs');
-      setAllSongs(response.data.songs);
-      setSearchResults(response.data.songs);
+      const sortedSongs = sortSongsByLanguage(response.data.songs);
+      setAllSongs(sortedSongs);
+      setSearchResults(sortedSongs);
     } catch (error) {
       console.error('Error fetching songs:', error);
       setError('Failed to load songs. Please refresh the page.');
@@ -670,7 +689,7 @@ function PresenterMode() {
     if (activeResourcePanel === 'songs') {
       // Search songs
       if (query.trim() === '') {
-        setSearchResults(allSongs);
+        setSearchResults(allSongs); // allSongs is already sorted
       } else {
         const filtered = allSongs.filter(song => {
           const searchTerm = query.toLowerCase();
@@ -692,7 +711,7 @@ function PresenterMode() {
 
           return false;
         });
-        setSearchResults(filtered);
+        setSearchResults(sortSongsByLanguage(filtered));
       }
     } else if (activeResourcePanel === 'bible') {
       // Parse Bible reference (e.g., "John 3", "Genesis 12", "1 Corinthians 13")

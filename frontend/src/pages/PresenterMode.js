@@ -92,6 +92,7 @@ function PresenterMode() {
   // Song search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const searchInputRef = useRef(null);
   const [allSongs, setAllSongs] = useState([]);
   const [songsLoading, setSongsLoading] = useState(true);
 
@@ -735,6 +736,9 @@ function PresenterMode() {
   const addToSetlist = (song) => {
     setSetlist([...setlist, { type: 'song', data: song }]);
     setHasUnsavedChanges(true);
+    handleSearch('');
+    // Keep focus on search input for quick successive additions
+    setTimeout(() => searchInputRef.current?.focus(), 0);
   };
 
   // Parse express text into slides
@@ -1996,6 +2000,7 @@ function PresenterMode() {
                 <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
               </svg>
               <input
+                ref={searchInputRef}
                 type="text"
                 placeholder={
                   activeResourcePanel === 'bible'
@@ -2010,7 +2015,7 @@ function PresenterMode() {
                   backdropFilter: 'blur(10px)',
                   border: '2px solid rgba(255, 255, 255, 0.2)',
                   borderRadius: '10px',
-                  padding: '10px 14px 10px 36px',
+                  padding: '10px 36px 10px 36px',
                   color: 'white',
                   fontSize: '0.95rem',
                   fontWeight: '400',
@@ -2026,6 +2031,37 @@ function PresenterMode() {
                   e.target.style.boxShadow = 'none';
                 }}
               />
+              {searchQuery && (
+                <button
+                  onClick={() => {
+                    handleSearch('');
+                    searchInputRef.current?.focus();
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '20px',
+                    height: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    padding: 0,
+                    transition: 'background 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.3)'}
+                  onMouseLeave={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.2)'}
+                >
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="white">
+                    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                  </svg>
+                </button>
+              )}
             </div>
 
             {/* New button */}

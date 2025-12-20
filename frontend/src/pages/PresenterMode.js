@@ -737,8 +737,10 @@ function PresenterMode() {
     setSetlist([...setlist, { type: 'song', data: song }]);
     setHasUnsavedChanges(true);
     handleSearch('');
-    // Keep focus on search input for quick successive additions
-    setTimeout(() => searchInputRef.current?.focus(), 0);
+    // Keep focus on search input for quick successive additions (desktop only)
+    if (!isMobile) {
+      setTimeout(() => searchInputRef.current?.focus(), 0);
+    }
   };
 
   // Parse express text into slides

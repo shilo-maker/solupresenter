@@ -20,10 +20,21 @@ function MediaLibrary() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadPreview, setUploadPreview] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [usage, setUsage] = useState(null);
 
   useEffect(() => {
     fetchMedia();
+    fetchUsage();
   }, []);
+
+  const fetchUsage = async () => {
+    try {
+      const response = await api.get('/api/media/usage');
+      setUsage(response.data);
+    } catch (error) {
+      console.error('Error fetching usage:', error);
+    }
+  };
 
   const fetchMedia = async () => {
     setLoading(true);
@@ -78,6 +89,7 @@ function MediaLibrary() {
         setSelectedFile(null);
         setUploadPreview('');
         fetchMedia();
+        fetchUsage();
       } catch (error) {
         console.error('Error uploading media:', error);
         setError(error.response?.data?.error || 'Failed to upload media');
@@ -133,6 +145,7 @@ function MediaLibrary() {
     try {
       await api.delete(`/api/media/${id}`);
       fetchMedia();
+      fetchUsage();
     } catch (error) {
       console.error('Error deleting media:', error);
       alert(error.response?.data?.error || 'Failed to delete media');
@@ -236,6 +249,27 @@ function MediaLibrary() {
 
           <Tabs activeKey={modalTab} onSelect={(k) => setModalTab(k)} className="mb-3">
             <Tab eventKey="upload" title="Upload File">
+              {usage && (
+                <Alert variant={usage.remaining.images <= 1 || usage.remaining.bytes < 500000 ? 'warning' : 'info'} className="mb-3">
+                  <div className="d-flex justify-content-between align-items-center">
+                    <div>
+                      <strong>Storage:</strong> {formatFileSize(usage.usage.totalBytes)} / {formatFileSize(usage.limits.maxBytes)}
+                    </div>
+                    <div>
+                      <strong>Images:</strong> {usage.usage.imageCount} / {usage.limits.maxImages}
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    <div className="progress" style={{ height: '8px' }}>
+                      <div
+                        className={`progress-bar ${usage.usage.totalBytes / usage.limits.maxBytes > 0.8 ? 'bg-warning' : 'bg-primary'}`}
+                        style={{ width: `${Math.min(100, (usage.usage.totalBytes / usage.limits.maxBytes) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </Alert>
+              )}
+
               <Form.Group className="mb-3">
                 <Form.Label>Background Name (optional)</Form.Label>
                 <Form.Control
@@ -253,9 +287,10 @@ function MediaLibrary() {
                   accept="image/*"
                   onChange={handleFileSelect}
                   required
+                  disabled={usage && usage.remaining.images <= 0}
                 />
                 <Form.Text className="text-muted">
-                  Upload an image file (JPG, PNG, GIF, WebP). Max size: 10MB
+                  Upload an image file (JPG, PNG, GIF, WebP). Images are automatically compressed.
                 </Form.Text>
               </Form.Group>
 
@@ -362,8 +397,12 @@ function MediaLibrary() {
           <Button variant="secondary" onClick={() => setShowAddModal(false)} disabled={uploading}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleAddMedia} disabled={uploading}>
-            {uploading ? 'Uploading...' : 'Add Background'}
+          <Button
+            variant="primary"
+            onClick={handleAddMedia}
+            disabled={uploading || (modalTab === 'upload' && usage && usage.remaining.images <= 0)}
+          >
+            {uploading ? 'Uploading...' : (modalTab === 'upload' && usage && usage.remaining.images <= 0) ? 'Limit Reached' : 'Add Background'}
           </Button>
         </Modal.Footer>
       </Modal>

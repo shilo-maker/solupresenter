@@ -39,6 +39,36 @@ const MAX_WIDTH = 1920;
 const MAX_HEIGHT = 1080;
 const WEBP_QUALITY = 80;
 
+// Upload limits (images uploaded by user, not gradients/URLs)
+const LIMITS = {
+  normal: {
+    maxImages: 5,
+    maxBytes: 2 * 1024 * 1024 // 2MB
+  },
+  admin: {
+    maxImages: 15,
+    maxBytes: 20 * 1024 * 1024 // 20MB
+  }
+};
+
+/**
+ * Get user's current upload usage (only counts uploaded images, not gradients/URLs)
+ */
+async function getUserUploadUsage(userId) {
+  const userMedia = await Media.findAll({
+    where: {
+      uploadedById: userId,
+      url: { [Op.like]: '/uploads/%' } // Only count actual uploaded files
+    },
+    attributes: ['id', 'fileSize']
+  });
+
+  const imageCount = userMedia.length;
+  const totalBytes = userMedia.reduce((sum, m) => sum + (m.fileSize || 0), 0);
+
+  return { imageCount, totalBytes };
+}
+
 /**
  * Process and compress an image using sharp
  * - Resize if larger than 1920x1080 (maintaining aspect ratio)
@@ -80,6 +110,33 @@ async function processImage(buffer, originalName) {
   };
 }
 
+// Get user's upload usage and limits
+router.get('/usage', authenticateToken, async (req, res) => {
+  try {
+    const isAdmin = req.user.role === 'admin';
+    const limits = isAdmin ? LIMITS.admin : LIMITS.normal;
+    const usage = await getUserUploadUsage(req.user.id);
+
+    res.json({
+      usage: {
+        imageCount: usage.imageCount,
+        totalBytes: usage.totalBytes
+      },
+      limits: {
+        maxImages: limits.maxImages,
+        maxBytes: limits.maxBytes
+      },
+      remaining: {
+        images: limits.maxImages - usage.imageCount,
+        bytes: limits.maxBytes - usage.totalBytes
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching usage:', error);
+    res.status(500).json({ error: 'Failed to fetch usage' });
+  }
+});
+
 // Get all media (public + user's personal media)
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -114,12 +171,44 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
+    // Check upload limits
+    const isAdmin = req.user.role === 'admin';
+    const limits = isAdmin ? LIMITS.admin : LIMITS.normal;
+    const usage = await getUserUploadUsage(req.user.id);
+
+    if (usage.imageCount >= limits.maxImages) {
+      return res.status(400).json({
+        error: `Upload limit reached. You can upload up to ${limits.maxImages} images.`,
+        usage: {
+          imageCount: usage.imageCount,
+          totalBytes: usage.totalBytes,
+          limits
+        }
+      });
+    }
+
     const { name } = req.body;
 
     // Process and compress the image
     console.log(`📷 Processing image: ${req.file.originalname} (${(req.file.size / 1024).toFixed(1)} KB)`);
     processedFile = await processImage(req.file.buffer, req.file.originalname);
     console.log(`✅ Compressed: ${(processedFile.originalSize / 1024).toFixed(1)} KB → ${(processedFile.size / 1024).toFixed(1)} KB (${Math.round((1 - processedFile.size / processedFile.originalSize) * 100)}% reduction)`);
+
+    // Check if adding this file would exceed storage limit
+    if (usage.totalBytes + processedFile.size > limits.maxBytes) {
+      // Delete the processed file since we won't be saving it
+      fs.unlink(processedFile.path, () => {});
+      const limitMB = (limits.maxBytes / (1024 * 1024)).toFixed(0);
+      const usedMB = (usage.totalBytes / (1024 * 1024)).toFixed(2);
+      return res.status(400).json({
+        error: `Storage limit reached. You have ${usedMB}MB used of ${limitMB}MB allowed.`,
+        usage: {
+          imageCount: usage.imageCount,
+          totalBytes: usage.totalBytes,
+          limits
+        }
+      });
+    }
 
     // Generate URL for the processed file
     const fileUrl = `/uploads/backgrounds/${processedFile.filename}`;
@@ -134,12 +223,24 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
       fileSize: processedFile.size
     });
 
+    // Calculate updated usage
+    const newUsage = {
+      imageCount: usage.imageCount + 1,
+      totalBytes: usage.totalBytes + processedFile.size
+    };
+
     res.status(201).json({
       media,
       compression: {
         originalSize: processedFile.originalSize,
         compressedSize: processedFile.size,
         reduction: Math.round((1 - processedFile.size / processedFile.originalSize) * 100)
+      },
+      usage: newUsage,
+      limits,
+      remaining: {
+        images: limits.maxImages - newUsage.imageCount,
+        bytes: limits.maxBytes - newUsage.totalBytes
       }
     });
   } catch (error) {

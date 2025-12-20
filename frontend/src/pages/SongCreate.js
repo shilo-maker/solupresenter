@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Form, Badge, Alert, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import api, { soluflowAPI } from '../services/api';
+import api from '../services/api';
 
 function SongCreate() {
   const navigate = useNavigate();
@@ -202,22 +202,6 @@ function SongCreate() {
       });
 
       const newSongId = response.data.song.id || response.data.song._id;
-
-      // If this song was created from a SoluFlow "No Match" entry, auto-link it
-      const soluflowId = searchParams.get('soluflowId');
-      if (soluflowId) {
-        try {
-          await soluflowAPI.createMapping({
-            soluflowSongId: parseInt(soluflowId),
-            presenterSongId: newSongId,
-            matchType: 'manual'
-          });
-          console.log('Auto-linked SoluFlow song', soluflowId, 'to SoluPresenter song', newSongId);
-        } catch (linkError) {
-          console.error('Failed to auto-link SoluFlow song:', linkError);
-          // Don't fail the whole operation, song was created successfully
-        }
-      }
 
       alert(submitForApproval
         ? 'Song created and submitted for approval!'

@@ -107,7 +107,11 @@ export const adminAPI = {
   getPendingSongs: () => api.get('/api/admin/pending-songs'),
   approveSong: (id) => api.post(`/api/admin/approve-song/${id}`),
   rejectSong: (id) => api.post(`/api/admin/reject-song/${id}`),
-  createPublicSong: (songData) => api.post('/api/admin/create-public-song', songData)
+  createPublicSong: (songData) => api.post('/api/admin/create-public-song', songData),
+  // User management
+  getUsers: () => api.get('/api/admin/users'),
+  toggleUserAdmin: (id) => api.post(`/api/admin/users/${id}/toggle-admin`),
+  deleteUser: (id) => api.delete(`/api/admin/users/${id}`)
 };
 
 // Helper function to get full image URL

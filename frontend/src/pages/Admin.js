@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Badge, ListGroup, Table, Tabs, Tab, Spinner, Alert } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Badge, ListGroup, Table, Tabs, Tab, Spinner, Alert, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
@@ -12,6 +12,7 @@ function Admin() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   useEffect(() => {
     // Check if user is admin
@@ -251,6 +252,21 @@ function Admin() {
           </Card>
         </Tab>
       </Tabs>
+
+      {/* Toast notifications */}
+      <ToastContainer position="bottom-end" className="p-3">
+        <Toast
+          show={toast.show}
+          onClose={() => setToast({ ...toast, show: false })}
+          delay={3000}
+          autohide
+          bg={toast.variant}
+        >
+          <Toast.Body className={toast.variant === 'danger' || toast.variant === 'success' ? 'text-white' : ''}>
+            {toast.message}
+          </Toast.Body>
+        </Toast>
+      </ToastContainer>
     </Container>
   );
 }

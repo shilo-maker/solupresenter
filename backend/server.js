@@ -22,7 +22,6 @@ const adminRoutes = require('./routes/admin');
 const mediaRoutes = require('./routes/media');
 const bibleRoutes = require('./routes/bible');
 const publicRoomsRoutes = require('./routes/publicRooms');
-const soluflowRoutes = require('./routes/soluflow');
 
 // Import cleanup jobs
 const cleanupTemporarySetlists = require('./jobs/cleanupTemporarySetlists');
@@ -148,7 +147,6 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/bible', bibleRoutes);
 app.use('/api/public-rooms', publicRoomsRoutes);
-app.use('/api/soluflow', soluflowRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

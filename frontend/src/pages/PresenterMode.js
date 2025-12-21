@@ -3468,8 +3468,10 @@ function PresenterMode() {
                   {currentSong.isBible
                     ? `Verse ${slide.verseNumber || index + 1}`
                     : slide.verseType
-                    ? `${slide.verseType} - Slide ${index + 1}`
-                    : `Slide ${index + 1}`}
+                    ? (index === 0 || currentSong.slides[index - 1]?.verseType !== slide.verseType)
+                      ? `${slide.verseType}`
+                      : `${index + 1}`
+                    : `${index + 1}`}
                 </div>
                 <div style={{ fontSize: '0.85rem', lineHeight: '1.3', color: 'white' }}>
                   <div style={{ marginBottom: '2px' }}>

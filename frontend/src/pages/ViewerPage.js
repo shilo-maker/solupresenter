@@ -471,24 +471,22 @@ function ViewerPage() {
         boxSizing: 'border-box',
         position: 'relative'
       }}>
-        {/* Verse Type/Reference Label - Top Left */}
+        {/* Verse Type/Reference Label - Top Left (subtle) */}
         {(slide.verseType || slide.reference) && (
           <div style={{
             position: 'absolute',
-            top: '20px',
-            left: '20px',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            color: 'white',
-            padding: '8px 16px',
-            borderRadius: '12px',
-            fontSize: 'clamp(0.9rem, 1.5vw, 1.2rem)',
-            fontWeight: '600',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
+            top: '15px',
+            left: '15px',
+            backgroundColor: 'rgba(0, 0, 0, 0.25)',
+            color: 'rgba(255, 255, 255, 0.5)',
+            padding: '4px 10px',
+            borderRadius: '8px',
+            fontSize: 'clamp(0.7rem, 1vw, 0.85rem)',
+            fontWeight: '400',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-start',
-            gap: '4px'
+            gap: '2px'
           }}>
             {slide.hebrewReference && (
               <div style={{ direction: 'rtl', width: '100%' }}>

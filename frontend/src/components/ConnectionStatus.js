@@ -48,14 +48,14 @@ const ConnectionStatus = ({ status, latency }) => {
         cursor: 'default'
       }}
     >
-      {/* Dot indicator */}
+      {/* Dot indicator - subtle */}
       <div
         style={{
-          width: '8px',
-          height: '8px',
+          width: '6px',
+          height: '6px',
           borderRadius: '50%',
           backgroundColor: getStatusColor(),
-          boxShadow: `0 0 ${isHovered ? '8px' : '4px'} ${getStatusColor()}`,
+          opacity: isHovered ? 0.9 : 0.5,
           transition: 'all 0.3s ease',
           animation: status === 'connecting' || status === 'reconnecting' ? 'pulse 1.5s infinite' : 'none'
         }}

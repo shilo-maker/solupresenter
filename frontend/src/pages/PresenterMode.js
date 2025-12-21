@@ -186,6 +186,7 @@ function PresenterMode() {
   const [quickSlideText, setQuickSlideText] = useState(''); // Persisted value for restore
   const [broadcastSlideIndex, setBroadcastSlideIndex] = useState(-1); // Which slide is being broadcast (-1 = none)
   const quickSlideTextareaRef = useRef(null); // Ref to textarea for instant typing
+  const createSongTextareaRef = useRef(null); // Ref to create song textarea for tag insertion
   const [slideCount, setSlideCount] = useState(0); // Track number of slides for button rendering
 
   // Switch resource panel and apply search
@@ -820,6 +821,34 @@ function PresenterMode() {
       translationOverflow: '',
       verseType: ''
     }];
+  };
+
+  // Insert verse type tag at cursor position in create song textarea
+  const insertVerseTag = (tag) => {
+    const textarea = createSongTextareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = newSongExpressText;
+
+    // Add newlines before tag if not at start and previous char isn't newline
+    let prefix = '';
+    if (start > 0 && text[start - 1] !== '\n') {
+      prefix = '\n\n';
+    } else if (start > 0 && text[start - 1] === '\n' && text[start - 2] !== '\n') {
+      prefix = '\n';
+    }
+
+    const newText = text.substring(0, start) + prefix + `[${tag}]` + '\n' + text.substring(end);
+    setNewSongExpressText(newText);
+
+    // Set cursor position after the inserted tag
+    setTimeout(() => {
+      const newPos = start + prefix.length + tag.length + 3; // +3 for [] and \n
+      textarea.focus();
+      textarea.setSelectionRange(newPos, newPos);
+    }, 0);
   };
 
   const handleCreateSong = async () => {
@@ -3916,9 +3945,38 @@ function PresenterMode() {
 
               <Form.Group className="mb-3">
                 <Form.Label>Song Content</Form.Label>
+                <div style={{ marginBottom: '8px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {['Verse1', 'Verse2', 'Verse3', 'Chorus', 'PreChorus', 'Bridge'].map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => insertVerseTag(tag)}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '0.75rem',
+                        border: '1px solid #dee2e6',
+                        borderRadius: '4px',
+                        backgroundColor: '#f8f9fa',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#e9ecef';
+                        e.currentTarget.style.borderColor = '#0d6efd';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#f8f9fa';
+                        e.currentTarget.style.borderColor = '#dee2e6';
+                      }}
+                    >
+                      [{tag}]
+                    </button>
+                  ))}
+                </div>
                 <Form.Control
                   as="textarea"
                   rows={15}
+                  ref={createSongTextareaRef}
                   placeholder="Enter your song lyrics here. Separate slides with blank lines.
 
 Format for each slide:

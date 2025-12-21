@@ -184,10 +184,9 @@ function PresenterMode() {
   // Quick Slide state
   const [showQuickSlideModal, setShowQuickSlideModal] = useState(false);
   const [quickSlideText, setQuickSlideText] = useState(''); // Persisted value for restore
-  const [isQuickSlideLive, setIsQuickSlideLive] = useState(false);
-  const [broadcastSlideIndex, setBroadcastSlideIndex] = useState(0); // Which slide is being broadcast
+  const [broadcastSlideIndex, setBroadcastSlideIndex] = useState(-1); // Which slide is being broadcast (-1 = none)
   const quickSlideTextareaRef = useRef(null); // Ref to textarea for instant typing
-  const [slideCount, setSlideCount] = useState(1); // Track number of slides for button rendering
+  const [slideCount, setSlideCount] = useState(0); // Track number of slides for button rendering
 
   // Switch resource panel and apply search
   const switchResourcePanel = (panel) => {
@@ -1472,44 +1471,26 @@ function PresenterMode() {
       };
     });
 
-    // Create a temporary song with all slides
+    // Create a temporary song with all slides (not added to setlist)
     const quickSong = {
-      _id: 'quick-live', // Fixed ID so we update the same slide
+      _id: 'quick-live',
       title: 'Quick Slide',
       isTemporary: true,
       slides: allSlides
     };
 
-    // Update or add to setlist
-    const existingIndex = setlist.findIndex(item => item.data?.id === 'quick-live');
-    if (existingIndex >= 0) {
-      // Update existing quick slide
-      const newSetlist = [...setlist];
-      newSetlist[existingIndex] = { type: 'song', data: quickSong };
-      setSetlist(newSetlist);
-      setHasUnsavedChanges(true);
-      console.log('⚡ Quick Slide: Updated existing slide in setlist');
-    } else {
-      // Add new quick slide to setlist
-      setSetlist([...setlist, { type: 'song', data: quickSong }]);
-      setHasUnsavedChanges(true);
-      console.log('⚡ Quick Slide: Added new slide to setlist');
-    }
-
-    // Update current display if live - show the specific slide requested
-    if (isQuickSlideLive && slideIndexToBroadcast !== undefined) {
+    // Broadcast directly without adding to setlist
+    if (slideIndexToBroadcast !== undefined) {
       const indexToBroadcast = Math.min(slideIndexToBroadcast, allSlides.length - 1);
-      console.log('⚡ Quick Slide: LIVE mode - Broadcasting slide', indexToBroadcast + 1, 'to viewers!');
+      console.log('⚡ Quick Slide: Broadcasting slide', indexToBroadcast + 1, 'to viewers!');
       setCurrentSong(quickSong);
       setCurrentItem({ type: 'song', data: quickSong });
       setCurrentSlideIndex(indexToBroadcast);
       setIsBlankActive(false);
       updateSlide(quickSong, indexToBroadcast, displayMode, false);
       setBroadcastSlideIndex(indexToBroadcast);
-    } else {
-      console.log('⚡ Quick Slide: Live mode OFF - not broadcasting');
     }
-  }, [isQuickSlideLive, setlist, displayMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [displayMode, room]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Initialize textarea when modal opens
   useEffect(() => {
@@ -1517,11 +1498,11 @@ function PresenterMode() {
       quickSlideTextareaRef.current.value = quickSlideText;
       // Initialize slide count based on persisted text
       if (!quickSlideText.trim()) {
-        setSlideCount(1);
+        setSlideCount(0);
       } else {
         // Filter out empty blocks (e.g., when text ends with \n\n)
         const blocks = quickSlideText.split(/\n\s*\n/).filter(block => block.trim());
-        setSlideCount(Math.max(1, blocks.length));
+        setSlideCount(blocks.length);
       }
     }
   }, [showQuickSlideModal, quickSlideText]);
@@ -1532,12 +1513,38 @@ function PresenterMode() {
     return quickSlideTextareaRef.current?.value || '';
   };
 
-  // Calculate slide blocks for display
-  const getQuickSlideBlocks = () => {
-    const text = getCurrentQuickSlideText();
-    if (!text.trim()) return [];
-    // Filter out empty blocks (e.g., when text ends with \n\n)
-    return text.split(/\n\s*\n/).filter(block => block.trim());
+  // Open Quick Slide modal and load existing slides into preview
+  const openQuickSlideModal = () => {
+    setShowQuickSlideModal(true);
+
+    // If there's existing quick slide text, load it into the slide preview
+    if (quickSlideText.trim()) {
+      const blocks = quickSlideText.split(/\n\s*\n/).filter(block => block.trim());
+      if (blocks.length > 0) {
+        const allSlides = blocks.map(block => {
+          const blockLines = block.split('\n');
+          return {
+            originalText: blockLines[0] || '',
+            transliteration: blockLines[1] || '',
+            translation: blockLines[2] || '',
+            translationOverflow: blockLines[3] || '',
+            verseType: 'chorus'
+          };
+        });
+
+        const quickSong = {
+          _id: 'quick-live',
+          title: 'Quick Slide',
+          isTemporary: true,
+          slides: allSlides
+        };
+
+        // Load into preview without selecting any slide (no highlight until user clicks)
+        setCurrentSong(quickSong);
+        setCurrentItem({ type: 'song', data: quickSong });
+        setCurrentSlideIndex(-1); // -1 means no slide selected
+      }
+    }
   };
 
   // Navigate to next slide
@@ -3281,7 +3288,7 @@ function PresenterMode() {
                   <Dropdown.Item onClick={toggleBlankSlide}>
                     {isBlankActive ? '⚫ Blank ON' : '⚪ Blank OFF'}
                   </Dropdown.Item>
-                  <Dropdown.Item onClick={() => setShowQuickSlideModal(true)}>
+                  <Dropdown.Item onClick={openQuickSlideModal}>
                     ⚡ Quick Slide
                   </Dropdown.Item>
                   <Dropdown.Item onClick={() => setShowBackgroundModal(true)}>
@@ -3307,7 +3314,7 @@ function PresenterMode() {
 
                 <Button
                   variant="success"
-                  onClick={() => setShowQuickSlideModal(true)}
+                  onClick={openQuickSlideModal}
                   size="sm"
                   style={{ fontSize: '0.8rem', padding: '4px 10px', whiteSpace: 'nowrap' }}
                   title="Create a quick slide on-the-fly"
@@ -3612,8 +3619,7 @@ function PresenterMode() {
             socketService.operatorUpdateQuickSlideText(room.id, currentText);
           }
           setShowQuickSlideModal(false);
-          setIsQuickSlideLive(false);
-          setSlideCount(1); // Reset slide count
+          setSlideCount(0); // Reset slide count
         }}
         size="lg"
       >
@@ -3634,31 +3640,7 @@ function PresenterMode() {
 
           <Form>
             <Form.Group className="mb-3">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <Form.Label style={{ marginBottom: 0 }}>Slide Text</Form.Label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{
-                    fontSize: '0.9rem',
-                    fontWeight: isQuickSlideLive ? 'bold' : 'normal',
-                    color: isQuickSlideLive ? '#28a745' : '#666'
-                  }}>
-                    {isQuickSlideLive ? '🔴 LIVE' : 'Not Live'}
-                  </span>
-                  <Form.Check
-                    type="switch"
-                    id="quick-slide-live-toggle"
-                    checked={isQuickSlideLive}
-                    onChange={(e) => {
-                      setIsQuickSlideLive(e.target.checked);
-                      if (e.target.checked && getCurrentQuickSlideText().trim()) {
-                        // Broadcast the current broadcast slide when turning live on
-                        parseAndBroadcastQuickSlide(broadcastSlideIndex);
-                      }
-                    }}
-                    style={{ fontSize: '1.2rem' }}
-                  />
-                </div>
-              </div>
+              <Form.Label>Slide Text</Form.Label>
               <Form.Control
                 as="textarea"
                 rows={12}
@@ -3668,11 +3650,11 @@ function PresenterMode() {
                   // Update slide count for button rendering (lightweight state update)
                   const text = e.target.value;
                   if (!text.trim()) {
-                    setSlideCount(1);
+                    setSlideCount(0);
                   } else {
                     // Filter out empty blocks (e.g., when text ends with \n\n)
                     const blocks = text.split(/\n\s*\n/).filter(block => block.trim());
-                    setSlideCount(Math.max(1, blocks.length));
+                    setSlideCount(blocks.length);
                   }
                 }}
                 placeholder={"Slide 1:\nLine 1: הללויה\nLine 2: Hallelujah\nLine 3: Praise the Lord\nLine 4: (optional overflow)\n\nSlide 2:\nLine 1: שלום\nLine 2: Shalom\nLine 3: Peace"}
@@ -3683,54 +3665,44 @@ function PresenterMode() {
                 }}
               />
               <Form.Text className="text-muted">
-                {isQuickSlideLive ? '✨ LIVE: Click slide buttons below to broadcast!' : 'Toggle "Live" then click slide buttons to broadcast. Separate slides with empty lines.'}
+                Click slide buttons below to broadcast. Separate slides with empty lines.
               </Form.Text>
-              {(() => {
-                const blocks = getQuickSlideBlocks();
-                return blocks.length > 1 && (
-                  <div style={{ marginTop: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <small style={{ color: '#666' }}>Click to broadcast:</small>
-                      {blocks.map((_, index) => (
-                        <div
-                          key={index}
-                          onClick={() => {
-                            if (isQuickSlideLive) {
-                              parseAndBroadcastQuickSlide(index);
-                            }
-                          }}
-                          style={{
-                            width: '35px',
-                            height: '35px',
-                            borderRadius: '4px',
-                            backgroundColor: index === broadcastSlideIndex && isQuickSlideLive ? '#28a745' : '#dee2e6',
-                            color: index === broadcastSlideIndex && isQuickSlideLive ? 'white' : '#666',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '0.9rem',
-                            fontWeight: index === broadcastSlideIndex && isQuickSlideLive ? 'bold' : 'normal',
-                            cursor: isQuickSlideLive ? 'pointer' : 'not-allowed',
-                            transition: 'all 0.2s',
-                            border: index === broadcastSlideIndex && isQuickSlideLive ? '2px solid #1e7e34' : '1px solid #ccc',
-                            opacity: isQuickSlideLive ? 1 : 0.5
-                          }}
-                          onMouseEnter={(e) => {
-                            if (isQuickSlideLive) {
-                              e.currentTarget.style.transform = 'scale(1.1)';
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = 'scale(1)';
-                          }}
-                        >
-                          {index + 1}
-                        </div>
-                      ))}
-                    </div>
+              {slideCount > 0 && (
+                <div style={{ marginTop: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <small style={{ color: '#666' }}>Click to broadcast:</small>
+                    {Array.from({ length: slideCount }, (_, index) => (
+                      <div
+                        key={index}
+                        onClick={() => parseAndBroadcastQuickSlide(index)}
+                        style={{
+                          width: '35px',
+                          height: '35px',
+                          borderRadius: '4px',
+                          backgroundColor: index === broadcastSlideIndex ? '#28a745' : '#dee2e6',
+                          color: index === broadcastSlideIndex ? 'white' : '#666',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.9rem',
+                          fontWeight: index === broadcastSlideIndex ? 'bold' : 'normal',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          border: index === broadcastSlideIndex ? '2px solid #1e7e34' : '1px solid #ccc'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'scale(1.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'scale(1)';
+                        }}
+                      >
+                        {index + 1}
+                      </div>
+                    ))}
                   </div>
-                );
-              })()}
+                </div>
+              )}
             </Form.Group>
           </Form>
         </Modal.Body>
@@ -3745,8 +3717,7 @@ function PresenterMode() {
                 socketService.operatorUpdateQuickSlideText(room.id, currentText);
               }
               setShowQuickSlideModal(false);
-              setIsQuickSlideLive(false);
-              setSlideCount(1); // Reset slide count
+              setSlideCount(0); // Reset slide count
             }}
           >
             Close

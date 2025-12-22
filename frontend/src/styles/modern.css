@@ -482,6 +482,10 @@ textarea.form-control:focus {
   display: block;
 }
 
+.form-label.text-white {
+  color: white !important;
+}
+
 /* Form Group */
 .form-group {
   margin-bottom: var(--spacing-lg);

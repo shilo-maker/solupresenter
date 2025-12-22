@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Form, Tab, Tabs, Alert, Modal, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api, { getFullImageUrl } from '../services/api';
 import { gradientPresets } from '../utils/gradients';
 
 function MediaLibrary() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [media, setMedia] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -43,7 +45,7 @@ function MediaLibrary() {
       setMedia(response.data.media);
     } catch (error) {
       console.error('Error fetching media:', error);
-      setError(error.response?.data?.error || 'Failed to load media');
+      setError(error.response?.data?.error || t('media.failedToLoad'));
     } finally {
       setLoading(false);
     }
@@ -68,7 +70,7 @@ function MediaLibrary() {
     if (modalTab === 'upload') {
       // Handle file upload
       if (!selectedFile) {
-        setError('Please select a file to upload');
+        setError(t('media.pleaseSelectFile'));
         return;
       }
 
@@ -92,7 +94,7 @@ function MediaLibrary() {
         fetchUsage();
       } catch (error) {
         console.error('Error uploading media:', error);
-        setError(error.response?.data?.error || 'Failed to upload media');
+        setError(error.response?.data?.error || t('media.failedToUpload'));
       } finally {
         setUploading(false);
       }
@@ -104,7 +106,7 @@ function MediaLibrary() {
 
     if (modalTab === 'gradient') {
       if (!selectedGradient) {
-        setError('Please select a gradient');
+        setError(t('media.pleaseSelectGradient'));
         return;
       }
       const gradient = gradientPresets.find(g => g.value === selectedGradient);
@@ -112,7 +114,7 @@ function MediaLibrary() {
       name = newMediaName || gradient.name;
     } else {
       if (!newMediaUrl || !newMediaName) {
-        setError('Please provide both name and URL');
+        setError(t('media.pleaseProvideNameAndUrl'));
         return;
       }
       url = newMediaUrl;
@@ -133,12 +135,12 @@ function MediaLibrary() {
       fetchMedia();
     } catch (error) {
       console.error('Error adding media:', error);
-      setError(error.response?.data?.error || 'Failed to add media');
+      setError(error.response?.data?.error || t('media.failedToAdd'));
     }
   };
 
   const handleDeleteMedia = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this background?')) {
+    if (!window.confirm(t('media.deleteBackgroundConfirm'))) {
       return;
     }
 
@@ -148,7 +150,7 @@ function MediaLibrary() {
       fetchUsage();
     } catch (error) {
       console.error('Error deleting media:', error);
-      alert(error.response?.data?.error || 'Failed to delete media');
+      alert(error.response?.data?.error || t('media.failedToDelete'));
     }
   };
 
@@ -165,15 +167,15 @@ function MediaLibrary() {
     <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2>Media Library</h2>
-          <p className="text-muted">Manage background images and gradients</p>
+          <h2>{t('media.title')}</h2>
+          <p className="text-muted">{t('media.subtitle')}</p>
         </div>
         <div>
           <Button variant="primary" className="me-2" onClick={() => setShowAddModal(true)}>
-            + Add Background
+            + {t('media.addBackground')}
           </Button>
           <Button variant="outline-secondary" onClick={() => navigate('/dashboard')}>
-            Back to Dashboard
+            {t('media.backToDashboard')}
           </Button>
         </div>
       </div>
@@ -192,7 +194,7 @@ function MediaLibrary() {
             <Col>
               <Card>
                 <Card.Body className="text-center py-5">
-                  <p className="text-muted">No backgrounds yet. Click "Add Background" to get started!</p>
+                  <p className="text-muted">{t('media.noBackgrounds')}</p>
                 </Card.Body>
               </Card>
             </Col>
@@ -215,7 +217,7 @@ function MediaLibrary() {
                     <div className="d-flex justify-content-between align-items-center">
                       <div>
                         <small className="text-muted">
-                          {isGradient(item.url) ? 'Gradient' : 'Image'}
+                          {isGradient(item.url) ? t('media.gradient') : t('media.image')}
                         </small>
                         {item.fileSize && (
                           <small className="text-muted ms-2">
@@ -228,7 +230,7 @@ function MediaLibrary() {
                         variant="outline-danger"
                         onClick={() => handleDeleteMedia(item._id)}
                       >
-                        Delete
+                        {t('common.delete')}
                       </Button>
                     </div>
                   </Card.Body>
@@ -242,21 +244,21 @@ function MediaLibrary() {
       {/* Add Media Modal */}
       <Modal show={showAddModal} onHide={() => setShowAddModal(false)} size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>Add Background</Modal.Title>
+          <Modal.Title>{t('media.addBackground')}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
 
           <Tabs activeKey={modalTab} onSelect={(k) => setModalTab(k)} className="mb-3">
-            <Tab eventKey="upload" title="Upload File">
+            <Tab eventKey="upload" title={t('media.uploadFile')}>
               {usage && (
                 <Alert variant={usage.remaining.images <= 1 || usage.remaining.bytes < 500000 ? 'warning' : 'info'} className="mb-3">
                   <div className="d-flex justify-content-between align-items-center">
                     <div>
-                      <strong>Storage:</strong> {formatFileSize(usage.usage.totalBytes)} / {formatFileSize(usage.limits.maxBytes)}
+                      <strong>{t('media.storage')}:</strong> {formatFileSize(usage.usage.totalBytes)} / {formatFileSize(usage.limits.maxBytes)}
                     </div>
                     <div>
-                      <strong>Images:</strong> {usage.usage.imageCount} / {usage.limits.maxImages}
+                      <strong>{t('media.images')}:</strong> {usage.usage.imageCount} / {usage.limits.maxImages}
                     </div>
                   </div>
                   <div className="mt-2">
@@ -271,17 +273,17 @@ function MediaLibrary() {
               )}
 
               <Form.Group className="mb-3">
-                <Form.Label>Background Name (optional)</Form.Label>
+                <Form.Label>{t('media.backgroundNameOptional')}</Form.Label>
                 <Form.Control
                   type="text"
-                  placeholder="Enter a custom name"
+                  placeholder={t('media.enterCustomName')}
                   value={newMediaName}
                   onChange={(e) => setNewMediaName(e.target.value)}
                 />
               </Form.Group>
 
               <Form.Group className="mb-3">
-                <Form.Label>Select Image File *</Form.Label>
+                <Form.Label>{t('media.selectImageFile')} *</Form.Label>
                 <Form.Control
                   type="file"
                   accept="image/*"
@@ -290,13 +292,13 @@ function MediaLibrary() {
                   disabled={usage && usage.remaining.images <= 0}
                 />
                 <Form.Text className="text-muted">
-                  Upload an image file (JPG, PNG, GIF, WebP). Images are automatically compressed.
+                  {t('media.uploadHelp')}
                 </Form.Text>
               </Form.Group>
 
               {uploadPreview && (
                 <div className="mb-3">
-                  <Form.Label>Preview</Form.Label>
+                  <Form.Label>{t('media.preview')}</Form.Label>
                   <div
                     style={{
                       height: '200px',
@@ -311,18 +313,18 @@ function MediaLibrary() {
               )}
             </Tab>
 
-            <Tab eventKey="gradient" title="Gradient">
+            <Tab eventKey="gradient" title={t('media.gradient')}>
               <Form.Group className="mb-3">
-                <Form.Label>Background Name (optional)</Form.Label>
+                <Form.Label>{t('media.backgroundNameOptional')}</Form.Label>
                 <Form.Control
                   type="text"
-                  placeholder="Enter a custom name"
+                  placeholder={t('media.enterCustomName')}
                   value={newMediaName}
                   onChange={(e) => setNewMediaName(e.target.value)}
                 />
               </Form.Group>
 
-              <Form.Label>Select a Gradient</Form.Label>
+              <Form.Label>{t('media.selectGradient')}</Form.Label>
               <Row className="g-2">
                 {gradientPresets.map((gradient) => (
                   <Col key={gradient.value} xs={6} md={4}>
@@ -349,12 +351,12 @@ function MediaLibrary() {
               </Row>
             </Tab>
 
-            <Tab eventKey="image" title="Image URL">
+            <Tab eventKey="image" title={t('media.imageUrl')}>
               <Form.Group className="mb-3">
-                <Form.Label>Background Name *</Form.Label>
+                <Form.Label>{t('media.backgroundNameRequired')} *</Form.Label>
                 <Form.Control
                   type="text"
-                  placeholder="Enter background name"
+                  placeholder={t('media.enterBackgroundName')}
                   value={newMediaName}
                   onChange={(e) => setNewMediaName(e.target.value)}
                   required
@@ -362,7 +364,7 @@ function MediaLibrary() {
               </Form.Group>
 
               <Form.Group className="mb-3">
-                <Form.Label>Image URL *</Form.Label>
+                <Form.Label>{t('media.imageUrlRequired')} *</Form.Label>
                 <Form.Control
                   type="url"
                   placeholder="https://example.com/image.jpg"
@@ -371,13 +373,13 @@ function MediaLibrary() {
                   required
                 />
                 <Form.Text className="text-muted">
-                  Enter a direct URL to an image (JPG, PNG, etc.)
+                  {t('media.urlHelp')}
                 </Form.Text>
               </Form.Group>
 
               {newMediaUrl && (
                 <div className="mb-3">
-                  <Form.Label>Preview</Form.Label>
+                  <Form.Label>{t('media.preview')}</Form.Label>
                   <div
                     style={{
                       height: '200px',
@@ -395,14 +397,14 @@ function MediaLibrary() {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowAddModal(false)} disabled={uploading}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             variant="primary"
             onClick={handleAddMedia}
             disabled={uploading || (modalTab === 'upload' && usage && usage.remaining.images <= 0)}
           >
-            {uploading ? 'Uploading...' : (modalTab === 'upload' && usage && usage.remaining.images <= 0) ? 'Limit Reached' : 'Add Background'}
+            {uploading ? t('media.uploading') : (modalTab === 'upload' && usage && usage.remaining.images <= 0) ? t('media.limitReached') : t('media.addBackground')}
           </Button>
         </Modal.Footer>
       </Modal>

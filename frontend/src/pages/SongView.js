@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Container, Card, Button, Badge, Row, Col, Spinner, Alert, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 
 function SongView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [song, setSong] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -42,17 +44,17 @@ function SongView() {
   };
 
   const deleteSong = async () => {
-    if (!window.confirm('Are you sure you want to delete this song?')) {
+    if (!window.confirm(t('songs.deleteSongConfirm'))) {
       return;
     }
 
     try {
       await api.delete(`/api/songs/${id}`);
-      alert('Song deleted successfully');
+      alert(t('songs.songDeleted'));
       navigate('/songs');
     } catch (error) {
       console.error('Error deleting song:', error);
-      alert(error.response?.data?.error || 'Failed to delete song');
+      alert(error.response?.data?.error || t('songs.failedToLoad'));
     }
   };
 

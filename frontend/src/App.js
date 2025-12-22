@@ -2,26 +2,32 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
+import { useTranslation } from 'react-i18next';
 // Import Bootstrap CSS
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles/modern.css';  // Modern theme overrides
 import './App.css';
+// Import i18n configuration
+import './i18n';
 
 // Loading component - dark theme to blend with app
-const LoadingFallback = () => (
-  <div style={{
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100vh',
-    backgroundColor: '#1a202c',
-    fontSize: '1.2rem',
-    color: '#4a5568',
-    opacity: 0.8
-  }}>
-    Loading...
-  </div>
-);
+const LoadingFallback = () => {
+  const { t } = useTranslation();
+  return (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      height: '100vh',
+      backgroundColor: '#1a202c',
+      fontSize: '1.2rem',
+      color: '#4a5568',
+      opacity: 0.8
+    }}>
+      {t('common.loading')}
+    </div>
+  );
+};
 
 // Lazy load pages for code splitting
 const Login = lazy(() => import('./pages/Login'));

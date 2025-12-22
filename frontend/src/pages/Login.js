@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Form, Button, Alert, Card } from 'react-bootstrap';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
+import { useTranslation } from 'react-i18next';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -15,6 +16,7 @@ function Login() {
   const [resendSuccess, setResendSuccess] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { t } = useTranslation();
 
   const handleSubmit = async (e) => {
     if (e) {
@@ -116,37 +118,37 @@ function Login() {
                 WORSHIP AS ONE
               </div>
             </div>
-            <h4 className="text-center mb-4">Login</h4>
+            <h4 className="text-center mb-4">{t('auth.login')}</h4>
 
             {error && (
               <Alert variant="danger" dismissible onClose={() => setError('')}>
-                <strong>Error:</strong> {error}
+                <strong>{t('common.error')}:</strong> {error}
               </Alert>
             )}
 
             {resendSuccess && (
               <Alert variant="success">
-                Verification email sent successfully! Please check your inbox.
+                {t('auth.verificationSent')}
               </Alert>
             )}
 
             {requiresVerification && !resendSuccess && (
               <Alert variant="warning">
-                <p className="mb-2">Your email address hasn't been verified yet.</p>
+                <p className="mb-2">{t('auth.emailNotVerified')}</p>
                 <Button
                   variant="warning"
                   size="sm"
                   onClick={handleResendVerification}
                   disabled={resendingEmail}
                 >
-                  {resendingEmail ? 'Sending...' : 'Resend Verification Email'}
+                  {resendingEmail ? t('common.sending') : t('auth.resendVerification')}
                 </Button>
               </Alert>
             )}
 
             <Form onSubmit={handleSubmit}>
               <Form.Group className="mb-3" controlId="email">
-                <Form.Label>Email</Form.Label>
+                <Form.Label>{t('auth.email')}</Form.Label>
                 <Form.Control
                   type="email"
                   value={email}
@@ -156,7 +158,7 @@ function Login() {
               </Form.Group>
 
               <Form.Group className="mb-3" controlId="password">
-                <Form.Label>Password</Form.Label>
+                <Form.Label>{t('auth.password')}</Form.Label>
                 <Form.Control
                   type="password"
                   value={password}
@@ -166,7 +168,7 @@ function Login() {
 
               <div className="d-flex justify-content-end mb-3">
                 <Link to="/forgot-password" style={{ fontSize: '0.9rem' }}>
-                  Forgot password?
+                  {t('auth.forgotPassword')}
                 </Link>
               </div>
 
@@ -176,16 +178,16 @@ function Login() {
                 className="w-100 mb-3"
                 disabled={loading}
               >
-                {loading ? 'Logging in...' : 'Login'}
+                {loading ? t('auth.loggingIn') : t('auth.login')}
               </Button>
             </Form>
 
             <div className="text-center mt-3">
-              Don't have an account? <Link to="/register">Register</Link>
+              {t('auth.noAccount')} <Link to="/register">{t('auth.register')}</Link>
             </div>
 
             <div className="text-center mt-2">
-              <Link to="/viewer">Join as Viewer</Link>
+              <Link to="/viewer">{t('auth.joinAsViewer')}</Link>
             </div>
           </Card.Body>
         </Card>

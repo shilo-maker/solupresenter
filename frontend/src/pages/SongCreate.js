@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Form, Badge, Alert, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 
 function SongCreate() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const [title, setTitle] = useState(searchParams.get('title') || '');
   const [author, setAuthor] = useState('');
@@ -206,8 +208,8 @@ function SongCreate() {
       const newSongId = response.data.song.id || response.data.song._id;
 
       alert(submitForApproval
-        ? 'Song created and submitted for approval!'
-        : 'Song created successfully!');
+        ? t('songs.songCreatedAndSubmitted')
+        : t('songs.songCreated'));
       navigate(`/songs/${newSongId}`);
     } catch (error) {
       console.error('Error creating song:', error);

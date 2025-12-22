@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Form, Badge, Alert, Spinner, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 function SongEdit() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -84,7 +86,7 @@ function SongEdit() {
       setTags(song.tags || []);
     } catch (error) {
       console.error('Error fetching song:', error);
-      setError(error.response?.data?.error || 'Failed to load song');
+      setError(error.response?.data?.error || t('songs.failedToLoad'));
     } finally {
       setLoading(false);
     }
@@ -215,7 +217,7 @@ function SongEdit() {
     setError('');
 
     if (!title.trim()) {
-      setError('Please enter a song title');
+      setError(t('songs.enterTitleError'));
       return;
     }
 
@@ -230,7 +232,7 @@ function SongEdit() {
 
     const validSlides = slidesToSubmit.filter(slide => slide.originalText.trim());
     if (validSlides.length === 0) {
-      setError('Please add at least one slide with original text');
+      setError(t('songs.addSlideError'));
       return;
     }
 
@@ -252,15 +254,15 @@ function SongEdit() {
 
       if (response.data.message === 'Personal copy created') {
         setIsPersonalCopy(true);
-        setToast({ show: true, message: 'A personal copy has been created since you were editing a public song', variant: 'info' });
+        setToast({ show: true, message: t('songs.personalCopyCreated'), variant: 'info' });
         setTimeout(() => navigate(`/songs/${response.data.song._id}`), 1500);
       } else {
-        setToast({ show: true, message: 'Song updated successfully!', variant: 'success' });
+        setToast({ show: true, message: t('songs.songUpdatedSuccess'), variant: 'success' });
         setTimeout(() => navigate(`/songs/${id}`), 1500);
       }
     } catch (error) {
       console.error('Error updating song:', error);
-      setError(error.response?.data?.error || 'Failed to update song');
+      setError(error.response?.data?.error || t('songs.failedToUpdate'));
     } finally {
       setSaving(false);
     }
@@ -280,7 +282,7 @@ function SongEdit() {
     return (
       <Container className="py-5">
         <Alert variant="danger">{error}</Alert>
-        <Button onClick={() => navigate('/songs')}>Back to Songs</Button>
+        <Button onClick={() => navigate('/songs')}>{t('songs.backToSongs')}</Button>
       </Container>
     );
   }
@@ -301,7 +303,7 @@ function SongEdit() {
           bg={toast.variant}
         >
           <Toast.Header closeButton={false}>
-            <strong className="me-auto">{toast.variant === 'success' ? 'Success' : 'Info'}</strong>
+            <strong className="me-auto">{toast.variant === 'success' ? t('songs.success') : t('songs.info')}</strong>
           </Toast.Header>
           <Toast.Body className={toast.variant === 'success' || toast.variant === 'info' ? 'text-white' : ''}>
             {toast.variant === 'success' && '✓ '}{toast.message}
@@ -311,9 +313,9 @@ function SongEdit() {
 
       <Container className="py-4">
         <div className="d-flex justify-content-between align-items-center mb-4">
-          <h2>Edit Song</h2>
+          <h2>{t('songs.editSong')}</h2>
           <Button variant="outline-secondary" onClick={() => navigate(`/songs/${id}`)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
         </div>
 
@@ -321,7 +323,7 @@ function SongEdit() {
 
       {isPersonalCopy && (
         <Alert variant="info">
-          Editing a public song creates a personal copy that you can modify freely.
+          {t('songs.editingPublicCopy')}
         </Alert>
       )}
 
@@ -331,14 +333,14 @@ function SongEdit() {
             {/* Basic Information */}
             <Card className="mb-4">
               <Card.Header>
-                <h5 className="mb-0">Basic Information</h5>
+                <h5 className="mb-0">{t('songs.basicInfo')}</h5>
               </Card.Header>
               <Card.Body>
                 <Form.Group className="mb-3">
-                  <Form.Label>Song Title *</Form.Label>
+                  <Form.Label>{t('songs.songTitle')} *</Form.Label>
                   <Form.Control
                     type="text"
-                    placeholder="Enter song title"
+                    placeholder={t('songs.enterSongTitle')}
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     required
@@ -346,17 +348,17 @@ function SongEdit() {
                 </Form.Group>
 
                 <Form.Group className="mb-3">
-                  <Form.Label>Author / Artist</Form.Label>
+                  <Form.Label>{t('songs.authorArtist')}</Form.Label>
                   <Form.Control
                     type="text"
-                    placeholder="Enter author or artist name (optional)"
+                    placeholder={t('songs.enterAuthor')}
                     value={author}
                     onChange={(e) => setAuthor(e.target.value)}
                   />
                 </Form.Group>
 
                 <Form.Group className="mb-3">
-                  <Form.Label>Original Language *</Form.Label>
+                  <Form.Label>{t('songs.originalLanguage')} *</Form.Label>
                   <Form.Select
                     value={originalLanguage}
                     onChange={(e) => setOriginalLanguage(e.target.value)}
@@ -367,7 +369,7 @@ function SongEdit() {
                     ))}
                   </Form.Select>
                   <Form.Text className="text-muted">
-                    Select the original language of the song for proper text rendering
+                    {t('songs.selectLanguageDesc')}
                   </Form.Text>
                 </Form.Group>
               </Card.Body>
@@ -376,7 +378,7 @@ function SongEdit() {
             {/* Slides */}
             <Card className="mb-4">
               <Card.Header className="d-flex justify-content-between align-items-center">
-                <h5 className="mb-0">Slides</h5>
+                <h5 className="mb-0">{t('songs.slides')}</h5>
                 <div>
                   <Button
                     size="sm"
@@ -384,11 +386,11 @@ function SongEdit() {
                     className="me-2"
                     onClick={toggleExpressMode}
                   >
-                    {expressMode ? 'Switch to Standard Form' : 'Switch to Express Form'}
+                    {expressMode ? t('songs.switchToStandardForm') : t('songs.switchToExpressForm')}
                   </Button>
                   {!expressMode && (
                     <Button size="sm" variant="primary" onClick={addSlide}>
-                      + Add Slide
+                      + {t('songs.addSlide')}
                     </Button>
                   )}
                 </div>
@@ -397,19 +399,19 @@ function SongEdit() {
                 {expressMode ? (
                   <>
                     <Form.Text className="text-muted d-block mb-3">
-                      <strong>Express Mode:</strong> Separate slides with blank lines.<br/>
-                      Use [Verse1], [Chorus], [Bridge], etc. to mark sections (applies to all following slides until next marker).<br/>
+                      <strong>{t('songs.expressMode')}:</strong> {t('songs.expressModeDesc')}<br/>
+                      {t('songs.expressModeVerseTypes')}<br/>
                       {isTransliterationLanguage ? (
                         <>
-                          Within each slide:<br/>
-                          Line 1 = Original text (required)<br/>
-                          Line 2 = Transliteration (optional)<br/>
-                          Line 3 = Translation (optional)<br/>
-                          Line 4 = Translation overflow (optional)
+                          {t('songs.expressModeLines')}<br/>
+                          {t('songs.expressModeLine1')}<br/>
+                          {t('songs.expressModeLine2')}<br/>
+                          {t('songs.expressModeLine3')}<br/>
+                          {t('songs.expressModeLine4')}
                         </>
                       ) : (
                         <>
-                          Each slide can have up to 4 lines of lyrics.
+                          {t('songs.expressModeSimple')}
                         </>
                       )}
                     </Form.Text>
@@ -431,48 +433,48 @@ function SongEdit() {
                   slides.map((slide, index) => (
                   <Card key={index} className="mb-3" bg="light">
                     <Card.Header className="d-flex justify-content-between align-items-center py-2">
-                      <small><strong>Slide {index + 1}</strong></small>
+                      <small><strong>{t('songs.slide')} {index + 1}</strong></small>
                       {slides.length > 1 && (
                         <Button
                           size="sm"
                           variant="outline-danger"
                           onClick={() => removeSlide(index)}
                         >
-                          Remove
+                          {t('songs.remove')}
                         </Button>
                       )}
                     </Card.Header>
                     <Card.Body>
                       <Form.Group className="mb-3">
-                        <Form.Label>Verse Type</Form.Label>
+                        <Form.Label>{t('songs.verseType')}</Form.Label>
                         <Form.Select
                           value={slide.verseType || ''}
                           onChange={(e) => updateSlide(index, 'verseType', e.target.value)}
                         >
-                          <option value="">None</option>
-                          <option value="Intro">Intro</option>
-                          <option value="Verse1">Verse 1</option>
-                          <option value="Verse2">Verse 2</option>
-                          <option value="Verse3">Verse 3</option>
-                          <option value="Verse4">Verse 4</option>
-                          <option value="PreChorus">Pre-Chorus</option>
-                          <option value="Chorus">Chorus</option>
-                          <option value="Bridge">Bridge</option>
-                          <option value="Instrumental">Instrumental</option>
-                          <option value="Outro">Outro</option>
-                          <option value="Tag">Tag</option>
+                          <option value="">{t('songs.none')}</option>
+                          <option value="Intro">{t('songs.intro')}</option>
+                          <option value="Verse1">{t('songs.verse1')}</option>
+                          <option value="Verse2">{t('songs.verse2')}</option>
+                          <option value="Verse3">{t('songs.verse3')}</option>
+                          <option value="Verse4">{t('songs.verse4')}</option>
+                          <option value="PreChorus">{t('songs.preChorus')}</option>
+                          <option value="Chorus">{t('songs.chorus')}</option>
+                          <option value="Bridge">{t('songs.bridge')}</option>
+                          <option value="Instrumental">{t('songs.instrumental')}</option>
+                          <option value="Outro">{t('songs.outro')}</option>
+                          <option value="Tag">{t('songs.tag')}</option>
                         </Form.Select>
                         <Form.Text className="text-muted">
-                          Optional: Mark the type of this slide
+                          {t('songs.verseTypeDesc')}
                         </Form.Text>
                       </Form.Group>
 
                       <Form.Group className="mb-3">
-                        <Form.Label>{isTransliterationLanguage ? 'Original Text *' : 'Lyrics *'}</Form.Label>
+                        <Form.Label>{isTransliterationLanguage ? t('songs.originalText') + ' *' : t('songs.lyrics') + ' *'}</Form.Label>
                         <Form.Control
                           as="textarea"
                           rows={2}
-                          placeholder={isTransliterationLanguage ? "Enter original text" : "Enter lyrics"}
+                          placeholder={isTransliterationLanguage ? t('songs.enterOriginalText') : t('songs.enterLyrics')}
                           value={slide.originalText}
                           onChange={(e) => updateSlide(index, 'originalText', e.target.value)}
                           dir={isTransliterationLanguage ? 'rtl' : 'ltr'}
@@ -480,33 +482,33 @@ function SongEdit() {
                       </Form.Group>
 
                       <Form.Group className="mb-3">
-                        <Form.Label>{isTransliterationLanguage ? 'Transliteration' : 'Lyrics (continued)'}</Form.Label>
+                        <Form.Label>{isTransliterationLanguage ? t('songs.transliteration') : t('songs.lyricsContinued')}</Form.Label>
                         <Form.Control
                           as="textarea"
                           rows={2}
-                          placeholder={isTransliterationLanguage ? "Enter transliteration (optional)" : "Additional lyrics (optional)"}
+                          placeholder={isTransliterationLanguage ? t('songs.enterTransliteration') : t('songs.additionalLyrics')}
                           value={slide.transliteration}
                           onChange={(e) => updateSlide(index, 'transliteration', e.target.value)}
                         />
                       </Form.Group>
 
                       <Form.Group className="mb-3">
-                        <Form.Label>{isTransliterationLanguage ? 'Translation' : 'Lyrics (continued)'}</Form.Label>
+                        <Form.Label>{isTransliterationLanguage ? t('songs.translation') : t('songs.lyricsContinued')}</Form.Label>
                         <Form.Control
                           as="textarea"
                           rows={2}
-                          placeholder={isTransliterationLanguage ? "Enter translation (optional)" : "Additional lyrics (optional)"}
+                          placeholder={isTransliterationLanguage ? t('songs.enterTranslation') : t('songs.additionalLyrics')}
                           value={slide.translation}
                           onChange={(e) => updateSlide(index, 'translation', e.target.value)}
                         />
                       </Form.Group>
 
                       <Form.Group>
-                        <Form.Label>{isTransliterationLanguage ? 'Translation Overflow' : 'Lyrics (continued)'}</Form.Label>
+                        <Form.Label>{isTransliterationLanguage ? t('songs.translationOverflow') : t('songs.lyricsContinued')}</Form.Label>
                         <Form.Control
                           as="textarea"
                           rows={2}
-                          placeholder={isTransliterationLanguage ? "Additional translation text (optional)" : "Additional lyrics (optional)"}
+                          placeholder={isTransliterationLanguage ? t('songs.additionalTranslation') : t('songs.additionalLyrics')}
                           value={slide.translationOverflow}
                           onChange={(e) => updateSlide(index, 'translationOverflow', e.target.value)}
                         />
@@ -523,19 +525,19 @@ function SongEdit() {
             {/* Tags */}
             <Card className="mb-4">
               <Card.Header>
-                <h5 className="mb-0">Tags</h5>
+                <h5 className="mb-0">{t('songs.tags')}</h5>
               </Card.Header>
               <Card.Body>
                 <Form.Group className="mb-3">
                   <Form.Control
                     type="text"
-                    placeholder="Add a tag..."
+                    placeholder={t('songs.addTag')}
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
                     onKeyDown={handleTagInputKeyDown}
                   />
                   <Form.Text className="text-muted">
-                    Press Enter to add tags
+                    {t('songs.pressEnterToAdd')}
                   </Form.Text>
                 </Form.Group>
 
@@ -557,7 +559,7 @@ function SongEdit() {
 
                 {availableTags.length > 0 && (
                   <>
-                    <Form.Label>Suggested Tags</Form.Label>
+                    <Form.Label>{t('songs.suggestedTags')}</Form.Label>
                     <div>
                       {availableTags
                         .filter(tag => !tags.includes(tag))
@@ -583,7 +585,7 @@ function SongEdit() {
             {(isAdmin || (isOwner && !isPublic)) && (
               <Card className="mb-4">
                 <Card.Header>
-                  <h5 className="mb-0">Visibility</h5>
+                  <h5 className="mb-0">{t('songs.visibility')}</h5>
                 </Card.Header>
                 <Card.Body>
                   {isAdmin ? (
@@ -591,18 +593,18 @@ function SongEdit() {
                       <Form.Check
                         type="switch"
                         id="makePublic"
-                        label={isPublic ? "Public song (visible to all users)" : "Make this song public"}
+                        label={isPublic ? t('songs.publicSong') : t('songs.makePublic')}
                         checked={isPublic}
                         onChange={(e) => setIsPublic(e.target.checked)}
                       />
                       <Form.Text className="text-muted">
                         {isPublic
-                          ? "Toggle off to make this song private"
-                          : "Toggle on to make this song visible to all users"}
+                          ? t('songs.toggleOffPrivate')
+                          : t('songs.toggleOnPublic')}
                       </Form.Text>
                       {isPublic && (
                         <Alert variant="success" className="mt-2 mb-0">
-                          <small>This song is currently public</small>
+                          <small>{t('songs.currentlyPublic')}</small>
                         </Alert>
                       )}
                     </>
@@ -611,16 +613,16 @@ function SongEdit() {
                       <Form.Check
                         type="checkbox"
                         id="submitForApproval"
-                        label="Submit for public approval"
+                        label={t('songs.submitForApproval')}
                         checked={isPendingApproval}
                         onChange={(e) => setIsPendingApproval(e.target.checked)}
                       />
                       <Form.Text className="text-muted">
-                        An admin will review this song for inclusion in the public database
+                        {t('songs.adminWillReview')}
                       </Form.Text>
                       {isPendingApproval && (
                         <Alert variant="info" className="mt-2 mb-0">
-                          <small>This song is pending approval</small>
+                          <small>{t('songs.pendingApproval')}</small>
                         </Alert>
                       )}
                     </>
@@ -637,13 +639,13 @@ function SongEdit() {
                 size="lg"
                 disabled={saving}
               >
-                {saving ? 'Saving...' : 'Save Changes'}
+                {saving ? t('songs.saving') : t('songs.saveChanges')}
               </Button>
               <Button
                 variant="outline-secondary"
                 onClick={() => navigate(`/songs/${id}`)}
               >
-                Cancel
+                {t('common.cancel')}
               </Button>
             </div>
           </Col>

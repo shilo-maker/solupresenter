@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Spinner, Alert, Badge } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Spinner, Alert, Badge, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 
 function SetlistList() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [setlists, setSetlists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   useEffect(() => {
     fetchSetlists();
@@ -20,14 +23,14 @@ function SetlistList() {
       setSetlists(response.data.setlists);
     } catch (error) {
       console.error('Error fetching setlists:', error);
-      setError(error.response?.data?.error || 'Failed to load setlists');
+      setError(error.response?.data?.error || t('setlists.failedToLoad'));
     } finally {
       setLoading(false);
     }
   };
 
   const deleteSetlist = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this setlist?')) {
+    if (!window.confirm(t('setlists.deleteSetlistConfirm'))) {
       return;
     }
 
@@ -36,7 +39,7 @@ function SetlistList() {
       setSetlists(setlists.filter(s => s.id !== id));
     } catch (error) {
       console.error('Error deleting setlist:', error);
-      alert(error.response?.data?.error || 'Failed to delete setlist');
+      alert(error.response?.data?.error || t('setlists.failedToDelete'));
     }
   };
 
@@ -53,13 +56,13 @@ function SetlistList() {
   return (
     <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>My Setlists</h2>
+        <h2>{t('setlists.mySetlists')}</h2>
         <div>
           <Button variant="outline-secondary" className="me-2" onClick={() => navigate('/dashboard')}>
-            Back to Dashboard
+            {t('dashboard.backToDashboard')}
           </Button>
           <Button variant="primary" onClick={() => navigate('/setlists/new')}>
-            Create New Setlist
+            {t('setlists.createNewSetlist')}
           </Button>
         </div>
       </div>
@@ -69,9 +72,9 @@ function SetlistList() {
       {setlists.length === 0 ? (
         <Card>
           <Card.Body className="text-center py-5">
-            <p className="text-muted mb-3">You haven't created any setlists yet.</p>
+            <p className="text-muted mb-3">{t('setlists.noSetlistsYet')}</p>
             <Button variant="primary" onClick={() => navigate('/setlists/new')}>
-              Create Your First Setlist
+              {t('setlists.createFirstSetlist')}
             </Button>
           </Card.Body>
         </Card>
@@ -84,16 +87,18 @@ function SetlistList() {
                   <Card.Title>{setlist.name}</Card.Title>
                   <div className="mb-3">
                     <Badge bg="secondary" className="me-2">
-                      {setlist.items.length} {setlist.items.length === 1 ? 'item' : 'items'}
+                      {setlist.items.length} {setlist.items.length === 1 ? t('setlists.item') : t('setlists.itemPlural')}
                     </Badge>
                     <Badge bg="info">
-                      Used {setlist.usageCount} {setlist.usageCount === 1 ? 'time' : 'times'}
+                      {setlist.usageCount === 1
+                        ? t('setlists.usedTime', { count: setlist.usageCount })
+                        : t('setlists.usedTimes', { count: setlist.usageCount })}
                     </Badge>
                   </div>
 
                   {setlist.items.length > 0 && (
                     <div className="mb-3">
-                      <small className="text-muted">Items:</small>
+                      <small className="text-muted">{t('setlists.items')}:</small>
                       <ul className="mb-0 mt-1" style={{ fontSize: '0.9rem' }}>
                         {setlist.items.slice(0, 3).map((item, idx) => (
                           <li key={idx}>
@@ -102,16 +107,16 @@ function SetlistList() {
                             ) : item.type === 'bible' && item.bibleData ? (
                               `📖 ${item.bibleData.title}`
                             ) : item.type === 'image' && item.image ? (
-                              `🖼️ ${item.image.title || 'Image'}`
+                              `🖼️ ${item.image.title || t('media.image')}`
                             ) : item.type === 'blank' ? (
-                              '⬜ Blank Slide'
+                              `⬜ ${t('setlists.blankSlide')}`
                             ) : (
-                              'Unknown Item'
+                              t('setlists.unknownItem')
                             )}
                           </li>
                         ))}
                         {setlist.items.length > 3 && (
-                          <li className="text-muted">+ {setlist.items.length - 3} more</li>
+                          <li className="text-muted">{t('setlists.andMore', { count: setlist.items.length - 3 })}</li>
                         )}
                       </ul>
                     </div>
@@ -119,18 +124,18 @@ function SetlistList() {
 
                   <div className="d-grid gap-2">
                     <Button variant="primary" size="sm" onClick={() => navigate(`/setlists/${setlist.id}`)}>
-                      View Details
+                      {t('setlists.viewDetails')}
                     </Button>
                     <Button variant="outline-primary" size="sm" onClick={() => navigate(`/setlists/${setlist.id}/edit`)}>
-                      Edit
+                      {t('common.edit')}
                     </Button>
                     <Button variant="outline-danger" size="sm" onClick={() => deleteSetlist(setlist.id)}>
-                      Delete
+                      {t('common.delete')}
                     </Button>
                   </div>
                 </Card.Body>
                 <Card.Footer className="text-muted">
-                  <small>Updated {new Date(setlist.updatedAt).toLocaleDateString()}</small>
+                  <small>{t('setlists.updated')} {new Date(setlist.updatedAt).toLocaleDateString()}</small>
                 </Card.Footer>
               </Card>
             </Col>

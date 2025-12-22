@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Container, Card, Button, Badge, ListGroup, Row, Col, Spinner, Alert, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 
 function SetlistView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [setlist, setSetlist] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -24,24 +26,24 @@ function SetlistView() {
       setSetlist(response.data.setlist);
     } catch (error) {
       console.error('Error fetching setlist:', error);
-      setError(error.response?.data?.error || 'Failed to load setlist');
+      setError(error.response?.data?.error || t('setlists.failedToLoadSetlist'));
     } finally {
       setLoading(false);
     }
   };
 
   const deleteSetlist = async () => {
-    if (!window.confirm('Are you sure you want to delete this setlist?')) {
+    if (!window.confirm(t('setlists.deleteSetlistConfirm'))) {
       return;
     }
 
     try {
       await api.delete(`/api/setlists/${id}`);
-      alert('Setlist deleted successfully');
+      alert(t('setlists.setlistDeleted'));
       navigate('/setlists');
     } catch (error) {
       console.error('Error deleting setlist:', error);
-      alert(error.response?.data?.error || 'Failed to delete setlist');
+      alert(error.response?.data?.error || t('setlists.failedToDelete'));
     }
   };
 
@@ -52,7 +54,7 @@ function SetlistView() {
       navigate('/operator', { state: { setlistId: id } });
     } catch (error) {
       console.error('Error using setlist:', error);
-      alert('Failed to use setlist');
+      alert(t('setlists.failedToUse'));
     }
   };
 
@@ -69,8 +71,8 @@ function SetlistView() {
   if (error || !setlist) {
     return (
       <Container className="py-5">
-        <Alert variant="danger">{error || 'Setlist not found'}</Alert>
-        <Button onClick={() => navigate('/setlists')}>Back to Setlists</Button>
+        <Alert variant="danger">{error || t('setlists.setlistNotFound')}</Alert>
+        <Button onClick={() => navigate('/setlists')}>{t('setlists.backToList')}</Button>
       </Container>
     );
   }
@@ -86,24 +88,26 @@ function SetlistView() {
           <h2>{setlist.name}</h2>
           <div className="mt-2">
             <Badge bg="secondary" className="me-2">
-              {setlist.items.length} {setlist.items.length === 1 ? 'item' : 'items'}
+              {setlist.items.length} {setlist.items.length === 1 ? t('setlists.item') : t('setlists.itemPlural')}
             </Badge>
             <Badge bg="info">
-              Used {setlist.usageCount} {setlist.usageCount === 1 ? 'time' : 'times'}
+              {setlist.usageCount === 1
+                ? t('setlists.usedTime', { count: setlist.usageCount })
+                : t('setlists.usedTimes', { count: setlist.usageCount })}
             </Badge>
           </div>
         </div>
         <div>
           <Button variant="outline-secondary" className="me-2" onClick={() => navigate('/setlists')}>
-            Back to List
+            {t('setlists.backToList')}
           </Button>
           {isOwner && (
             <>
               <Button variant="primary" className="me-2" onClick={() => navigate(`/setlists/${id}/edit`)}>
-                Edit
+                {t('common.edit')}
               </Button>
               <Button variant="outline-danger" onClick={deleteSetlist}>
-                Delete
+                {t('common.delete')}
               </Button>
             </>
           )}
@@ -115,12 +119,12 @@ function SetlistView() {
           {/* Setlist Items */}
           <Card className="mb-4">
             <Card.Header>
-              <h5 className="mb-0">Items in this Setlist</h5>
+              <h5 className="mb-0">{t('setlists.itemsInSetlist')}</h5>
             </Card.Header>
             <Card.Body>
               {setlist.items.length === 0 ? (
                 <p className="text-muted text-center py-3">
-                  This setlist is empty.
+                  {t('setlists.setlistEmpty')}
                 </p>
               ) : (
                 <ListGroup variant="flush">
@@ -135,7 +139,7 @@ function SetlistView() {
                             <>
                               <div style={{ fontSize: '1.1rem' }}>{item.song.title}</div>
                               <small className="text-muted">
-                                {item.song.slides?.length || 0} slides
+                                {item.song.slides?.length || 0} {t('setlists.slides')}
                               </small>
                             </>
                           ) : item.type === 'bible' && item.bibleData ? (
@@ -144,25 +148,25 @@ function SetlistView() {
                                 📖 {item.bibleData.title}
                               </div>
                               <small className="text-muted">
-                                {item.bibleData.slides?.length || 0} verses
+                                {item.bibleData.slides?.length || 0} {t('setlists.verses')}
                               </small>
                             </>
                           ) : item.type === 'image' && item.image ? (
                             <>
                               <div style={{ fontSize: '1.1rem' }}>
-                                🖼️ {item.image.title || 'Image'}
+                                🖼️ {item.image.title || t('media.image')}
                               </div>
                               <small className="text-muted">
-                                Image slide
+                                {t('setlists.imageSlide')}
                               </small>
                             </>
                           ) : item.type === 'blank' ? (
                             <div style={{ fontSize: '1.1rem', fontStyle: 'italic' }}>
-                              ⬜ Blank Slide
+                              ⬜ {t('setlists.blankSlide')}
                             </div>
                           ) : (
                             <div style={{ fontSize: '1.1rem', fontStyle: 'italic' }}>
-                              Unknown Item
+                              {t('setlists.unknownItem')}
                             </div>
                           )}
                         </div>
@@ -173,7 +177,7 @@ function SetlistView() {
                           size="sm"
                           onClick={() => navigate(`/songs/${item.song.id || item.song._id}`)}
                         >
-                          View Song
+                          {t('setlists.viewSong')}
                         </Button>
                       )}
                     </ListGroup.Item>
@@ -188,26 +192,26 @@ function SetlistView() {
           {/* Details */}
           <Card className="mb-3">
             <Card.Header>
-              <h5 className="mb-0">Details</h5>
+              <h5 className="mb-0">{t('setlists.details')}</h5>
             </Card.Header>
             <Card.Body>
               <div className="mb-3">
-                <small className="text-muted">Created:</small>
+                <small className="text-muted">{t('setlists.created')}:</small>
                 <div>{new Date(setlist.createdAt).toLocaleDateString()}</div>
               </div>
 
               <div className="mb-3">
-                <small className="text-muted">Last Updated:</small>
+                <small className="text-muted">{t('setlists.lastUpdated')}:</small>
                 <div>{new Date(setlist.updatedAt).toLocaleDateString()}</div>
               </div>
 
               <div className="mb-3">
-                <small className="text-muted">Total Items:</small>
+                <small className="text-muted">{t('setlists.totalItems')}:</small>
                 <div>{setlist.items.length}</div>
               </div>
 
               <div>
-                <small className="text-muted">Usage Count:</small>
+                <small className="text-muted">{t('setlists.usageCount')}:</small>
                 <div>{setlist.usageCount}</div>
               </div>
             </Card.Body>
@@ -216,16 +220,16 @@ function SetlistView() {
           {/* Actions */}
           <Card className="mb-3">
             <Card.Header>
-              <h5 className="mb-0">Actions</h5>
+              <h5 className="mb-0">{t('setlists.actions')}</h5>
             </Card.Header>
             <Card.Body>
               <div className="d-grid gap-2">
                 <Button variant="success" onClick={useSetlist}>
-                  Present This Setlist
+                  {t('setlists.presentSetlist')}
                 </Button>
                 {isOwner && (
                   <Button variant="outline-primary" onClick={() => navigate(`/setlists/${id}/edit`)}>
-                    Edit Setlist
+                    {t('setlists.editSetlist')}
                   </Button>
                 )}
               </div>
@@ -235,11 +239,11 @@ function SetlistView() {
           {/* Share Link */}
           <Card>
             <Card.Header>
-              <h5 className="mb-0">Share Setlist</h5>
+              <h5 className="mb-0">{t('setlists.shareSetlist')}</h5>
             </Card.Header>
             <Card.Body>
               <p className="text-muted small mb-2">
-                Share this link with other logged-in users to let them present this setlist
+                {t('setlists.shareSetlistDesc')}
               </p>
               <Button
                 variant="primary"
@@ -247,10 +251,10 @@ function SetlistView() {
                 onClick={() => {
                   const shareUrl = `${window.location.origin}/operator?setlistId=${id}`;
                   navigator.clipboard.writeText(shareUrl);
-                  alert('Share link copied to clipboard!');
+                  alert(t('common.copiedToClipboard'));
                 }}
               >
-                Copy Share Link
+                {t('setlists.copyShareLink')}
               </Button>
               <div style={{
                 fontSize: '0.75rem',

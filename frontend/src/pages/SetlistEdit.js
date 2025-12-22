@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Form, ListGroup, InputGroup, Alert, Spinner } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Form, ListGroup, InputGroup, Alert, Spinner, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api, { getFullImageUrl } from '../services/api';
 
 function SetlistEdit() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [items, setItems] = useState([]);
   const [allSongs, setAllSongs] = useState([]);
@@ -15,6 +17,7 @@ function SetlistEdit() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   // Bible state
   const [bibleBooks, setBibleBooks] = useState([]);
@@ -258,7 +261,7 @@ function SetlistEdit() {
         items: formattedItems
       });
 
-      alert('Setlist updated successfully!');
+      alert(t('setlists.setlistUpdated'));
       navigate(`/setlists/${id}`);
     } catch (error) {
       console.error('Error updating setlist:', error);

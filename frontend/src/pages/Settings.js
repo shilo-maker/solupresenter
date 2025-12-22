@@ -3,10 +3,14 @@ import { Container, Row, Col, Card, Button, Form, Alert, Badge, Spinner } from '
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { publicRoomAPI } from '../services/api';
+import { useTranslation } from 'react-i18next';
+import { changeLanguage } from '../i18n';
+import api from '../services/api';
 
 function Settings() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
+  const { t, i18n } = useTranslation();
 
   // Public rooms state
   const [publicRooms, setPublicRooms] = useState([]);
@@ -14,9 +18,21 @@ function Settings() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Language state
+  const [currentLanguage, setCurrentLanguage] = useState(i18n.language || 'en');
+  const [savingLanguage, setSavingLanguage] = useState(false);
+
   // New public room form
   const [newRoomName, setNewRoomName] = useState('');
   const [creating, setCreating] = useState(false);
+
+  // Initialize language from user preferences
+  useEffect(() => {
+    if (user?.preferences?.language) {
+      setCurrentLanguage(user.preferences.language);
+      changeLanguage(user.preferences.language);
+    }
+  }, [user]);
 
   // Load public rooms on mount
   useEffect(() => {
@@ -51,14 +67,14 @@ function Settings() {
       const response = await publicRoomAPI.create(newRoomName.trim());
       setPublicRooms([...publicRooms, response.data.publicRoom]);
       setNewRoomName('');
-      setSuccess('Public room created successfully!');
+      setSuccess(t('settings.roomCreated'));
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('Error creating public room:', err);
       if (err.response?.data?.error) {
         setError(err.response.data.error);
       } else {
-        setError('Failed to create public room');
+        setError(t('errors.generic'));
       }
     } finally {
       setCreating(false);
@@ -66,7 +82,7 @@ function Settings() {
   };
 
   const handleDeleteRoom = async (roomId) => {
-    if (!window.confirm('Are you sure you want to delete this public room?')) {
+    if (!window.confirm(t('settings.deleteRoomConfirm'))) {
       return;
     }
 
@@ -74,11 +90,42 @@ function Settings() {
       setError('');
       await publicRoomAPI.delete(roomId);
       setPublicRooms(publicRooms.filter(r => r.id !== roomId));
-      setSuccess('Public room deleted successfully!');
+      setSuccess(t('settings.roomDeleted'));
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('Error deleting public room:', err);
-      setError('Failed to delete public room');
+      setError(t('errors.generic'));
+    }
+  };
+
+  // Handle language change
+  const handleLanguageChange = async (newLang) => {
+    try {
+      setSavingLanguage(true);
+      setError('');
+
+      // Update UI immediately
+      setCurrentLanguage(newLang);
+      changeLanguage(newLang);
+
+      // Save to backend
+      await api.put('/auth/preferences', { language: newLang });
+
+      // Refresh user data to sync preferences
+      if (refreshUser) {
+        await refreshUser();
+      }
+
+      setSuccess(t('settings.languageUpdated'));
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      console.error('Error saving language preference:', err);
+      setError(t('settings.languageUpdateError'));
+      // Revert on error
+      setCurrentLanguage(i18n.language);
+      changeLanguage(i18n.language);
+    } finally {
+      setSavingLanguage(false);
     }
   };
 
@@ -99,14 +146,14 @@ function Settings() {
         <img src="/new_cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '250px', height: 'auto' }} />
       </div>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Settings</h2>
+        <h2>{t('settings.title')}</h2>
         <div>
-          <span className="me-3">Welcome, {user?.email}</span>
+          <span className="me-3">{t('dashboard.welcome')}, {user?.email}</span>
           <Button variant="outline-secondary" size="sm" className="me-2" onClick={() => navigate('/dashboard')}>
-            Dashboard
+            {t('nav.dashboard')}
           </Button>
           <Button variant="outline-danger" size="sm" onClick={logout}>
-            Logout
+            {t('nav.logout')}
           </Button>
         </div>
       </div>
@@ -115,13 +162,41 @@ function Settings() {
       {success && <Alert variant="success" onClose={() => setSuccess('')} dismissible>{success}</Alert>}
 
       <Row className="g-4">
+        {/* Language Settings Section */}
+        <Col md={12}>
+          <Card>
+            <Card.Header>
+              <h5 className="mb-0">{t('settings.language')}</h5>
+              <small className="text-muted">
+                {t('settings.selectLanguage')}
+              </small>
+            </Card.Header>
+            <Card.Body>
+              <div className="d-flex align-items-center gap-3">
+                <Button
+                  variant="primary"
+                  onClick={() => handleLanguageChange(currentLanguage === 'en' ? 'he' : 'en')}
+                  disabled={savingLanguage}
+                  style={{ minWidth: '120px' }}
+                >
+                  {currentLanguage === 'en' ? 'עברית' : 'English'}
+                </Button>
+                {savingLanguage && <Spinner size="sm" animation="border" />}
+                <small className="text-muted">
+                  {t('settings.currentLanguage')}: {currentLanguage === 'en' ? t('settings.english') : t('settings.hebrew')}
+                </small>
+              </div>
+            </Card.Body>
+          </Card>
+        </Col>
+
         {/* Public Rooms Section */}
         <Col md={12}>
           <Card>
             <Card.Header>
-              <h5 className="mb-0">Public Rooms</h5>
+              <h5 className="mb-0">{t('settings.publicRooms')}</h5>
               <small className="text-muted">
-                Create named rooms that viewers can join by name instead of PIN
+                {t('settings.publicRoomsDesc')}
               </small>
             </Card.Header>
             <Card.Body>
@@ -130,17 +205,17 @@ function Settings() {
                 <Row className="g-2 align-items-end">
                   <Col md={6}>
                     <Form.Group>
-                      <Form.Label>Room Name</Form.Label>
+                      <Form.Label>{t('settings.roomName')}</Form.Label>
                       <Form.Control
                         type="text"
-                        placeholder="e.g., Solu Israel"
+                        placeholder={t('settings.roomNamePlaceholder')}
                         value={newRoomName}
                         onChange={(e) => setNewRoomName(e.target.value)}
                         disabled={creating}
                       />
                       {newRoomName && (
                         <Form.Text className="text-muted">
-                          Viewers will search for: <strong>{getSlugPreview(newRoomName)}</strong>
+                          {t('settings.searchSlug')}: <strong>{getSlugPreview(newRoomName)}</strong>
                         </Form.Text>
                       )}
                     </Form.Group>
@@ -155,10 +230,10 @@ function Settings() {
                       {creating ? (
                         <>
                           <Spinner size="sm" animation="border" className="me-2" />
-                          Creating...
+                          {t('common.loading')}
                         </>
                       ) : (
-                        'Create Public Room'
+                        t('settings.createRoom')
                       )}
                     </Button>
                   </Col>
@@ -169,22 +244,22 @@ function Settings() {
               {loading ? (
                 <div className="text-center py-4">
                   <Spinner animation="border" />
-                  <p className="mt-2 text-muted">Loading public rooms...</p>
+                  <p className="mt-2 text-muted">{t('common.loading')}</p>
                 </div>
               ) : publicRooms.length === 0 ? (
                 <div className="text-center py-4 text-muted">
-                  <p className="mb-0">You haven't created any public rooms yet.</p>
-                  <p className="small">Create one above to let viewers join by name!</p>
+                  <p className="mb-0">{t('settings.noPublicRooms')}</p>
+                  <p className="small">{t('settings.createFirstRoom')}</p>
                 </div>
               ) : (
                 <div className="table-responsive">
                   <table className="table table-hover">
                     <thead>
                       <tr>
-                        <th>Name</th>
-                        <th>Search Term</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                        <th>{t('viewer.name')}</th>
+                        <th>{t('settings.searchSlug')}</th>
+                        <th>{t('songs.type')}</th>
+                        <th>{t('common.actions')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -199,11 +274,11 @@ function Settings() {
                           <td>
                             {room.activeRoomId ? (
                               <Badge bg="success">
-                                Live
+                                {t('settings.live')}
                               </Badge>
                             ) : (
                               <Badge bg="secondary">
-                                Offline
+                                {t('settings.offline')}
                               </Badge>
                             )}
                           </td>
@@ -213,7 +288,7 @@ function Settings() {
                               size="sm"
                               onClick={() => handleDeleteRoom(room.id)}
                             >
-                              Delete
+                              {t('common.delete')}
                             </Button>
                           </td>
                         </tr>
@@ -222,16 +297,6 @@ function Settings() {
                   </table>
                 </div>
               )}
-
-              <Alert variant="info" className="mt-3 mb-0">
-                <strong>How it works:</strong>
-                <ul className="mb-0 mt-2">
-                  <li>Create a public room name (e.g., "Solu Israel")</li>
-                  <li>When you start presenting, select which public room to link</li>
-                  <li>Viewers can then search for your room by name and join</li>
-                  <li>When you stop presenting, the room goes offline but keeps its name</li>
-                </ul>
-              </Alert>
             </Card.Body>
           </Card>
         </Col>

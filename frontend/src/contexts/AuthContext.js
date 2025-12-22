@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { authAPI } from '../services/api';
+import { changeLanguage } from '../i18n';
 
 const AuthContext = createContext();
 
@@ -19,6 +20,13 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     checkAuth();
   }, []);
+
+  // Apply user's language preference when user is loaded
+  useEffect(() => {
+    if (user?.preferences?.language) {
+      changeLanguage(user.preferences.language);
+    }
+  }, [user]);
 
   const checkAuth = async () => {
     try {
@@ -103,6 +111,19 @@ export const AuthProvider = ({ children }) => {
     authAPI.googleAuth();
   };
 
+  // Refresh user data from server
+  const refreshUser = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const response = await authAPI.getCurrentUser();
+        setUser(response.data.user);
+      }
+    } catch (error) {
+      console.error('Failed to refresh user:', error);
+    }
+  };
+
   const value = {
     user,
     loading,
@@ -111,6 +132,7 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     googleLogin,
+    refreshUser,
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin' || user?.isAdmin === true
   };

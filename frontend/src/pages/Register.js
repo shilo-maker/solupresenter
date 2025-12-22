@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Container, Form, Button, Alert, Card } from 'react-bootstrap';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 function Register() {
   const [email, setEmail] = useState('');
@@ -13,17 +14,18 @@ function Register() {
   const [registeredEmail, setRegisteredEmail] = useState('');
   const navigate = useNavigate();
   const { register } = useAuth();
+  const { t } = useTranslation();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
     if (password !== confirmPassword) {
-      return setError('Passwords do not match');
+      return setError(t('auth.passwordMismatch'));
     }
 
     if (password.length < 6) {
-      return setError('Password must be at least 6 characters');
+      return setError(t('auth.passwordTooShort'));
     }
 
     setLoading(true);
@@ -54,27 +56,27 @@ function Register() {
             <div className="text-center mb-3">
               <img src="/new_cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '200px', height: 'auto' }} />
             </div>
-            <h4 className="text-center mb-4">Register</h4>
+            <h4 className="text-center mb-4">{t('auth.register')}</h4>
 
             {showVerificationMessage ? (
               <div>
                 <Alert variant="success">
-                  <Alert.Heading>Check Your Email!</Alert.Heading>
+                  <Alert.Heading>{t('auth.checkYourEmail')}</Alert.Heading>
                   <p>
-                    We've sent a verification link to <strong>{registeredEmail}</strong>
+                    {t('auth.verificationLinkSent')} <strong>{registeredEmail}</strong>
                   </p>
                   <p>
-                    Please click the link in the email to verify your account and complete registration.
+                    {t('auth.verifyAccountComplete')}
                   </p>
                   <hr />
                   <p className="mb-0" style={{ fontSize: '0.9rem' }}>
-                    Didn't receive the email? Check your spam folder or{' '}
-                    <Link to="/login">return to login</Link> to request a new verification email.
+                    {t('auth.didntReceiveEmail')}{' '}
+                    <Link to="/login">{t('auth.returnToLogin')}</Link> {t('auth.requestNewVerification')}
                   </p>
                 </Alert>
                 <div className="text-center mt-3">
                   <Link to="/login" className="btn btn-primary">
-                    Go to Login
+                    {t('auth.goToLogin')}
                   </Link>
                 </div>
               </div>
@@ -84,7 +86,7 @@ function Register() {
 
             <Form onSubmit={handleSubmit}>
               <Form.Group className="mb-3" controlId="email">
-                <Form.Label>Email</Form.Label>
+                <Form.Label>{t('auth.email')}</Form.Label>
                 <Form.Control
                   type="email"
                   value={email}
@@ -95,7 +97,7 @@ function Register() {
               </Form.Group>
 
               <Form.Group className="mb-3" controlId="password">
-                <Form.Label>Password</Form.Label>
+                <Form.Label>{t('auth.password')}</Form.Label>
                 <Form.Control
                   type="password"
                   value={password}
@@ -105,7 +107,7 @@ function Register() {
               </Form.Group>
 
               <Form.Group className="mb-3" controlId="confirmPassword">
-                <Form.Label>Confirm Password</Form.Label>
+                <Form.Label>{t('auth.confirmPassword')}</Form.Label>
                 <Form.Control
                   type="password"
                   value={confirmPassword}
@@ -120,12 +122,12 @@ function Register() {
                 className="w-100 mb-3"
                 disabled={loading}
               >
-                {loading ? 'Creating account...' : 'Register'}
+                {loading ? t('auth.creatingAccount') : t('auth.register')}
               </Button>
             </Form>
 
             <div className="text-center mt-3">
-              Already have an account? <Link to="/login">Login</Link>
+              {t('auth.hasAccount')} <Link to="/login">{t('auth.login')}</Link>
             </div>
               </>
             )}

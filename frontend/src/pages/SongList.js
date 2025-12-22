@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Form, InputGroup, Badge, Table, Spinner, Modal, Alert, ProgressBar } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Form, InputGroup, Badge, Table, Spinner, Modal, Alert, ProgressBar, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 
 function SongList() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [songs, setSongs] = useState([]);
@@ -19,16 +21,17 @@ function SongList() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadResults, setUploadResults] = useState(null);
   const [error, setError] = useState(null);
+  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   const languages = [
-    { code: 'he', name: 'Hebrew' },
-    { code: 'en', name: 'English' },
-    { code: 'es', name: 'Spanish' },
-    { code: 'fr', name: 'French' },
-    { code: 'de', name: 'German' },
-    { code: 'ru', name: 'Russian' },
-    { code: 'ar', name: 'Arabic' },
-    { code: 'other', name: 'Other' }
+    { code: 'he', name: t('songs.hebrew') },
+    { code: 'en', name: t('songs.english') },
+    { code: 'es', name: t('songs.spanish') },
+    { code: 'fr', name: t('songs.french') },
+    { code: 'de', name: t('songs.german') },
+    { code: 'ru', name: t('songs.russian') },
+    { code: 'ar', name: t('songs.arabic') },
+    { code: 'other', name: t('songs.other') }
   ];
 
   useEffect(() => {
@@ -85,24 +88,24 @@ function SongList() {
       setSongs(response.data.songs);
     } catch (error) {
       console.error('Error searching songs:', error);
-      alert('Failed to search songs');
+      alert(t('common.failedToSearch'));
     } finally {
       setLoading(false);
     }
   };
 
   const deleteSong = async (songId) => {
-    if (!window.confirm('Are you sure you want to delete this song?')) {
+    if (!window.confirm(t('songs.deleteSongConfirm'))) {
       return;
     }
 
     try {
       await api.delete(`/api/songs/${songId}`);
       setSongs(songs.filter(song => song._id !== songId));
-      alert('Song deleted successfully');
+      alert(t('songs.songDeleted'));
     } catch (error) {
       console.error('Error deleting song:', error);
-      alert('Failed to delete song');
+      alert(t('songs.failedToLoad'));
     }
   };
 
@@ -127,7 +130,7 @@ function SongList() {
 
   const handleBulkImport = async () => {
     if (selectedFiles.length === 0) {
-      alert('Please select at least one file');
+      alert(t('songs.selectAtLeastOneFile'));
       return;
     }
 
@@ -163,7 +166,7 @@ function SongList() {
       setSelectedFiles([]);
     } catch (error) {
       console.error('Error uploading files:', error);
-      alert('Failed to upload files: ' + (error.response?.data?.error || error.message));
+      alert(t('songs.failedToUpload') + ': ' + (error.response?.data?.error || error.message));
     } finally {
       setUploading(false);
     }
@@ -179,16 +182,16 @@ function SongList() {
   return (
     <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Song Library</h2>
+        <h2>{t('songs.songLibrary')}</h2>
         <div>
           <Button variant="outline-secondary" onClick={() => navigate('/dashboard')} className="me-2">
-            Back to Dashboard
+            {t('songs.backToDashboard')}
           </Button>
           <Button variant="success" onClick={() => setShowBulkImportModal(true)} className="me-2">
-            Bulk Import
+            {t('songs.bulkImport')}
           </Button>
           <Button variant="primary" onClick={() => navigate('/songs/new')}>
-            Create New Song
+            {t('songs.createNewSong')}
           </Button>
         </div>
       </div>
@@ -198,29 +201,29 @@ function SongList() {
         <Card.Body>
           <Row className="g-3">
             <Col md={6}>
-              <Form.Label>Search</Form.Label>
+              <Form.Label>{t('common.search')}</Form.Label>
               <InputGroup>
                 <Form.Control
                   type="text"
-                  placeholder="Search by title or lyrics..."
+                  placeholder={t('songs.searchByTitleOrLyrics')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
                 {searchQuery && (
                   <Button variant="outline-secondary" onClick={() => setSearchQuery('')}>
-                    Clear
+                    {t('songs.clear')}
                   </Button>
                 )}
               </InputGroup>
             </Col>
 
             <Col md={6}>
-              <Form.Label>Language</Form.Label>
+              <Form.Label>{t('songs.language')}</Form.Label>
               <Form.Select
                 value={selectedLanguage}
                 onChange={(e) => setSelectedLanguage(e.target.value)}
               >
-                <option value="">All Languages</option>
+                <option value="">{t('songs.allLanguages')}</option>
                 {languages.map(lang => (
                   <option key={lang.code} value={lang.code}>{lang.name}</option>
                 ))}
@@ -229,7 +232,7 @@ function SongList() {
 
             {availableTags.length > 0 && (
               <Col xs={12}>
-                <Form.Label>Filter by Tags</Form.Label>
+                <Form.Label>{t('songs.filterByTags')}</Form.Label>
                 <div>
                   {availableTags.map(tag => (
                     <Badge
@@ -266,47 +269,47 @@ function SongList() {
               role="status"
               style={{ width: '3rem', height: '3rem' }}
             >
-              <span className="visually-hidden">Loading...</span>
+              <span className="visually-hidden">{t('common.loading')}</span>
             </Spinner>
-            <h4 className="mt-4">Loading songs...</h4>
-            <p className="text-muted">Please wait while we fetch all songs from the database</p>
+            <h4 className="mt-4">{t('songs.loadingSongs')}</h4>
+            <p className="text-muted">{t('songs.loadingSongsDesc')}</p>
           </Card.Body>
         </Card>
       ) : error ? (
         <Card className="text-center py-5">
           <Card.Body>
-            <h4 className="text-danger">Failed to Load Songs</h4>
+            <h4 className="text-danger">{t('songs.failedToLoad')}</h4>
             <p>{error}</p>
             <Button variant="primary" onClick={fetchSongs}>
-              Retry
+              {t('songs.retry')}
             </Button>
           </Card.Body>
         </Card>
       ) : songs.length === 0 ? (
         <Card className="text-center py-5">
           <Card.Body>
-            <h4>No songs found</h4>
-            <p className="text-muted">Create your first song to get started!</p>
+            <h4>{t('songs.noSongs')}</h4>
+            <p className="text-muted">{t('songs.noSongsDesc')}</p>
             <Button variant="primary" onClick={() => navigate('/songs/new')}>
-              Create New Song
+              {t('songs.createNewSong')}
             </Button>
           </Card.Body>
         </Card>
       ) : (
         <Card>
           <Card.Header>
-            <strong>{songs.length}</strong> {songs.length === 1 ? 'song' : 'songs'} found
+            <strong>{songs.length}</strong> {songs.length === 1 ? t('songs.songFound') : t('songs.songsFound')}
           </Card.Header>
           <Table responsive hover>
             <thead>
               <tr>
-                <th>Title</th>
-                <th>Language</th>
-                <th>Slides</th>
-                <th>Tags</th>
-                <th>Usage</th>
-                <th>Type</th>
-                <th>Actions</th>
+                <th>{t('songs.songTitle')}</th>
+                <th>{t('songs.language')}</th>
+                <th>{t('songs.slides')}</th>
+                <th>{t('songs.tags')}</th>
+                <th>{t('songs.usage')}</th>
+                <th>{t('songs.type')}</th>
+                <th>{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -315,7 +318,7 @@ function SongList() {
                   <td>
                     <strong>{song.title}</strong>
                     {song.createdBy && song.createdBy._id === user._id && (
-                      <Badge bg="info" className="ms-2">Mine</Badge>
+                      <Badge bg="info" className="ms-2">{t('songs.mine')}</Badge>
                     )}
                   </td>
                   <td>{getLanguageName(song.originalLanguage)}</td>
@@ -328,11 +331,11 @@ function SongList() {
                   <td>{song.usageCount || 0}</td>
                   <td>
                     {song.isPublic ? (
-                      <Badge bg="success">Public</Badge>
+                      <Badge bg="success">{t('songs.public')}</Badge>
                     ) : song.isPendingApproval ? (
-                      <Badge bg="warning">Pending</Badge>
+                      <Badge bg="warning">{t('songs.pending')}</Badge>
                     ) : (
-                      <Badge bg="secondary">Private</Badge>
+                      <Badge bg="secondary">{t('songs.private')}</Badge>
                     )}
                   </td>
                   <td>
@@ -342,7 +345,7 @@ function SongList() {
                       className="me-2"
                       onClick={() => navigate(`/songs/${song._id}`)}
                     >
-                      View
+                      {t('common.view')}
                     </Button>
                     <Button
                       size="sm"
@@ -350,7 +353,7 @@ function SongList() {
                       className="me-2"
                       onClick={() => navigate(`/songs/${song._id}/edit`)}
                     >
-                      Edit
+                      {t('common.edit')}
                     </Button>
                     {song.createdBy && song.createdBy._id === user._id && (
                       <Button
@@ -358,7 +361,7 @@ function SongList() {
                         variant="outline-danger"
                         onClick={() => deleteSong(song._id)}
                       >
-                        Delete
+                        {t('common.delete')}
                       </Button>
                     )}
                   </td>
@@ -372,11 +375,11 @@ function SongList() {
       {/* Bulk Import Modal */}
       <Modal show={showBulkImportModal} onHide={closeBulkImportModal} size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>Bulk Import Songs</Modal.Title>
+          <Modal.Title>{t('songs.bulkImportSongs')}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Alert variant="info">
-            <strong>File Format:</strong> Each .txt file should contain:
+            <strong>{t('songs.fileFormat')}:</strong> {t('songs.fileFormatDesc')}:
             <ul className="mb-0 mt-2">
               <li>Line 1: Song title</li>
               <li>Lines 2-5: First slide (Hebrew, transliteration, translation, overflow)</li>
@@ -386,7 +389,7 @@ function SongList() {
           </Alert>
 
           <Form.Group className="mb-3">
-            <Form.Label>Select .txt Files (Max 50 files)</Form.Label>
+            <Form.Label>{t('songs.selectFiles')}</Form.Label>
             <Form.Control
               type="file"
               multiple
@@ -396,7 +399,7 @@ function SongList() {
             />
             {selectedFiles.length > 0 && (
               <Form.Text className="text-muted">
-                {selectedFiles.length} file(s) selected
+                {selectedFiles.length} {t('songs.filesSelected')}
               </Form.Text>
             )}
           </Form.Group>
@@ -404,28 +407,28 @@ function SongList() {
           {uploading && (
             <div className="mb-3">
               <ProgressBar animated now={uploadProgress} label={`${uploadProgress}%`} />
-              <p className="text-center mt-2">Uploading and processing files...</p>
+              <p className="text-center mt-2">{t('songs.uploadingFiles')}</p>
             </div>
           )}
 
           {uploadResults && (
             <div>
               <Alert variant={uploadResults.results.failed.length === 0 ? 'success' : 'warning'}>
-                <strong>Import Complete!</strong>
+                <strong>{t('songs.importComplete')}</strong>
                 <ul className="mb-0 mt-2">
-                  <li>Total files: {uploadResults.summary.total}</li>
-                  <li>Successful: {uploadResults.summary.successful}</li>
-                  <li>Failed: {uploadResults.summary.failed}</li>
+                  <li>{t('songs.totalFiles')}: {uploadResults.summary.total}</li>
+                  <li>{t('songs.successful')}: {uploadResults.summary.successful}</li>
+                  <li>{t('songs.failed')}: {uploadResults.summary.failed}</li>
                 </ul>
               </Alert>
 
               {uploadResults.results.successful.length > 0 && (
                 <div className="mb-3">
-                  <h6>Successfully Imported:</h6>
+                  <h6>{t('songs.successfullyImported')}:</h6>
                   <ul>
                     {uploadResults.results.successful.map((result, idx) => (
                       <li key={idx}>
-                        <strong>{result.title}</strong> ({result.slideCount} slides) - {result.filename}
+                        <strong>{result.title}</strong> ({result.slideCount} {t('songs.slides')}) - {result.filename}
                       </li>
                     ))}
                   </ul>
@@ -434,7 +437,7 @@ function SongList() {
 
               {uploadResults.results.failed.length > 0 && (
                 <div>
-                  <h6 className="text-danger">Failed Imports:</h6>
+                  <h6 className="text-danger">{t('songs.failedImports')}:</h6>
                   <ul>
                     {uploadResults.results.failed.map((result, idx) => (
                       <li key={idx} className="text-danger">
@@ -449,14 +452,14 @@ function SongList() {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={closeBulkImportModal} disabled={uploading}>
-            Close
+            {t('common.close')}
           </Button>
           <Button
             variant="primary"
             onClick={handleBulkImport}
             disabled={uploading || selectedFiles.length === 0}
           >
-            {uploading ? 'Uploading...' : 'Upload and Import'}
+            {uploading ? t('songs.uploading') : t('songs.uploadAndImport')}
           </Button>
         </Modal.Footer>
       </Modal>

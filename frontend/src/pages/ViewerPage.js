@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Form, Button, Alert, Spinner } from 'react-bootstrap';
 import { useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import socketService from '../services/socket';
 import ConnectionStatus from '../components/ConnectionStatus';
 import { getFullImageUrl, publicRoomAPI } from '../services/api';
 
 function ViewerPage() {
+  const { t } = useTranslation();
   const location = useLocation();
   const [pin, setPin] = useState('');
   const [joined, setJoined] = useState(false);
@@ -30,6 +32,11 @@ function ViewerPage() {
   const [imageUrl, setImageUrl] = useState(null); // For image-only slides
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // Viewer display toggles
+  const [showOriginal, setShowOriginal] = useState(true);
+  const [showTransliteration, setShowTransliteration] = useState(true);
+  const [showTranslation, setShowTranslation] = useState(true);
+
   // Refs for click outside detection
   const controlsRef = useRef(null);
   const settingsButtonRef = useRef(null);
@@ -37,6 +44,12 @@ function ViewerPage() {
   // Inactivity tracking - reset view after 1 hour of no activity
   const lastActivityRef = useRef(Date.now());
   const INACTIVITY_TIMEOUT = 60 * 60 * 1000; // 1 hour in milliseconds
+
+  // Ref for translation function to use in socket callbacks without adding to dependencies
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
 
   // Handle click outside to close controls panel
   useEffect(() => {
@@ -200,7 +213,7 @@ function ViewerPage() {
       setRoomSearch('');
       setSearchResults([]);
       setSelectedRoom(null);
-      setError('The presenter has ended the session');
+      setError(tRef.current('viewer.sessionEnded'));
     });
 
     // Check if PIN or room name is in URL query params and auto-join
@@ -237,16 +250,6 @@ function ViewerPage() {
     };
   }, [location.search]);
 
-  const handleJoin = (e) => {
-    e.preventDefault();
-    setError('');
-    if (pin.trim().length === 4) {
-      socketService.viewerJoinRoom(pin.trim().toUpperCase());
-    } else {
-      setError('PIN must be 4 characters');
-    }
-  };
-
   // Search for public rooms by name
   const handleRoomSearch = async (query) => {
     setRoomSearch(query);
@@ -281,12 +284,12 @@ function ViewerPage() {
     setError('');
 
     if (!selectedRoom) {
-      setError('Please select a room to join');
+      setError(t('viewer.selectRoomToJoin'));
       return;
     }
 
     if (!selectedRoom.isLive) {
-      setError(`"${selectedRoom.name}" is not currently live`);
+      setError(`"${selectedRoom.name}" ${t('viewer.roomNotLive')}`);
       return;
     }
 
@@ -352,7 +355,7 @@ function ViewerPage() {
               fontSize: 'clamp(1rem, 2vw, 1.5rem)',
               opacity: 0.7
             }}>
-              Blank
+              {t('viewer.blank')}
             </div>
           ) : (
             // Show modern waiting state
@@ -387,7 +390,7 @@ function ViewerPage() {
                 fontWeight: '300',
                 letterSpacing: '0.05em'
               }}>
-                <span style={{ opacity: 0.7 }}>Waiting for presentation</span>
+                <span style={{ opacity: 0.7 }}>{t('viewer.waitingForPresentation')}</span>
                 <div style={{ display: 'flex', gap: '0.4rem' }}>
                   <div style={{
                     width: '8px',
@@ -433,7 +436,7 @@ function ViewerPage() {
       );
     }
 
-    const { slide, originalLanguage } = currentSlide;
+    const { slide, originalLanguage, isBible } = currentSlide;
 
     // Check if language needs transliteration/translation structure (Hebrew, Arabic)
     const isTransliterationLanguage = originalLanguage === 'he' || originalLanguage === 'ar';
@@ -504,23 +507,26 @@ function ViewerPage() {
 
         {displayMode === 'original' ? (
           // Original language only - single line display
-          <div style={{
-            fontSize: `calc(clamp(2.5rem, 8vw, 8rem) * ${fontSize / 100})`,
-            lineHeight: 1.4,
-            fontWeight: '400',
-            width: '100%',
-            maxWidth: '100%',
-            wordWrap: 'break-word',
-            overflowWrap: 'break-word',
-            color: textColor,
-            textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
-            direction: getTextDirection(slide.originalText),
-            unicodeBidi: 'plaintext'
-          }}>
-            {slide.originalText}
-          </div>
+          showOriginal && (
+            <div style={{
+              fontSize: `calc(clamp(2.5rem, 8vw, 8rem) * ${fontSize / 100})`,
+              lineHeight: 1.4,
+              fontWeight: '400',
+              width: '100%',
+              maxWidth: '100%',
+              wordWrap: 'break-word',
+              overflowWrap: 'break-word',
+              color: textColor,
+              textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+              direction: getTextDirection(slide.originalText),
+              unicodeBidi: 'plaintext',
+              textAlign: isBible ? 'right' : 'center'
+            }}>
+              {slide.originalText}
+            </div>
+          )
         ) : (
-          // Bilingual mode - all 4 lines
+          // Bilingual mode - all 4 lines (respects viewer toggles)
           <div style={{
             display: 'flex',
             flexDirection: 'column',
@@ -529,23 +535,26 @@ function ViewerPage() {
             maxWidth: '100%'
           }}>
             {/* Line 1 - Original Text / Lyrics */}
-            <div style={{
-              fontSize: line1FontSize,
-              lineHeight: 1.4,
-              fontWeight: isTransliterationLanguage ? '500' : '400',
-              width: '100%',
-              wordWrap: 'break-word',
-              overflowWrap: 'break-word',
-              color: textColor,
-              textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
-              direction: getTextDirection(slide.originalText),
-              unicodeBidi: 'plaintext'
-            }}>
-              {slide.originalText}
-            </div>
+            {showOriginal && (
+              <div style={{
+                fontSize: line1FontSize,
+                lineHeight: 1.4,
+                fontWeight: isTransliterationLanguage ? '500' : '400',
+                width: '100%',
+                wordWrap: 'break-word',
+                overflowWrap: 'break-word',
+                color: textColor,
+                textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                direction: getTextDirection(slide.originalText),
+                unicodeBidi: 'plaintext',
+                textAlign: isBible ? 'right' : 'center'
+              }}>
+                {slide.originalText}
+              </div>
+            )}
 
             {/* Line 2 - Transliteration / Lyrics continued */}
-            {slide.transliteration && (
+            {showTransliteration && slide.transliteration && (
               <div style={{
                 fontSize: otherLinesFontSize,
                 lineHeight: 1.4,
@@ -563,7 +572,7 @@ function ViewerPage() {
             )}
 
             {/* Lines 3 & 4 - Translation / Lyrics continued */}
-            {slide.translation && (
+            {showTranslation && slide.translation && (
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -578,10 +587,11 @@ function ViewerPage() {
                   width: '100%',
                   wordWrap: 'break-word',
                   overflowWrap: 'break-word',
-                  color: textColor,
+                  color: isBible ? '#FFD700' : textColor,
                   textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
                   direction: getTextDirection(slide.translation),
-                  unicodeBidi: 'plaintext'
+                  unicodeBidi: 'plaintext',
+                  textAlign: isBible ? 'left' : 'center'
                 }}>
                   {slide.translation}
                 </div>
@@ -595,10 +605,11 @@ function ViewerPage() {
                     width: '100%',
                     wordWrap: 'break-word',
                     overflowWrap: 'break-word',
-                    color: textColor,
+                    color: isBible ? '#FFD700' : textColor,
                     textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
                     direction: getTextDirection(slide.translationOverflow),
-                    unicodeBidi: 'plaintext'
+                    unicodeBidi: 'plaintext',
+                    textAlign: isBible ? 'left' : 'center'
                   }}>
                     {slide.translationOverflow}
                   </div>
@@ -650,7 +661,7 @@ function ViewerPage() {
           }}
           onClick={() => window.location.href = localStorage.getItem('token') ? '/operator' : '/login'}
         >
-          {localStorage.getItem('token') ? 'OPERATOR' : 'LOGIN'}
+          {localStorage.getItem('token') ? t('viewer.operator') : t('auth.login').toUpperCase()}
         </Button>
 
         {/* Centered Content */}
@@ -719,7 +730,7 @@ function ViewerPage() {
               fontSize: '0.9rem',
               transition: 'all 0.2s ease'
             }}>
-              Code
+              {t('viewer.code')}
             </span>
 
             {/* Toggle Switch */}
@@ -750,7 +761,7 @@ function ViewerPage() {
               fontSize: '0.9rem',
               transition: 'all 0.2s ease'
             }}>
-              Name
+              {t('viewer.name')}
             </span>
           </div>
 
@@ -767,7 +778,7 @@ function ViewerPage() {
                   marginBottom: '20px',
                   letterSpacing: '0.5px'
                 }}>
-                  Enter Room Code
+                  {t('viewer.enterRoomCode')}
                 </h3>
 
                 {/* PIN Input - Individual Boxes */}
@@ -854,14 +865,14 @@ function ViewerPage() {
                   marginBottom: '20px',
                   letterSpacing: '0.5px'
                 }}>
-                  Search Room Name
+                  {t('viewer.searchRoomName')}
                 </h3>
 
                 {/* Search Input - Glassmorphic style matching code boxes */}
                 <div style={{ position: 'relative' }}>
                   <input
                     type="text"
-                    placeholder="Type room name..."
+                    placeholder={t('viewer.typeRoomName')}
                     value={roomSearch}
                     onChange={(e) => handleRoomSearch(e.target.value)}
                     style={{
@@ -917,7 +928,7 @@ function ViewerPage() {
                           if (room.isLive) {
                             socketService.viewerJoinRoomBySlug(room.slug);
                           } else {
-                            setError(`"${room.name}" is not currently live`);
+                            setError(`"${room.name}" ${t('viewer.roomNotLive')}`);
                           }
                         }}
                         style={{
@@ -949,7 +960,7 @@ function ViewerPage() {
                           backgroundColor: room.isLive ? '#28a745' : '#6c757d',
                           color: 'white'
                         }}>
-                          {room.isLive ? 'LIVE - TAP TO JOIN' : 'OFFLINE'}
+                          {room.isLive ? t('viewer.liveJoin') : t('viewer.offline')}
                         </span>
                       </div>
                     ))}
@@ -962,7 +973,7 @@ function ViewerPage() {
                     color: 'rgba(255, 255, 255, 0.6)',
                     fontSize: '0.9rem'
                   }}>
-                    No rooms found
+                    {t('viewer.noRoomsFound')}
                   </div>
                 )}
               </div>
@@ -1036,7 +1047,7 @@ function ViewerPage() {
           opacity: showControls ? '1' : '0.4',
           boxShadow: showControls ? '0 4px 12px rgba(255,255,255,0.15)' : 'none'
         }}
-        title="Display Settings"
+        title={t('viewer.displaySettings')}
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <line x1="4" y1="7" x2="20" y2="7"/>
@@ -1073,7 +1084,7 @@ function ViewerPage() {
           opacity: isFullscreen ? '1' : '0.4',
           boxShadow: isFullscreen ? '0 4px 12px rgba(255,255,255,0.15)' : 'none'
         }}
-        title={isFullscreen ? 'Exit Fullscreen (ESC)' : 'Enter Fullscreen (F11)'}
+        title={isFullscreen ? t('viewer.exitFullscreen') : t('viewer.enterFullscreen')}
       >
         {isFullscreen ? (
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1114,7 +1125,7 @@ function ViewerPage() {
           borderBottom: '1px solid rgba(255,255,255,0.2)',
           paddingBottom: '10px'
         }}>
-          Display Settings
+          {t('viewer.displaySettings')}
         </h6>
 
         {/* Font Size Controls */}
@@ -1126,7 +1137,7 @@ function ViewerPage() {
             display: 'block',
             fontWeight: '500'
           }}>
-            Font Size
+            {t('viewer.fontSize')}
           </label>
           <div style={{
             display: 'flex',
@@ -1195,7 +1206,7 @@ function ViewerPage() {
                 width: '100%'
               }}
             >
-              Reset to 100%
+              {t('viewer.resetTo100')}
             </Button>
           )}
         </div>
@@ -1209,7 +1220,7 @@ function ViewerPage() {
             display: 'block',
             fontWeight: '500'
           }}>
-            Text Color
+            {t('viewer.textColor')}
           </label>
           <div style={{
             display: 'grid',
@@ -1247,7 +1258,7 @@ function ViewerPage() {
               width: '100%'
             }}
           >
-            {showColorPicker ? 'Hide' : 'Custom Color'}
+            {showColorPicker ? t('viewer.hide') : t('viewer.customColor')}
           </Button>
 
           {/* Custom Color Picker */}
@@ -1285,6 +1296,78 @@ function ViewerPage() {
               </span>
             </div>
           )}
+        </div>
+
+        {/* Display Toggles */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{
+            color: 'white',
+            fontSize: '0.9rem',
+            marginBottom: '10px',
+            display: 'block',
+            fontWeight: '500'
+          }}>
+            {t('viewer.showHideLines')}
+          </label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div
+              onClick={() => setShowOriginal(!showOriginal)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 12px',
+                backgroundColor: showOriginal ? 'rgba(40, 167, 69, 0.3)' : 'rgba(255,255,255,0.1)',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                border: showOriginal ? '1px solid rgba(40, 167, 69, 0.5)' : '1px solid rgba(255,255,255,0.2)',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <span style={{ color: 'white', fontSize: '0.9rem' }}>{t('viewer.originalText')}</span>
+              <span style={{ color: showOriginal ? '#28a745' : '#999', fontSize: '1.2rem' }}>
+                {showOriginal ? '✓' : '○'}
+              </span>
+            </div>
+            <div
+              onClick={() => setShowTransliteration(!showTransliteration)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 12px',
+                backgroundColor: showTransliteration ? 'rgba(40, 167, 69, 0.3)' : 'rgba(255,255,255,0.1)',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                border: showTransliteration ? '1px solid rgba(40, 167, 69, 0.5)' : '1px solid rgba(255,255,255,0.2)',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <span style={{ color: 'white', fontSize: '0.9rem' }}>{t('viewer.transliteration')}</span>
+              <span style={{ color: showTransliteration ? '#28a745' : '#999', fontSize: '1.2rem' }}>
+                {showTransliteration ? '✓' : '○'}
+              </span>
+            </div>
+            <div
+              onClick={() => setShowTranslation(!showTranslation)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 12px',
+                backgroundColor: showTranslation ? 'rgba(40, 167, 69, 0.3)' : 'rgba(255,255,255,0.1)',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                border: showTranslation ? '1px solid rgba(40, 167, 69, 0.5)' : '1px solid rgba(255,255,255,0.2)',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <span style={{ color: 'white', fontSize: '0.9rem' }}>{t('viewer.translation')}</span>
+              <span style={{ color: showTranslation ? '#28a745' : '#999', fontSize: '1.2rem' }}>
+                {showTranslation ? '✓' : '○'}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 

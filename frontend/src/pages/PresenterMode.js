@@ -3,6 +3,7 @@ import { Form, Button, InputGroup, Modal, Row, Col, Alert, Badge, Dropdown } fro
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FixedSizeList } from 'react-window';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import api, { getFullImageUrl, publicRoomAPI, roomAPI } from '../services/api';
 import socketService from '../services/socket';
 
@@ -10,6 +11,7 @@ function PresenterMode() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loading, isAdmin } = useAuth();
+  const { t, i18n } = useTranslation();
 
   // Add pulse animation keyframes and custom scrollbar styles
   useEffect(() => {
@@ -201,6 +203,93 @@ function PresenterMode() {
     }
   };
 
+  // English to Hebrew book name mapping for display
+  const englishToHebrewBooks = {
+    'Genesis': 'בראשית', 'Exodus': 'שמות', 'Leviticus': 'ויקרא',
+    'Numbers': 'במדבר', 'Deuteronomy': 'דברים', 'Joshua': 'יהושע',
+    'Judges': 'שופטים', 'I Samuel': 'שמואל א', 'II Samuel': 'שמואל ב',
+    'I Kings': 'מלכים א', 'II Kings': 'מלכים ב', 'Isaiah': 'ישעיהו',
+    'Jeremiah': 'ירמיהו', 'Ezekiel': 'יחזקאל', 'Hosea': 'הושע',
+    'Joel': 'יואל', 'Amos': 'עמוס', 'Obadiah': 'עובדיה', 'Jonah': 'יונה',
+    'Micah': 'מיכה', 'Nahum': 'נחום', 'Habakkuk': 'חבקוק', 'Zephaniah': 'צפניה',
+    'Haggai': 'חגי', 'Zechariah': 'זכריה', 'Malachi': 'מלאכי',
+    'Psalms': 'תהילים', 'Proverbs': 'משלי', 'Job': 'איוב',
+    'Song of Songs': 'שיר השירים', 'Ruth': 'רות', 'Lamentations': 'איכה',
+    'Ecclesiastes': 'קהלת', 'Esther': 'אסתר', 'Daniel': 'דניאל',
+    'Ezra': 'עזרא', 'Nehemiah': 'נחמיה', 'I Chronicles': 'דברי הימים א',
+    'II Chronicles': 'דברי הימים ב',
+    // New Testament
+    'Matthew': 'מתי', 'Mark': 'מרקוס', 'Luke': 'לוקס', 'John': 'יוחנן',
+    'Acts': 'מעשי השליחים', 'Romans': 'רומים',
+    '1 Corinthians': 'קורינתים א', '2 Corinthians': 'קורינתים ב',
+    'Galatians': 'גלטים', 'Ephesians': 'אפסים', 'Philippians': 'פיליפים',
+    'Colossians': 'קולוסים', '1 Thessalonians': 'תסלוניקים א',
+    '2 Thessalonians': 'תסלוניקים ב', '1 Timothy': 'טימותיאוס א',
+    '2 Timothy': 'טימותיאוס ב', 'Titus': 'טיטוס', 'Philemon': 'פילימון',
+    'Hebrews': 'עברים', 'James': 'יעקב', '1 Peter': 'פטרוס א',
+    '2 Peter': 'פטרוס ב', '1 John': 'יוחנן א', '2 John': 'יוחנן ב',
+    '3 John': 'יוחנן ג', 'Jude': 'יהודה', 'Revelation': 'התגלות'
+  };
+
+  // Convert Arabic number to Hebrew numeral
+  const numberToHebrew = (num) => {
+    const ones = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
+    const tens = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
+    const hundreds = ['', 'ק', 'ר', 'ש', 'ת'];
+
+    const n = parseInt(num);
+    if (n <= 0 || n > 499) return num.toString();
+
+    let result = '';
+
+    // Hundreds
+    if (n >= 100) {
+      result += hundreds[Math.floor(n / 100)];
+    }
+
+    // Handle 15 and 16 specially (ט״ו and ט״ז instead of י״ה and י״ו)
+    const remainder = n % 100;
+    if (remainder === 15) {
+      result += 'ט״ו';
+    } else if (remainder === 16) {
+      result += 'ט״ז';
+    } else {
+      // Tens
+      if (remainder >= 10) {
+        result += tens[Math.floor(remainder / 10)];
+      }
+      // Ones
+      if (remainder % 10 > 0) {
+        result += ones[remainder % 10];
+      }
+    }
+
+    // Add gershayim before last letter if more than one letter
+    if (result.length > 1 && !result.includes('״')) {
+      result = result.slice(0, -1) + '״' + result.slice(-1);
+    } else if (result.length === 1) {
+      result += '׳';
+    }
+
+    return result;
+  };
+
+  // Get display name for book (Hebrew if in Hebrew mode)
+  const getDisplayBookName = (englishName) => {
+    if (i18n.language === 'he' && englishToHebrewBooks[englishName]) {
+      return englishToHebrewBooks[englishName];
+    }
+    return englishName;
+  };
+
+  // Get display chapter (Hebrew numeral if in Hebrew mode)
+  const getDisplayChapter = (chapter) => {
+    if (i18n.language === 'he') {
+      return numberToHebrew(chapter);
+    }
+    return chapter;
+  };
+
   // Fetch Bible books
   const fetchBibleBooks = async () => {
     try {
@@ -234,7 +323,7 @@ function PresenterMode() {
       // Create a Bible passage object that acts like a song
       const biblePassage = {
         _id: `bible-${book}-${chapter}`,
-        title: `${book} ${chapter}`,
+        title: `${getDisplayBookName(book)} ${getDisplayChapter(chapter)}`,
         slides: bibleSlides,
         isBible: true,
         book: book,
@@ -715,7 +804,7 @@ function PresenterMode() {
         setSearchResults(sortSongsByLanguage(filtered));
       }
     } else if (activeResourcePanel === 'bible') {
-      // Parse Bible reference (e.g., "John 3", "Genesis 12", "1 Corinthians 13")
+      // Parse Bible reference (e.g., "John 3", "Genesis 12", "1 Corinthians 13", "יוחנן י״ג")
       const trimmed = query.trim();
       if (trimmed === '') {
         setSelectedBibleBook('');
@@ -723,30 +812,102 @@ function PresenterMode() {
         return;
       }
 
-      // Try to match pattern: "BookName Chapter"
-      // Match book name (can include numbers like "1 Corinthians") and chapter number
-      const match = trimmed.match(/^(.+?)\s+(\d+)$/);
-      if (match) {
-        const bookName = match[1].trim().toLowerCase();
-        const chapterNum = match[2];
+      // Helper function to convert Hebrew numerals to Arabic numbers
+      const hebrewToNumber = (hebrewStr) => {
+        // Remove quotation marks used in Hebrew numerals (like י"ג or י״ג)
+        const cleaned = hebrewStr.replace(/[""״׳']/g, '');
+
+        const hebrewValues = {
+          'א': 1, 'ב': 2, 'ג': 3, 'ד': 4, 'ה': 5, 'ו': 6, 'ז': 7, 'ח': 8, 'ט': 9,
+          'י': 10, 'כ': 20, 'ך': 20, 'ל': 30, 'מ': 40, 'ם': 40, 'נ': 50, 'ן': 50,
+          'ס': 60, 'ע': 70, 'פ': 80, 'ף': 80, 'צ': 90, 'ץ': 90,
+          'ק': 100, 'ר': 200, 'ש': 300, 'ת': 400
+        };
+
+        let total = 0;
+        for (const char of cleaned) {
+          if (hebrewValues[char]) {
+            total += hebrewValues[char];
+          }
+        }
+        return total > 0 ? total : null;
+      };
+
+      // Try to match pattern: "BookName Chapter" (Arabic or Hebrew numerals)
+      // Match book name and chapter number (digits or Hebrew letters)
+      const matchArabic = trimmed.match(/^(.+?)\s+(\d+)$/);
+      const matchHebrew = trimmed.match(/^(.+?)\s+([א-ת""״׳']+)$/);
+
+      let bookName = null;
+      let chapterNum = null;
+
+      if (matchArabic) {
+        bookName = matchArabic[1].trim().toLowerCase();
+        chapterNum = matchArabic[2];
+      } else if (matchHebrew) {
+        bookName = matchHebrew[1].trim().toLowerCase();
+        const hebrewNum = hebrewToNumber(matchHebrew[2]);
+        if (hebrewNum) {
+          chapterNum = hebrewNum.toString();
+        }
+      }
+
+      if (bookName && chapterNum) {
+        // Hebrew to English book name mapping
+        const hebrewBookNames = {
+          'בראשית': 'Genesis', 'שמות': 'Exodus', 'ויקרא': 'Leviticus',
+          'במדבר': 'Numbers', 'דברים': 'Deuteronomy', 'יהושע': 'Joshua',
+          'שופטים': 'Judges', 'שמואל א': 'I Samuel', 'שמואל ב': 'II Samuel',
+          'מלכים א': 'I Kings', 'מלכים ב': 'II Kings', 'ישעיהו': 'Isaiah',
+          'ישעיה': 'Isaiah', 'ירמיהו': 'Jeremiah', 'ירמיה': 'Jeremiah',
+          'יחזקאל': 'Ezekiel', 'הושע': 'Hosea', 'יואל': 'Joel', 'עמוס': 'Amos',
+          'עובדיה': 'Obadiah', 'יונה': 'Jonah', 'מיכה': 'Micah', 'נחום': 'Nahum',
+          'חבקוק': 'Habakkuk', 'צפניה': 'Zephaniah', 'חגי': 'Haggai',
+          'זכריה': 'Zechariah', 'מלאכי': 'Malachi', 'תהילים': 'Psalms',
+          'תהלים': 'Psalms', 'משלי': 'Proverbs', 'איוב': 'Job',
+          'שיר השירים': 'Song of Songs', 'רות': 'Ruth', 'איכה': 'Lamentations',
+          'קהלת': 'Ecclesiastes', 'אסתר': 'Esther', 'דניאל': 'Daniel',
+          'עזרא': 'Ezra', 'נחמיה': 'Nehemiah', 'דברי הימים א': 'I Chronicles',
+          'דברי הימים ב': 'II Chronicles',
+          // New Testament
+          'מתי': 'Matthew', 'מרקוס': 'Mark', 'לוקס': 'Luke', 'יוחנן': 'John',
+          'מעשי השליחים': 'Acts', 'מעשים': 'Acts', 'רומים': 'Romans',
+          'קורינתים א': '1 Corinthians', 'קורינתים ב': '2 Corinthians',
+          'גלטים': 'Galatians', 'אפסים': 'Ephesians', 'פיליפים': 'Philippians',
+          'קולוסים': 'Colossians', 'תסלוניקים א': '1 Thessalonians',
+          'תסלוניקים ב': '2 Thessalonians', 'טימותיאוס א': '1 Timothy',
+          'טימותיאוס ב': '2 Timothy', 'טיטוס': 'Titus', 'פילימון': 'Philemon',
+          'עברים': 'Hebrews', 'יעקב': 'James', 'פטרוס א': '1 Peter',
+          'פטרוס ב': '2 Peter', 'יוחנן א': '1 John', 'יוחנן ב': '2 John',
+          'יוחנן ג': '3 John', 'יהודה': 'Jude', 'התגלות': 'Revelation', 'חזון': 'Revelation'
+        };
+
+        // Check if bookName is Hebrew and convert to English
+        let searchName = bookName;
+        const hebrewMatch = Object.keys(hebrewBookNames).find(heb =>
+          heb === bookName || heb.startsWith(bookName) || bookName.startsWith(heb)
+        );
+        if (hebrewMatch) {
+          searchName = hebrewBookNames[hebrewMatch].toLowerCase();
+        }
 
         // Find matching book with fuzzy matching
         // Try exact match first, then prefix match, then contains match
         let matchedBook = bibleBooks.find(b =>
-          b.name.toLowerCase() === bookName
+          b.name.toLowerCase() === searchName
         );
 
         if (!matchedBook) {
           // Try prefix match (e.g., "gen" matches "Genesis")
           matchedBook = bibleBooks.find(b =>
-            b.name.toLowerCase().startsWith(bookName)
+            b.name.toLowerCase().startsWith(searchName)
           );
         }
 
         if (!matchedBook) {
           // Try contains match (e.g., "corin" matches "1 Corinthians")
           matchedBook = bibleBooks.find(b =>
-            b.name.toLowerCase().includes(bookName)
+            b.name.toLowerCase().includes(searchName)
           );
         }
 
@@ -1811,7 +1972,7 @@ function PresenterMode() {
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
                     <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
                   </svg>
-                  <span style={{ fontWeight: '500' }}>Dashboard</span>
+                  <span style={{ fontWeight: '500' }}>{t('presenter.dashboard')}</span>
                 </div>
                 <div
                   onClick={() => { navigate('/'); setShowGearMenu(false); }}
@@ -1830,7 +1991,7 @@ function PresenterMode() {
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
                     <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
                   </svg>
-                  <span style={{ fontWeight: '500' }}>Home</span>
+                  <span style={{ fontWeight: '500' }}>{t('presenter.home')}</span>
                 </div>
               </div>
             )}
@@ -1871,9 +2032,9 @@ function PresenterMode() {
                   </svg>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '0.75rem', color: 'white' }}>Broadcasting to</div>
+                  <div style={{ fontSize: '0.75rem', color: 'white' }}>{t('presenter.broadcastingTo')}</div>
                   <div style={{ fontWeight: '600', color: selectedPublicRoom ? '#28a745' : '#0d6efd', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {selectedPublicRoom ? selectedPublicRoom.name : `Private Room (${roomPin})`}
+                    {selectedPublicRoom ? selectedPublicRoom.name : `${t('presenter.privateRoom')} (${roomPin})`}
                   </div>
                 </div>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style={{ transform: showRoomSelector ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
@@ -1912,10 +2073,10 @@ function PresenterMode() {
                       <path d="M12 2C9.24 2 7 4.24 7 7v5H6c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v5H9V7c0-1.66 1.34-3 3-3z"/>
                     </svg>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: '500', color: !selectedPublicRoom ? '#0d6efd' : '#333' }}>Private Room</div>
-                      <div style={{ fontSize: '0.8rem', color: '#666' }}>PIN: {roomPin}</div>
+                      <div style={{ fontWeight: '500', color: !selectedPublicRoom ? '#0d6efd' : '#333' }}>{t('presenter.privateRoom')}</div>
+                      <div style={{ fontSize: '0.8rem', color: '#666' }}>{t('presenter.pin')}: {roomPin}</div>
                     </div>
-                    {!selectedPublicRoom && <Badge bg="primary" style={{ fontSize: '0.65rem' }}>Active</Badge>}
+                    {!selectedPublicRoom && <Badge bg="primary" style={{ fontSize: '0.65rem' }}>{t('presenter.active')}</Badge>}
                   </div>
 
                   {/* Public Room Options */}
@@ -1938,9 +2099,9 @@ function PresenterMode() {
                       </svg>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: '500', color: selectedPublicRoom?.id === pr.id ? '#28a745' : '#333' }}>{pr.name}</div>
-                        <div style={{ fontSize: '0.8rem', color: '#666' }}>Public room</div>
+                        <div style={{ fontSize: '0.8rem', color: '#666' }}>{t('presenter.publicRoom')}</div>
                       </div>
-                      {selectedPublicRoom?.id === pr.id && <Badge bg="success" style={{ fontSize: '0.65rem' }}>Active</Badge>}
+                      {selectedPublicRoom?.id === pr.id && <Badge bg="success" style={{ fontSize: '0.65rem' }}>{t('presenter.active')}</Badge>}
                     </div>
                   ))}
 
@@ -1956,7 +2117,7 @@ function PresenterMode() {
                       fontSize: '0.85rem'
                     }}
                   >
-                    + Manage rooms
+                    {t('presenter.manageRooms')}
                   </div>
                 </div>
               )}
@@ -1979,7 +2140,7 @@ function PresenterMode() {
         {isCreatingRoom && !roomPin && (
           <div style={{ marginTop: '20px', textAlign: 'center' }}>
             <div style={{ fontSize: '0.9rem', color: 'white' }}>
-              Creating your presentation room...
+              {t('presenter.creatingRoom')}
             </div>
           </div>
         )}
@@ -1995,7 +2156,7 @@ function PresenterMode() {
                   // Try modern clipboard API first, fallback to older method
                   if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(shareUrl)
-                      .then(() => alert('Share link copied to clipboard!'))
+                      .then(() => alert(t('common.copiedToClipboard')))
                       .catch(() => {
                         // Fallback method
                         fallbackCopyTextToClipboard(shareUrl);
@@ -2023,9 +2184,9 @@ function PresenterMode() {
                     textArea.select();
                     try {
                       document.execCommand('copy');
-                      alert('Share link copied to clipboard!');
+                      alert(t('common.copiedToClipboard'));
                     } catch (err) {
-                      alert('Failed to copy link. Please copy manually: ' + text);
+                      alert(t('common.failedToCopy'));
                     }
                     document.body.removeChild(textArea);
                   }
@@ -2036,7 +2197,7 @@ function PresenterMode() {
                   alignItems: 'center',
                   justifyContent: 'center'
                 }}
-                title="Copy Share Link"
+                title={t('presenter.copyShareLink')}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
@@ -2055,7 +2216,7 @@ function PresenterMode() {
                   alignItems: 'center',
                   justifyContent: 'center'
                 }}
-                title="Share on WhatsApp"
+                title={t('presenter.shareOnWhatsApp')}
               >
                 <svg
                   width="20"
@@ -2071,7 +2232,7 @@ function PresenterMode() {
                 <Button
                   variant={castConnected ? "danger" : "outline-secondary"}
                   onClick={handleCast}
-                  title="Cast to Chromecast"
+                  title={t('presenter.castToChromecast')}
                   style={{
                     padding: '0.375rem 0.75rem',
                     display: 'flex',
@@ -2138,7 +2299,7 @@ function PresenterMode() {
                 onClick={() => switchResourcePanel('songs')}
                 style={{ fontWeight: '500' }}
               >
-                Songs
+                {t('presenter.songs')}
               </Button>
               <Button
                 variant={activeResourcePanel === 'images' ? 'primary' : 'outline-light'}
@@ -2146,7 +2307,7 @@ function PresenterMode() {
                 onClick={() => switchResourcePanel('images')}
                 style={{ fontWeight: '500' }}
               >
-                Images
+                {t('presenter.images')}
               </Button>
               <Button
                 variant={activeResourcePanel === 'bible' ? 'primary' : 'outline-light'}
@@ -2154,7 +2315,7 @@ function PresenterMode() {
                 onClick={() => switchResourcePanel('bible')}
                 style={{ fontWeight: '500' }}
               >
-                Bible
+                {t('presenter.bible')}
               </Button>
             </div>
 
@@ -2181,8 +2342,8 @@ function PresenterMode() {
                 type="text"
                 placeholder={
                   activeResourcePanel === 'bible'
-                    ? "e.g. John 3"
-                    : "Search..."
+                    ? t('presenter.searchBiblePlaceholder')
+                    : t('presenter.searchPlaceholder')
                 }
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
@@ -2251,9 +2412,9 @@ function PresenterMode() {
                   fontWeight: '600',
                   fontSize: '0.75rem'
                 }}
-                title={activeResourcePanel === 'songs' ? 'Create New Song' : 'Upload New Image'}
+                title={activeResourcePanel === 'songs' ? t('presenter.createNewSong') : t('presenter.uploadNewImage')}
               >
-                New
+                {t('presenter.new')}
               </Button>
             )}
           </div>
@@ -2266,11 +2427,11 @@ function PresenterMode() {
                     <div className="spinner-border text-light" role="status" style={{ marginBottom: '10px' }}>
                       <span className="visually-hidden">Loading...</span>
                     </div>
-                    <div>Loading songs...</div>
+                    <div>{t('presenter.loadingSongs')}</div>
                   </div>
                 ) : searchResults.length === 0 ? (
                   <p style={{ textAlign: 'center', color: 'white', fontSize: '0.9rem' }}>
-                    {searchQuery ? 'No songs match your search' : 'No songs available'}
+                    {searchQuery ? t('presenter.noSongsMatch') : t('presenter.noSongsAvailable')}
                   </p>
                 ) : (
                   <FixedSizeList
@@ -2289,6 +2450,7 @@ function PresenterMode() {
                             ...(style || {}),
                             padding: '3px 8px',
                             display: 'flex',
+                            flexDirection: i18n.language === 'he' ? 'row-reverse' : 'row',
                             gap: '8px',
                             alignItems: 'center',
                             boxSizing: 'border-box'
@@ -2307,7 +2469,9 @@ function PresenterMode() {
                               fontWeight: isSelected ? '500' : '400',
                               border: isSelected ? '2px solid var(--color-primary)' : '1px solid rgba(255,255,255,0.3)',
                               transition: 'all 0.2s ease',
-                              boxShadow: isSelected ? '0 2px 8px rgba(0,123,255,0.25)' : 'none'
+                              boxShadow: isSelected ? '0 2px 8px rgba(0,123,255,0.25)' : 'none',
+                              direction: 'ltr',
+                              textAlign: i18n.language === 'he' ? 'right' : 'left'
                             }}
                             onMouseEnter={(e) => {
                               if (!isSelected) {
@@ -2355,119 +2519,119 @@ function PresenterMode() {
                   {/* Side-by-side Book and Chapter selectors (stacks on mobile) */}
                   <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '10px', marginBottom: '15px' }}>
                     <div style={{ flex: isMobile ? '1' : '2' }}>
-                      <Form.Label style={{ fontSize: '0.85rem', fontWeight: '500', marginBottom: '6px', display: 'block', color: 'white' }}>
-                        Book
+                      <Form.Label className="text-white" style={{ fontSize: '0.85rem', fontWeight: '500', marginBottom: '6px', display: 'block' }}>
+                        {t('bible.book')}
                       </Form.Label>
                       <Form.Select
                         size="sm"
                         value={selectedBibleBook}
                         onChange={(e) => setSelectedBibleBook(e.target.value)}
-                        style={{ fontSize: '0.85rem' }}
+                        style={{ fontSize: '0.85rem', backgroundColor: '#333', color: 'white', borderColor: '#555' }}
                       >
-                        <option value="">Select...</option>
-                        <optgroup label="Torah (Pentateuch)">
-                          <option value="Genesis">Genesis (בראשית)</option>
-                          <option value="Exodus">Exodus (שמות)</option>
-                          <option value="Leviticus">Leviticus (ויקרא)</option>
-                          <option value="Numbers">Numbers (במדבר)</option>
-                          <option value="Deuteronomy">Deuteronomy (דברים)</option>
+                        <option value="">{t('common.select')}...</option>
+                        <optgroup label={i18n.language === 'he' ? 'תורה' : 'Torah (Pentateuch)'}>
+                          <option value="Genesis">{i18n.language === 'he' ? 'בראשית' : 'Genesis (בראשית)'}</option>
+                          <option value="Exodus">{i18n.language === 'he' ? 'שמות' : 'Exodus (שמות)'}</option>
+                          <option value="Leviticus">{i18n.language === 'he' ? 'ויקרא' : 'Leviticus (ויקרא)'}</option>
+                          <option value="Numbers">{i18n.language === 'he' ? 'במדבר' : 'Numbers (במדבר)'}</option>
+                          <option value="Deuteronomy">{i18n.language === 'he' ? 'דברים' : 'Deuteronomy (דברים)'}</option>
                         </optgroup>
-                        <optgroup label="Nevi'im (Prophets)">
-                          <option value="Joshua">Joshua (יהושע)</option>
-                          <option value="Judges">Judges (שופטים)</option>
-                          <option value="I Samuel">1 Samuel (שמואל א)</option>
-                          <option value="II Samuel">2 Samuel (שמואל ב)</option>
-                          <option value="I Kings">1 Kings (מלכים א)</option>
-                          <option value="II Kings">2 Kings (מלכים ב)</option>
-                          <option value="Isaiah">Isaiah (ישעיהו)</option>
-                          <option value="Jeremiah">Jeremiah (ירמיהו)</option>
-                          <option value="Ezekiel">Ezekiel (יחזקאל)</option>
-                          <option value="Hosea">Hosea (הושע)</option>
-                          <option value="Joel">Joel (יואל)</option>
-                          <option value="Amos">Amos (עמוס)</option>
-                          <option value="Obadiah">Obadiah (עובדיה)</option>
-                          <option value="Jonah">Jonah (יונה)</option>
-                          <option value="Micah">Micah (מיכה)</option>
-                          <option value="Nahum">Nahum (נחום)</option>
-                          <option value="Habakkuk">Habakkuk (חבקוק)</option>
-                          <option value="Zephaniah">Zephaniah (צפניה)</option>
-                          <option value="Haggai">Haggai (חגי)</option>
-                          <option value="Zechariah">Zechariah (זכריה)</option>
-                          <option value="Malachi">Malachi (מלאכי)</option>
+                        <optgroup label={i18n.language === 'he' ? 'נביאים' : "Nevi'im (Prophets)"}>
+                          <option value="Joshua">{i18n.language === 'he' ? 'יהושע' : 'Joshua (יהושע)'}</option>
+                          <option value="Judges">{i18n.language === 'he' ? 'שופטים' : 'Judges (שופטים)'}</option>
+                          <option value="I Samuel">{i18n.language === 'he' ? 'שמואל א׳' : '1 Samuel (שמואל א)'}</option>
+                          <option value="II Samuel">{i18n.language === 'he' ? 'שמואל ב׳' : '2 Samuel (שמואל ב)'}</option>
+                          <option value="I Kings">{i18n.language === 'he' ? 'מלכים א׳' : '1 Kings (מלכים א)'}</option>
+                          <option value="II Kings">{i18n.language === 'he' ? 'מלכים ב׳' : '2 Kings (מלכים ב)'}</option>
+                          <option value="Isaiah">{i18n.language === 'he' ? 'ישעיהו' : 'Isaiah (ישעיהו)'}</option>
+                          <option value="Jeremiah">{i18n.language === 'he' ? 'ירמיהו' : 'Jeremiah (ירמיהו)'}</option>
+                          <option value="Ezekiel">{i18n.language === 'he' ? 'יחזקאל' : 'Ezekiel (יחזקאל)'}</option>
+                          <option value="Hosea">{i18n.language === 'he' ? 'הושע' : 'Hosea (הושע)'}</option>
+                          <option value="Joel">{i18n.language === 'he' ? 'יואל' : 'Joel (יואל)'}</option>
+                          <option value="Amos">{i18n.language === 'he' ? 'עמוס' : 'Amos (עמוס)'}</option>
+                          <option value="Obadiah">{i18n.language === 'he' ? 'עובדיה' : 'Obadiah (עובדיה)'}</option>
+                          <option value="Jonah">{i18n.language === 'he' ? 'יונה' : 'Jonah (יונה)'}</option>
+                          <option value="Micah">{i18n.language === 'he' ? 'מיכה' : 'Micah (מיכה)'}</option>
+                          <option value="Nahum">{i18n.language === 'he' ? 'נחום' : 'Nahum (נחום)'}</option>
+                          <option value="Habakkuk">{i18n.language === 'he' ? 'חבקוק' : 'Habakkuk (חבקוק)'}</option>
+                          <option value="Zephaniah">{i18n.language === 'he' ? 'צפניה' : 'Zephaniah (צפניה)'}</option>
+                          <option value="Haggai">{i18n.language === 'he' ? 'חגי' : 'Haggai (חגי)'}</option>
+                          <option value="Zechariah">{i18n.language === 'he' ? 'זכריה' : 'Zechariah (זכריה)'}</option>
+                          <option value="Malachi">{i18n.language === 'he' ? 'מלאכי' : 'Malachi (מלאכי)'}</option>
                         </optgroup>
-                        <optgroup label="Ketuvim (Writings)">
-                          <option value="Psalms">Psalms (תהילים)</option>
-                          <option value="Proverbs">Proverbs (משלי)</option>
-                          <option value="Job">Job (איוב)</option>
-                          <option value="Song of Songs">Song of Songs (שיר השירים)</option>
-                          <option value="Ruth">Ruth (רות)</option>
-                          <option value="Lamentations">Lamentations (איכה)</option>
-                          <option value="Ecclesiastes">Ecclesiastes (קהלת)</option>
-                          <option value="Esther">Esther (אסתר)</option>
-                          <option value="Daniel">Daniel (דניאל)</option>
-                          <option value="Ezra">Ezra (עזרא)</option>
-                          <option value="Nehemiah">Nehemiah (נחמיה)</option>
-                          <option value="I Chronicles">1 Chronicles (דברי הימים א)</option>
-                          <option value="II Chronicles">2 Chronicles (דברי הימים ב)</option>
+                        <optgroup label={i18n.language === 'he' ? 'כתובים' : 'Ketuvim (Writings)'}>
+                          <option value="Psalms">{i18n.language === 'he' ? 'תהילים' : 'Psalms (תהילים)'}</option>
+                          <option value="Proverbs">{i18n.language === 'he' ? 'משלי' : 'Proverbs (משלי)'}</option>
+                          <option value="Job">{i18n.language === 'he' ? 'איוב' : 'Job (איוב)'}</option>
+                          <option value="Song of Songs">{i18n.language === 'he' ? 'שיר השירים' : 'Song of Songs (שיר השירים)'}</option>
+                          <option value="Ruth">{i18n.language === 'he' ? 'רות' : 'Ruth (רות)'}</option>
+                          <option value="Lamentations">{i18n.language === 'he' ? 'איכה' : 'Lamentations (איכה)'}</option>
+                          <option value="Ecclesiastes">{i18n.language === 'he' ? 'קהלת' : 'Ecclesiastes (קהלת)'}</option>
+                          <option value="Esther">{i18n.language === 'he' ? 'אסתר' : 'Esther (אסתר)'}</option>
+                          <option value="Daniel">{i18n.language === 'he' ? 'דניאל' : 'Daniel (דניאל)'}</option>
+                          <option value="Ezra">{i18n.language === 'he' ? 'עזרא' : 'Ezra (עזרא)'}</option>
+                          <option value="Nehemiah">{i18n.language === 'he' ? 'נחמיה' : 'Nehemiah (נחמיה)'}</option>
+                          <option value="I Chronicles">{i18n.language === 'he' ? 'דברי הימים א׳' : '1 Chronicles (דברי הימים א)'}</option>
+                          <option value="II Chronicles">{i18n.language === 'he' ? 'דברי הימים ב׳' : '2 Chronicles (דברי הימים ב)'}</option>
                         </optgroup>
-                        <optgroup label="New Testament - Gospels">
-                          <option value="Matthew">Matthew</option>
-                          <option value="Mark">Mark</option>
-                          <option value="Luke">Luke</option>
-                          <option value="John">John</option>
+                        <optgroup label={i18n.language === 'he' ? 'ברית חדשה - בשורות' : 'New Testament - Gospels'}>
+                          <option value="Matthew">{i18n.language === 'he' ? 'מתי' : 'Matthew (מתי)'}</option>
+                          <option value="Mark">{i18n.language === 'he' ? 'מרקוס' : 'Mark (מרקוס)'}</option>
+                          <option value="Luke">{i18n.language === 'he' ? 'לוקס' : 'Luke (לוקס)'}</option>
+                          <option value="John">{i18n.language === 'he' ? 'יוחנן' : 'John (יוחנן)'}</option>
                         </optgroup>
-                        <optgroup label="New Testament - History">
-                          <option value="Acts">Acts</option>
+                        <optgroup label={i18n.language === 'he' ? 'ברית חדשה - היסטוריה' : 'New Testament - History'}>
+                          <option value="Acts">{i18n.language === 'he' ? 'מעשי השליחים' : 'Acts (מעשי השליחים)'}</option>
                         </optgroup>
-                        <optgroup label="New Testament - Paul's Letters">
-                          <option value="Romans">Romans</option>
-                          <option value="1 Corinthians">1 Corinthians</option>
-                          <option value="2 Corinthians">2 Corinthians</option>
-                          <option value="Galatians">Galatians</option>
-                          <option value="Ephesians">Ephesians</option>
-                          <option value="Philippians">Philippians</option>
-                          <option value="Colossians">Colossians</option>
-                          <option value="1 Thessalonians">1 Thessalonians</option>
-                          <option value="2 Thessalonians">2 Thessalonians</option>
-                          <option value="1 Timothy">1 Timothy</option>
-                          <option value="2 Timothy">2 Timothy</option>
-                          <option value="Titus">Titus</option>
-                          <option value="Philemon">Philemon</option>
+                        <optgroup label={i18n.language === 'he' ? 'ברית חדשה - אגרות פאולוס' : "New Testament - Paul's Letters"}>
+                          <option value="Romans">{i18n.language === 'he' ? 'רומים' : 'Romans (רומים)'}</option>
+                          <option value="1 Corinthians">{i18n.language === 'he' ? 'קורינתים א׳' : '1 Corinthians (קורינתים א׳)'}</option>
+                          <option value="2 Corinthians">{i18n.language === 'he' ? 'קורינתים ב׳' : '2 Corinthians (קורינתים ב׳)'}</option>
+                          <option value="Galatians">{i18n.language === 'he' ? 'גלטים' : 'Galatians (גלטים)'}</option>
+                          <option value="Ephesians">{i18n.language === 'he' ? 'אפסים' : 'Ephesians (אפסים)'}</option>
+                          <option value="Philippians">{i18n.language === 'he' ? 'פיליפים' : 'Philippians (פיליפים)'}</option>
+                          <option value="Colossians">{i18n.language === 'he' ? 'קולוסים' : 'Colossians (קולוסים)'}</option>
+                          <option value="1 Thessalonians">{i18n.language === 'he' ? 'תסלוניקים א׳' : '1 Thessalonians (תסלוניקים א׳)'}</option>
+                          <option value="2 Thessalonians">{i18n.language === 'he' ? 'תסלוניקים ב׳' : '2 Thessalonians (תסלוניקים ב׳)'}</option>
+                          <option value="1 Timothy">{i18n.language === 'he' ? 'טימותיאוס א׳' : '1 Timothy (טימותיאוס א׳)'}</option>
+                          <option value="2 Timothy">{i18n.language === 'he' ? 'טימותיאוס ב׳' : '2 Timothy (טימותיאוס ב׳)'}</option>
+                          <option value="Titus">{i18n.language === 'he' ? 'טיטוס' : 'Titus (טיטוס)'}</option>
+                          <option value="Philemon">{i18n.language === 'he' ? 'פילימון' : 'Philemon (פילימון)'}</option>
                         </optgroup>
-                        <optgroup label="New Testament - General Letters">
-                          <option value="Hebrews">Hebrews</option>
-                          <option value="James">James</option>
-                          <option value="1 Peter">1 Peter</option>
-                          <option value="2 Peter">2 Peter</option>
-                          <option value="1 John">1 John</option>
-                          <option value="2 John">2 John</option>
-                          <option value="3 John">3 John</option>
-                          <option value="Jude">Jude</option>
+                        <optgroup label={i18n.language === 'he' ? 'ברית חדשה - אגרות כלליות' : 'New Testament - General Letters'}>
+                          <option value="Hebrews">{i18n.language === 'he' ? 'עברים' : 'Hebrews (עברים)'}</option>
+                          <option value="James">{i18n.language === 'he' ? 'יעקב' : 'James (יעקב)'}</option>
+                          <option value="1 Peter">{i18n.language === 'he' ? 'פטרוס א׳' : '1 Peter (פטרוס א׳)'}</option>
+                          <option value="2 Peter">{i18n.language === 'he' ? 'פטרוס ב׳' : '2 Peter (פטרוס ב׳)'}</option>
+                          <option value="1 John">{i18n.language === 'he' ? 'יוחנן א׳' : '1 John (יוחנן א׳)'}</option>
+                          <option value="2 John">{i18n.language === 'he' ? 'יוחנן ב׳' : '2 John (יוחנן ב׳)'}</option>
+                          <option value="3 John">{i18n.language === 'he' ? 'יוחנן ג׳' : '3 John (יוחנן ג׳)'}</option>
+                          <option value="Jude">{i18n.language === 'he' ? 'יהודה' : 'Jude (יהודה)'}</option>
                         </optgroup>
-                        <optgroup label="New Testament - Prophecy">
-                          <option value="Revelation">Revelation</option>
+                        <optgroup label={i18n.language === 'he' ? 'ברית חדשה - נבואה' : 'New Testament - Prophecy'}>
+                          <option value="Revelation">{i18n.language === 'he' ? 'התגלות' : 'Revelation (התגלות)'}</option>
                         </optgroup>
                       </Form.Select>
                     </div>
 
                     <div style={{ flex: isMobile ? '1' : '1' }}>
-                      <Form.Label style={{ fontSize: '0.85rem', fontWeight: '500', marginBottom: '6px', display: 'block', color: 'white' }}>
-                        Chapter
+                      <Form.Label className="text-white" style={{ fontSize: '0.85rem', fontWeight: '500', marginBottom: '6px', display: 'block' }}>
+                        {t('bible.chapter')}
                       </Form.Label>
                       <Form.Select
                         size="sm"
                         value={selectedBibleChapter}
                         onChange={(e) => setSelectedBibleChapter(e.target.value)}
                         disabled={!selectedBibleBook}
-                        style={{ fontSize: '0.85rem' }}
+                        style={{ fontSize: '0.85rem', backgroundColor: '#333', color: 'white', borderColor: '#555' }}
                       >
-                        <option value="">Select...</option>
+                        <option value="">{t('common.select')}...</option>
                         {selectedBibleBook && (() => {
                           const bookData = bibleBooks.find(b => b.name === selectedBibleBook);
                           const chapterCount = bookData?.chapters || 50;
                           return Array.from({ length: chapterCount }, (_, i) => (
                             <option key={i + 1} value={i + 1}>
-                              {i + 1}
+                              {getDisplayChapter(i + 1)}
                             </option>
                           ));
                         })()}
@@ -2484,7 +2648,7 @@ function PresenterMode() {
                         onClick={() => {
                           const biblePassage = {
                             _id: `bible-${selectedBibleBook}-${selectedBibleChapter}`,
-                            title: `${selectedBibleBook} ${selectedBibleChapter}`,
+                            title: `${getDisplayBookName(selectedBibleBook)} ${getDisplayChapter(selectedBibleChapter)}`,
                             slides: bibleVerses,
                             isBible: true,
                             book: selectedBibleBook,
@@ -2493,7 +2657,7 @@ function PresenterMode() {
                           addBibleToSetlist(biblePassage);
                         }}
                       >
-                        + Add {selectedBibleBook} {selectedBibleChapter} to Setlist
+                        {t('bible.addPassageToSetlist', { book: getDisplayBookName(selectedBibleBook), chapter: getDisplayChapter(selectedBibleChapter) })}
                       </Button>
                     </div>
                   )}
@@ -2501,13 +2665,13 @@ function PresenterMode() {
 
                 {bibleLoading && (
                   <div style={{ textAlign: 'center', color: 'white', padding: '20px' }}>
-                    Loading verses...
+                    {t('presenter.loadingVerses')}
                   </div>
                 )}
 
                 {!bibleLoading && bibleVerses.length === 0 && selectedBibleBook && selectedBibleChapter && (
                   <div style={{ textAlign: 'center', color: 'white', padding: '20px' }}>
-                    Select a book and chapter to load verses
+                    {t('presenter.selectBookAndChapter')}
                   </div>
                 )}
               </div>
@@ -2518,11 +2682,11 @@ function PresenterMode() {
                     <div className="spinner-border text-light" role="status" style={{ marginBottom: '10px' }}>
                       <span className="visually-hidden">Loading...</span>
                     </div>
-                    <div>Loading media library...</div>
+                    <div>{t('presenter.loadingMedia')}</div>
                   </div>
                 ) : imageSearchResults.length === 0 ? (
                   <p style={{ textAlign: 'center', color: 'white', fontSize: '0.9rem' }}>
-                    {searchQuery ? 'No images match your search' : 'No images available'}
+                    {searchQuery ? t('presenter.noImagesMatch') : t('presenter.noImagesAvailable')}
                   </p>
                 ) : (
                   imageSearchResults.map((image) => {
@@ -2534,6 +2698,7 @@ function PresenterMode() {
                           padding: '8px 10px',
                           backgroundColor: 'transparent',
                           display: 'flex',
+                          flexDirection: i18n.language === 'he' ? 'row-reverse' : 'row',
                           alignItems: 'center',
                           gap: '8px',
                           cursor: 'pointer',
@@ -2554,7 +2719,13 @@ function PresenterMode() {
                           }}
                         />
                         <span
-                          style={{ fontSize: '0.95rem', flex: 1, color: 'white' }}
+                          style={{
+                            fontSize: '0.95rem',
+                            flex: 1,
+                            color: 'white',
+                            direction: 'ltr',
+                            textAlign: i18n.language === 'he' ? 'right' : 'left'
+                          }}
                           onClick={() => selectItem({ type: 'image', data: image })}
                         >
                           {image.name}
@@ -2622,7 +2793,7 @@ function PresenterMode() {
                     style={{ width: '100%' }}
                     onClick={addBlankToSetlist}
                   >
-                    + Add Blank Slide
+                    {t('presenter.addBlankSlide')}
                   </Button>
                 </div>
               </div>
@@ -2708,7 +2879,7 @@ function PresenterMode() {
                     color: 'white',
                     letterSpacing: '0.3px'
                   }}>
-                    Setlist
+                    {t('presenter.setlist')}
                   </span>
                 </div>
               )}
@@ -2780,7 +2951,7 @@ function PresenterMode() {
                     e.currentTarget.style.color = setlist.length === 0 ? '#A0AEC0' : '#2D3748';
                   }}
                 >
-                  <span style={{ fontSize: '1.1rem' }}>💾</span> Save
+                  <span style={{ fontSize: '1.1rem' }}>💾</span> {t('presenter.save')}
                 </Dropdown.Item>
 
                 {room?.linkedPermanentSetlist && (
@@ -2834,7 +3005,7 @@ function PresenterMode() {
                       e.currentTarget.style.color = '#2D3748';
                     }}
                   >
-                    <span style={{ fontSize: '1.1rem' }}>✨</span> New
+                    <span style={{ fontSize: '1.1rem' }}>✨</span> {t('presenter.new')}
                   </Dropdown.Item>
                 )}
 
@@ -2863,7 +3034,7 @@ function PresenterMode() {
                     e.currentTarget.style.color = '#2D3748';
                   }}
                 >
-                  <span style={{ fontSize: '1.1rem' }}>📂</span> Load
+                  <span style={{ fontSize: '1.1rem' }}>📂</span> {t('presenter.load')}
                 </Dropdown.Item>
 
                 {!room?.linkedPermanentSetlist && (
@@ -2895,7 +3066,7 @@ function PresenterMode() {
                       e.currentTarget.style.color = setlist.length === 0 ? '#A0AEC0' : '#2D3748';
                     }}
                   >
-                    <span style={{ fontSize: '1.1rem' }}>📝</span> Save As...
+                    <span style={{ fontSize: '1.1rem' }}>📝</span> {t('presenter.saveAs')}
                   </Dropdown.Item>
                 )}
 
@@ -2925,7 +3096,7 @@ function PresenterMode() {
                     e.currentTarget.style.color = '#2D3748';
                   }}
                 >
-                  <span style={{ fontSize: '1.1rem' }}>📑</span> Add Section
+                  <span style={{ fontSize: '1.1rem' }}>📑</span> {t('presenter.addSection')}
                 </Dropdown.Item>
               </Dropdown.Menu>
             </Dropdown>
@@ -2935,7 +3106,7 @@ function PresenterMode() {
             <div style={{ padding: '10px' }}>
               {setlist.length === 0 ? (
                 <p style={{ textAlign: 'center', color: 'white' }}>
-                  No songs in setlist. Add songs from above.
+                  {t('presenter.noSongsInSetlist')}
                 </p>
               ) : (
                 <div
@@ -2967,37 +3138,37 @@ function PresenterMode() {
                     const getItemDisplay = () => {
                       if (item.type === 'song') {
                         return {
-                          title: item.data?.title || 'Unknown Song',
+                          title: item.data?.title || t('presenter.unknownSong'),
                           bgColor: 'transparent',
                           borderLeft: '4px solid #667eea'
                         };
                       } else if (item.type === 'bible') {
                         return {
-                          title: item.data?.title || 'Bible Passage',
+                          title: item.data?.title || t('presenter.biblePassage'),
                           bgColor: 'transparent',
                           borderLeft: '4px solid #764ba2'
                         };
                       } else if (item.type === 'image') {
                         return {
-                          title: item.data?.name || 'Image Slide',
+                          title: item.data?.name || t('presenter.imageSlide'),
                           bgColor: 'transparent',
                           borderLeft: '4px solid #4facfe'
                         };
                       } else if (item.type === 'blank') {
                         return {
-                          title: 'Blank Slide',
+                          title: t('presenter.blankSlide'),
                           bgColor: 'transparent',
                           borderLeft: '4px solid #f093fb'
                         };
                       } else if (item.type === 'section') {
                         return {
-                          title: item.data?.title || 'Section',
+                          title: item.data?.title || t('presenter.section'),
                           bgColor: 'rgba(255, 255, 255, 0.1)',
                           borderLeft: 'none',
                           isSection: true
                         };
                       }
-                      return { title: 'Unknown', bgColor: 'transparent', borderLeft: '4px solid #718096' };
+                      return { title: t('presenter.unknown'), bgColor: 'transparent', borderLeft: '4px solid #718096' };
                     };
 
                     const display = getItemDisplay();
@@ -3198,9 +3369,9 @@ function PresenterMode() {
                   : currentItem.type === 'bible'
                   ? currentItem.data?.title
                   : currentItem.type === 'image'
-                  ? `Image: ${currentItem.data?.name}`
-                  : 'Blank Slide'
-                : 'No Item Selected'}
+                  ? `${t('presenter.image')}: ${currentItem.data?.name}`
+                  : t('presenter.blankSlide')
+                : t('presenter.noItemSelected')}
             </span>
           </div>
 
@@ -3315,17 +3486,17 @@ function PresenterMode() {
 
                 <Dropdown.Menu style={{ maxHeight: '400px', overflowY: 'auto' }}>
                   <Dropdown.Item onClick={toggleBlankSlide}>
-                    {isBlankActive ? '⚫ Blank ON' : '⚪ Blank OFF'}
+                    {isBlankActive ? `⚫ ${t('presenter.blankOn')}` : `⚪ ${t('presenter.blankOff')}`}
                   </Dropdown.Item>
                   <Dropdown.Item onClick={openQuickSlideModal}>
-                    ⚡ Quick Slide
+                    ⚡ {t('presenter.quickSlide')}
                   </Dropdown.Item>
                   <Dropdown.Item onClick={() => setShowBackgroundModal(true)}>
-                    🖼️ Background
+                    🖼️ {t('presenter.background')}
                   </Dropdown.Item>
                   <Dropdown.Divider />
                   <Dropdown.Item onClick={toggleDisplayMode}>
-                    {displayMode === 'original' ? '🔤 Switch to Bilingual' : '🔤 Switch to Original'}
+                    {displayMode === 'original' ? `🔤 ${t('presenter.switchToBilingual')}` : `🔤 ${t('presenter.switchToOriginal')}`}
                   </Dropdown.Item>
                 </Dropdown.Menu>
               </Dropdown>
@@ -3338,7 +3509,7 @@ function PresenterMode() {
                   size="sm"
                   style={{ fontSize: '0.8rem', padding: '4px 10px', whiteSpace: 'nowrap' }}
                 >
-                  {isBlankActive ? 'Blank ON' : 'Blank'}
+                  {isBlankActive ? t('presenter.blankOn') : t('presenter.blank')}
                 </Button>
 
                 <Button
@@ -3346,9 +3517,9 @@ function PresenterMode() {
                   onClick={openQuickSlideModal}
                   size="sm"
                   style={{ fontSize: '0.8rem', padding: '4px 10px', whiteSpace: 'nowrap' }}
-                  title="Create a quick slide on-the-fly"
+                  title={t('presenter.quickSlideTitle')}
                 >
-                  ⚡ Quick
+                  ⚡ {t('presenter.quick')}
                 </Button>
 
                 <Button
@@ -3357,7 +3528,7 @@ function PresenterMode() {
                   size="sm"
                   style={{ fontSize: '0.8rem', padding: '4px 10px', whiteSpace: 'nowrap' }}
                 >
-                  Background
+                  {t('presenter.background')}
                 </Button>
 
                 <Button
@@ -3366,7 +3537,7 @@ function PresenterMode() {
                   size="sm"
                   style={{ fontSize: '0.8rem', padding: '4px 10px', whiteSpace: 'nowrap' }}
                 >
-                  {displayMode === 'original' ? 'Original' : 'Bilingual'}
+                  {displayMode === 'original' ? t('presenter.original') : t('presenter.bilingual')}
                 </Button>
               </>
             )}
@@ -3495,7 +3666,7 @@ function PresenterMode() {
                 }}>
                   {isSelected && <span style={{ fontSize: '0.7rem' }}>▶</span>}
                   {currentSong.isBible
-                    ? `Verse ${slide.verseNumber || index + 1}`
+                    ? `${t('presenter.verse')} ${slide.verseNumber || index + 1}`
                     : slide.verseType
                     ? (index === 0 || currentSong.slides[index - 1]?.verseType !== slide.verseType)
                       ? `${slide.verseType}`
@@ -3503,21 +3674,21 @@ function PresenterMode() {
                     : `${index + 1}`}
                 </div>
                 <div style={{ fontSize: '0.85rem', lineHeight: '1.3', color: 'white' }}>
-                  <div style={{ marginBottom: '2px' }}>
+                  <div style={{ marginBottom: '2px', textAlign: currentSong.isBible ? 'right' : 'inherit', direction: currentSong.isBible ? 'rtl' : 'inherit' }}>
                     {slide.originalText}
                   </div>
-                  {slide.transliteration && (
+                  {displayMode === 'bilingual' && slide.transliteration && (
                     <div style={{ marginBottom: '2px', color: 'rgba(255,255,255,0.85)' }}>
                       {slide.transliteration}
                     </div>
                   )}
-                  {slide.translation && (
-                    <div style={{ marginBottom: '2px', color: 'rgba(255,255,255,0.85)' }}>
+                  {displayMode === 'bilingual' && slide.translation && (
+                    <div style={{ marginBottom: '2px', color: 'rgba(255,255,255,0.85)', textAlign: currentSong.isBible ? 'left' : 'inherit', direction: currentSong.isBible ? 'ltr' : 'inherit' }}>
                       {slide.translation}
                     </div>
                   )}
-                  {slide.translationOverflow && (
-                    <div style={{ marginBottom: '2px', color: 'rgba(255,255,255,0.85)' }}>
+                  {displayMode === 'bilingual' && slide.translationOverflow && (
+                    <div style={{ marginBottom: '2px', color: 'rgba(255,255,255,0.85)', textAlign: currentSong.isBible ? 'left' : 'inherit', direction: currentSong.isBible ? 'ltr' : 'inherit' }}>
                       {slide.translationOverflow}
                     </div>
                   )}
@@ -3555,7 +3726,7 @@ function PresenterMode() {
 
         {slideSectionOpen && !currentItem && (
           <div style={{ padding: '40px', textAlign: 'center', color: 'white' }}>
-            Select a song or item to view
+            {t('presenter.selectSongOrItem')}
           </div>
         )}
       </div>
@@ -3582,7 +3753,7 @@ function PresenterMode() {
           alignItems: 'center',
           justifyContent: 'center'
         }}
-        title="Keyboard Shortcuts"
+        title={t('presenter.keyboardShortcuts')}
       >
         ?
       </button>
@@ -3590,50 +3761,50 @@ function PresenterMode() {
       {/* Keyboard Shortcuts Help Modal */}
       <Modal show={showKeyboardHelp} onHide={() => setShowKeyboardHelp(false)} centered>
         <Modal.Header closeButton>
-          <Modal.Title>Keyboard Shortcuts</Modal.Title>
+          <Modal.Title>{t('presenter.keyboardShortcuts')}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <div style={{ fontSize: '0.95rem' }}>
             <div style={{ marginBottom: '20px' }}>
-              <h6 style={{ fontWeight: 'bold', marginBottom: '12px' }}>Navigation</h6>
+              <h6 style={{ fontWeight: 'bold', marginBottom: '12px' }}>{t('presenter.navigation')}</h6>
               <div style={{ display: 'grid', gap: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>→</kbd> Right Arrow</span>
-                  <span style={{ color: '#666' }}>Next Slide</span>
+                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>→</kbd> {t('presenter.rightArrow')}</span>
+                  <span style={{ color: '#666' }}>{t('presenter.nextSlide')}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>←</kbd> Left Arrow</span>
-                  <span style={{ color: '#666' }}>Previous Slide</span>
+                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>←</kbd> {t('presenter.leftArrow')}</span>
+                  <span style={{ color: '#666' }}>{t('presenter.previousSlide')}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>↓</kbd> Down Arrow</span>
-                  <span style={{ color: '#666' }}>Next Song</span>
+                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>↓</kbd> {t('presenter.downArrow')}</span>
+                  <span style={{ color: '#666' }}>{t('presenter.nextSong')}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>↑</kbd> Up Arrow</span>
-                  <span style={{ color: '#666' }}>Previous Song</span>
+                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>↑</kbd> {t('presenter.upArrow')}</span>
+                  <span style={{ color: '#666' }}>{t('presenter.previousSong')}</span>
                 </div>
               </div>
             </div>
 
             <div>
-              <h6 style={{ fontWeight: 'bold', marginBottom: '12px' }}>Display Control</h6>
+              <h6 style={{ fontWeight: 'bold', marginBottom: '12px' }}>{t('presenter.displayControl')}</h6>
               <div style={{ display: 'grid', gap: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>Space</kbd> or <kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>B</kbd></span>
-                  <span style={{ color: '#666' }}>Toggle Blank Screen</span>
+                  <span style={{ color: '#666' }}>{t('presenter.toggleBlankScreen')}</span>
                 </div>
               </div>
             </div>
 
             <div style={{ marginTop: '20px', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px', fontSize: '0.85rem', color: '#666' }}>
-              <strong>Tip:</strong> Keyboard shortcuts won't work while typing in search fields or text inputs.
+              <strong>{t('presenter.tip')}:</strong> {t('presenter.keyboardTip')}
             </div>
           </div>
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowKeyboardHelp(false)}>
-            Close
+            {t('common.close')}
           </Button>
         </Modal.Footer>
       </Modal>
@@ -3655,23 +3826,23 @@ function PresenterMode() {
         size="lg"
       >
         <Modal.Header closeButton>
-          <Modal.Title>⚡ Quick Slide</Modal.Title>
+          <Modal.Title>⚡ {t('presenter.quickSlide')}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <div style={{ marginBottom: '15px', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
             <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '8px' }}>
-              <strong>How to use:</strong>
+              <strong>{t('presenter.howToUse')}</strong>
             </p>
             <ul style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0', paddingLeft: '20px' }}>
-              <li>Line 1: Hebrew/Original text</li>
-              <li>Line 2: Transliteration</li>
-              <li>Line 3-4: Translation (can use 2 lines)</li>
+              <li>{t('presenter.quickSlideInstructions1')}</li>
+              <li>{t('presenter.quickSlideInstructions2')}</li>
+              <li>{t('presenter.quickSlideInstructions3')}</li>
             </ul>
           </div>
 
           <Form>
             <Form.Group className="mb-3">
-              <Form.Label>Slide Text</Form.Label>
+              <Form.Label>{t('presenter.slideText')}</Form.Label>
               <Form.Control
                 as="textarea"
                 rows={12}
@@ -3696,12 +3867,12 @@ function PresenterMode() {
                 }}
               />
               <Form.Text className="text-muted">
-                Click slide buttons below to broadcast. Separate slides with empty lines.
+                {t('presenter.clickSlideToBroadcast')}
               </Form.Text>
               {slideCount > 0 && (
                 <div style={{ marginTop: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <small style={{ color: '#666' }}>Click to broadcast:</small>
+                    <small style={{ color: '#666' }}>{t('presenter.clickToBroadcast')}</small>
                     {Array.from({ length: slideCount }, (_, index) => (
                       <div
                         key={index}
@@ -3751,14 +3922,14 @@ function PresenterMode() {
               setSlideCount(0); // Reset slide count
             }}
           >
-            Close
+            {t('common.close')}
           </Button>
         </Modal.Footer>
       </Modal>
 
       <Modal show={showBackgroundModal} onHide={() => setShowBackgroundModal(false)} size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>Select Background</Modal.Title>
+          <Modal.Title>{t('presenter.selectBackground')}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Row className="g-3">
@@ -3780,7 +3951,7 @@ function PresenterMode() {
                   transition: 'all 0.2s'
                 }}
               >
-                No Background
+                {t('presenter.noBackground')}
               </div>
             </Col>
 
@@ -3823,16 +3994,16 @@ function PresenterMode() {
 
           {media.length === 0 && (
             <div style={{ textAlign: 'center', color: '#666', padding: '40px' }}>
-              No backgrounds available. Add some in the Media Library!
+              {t('presenter.noBackgroundsAvailable')}
             </div>
           )}
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowBackgroundModal(false)}>
-            Close
+            {t('common.close')}
           </Button>
           <Button variant="primary" onClick={() => navigate('/media')}>
-            Manage Backgrounds
+            {t('presenter.manageBackgrounds')}
           </Button>
         </Modal.Footer>
       </Modal>
@@ -3850,8 +4021,8 @@ function PresenterMode() {
       >
         <Modal.Header closeButton>
           <Modal.Title>
-            {createModalView === 'choice' && 'Create New'}
-            {createModalView === 'create-song' && 'Create Song'}
+            {createModalView === 'choice' && t('presenter.createNew')}
+            {createModalView === 'create-song' && t('presenter.createSong')}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
@@ -3876,9 +4047,9 @@ function PresenterMode() {
                   e.currentTarget.style.backgroundColor = 'white';
                 }}
               >
-                <h5 style={{ marginBottom: '10px', color: '#0d6efd' }}>Create Song</h5>
+                <h5 style={{ marginBottom: '10px', color: '#0d6efd' }}>{t('presenter.createSong')}</h5>
                 <p style={{ marginBottom: '0', color: '#666', fontSize: '0.9rem' }}>
-                  Create a new song with lyrics in Hebrew and English
+                  {t('presenter.createSongDesc')}
                 </p>
               </div>
 
@@ -3905,9 +4076,9 @@ function PresenterMode() {
                     e.currentTarget.style.backgroundColor = 'white';
                   }}
                 >
-                  <h5 style={{ marginBottom: '10px', color: '#0d6efd' }}>Upload Image</h5>
+                  <h5 style={{ marginBottom: '10px', color: '#0d6efd' }}>{t('presenter.uploadImage')}</h5>
                   <p style={{ marginBottom: '0', color: '#666', fontSize: '0.9rem' }}>
-                    Upload new images or backgrounds to your media library
+                    {t('presenter.uploadImageDesc')}
                   </p>
                 </div>
               )}
@@ -3917,17 +4088,17 @@ function PresenterMode() {
           {createModalView === 'create-song' && (
             <div>
               <Form.Group className="mb-3">
-                <Form.Label>Song Title</Form.Label>
+                <Form.Label>{t('presenter.songTitle')}</Form.Label>
                 <Form.Control
                   type="text"
-                  placeholder="Enter song title"
+                  placeholder={t('presenter.enterSongTitle')}
                   value={newSongTitle}
                   onChange={(e) => setNewSongTitle(e.target.value)}
                 />
               </Form.Group>
 
               <Form.Group className="mb-3">
-                <Form.Label>Language</Form.Label>
+                <Form.Label>{t('presenter.language')}</Form.Label>
                 <Form.Select
                   value={newSongLanguage}
                   onChange={(e) => setNewSongLanguage(e.target.value)}
@@ -3944,7 +4115,7 @@ function PresenterMode() {
               </Form.Group>
 
               <Form.Group className="mb-3">
-                <Form.Label>Song Content</Form.Label>
+                <Form.Label>{t('presenter.songContent')}</Form.Label>
                 <div style={{ marginBottom: '8px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                   {['Verse1', 'Verse2', 'Verse3', 'Chorus', 'PreChorus', 'Bridge'].map((tag) => (
                     <button
@@ -3977,22 +4148,7 @@ function PresenterMode() {
                   as="textarea"
                   rows={15}
                   ref={createSongTextareaRef}
-                  placeholder="Enter your song lyrics here. Separate slides with blank lines.
-
-Format for each slide:
-Line 1: Hebrew text (עברית)
-Line 2: Transliteration (optional)
-Line 3: English translation (optional)
-Line 4: Translation overflow (optional)
-
-Example:
-ברוך אתה ה׳
-Baruch atah Adonai
-Blessed are You, LORD
-
-הללויה
-Hallelujah
-Praise the LORD"
+                  placeholder={t('presenter.songContentPlaceholder')}
                   value={newSongExpressText}
                   onChange={(e) => setNewSongExpressText(e.target.value)}
                   style={{ fontFamily: 'monospace', fontSize: '0.9rem' }}
@@ -4000,8 +4156,7 @@ Praise the LORD"
               </Form.Group>
 
               <div style={{ fontSize: '0.85rem', color: '#666', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
-                <strong>Tip:</strong> Separate each slide with a blank line. Within each slide, add up to 4 lines:
-                Hebrew text, transliteration, translation, and translation overflow.
+                <strong>{t('presenter.tip')}:</strong> {t('presenter.songContentTip')}
               </div>
             </div>
           )}
@@ -4012,7 +4167,7 @@ Praise the LORD"
               variant="secondary"
               onClick={() => setCreateModalView('choice')}
             >
-              Back
+              {t('presenter.back')}
             </Button>
           )}
           <Button
@@ -4025,7 +4180,7 @@ Praise the LORD"
               setNewSongExpressText('');
             }}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           {createModalView === 'create-song' && (
             <Button
@@ -4033,7 +4188,7 @@ Praise the LORD"
               onClick={handleCreateSong}
               disabled={createSongLoading}
             >
-              {createSongLoading ? 'Creating...' : 'Create & Add to Setlist'}
+              {createSongLoading ? t('presenter.creating') : t('presenter.createAndAddToSetlist')}
             </Button>
           )}
         </Modal.Footer>
@@ -4047,12 +4202,12 @@ Praise the LORD"
         setSetlistVenue('');
       }}>
         <Modal.Header closeButton>
-          <Modal.Title>Save Setlist as Permanent</Modal.Title>
+          <Modal.Title>{t('presenter.saveSetlistAsPermanent')}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form>
             <Form.Group className="mb-3">
-              <Form.Label>Date</Form.Label>
+              <Form.Label>{t('presenter.date')}</Form.Label>
               <Form.Control
                 type="date"
                 value={setlistDate}
@@ -4061,7 +4216,7 @@ Praise the LORD"
               />
             </Form.Group>
             <Form.Group className="mb-3">
-              <Form.Label>Time</Form.Label>
+              <Form.Label>{t('presenter.time')}</Form.Label>
               <Form.Control
                 type="time"
                 value={setlistTime}
@@ -4069,10 +4224,10 @@ Praise the LORD"
               />
             </Form.Group>
             <Form.Group className="mb-3">
-              <Form.Label>Venue</Form.Label>
+              <Form.Label>{t('presenter.venue')}</Form.Label>
               <Form.Control
                 type="text"
-                placeholder="Main Hall"
+                placeholder={t('presenter.venuePlaceholder')}
                 value={setlistVenue}
                 onChange={(e) => setSetlistVenue(e.target.value)}
                 onKeyPress={(e) => {
@@ -4090,14 +4245,14 @@ Praise the LORD"
               return (
                 <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
                   <small style={{ color: '#666' }}>
-                    <strong>Setlist name:</strong> {formattedDate} {setlistTime} {setlistVenue}
+                    <strong>{t('presenter.setlistName')}</strong> {formattedDate} {setlistTime} {setlistVenue}
                   </small>
                 </div>
               );
             })()}
             <div style={{ marginTop: '15px', color: '#666' }}>
               <small>
-                This will create a permanent copy of your current setlist with {setlist.length} item{setlist.length !== 1 ? 's' : ''}.
+                {t('presenter.saveSetlistInfo', { count: setlist.length })}
               </small>
             </div>
           </Form>
@@ -4109,14 +4264,14 @@ Praise the LORD"
             setSetlistTime('');
             setSetlistVenue('');
           }}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             variant="success"
             onClick={handleSaveSetlist}
             disabled={saveSetlistLoading || !setlistDate.trim() || !setlistTime.trim() || !setlistVenue.trim()}
           >
-            {saveSetlistLoading ? 'Saving...' : 'Save Setlist'}
+            {saveSetlistLoading ? t('presenter.saving') : t('presenter.saveSetlist')}
           </Button>
         </Modal.Footer>
       </Modal>
@@ -4124,7 +4279,7 @@ Praise the LORD"
       {/* Load Setlist Modal */}
       <Modal show={showLoadSetlistModal} onHide={() => setShowLoadSetlistModal(false)}>
         <Modal.Header closeButton>
-          <Modal.Title>Load Setlist</Modal.Title>
+          <Modal.Title>{t('presenter.loadSetlist')}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {loadSetlistLoading ? (
@@ -4132,11 +4287,11 @@ Praise the LORD"
               <div className="spinner-border text-primary" role="status">
                 <span className="visually-hidden">Loading...</span>
               </div>
-              <div style={{ marginTop: '10px' }}>Loading setlists...</div>
+              <div style={{ marginTop: '10px' }}>{t('presenter.loadingSetlists')}</div>
             </div>
           ) : availableSetlists.length === 0 ? (
             <p style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
-              No saved setlists found. Create a new setlist by adding songs and clicking "Save".
+              {t('presenter.noSavedSetlists')}
             </p>
           ) : (
             <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
@@ -4166,7 +4321,7 @@ Praise the LORD"
                     {setlist.name}
                   </div>
                   <div style={{ fontSize: '0.85rem', color: '#666' }}>
-                    {setlist.items?.length || 0} item{(setlist.items?.length || 0) !== 1 ? 's' : ''}
+                    {setlist.items?.length || 0} {(setlist.items?.length || 0) !== 1 ? t('presenter.items') : t('presenter.item')}
                   </div>
                 </div>
               ))}
@@ -4175,7 +4330,7 @@ Praise the LORD"
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowLoadSetlistModal(false)}>
-            Close
+            {t('common.close')}
           </Button>
         </Modal.Footer>
       </Modal>
@@ -4188,14 +4343,14 @@ Praise the LORD"
         size="sm"
       >
         <Modal.Header closeButton>
-          <Modal.Title style={{ fontSize: '1.1rem' }}>Add Section</Modal.Title>
+          <Modal.Title style={{ fontSize: '1.1rem' }}>{t('presenter.addSection')}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form.Group>
-            <Form.Label>Section Title</Form.Label>
+            <Form.Label>{t('presenter.sectionTitle')}</Form.Label>
             <Form.Control
               type="text"
-              placeholder="e.g., Worship, Message, Ministry Time"
+              placeholder={t('presenter.sectionTitlePlaceholder')}
               value={sectionTitleInput}
               onChange={(e) => setSectionTitleInput(e.target.value)}
               onKeyDown={(e) => {
@@ -4213,7 +4368,7 @@ Praise the LORD"
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowSectionModal(false)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -4227,7 +4382,7 @@ Praise the LORD"
             }}
             disabled={!sectionTitleInput.trim()}
           >
-            Add Section
+            {t('presenter.addSectionToSetlist')}
           </Button>
         </Modal.Footer>
       </Modal>

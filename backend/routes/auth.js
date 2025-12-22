@@ -261,6 +261,43 @@ router.get('/me', async (req, res) => {
   }
 });
 
+// Update user preferences
+router.put('/preferences', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findByPk(decoded.userId);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const { language } = req.body;
+
+    // Merge new preferences with existing ones
+    const updatedPreferences = {
+      ...user.preferences,
+      ...(language && { language })
+    };
+
+    await user.update({ preferences: updatedPreferences });
+
+    res.json({
+      message: 'Preferences updated successfully',
+      preferences: updatedPreferences
+    });
+  } catch (error) {
+    console.error('Update preferences error:', error);
+    res.status(500).json({ error: 'Failed to update preferences' });
+  }
+});
+
 // Request password reset
 router.post('/forgot-password', authLimiter, async (req, res) => {
   try {

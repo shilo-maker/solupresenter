@@ -41,7 +41,7 @@ const User = sequelize.define('User', {
   preferences: {
     type: DataTypes.JSONB,
     defaultValue: {
-      defaultLanguage: 'en'
+      language: 'he' // Default to Hebrew
     }
   },
   activeRoomId: {

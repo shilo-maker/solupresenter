@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { authAPI } from '../services/api';
-import { changeLanguage } from '../i18n';
+import { changeLanguage, getCurrentLanguage } from '../i18n';
 
 const AuthContext = createContext();
 
@@ -76,7 +76,8 @@ export const AuthProvider = ({ children }) => {
   const register = async (email, password) => {
     try {
       setError(null);
-      const response = await authAPI.register(email, password);
+      const currentLanguage = getCurrentLanguage();
+      const response = await authAPI.register(email, password, currentLanguage);
 
       // Check if registration requires email verification
       if (response.data.requiresVerification) {

@@ -35,7 +35,7 @@ const generateToken = (userId) => {
 // Register with email/password
 router.post('/register', registerLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, language } = req.body;
 
     // Validation
     if (!email || !password) {
@@ -56,6 +56,11 @@ router.post('/register', registerLimiter, async (req, res) => {
     const verificationToken = generateVerificationToken();
     const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
+    // Set preferences with language from registration page
+    const preferences = {
+      language: language || 'he' // Default to Hebrew if not specified
+    };
+
     // Create new user
     const user = await User.create({
       email: email.toLowerCase(),
@@ -63,7 +68,8 @@ router.post('/register', registerLimiter, async (req, res) => {
       authProvider: 'local',
       isEmailVerified: false, // Require email verification
       emailVerificationToken: verificationToken,
-      emailVerificationExpires: verificationExpires
+      emailVerificationExpires: verificationExpires,
+      preferences
     });
 
     // Send verification email
@@ -121,7 +127,8 @@ router.post('/login', authLimiter, (req, res, next) => {
         id: user.id,
         email: user.email,
         role: user.role,
-        isEmailVerified: user.isEmailVerified
+        isEmailVerified: user.isEmailVerified,
+        preferences: user.preferences
       }
     });
   })(req, res, next);
@@ -177,7 +184,8 @@ router.get('/verify-email/:token', async (req, res) => {
         _id: user.id,
         email: user.email,
         role: user.role,
-        isEmailVerified: user.isEmailVerified
+        isEmailVerified: user.isEmailVerified,
+        preferences: user.preferences
       }
     });
   } catch (error) {
@@ -386,7 +394,8 @@ router.post('/reset-password', authLimiter, async (req, res) => {
         id: user.id,
         email: user.email,
         role: user.role,
-        isEmailVerified: user.isEmailVerified
+        isEmailVerified: user.isEmailVerified,
+        preferences: user.preferences
       }
     });
   } catch (error) {

@@ -42,6 +42,11 @@ export const changeLanguage = (lng) => {
   // Direction update is handled by the 'languageChanged' event listener
 };
 
+// Function to get current language
+export const getCurrentLanguage = () => {
+  return i18n.resolvedLanguage || i18n.language || 'he';
+};
+
 // Set initial direction after i18n is initialized
 // Use resolvedLanguage which is more reliable than language
 updateDocumentDirection(i18n.resolvedLanguage || i18n.language);

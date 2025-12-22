@@ -95,6 +95,8 @@ function PresenterMode() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const searchInputRef = useRef(null);
+  const lastTapRef = useRef({ time: 0, songId: null }); // For double-tap detection on database
+  const lastSetlistTapRef = useRef({ time: 0, index: null }); // For double-tap detection on setlist
   const [allSongs, setAllSongs] = useState([]);
   const [songsLoading, setSongsLoading] = useState(true);
 
@@ -2457,7 +2459,19 @@ function PresenterMode() {
                           }}
                         >
                           <div
-                            onClick={() => selectSong(song)}
+                            onClick={() => {
+                              const now = Date.now();
+                              const DOUBLE_TAP_DELAY = 300;
+                              if (lastTapRef.current.songId === song._id && now - lastTapRef.current.time < DOUBLE_TAP_DELAY) {
+                                // Double tap detected
+                                addToSetlist(song);
+                                lastTapRef.current = { time: 0, songId: null };
+                              } else {
+                                // Single tap - select song
+                                selectSong(song);
+                                lastTapRef.current = { time: now, songId: song._id };
+                              }
+                            }}
                             style={{
                               flex: 1,
                               padding: '5px 7px',
@@ -2489,7 +2503,7 @@ function PresenterMode() {
                             {song.title}
                           </div>
                           <Button
-                            variant="success"
+                            variant="outline-success"
                             onClick={(e) => {
                               e.stopPropagation();
                               addToSetlist(song);
@@ -2502,7 +2516,10 @@ function PresenterMode() {
                               fontWeight: '600',
                               flexShrink: 0,
                               padding: '0',
-                              lineHeight: '1'
+                              lineHeight: '1',
+                              background: 'transparent',
+                              borderColor: '#198754',
+                              color: '#198754'
                             }}
                           >
                             +
@@ -3311,7 +3328,19 @@ function PresenterMode() {
                           </span>
                           <span
                             style={{ fontSize: '0.95rem', cursor: 'pointer', flex: 1, fontWeight: '400', color: 'white' }}
-                            onClick={() => selectItem(item)}
+                            onClick={() => {
+                              const now = Date.now();
+                              const DOUBLE_TAP_DELAY = 300;
+                              if (lastSetlistTapRef.current.index === index && now - lastSetlistTapRef.current.time < DOUBLE_TAP_DELAY) {
+                                // Double tap detected - remove from setlist
+                                removeFromSetlist(index);
+                                lastSetlistTapRef.current = { time: 0, index: null };
+                              } else {
+                                // Single tap - select item
+                                selectItem(item);
+                                lastSetlistTapRef.current = { time: now, index: index };
+                              }
+                            }}
                           >
                             {currentItemNumber}. {display.title}
                           </span>

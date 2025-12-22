@@ -328,7 +328,7 @@ io.on('connection', (socket) => {
   // Operator updates slide
   socket.on('operator:updateSlide', async (data) => {
     try {
-      const { roomId, roomPin, backgroundImage: clientBackgroundImage, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData, slideData } = data;
+      const { roomId, roomPin, backgroundImage: clientBackgroundImage, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData, slideData, toolsData } = data;
 
       // Use PIN from client if available (fast path), otherwise query DB (fallback)
       let pin = roomPin;
@@ -404,7 +404,8 @@ io.on('connection', (socket) => {
         slideData: broadcastSlideData,
         isBlank,
         imageUrl: imageUrl || null,
-        backgroundImage: backgroundImage || ''
+        backgroundImage: backgroundImage || '',
+        toolsData: toolsData || null
       });
 
       // 💾 Save to database asynchronously (don't block broadcast)

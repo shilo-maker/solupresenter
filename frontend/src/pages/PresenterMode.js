@@ -174,7 +174,7 @@ function PresenterMode() {
   const [bibleLoading, setBibleLoading] = useState(false);
 
   // Collapsible sections
-  const [activeResourcePanel, setActiveResourcePanel] = useState('songs'); // 'songs', 'images', or 'bible'
+  const [activeResourcePanel, setActiveResourcePanel] = useState('songs'); // 'songs', 'images', 'bible', or 'tools'
   const [setlistSectionOpen, setSetlistSectionOpen] = useState(true);
   const [slideSectionOpen, setSlideSectionOpen] = useState(true);
 
@@ -192,6 +192,415 @@ function PresenterMode() {
   const quickSlideTextareaRef = useRef(null); // Ref to textarea for instant typing
   const createSongTextareaRef = useRef(null); // Ref to create song textarea for tag insertion
   const [slideCount, setSlideCount] = useState(0); // Track number of slides for button rendering
+
+  // Tools state
+  const [activeToolsTab, setActiveToolsTab] = useState('countdown'); // 'countdown', 'clock', 'stopwatch', 'announce', 'messages'
+  // Countdown state
+  const [countdownHours, setCountdownHours] = useState(0);
+  const [countdownMinutes, setCountdownMinutes] = useState(5);
+  const [countdownSeconds, setCountdownSeconds] = useState(0);
+  const [countdownMessage, setCountdownMessage] = useState('');
+  const [countdownRunning, setCountdownRunning] = useState(false);
+  const [countdownRemaining, setCountdownRemaining] = useState(0); // in seconds
+  const countdownIntervalRef = useRef(null);
+  // Clock state
+  const [clockFormat, setClockFormat] = useState('24h');
+  const [clockShowDate, setClockShowDate] = useState(false);
+  const [clockBroadcasting, setClockBroadcasting] = useState(false);
+  const clockIntervalRef = useRef(null);
+  // Stopwatch state
+  const [stopwatchTime, setStopwatchTime] = useState(0); // in seconds
+  const [stopwatchRunning, setStopwatchRunning] = useState(false);
+  const [stopwatchLabel, setStopwatchLabel] = useState('');
+  const stopwatchIntervalRef = useRef(null);
+  // Announcement state
+  const [announcementText, setAnnouncementText] = useState('');
+  const [announcementVisible, setAnnouncementVisible] = useState(false);
+  const announcementTimerRef = useRef(null);
+  // Rotating messages state
+  const [rotatingMessages, setRotatingMessages] = useState([
+    { id: 1, text: 'welcomeMsg', enabled: true, isPreset: true },
+    { id: 2, text: 'serviceStartingSoon', enabled: true, isPreset: true },
+    { id: 3, text: 'prayerTime', enabled: false, isPreset: true },
+    { id: 4, text: 'worshipTime', enabled: false, isPreset: true },
+    { id: 5, text: 'sermon', enabled: false, isPreset: true },
+    { id: 6, text: 'offeringTimeMsg', enabled: false, isPreset: true },
+    { id: 7, text: 'seeYouNextWeek', enabled: false, isPreset: true },
+    { id: 8, text: 'godBlessYou', enabled: false, isPreset: true },
+  ]);
+  const [rotatingInterval, setRotatingInterval] = useState(10); // seconds
+  const [rotatingRunning, setRotatingRunning] = useState(false);
+  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+  const [customMessageInput, setCustomMessageInput] = useState('');
+  const rotatingIntervalRef = useRef(null);
+  const broadcastRotatingMessageRef = useRef(null);
+
+  // Format time in HH:MM:SS or MM:SS
+  const formatTime = (totalSeconds) => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) {
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Countdown functions
+  const toggleCountdown = () => {
+    if (countdownRunning) {
+      // Pause
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+      setCountdownRunning(false);
+    } else {
+      // Start
+      if (countdownRemaining === 0) {
+        // Calculate total seconds from inputs
+        const total = countdownHours * 3600 + countdownMinutes * 60 + countdownSeconds;
+        if (total <= 0) return;
+        setCountdownRemaining(total);
+      }
+      setCountdownRunning(true);
+    }
+  };
+
+  const resetCountdown = () => {
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    setCountdownRunning(false);
+    setCountdownRemaining(0);
+  };
+
+  const broadcastCountdown = () => {
+    if (!room) return;
+    socketService.operatorUpdateSlide({
+      roomId: room.id,
+      roomPin: room.pin,
+      backgroundImage: room.backgroundImage || '',
+      songId: null,
+      slideIndex: 0,
+      displayMode: displayMode,
+      isBlank: false,
+      toolsData: {
+        type: 'countdown',
+        countdown: {
+          remaining: countdownRemaining > 0 ? countdownRemaining : (countdownHours * 3600 + countdownMinutes * 60 + countdownSeconds),
+          message: countdownMessage,
+          running: countdownRunning,
+          endTime: countdownRunning ? Date.now() + (countdownRemaining * 1000) : null
+        }
+      }
+    });
+  };
+
+  // Clock functions
+  const toggleClockBroadcast = () => {
+    if (clockBroadcasting) {
+      // Stop broadcasting
+      if (clockIntervalRef.current) {
+        clearInterval(clockIntervalRef.current);
+        clockIntervalRef.current = null;
+      }
+      setClockBroadcasting(false);
+      // Clear the tools display
+      if (room) {
+        socketService.operatorUpdateSlide({
+          roomId: room.id,
+          roomPin: room.pin,
+          backgroundImage: room.backgroundImage || '',
+          songId: null,
+          slideIndex: 0,
+          displayMode: displayMode,
+          isBlank: true,
+          toolsData: null
+        });
+      }
+    } else {
+      // Start broadcasting clock
+      setClockBroadcasting(true);
+      broadcastClock();
+    }
+  };
+
+  const broadcastClock = () => {
+    if (!room) return;
+    socketService.operatorUpdateSlide({
+      roomId: room.id,
+      roomPin: room.pin,
+      backgroundImage: room.backgroundImage || '',
+      songId: null,
+      slideIndex: 0,
+      displayMode: displayMode,
+      isBlank: false,
+      toolsData: {
+        type: 'clock',
+        clock: {
+          format: clockFormat,
+          showDate: clockShowDate
+        }
+      }
+    });
+  };
+
+  // Stopwatch functions
+  const toggleStopwatch = () => {
+    if (stopwatchRunning) {
+      // Pause
+      if (stopwatchIntervalRef.current) {
+        clearInterval(stopwatchIntervalRef.current);
+        stopwatchIntervalRef.current = null;
+      }
+      setStopwatchRunning(false);
+    } else {
+      // Start
+      setStopwatchRunning(true);
+    }
+  };
+
+  const resetStopwatch = () => {
+    if (stopwatchIntervalRef.current) {
+      clearInterval(stopwatchIntervalRef.current);
+      stopwatchIntervalRef.current = null;
+    }
+    setStopwatchRunning(false);
+    setStopwatchTime(0);
+  };
+
+  const broadcastStopwatch = () => {
+    if (!room) return;
+    socketService.operatorUpdateSlide({
+      roomId: room.id,
+      roomPin: room.pin,
+      backgroundImage: room.backgroundImage || '',
+      songId: null,
+      slideIndex: 0,
+      displayMode: displayMode,
+      isBlank: false,
+      toolsData: {
+        type: 'stopwatch',
+        stopwatch: {
+          elapsed: stopwatchTime,
+          label: stopwatchLabel,
+          running: stopwatchRunning,
+          startTime: stopwatchRunning ? Date.now() - (stopwatchTime * 1000) : null
+        }
+      }
+    });
+  };
+
+  // Announcement functions
+  const hideAnnouncement = () => {
+    // Clear any existing timer
+    if (announcementTimerRef.current) {
+      clearTimeout(announcementTimerRef.current);
+      announcementTimerRef.current = null;
+    }
+    setAnnouncementVisible(false);
+
+    if (!room) return;
+    socketService.operatorUpdateSlide({
+      roomId: room.id,
+      roomPin: room.pin,
+      backgroundImage: room.backgroundImage || '',
+      songId: currentSong?.id || null,
+      slideIndex: currentSlideIndex,
+      displayMode: displayMode,
+      isBlank: isBlankActive,
+      toolsData: {
+        type: 'announcement',
+        announcement: {
+          text: announcementText,
+          visible: false
+        }
+      }
+    });
+  };
+
+  const showAnnouncement = (text) => {
+    // Clear any existing timer
+    if (announcementTimerRef.current) {
+      clearTimeout(announcementTimerRef.current);
+    }
+
+    setAnnouncementVisible(true);
+
+    if (!room) return;
+    socketService.operatorUpdateSlide({
+      roomId: room.id,
+      roomPin: room.pin,
+      backgroundImage: room.backgroundImage || '',
+      songId: currentSong?.id || null,
+      slideIndex: currentSlideIndex,
+      displayMode: displayMode,
+      isBlank: isBlankActive,
+      toolsData: {
+        type: 'announcement',
+        announcement: {
+          text: text || announcementText,
+          visible: true
+        }
+      }
+    });
+
+    // Auto-hide after 15 seconds
+    announcementTimerRef.current = setTimeout(() => {
+      hideAnnouncement();
+    }, 15000);
+  };
+
+  const toggleAnnouncement = () => {
+    if (announcementVisible) {
+      hideAnnouncement();
+    } else {
+      showAnnouncement(announcementText);
+    }
+  };
+
+  // Update announcement text and broadcast if banner is visible
+  const updateAnnouncementText = (text) => {
+    setAnnouncementText(text);
+
+    // If banner is already visible, broadcast the new text and reset timer
+    if (announcementVisible && room) {
+      // Clear existing timer and restart
+      if (announcementTimerRef.current) {
+        clearTimeout(announcementTimerRef.current);
+      }
+
+      socketService.operatorUpdateSlide({
+        roomId: room.id,
+        roomPin: room.pin,
+        backgroundImage: room.backgroundImage || '',
+        songId: currentSong?.id || null,
+        slideIndex: currentSlideIndex,
+        displayMode: displayMode,
+        isBlank: isBlankActive,
+        toolsData: {
+          type: 'announcement',
+          announcement: {
+            text: text,
+            visible: true
+          }
+        }
+      });
+
+      // Reset auto-hide timer
+      announcementTimerRef.current = setTimeout(() => {
+        hideAnnouncement();
+      }, 15000);
+    }
+  };
+
+  // Rotating messages functions
+  const toggleMessageEnabled = (id) => {
+    setRotatingMessages(msgs =>
+      msgs.map(msg => msg.id === id ? { ...msg, enabled: !msg.enabled } : msg)
+    );
+  };
+
+  const addCustomMessage = () => {
+    if (!customMessageInput.trim()) return;
+    const newId = Math.max(...rotatingMessages.map(m => m.id)) + 1;
+    setRotatingMessages([...rotatingMessages, {
+      id: newId,
+      text: customMessageInput.trim(),
+      enabled: true,
+      isPreset: false
+    }]);
+    setCustomMessageInput('');
+  };
+
+  const removeCustomMessage = (id) => {
+    setRotatingMessages(msgs => msgs.filter(msg => msg.id !== id));
+  };
+
+  const toggleRotatingMessages = () => {
+    if (rotatingRunning) {
+      // Stop
+      if (rotatingIntervalRef.current) {
+        clearInterval(rotatingIntervalRef.current);
+        rotatingIntervalRef.current = null;
+      }
+      setRotatingRunning(false);
+      // Clear display
+      if (room) {
+        socketService.operatorUpdateSlide({
+          roomId: room.id,
+          roomPin: room.pin,
+          backgroundImage: room.backgroundImage || '',
+          songId: null,
+          slideIndex: 0,
+          displayMode: displayMode,
+          isBlank: true,
+          toolsData: null
+        });
+      }
+    } else {
+      // Start
+      const enabledMessages = rotatingMessages.filter(m => m.enabled);
+      if (enabledMessages.length === 0) return;
+      setCurrentMessageIndex(0);
+      setRotatingRunning(true);
+      // Broadcast first message immediately
+      broadcastRotatingMessage(0);
+    }
+  };
+
+  const broadcastRotatingMessage = (index) => {
+    if (!room) return;
+    const enabledMessages = rotatingMessages.filter(m => m.enabled);
+    if (enabledMessages.length === 0) return;
+
+    const msg = enabledMessages[index % enabledMessages.length];
+    const displayText = msg.isPreset ? t(`presenter.${msg.text}`) : msg.text;
+
+    socketService.operatorUpdateSlide({
+      roomId: room.id,
+      roomPin: room.pin,
+      backgroundImage: room.backgroundImage || '',
+      songId: null,
+      slideIndex: 0,
+      displayMode: displayMode,
+      isBlank: false,
+      toolsData: {
+        type: 'rotatingMessage',
+        rotatingMessage: {
+          text: displayText,
+          interval: rotatingInterval
+        }
+      }
+    });
+  };
+
+  // Keep ref updated for use in effects (avoids stale closures)
+  broadcastRotatingMessageRef.current = broadcastRotatingMessage;
+
+  // Stop all running tools (called when broadcasting non-tool content)
+  const stopAllTools = () => {
+    // Stop rotating messages
+    if (rotatingRunning) {
+      if (rotatingIntervalRef.current) {
+        clearInterval(rotatingIntervalRef.current);
+        rotatingIntervalRef.current = null;
+      }
+      setRotatingRunning(false);
+    }
+    // Stop clock broadcast
+    if (clockBroadcasting) {
+      if (clockIntervalRef.current) {
+        clearInterval(clockIntervalRef.current);
+        clockIntervalRef.current = null;
+      }
+      setClockBroadcasting(false);
+    }
+    // Note: Countdown and Stopwatch don't auto-broadcast, so no need to stop them
+    // But we can reset their "broadcasting" state if needed
+  };
 
   // Switch resource panel and apply search
   const switchResourcePanel = (panel) => {
@@ -452,6 +861,66 @@ function PresenterMode() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Countdown timer effect
+  useEffect(() => {
+    if (countdownRunning && countdownRemaining > 0) {
+      countdownIntervalRef.current = setInterval(() => {
+        setCountdownRemaining(prev => {
+          if (prev <= 1) {
+            clearInterval(countdownIntervalRef.current);
+            countdownIntervalRef.current = null;
+            setCountdownRunning(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
+    };
+  }, [countdownRunning]);
+
+  // Stopwatch timer effect
+  useEffect(() => {
+    if (stopwatchRunning) {
+      stopwatchIntervalRef.current = setInterval(() => {
+        setStopwatchTime(prev => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (stopwatchIntervalRef.current) {
+        clearInterval(stopwatchIntervalRef.current);
+      }
+    };
+  }, [stopwatchRunning]);
+
+  // Rotating messages effect
+  useEffect(() => {
+    if (rotatingRunning) {
+      rotatingIntervalRef.current = setInterval(() => {
+        setCurrentMessageIndex(prev => {
+          const enabledMessages = rotatingMessages.filter(m => m.enabled);
+          if (enabledMessages.length === 0) return prev;
+          const nextIndex = (prev + 1) % enabledMessages.length;
+          // Use ref to avoid stale closure issues
+          if (broadcastRotatingMessageRef.current) {
+            broadcastRotatingMessageRef.current(nextIndex);
+          }
+          return nextIndex;
+        });
+      }, rotatingInterval * 1000);
+    }
+    return () => {
+      if (rotatingIntervalRef.current) {
+        clearInterval(rotatingIntervalRef.current);
+        rotatingIntervalRef.current = null;
+      }
+    };
+  }, [rotatingRunning, rotatingInterval, rotatingMessages]);
 
   useEffect(() => {
     console.log('🔄 PresenterMode useEffect triggered', {
@@ -1571,6 +2040,9 @@ function PresenterMode() {
       return;
     }
 
+    // Stop any running tools when broadcasting a slide
+    stopAllTools();
+
     // Send slide data directly to avoid backend DB queries
     const payload = {
       roomId: room.id,
@@ -1601,6 +2073,9 @@ function PresenterMode() {
       console.error('❌ Cannot update image slide: room is null');
       return;
     }
+
+    // Stop any running tools when broadcasting an image
+    stopAllTools();
 
     socketService.operatorUpdateSlide({
       roomId: room.id,
@@ -2320,6 +2795,14 @@ function PresenterMode() {
               >
                 {t('presenter.bible')}
               </Button>
+              <Button
+                variant={activeResourcePanel === 'tools' ? 'primary' : 'outline-light'}
+                size="sm"
+                onClick={() => switchResourcePanel('tools')}
+                style={{ fontWeight: '500' }}
+              >
+                {t('presenter.tools')}
+              </Button>
             </div>
 
             {/* Search bar - Glassmorphic style */}
@@ -2710,6 +3193,426 @@ function PresenterMode() {
                 {!bibleLoading && bibleVerses.length === 0 && selectedBibleBook && selectedBibleChapter && (
                   <div style={{ textAlign: 'center', color: 'white', padding: '20px' }}>
                     {t('presenter.selectBookAndChapter')}
+                  </div>
+                )}
+              </div>
+            ) : activeResourcePanel === 'tools' ? (
+              <div className="dark-scrollbar" style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                {/* Tools Selector - Modern Card Style */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(5, 1fr)',
+                  gap: '6px',
+                  marginBottom: '14px'
+                }}>
+                  {[
+                    { key: 'countdown', icon: '⏱️', label: t('presenter.toolsCountdown') },
+                    { key: 'clock', icon: '🕐', label: t('presenter.toolsClock') },
+                    { key: 'stopwatch', icon: '⏲️', label: t('presenter.toolsStopwatch') },
+                    { key: 'announce', icon: '📢', label: t('presenter.toolsAnnounce') },
+                    { key: 'messages', icon: '💬', label: t('presenter.toolsMessages') }
+                  ].map((tool) => (
+                    <div
+                      key={tool.key}
+                      onClick={() => setActiveToolsTab(tool.key)}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '8px 4px',
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        background: activeToolsTab === tool.key
+                          ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                          : 'rgba(255, 255, 255, 0.08)',
+                        border: activeToolsTab === tool.key
+                          ? '1px solid rgba(255, 255, 255, 0.3)'
+                          : '1px solid rgba(255, 255, 255, 0.1)',
+                        boxShadow: activeToolsTab === tool.key
+                          ? '0 4px 15px rgba(102, 126, 234, 0.4)'
+                          : 'none',
+                        transform: activeToolsTab === tool.key ? 'scale(1.02)' : 'scale(1)'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (activeToolsTab !== tool.key) {
+                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                          e.currentTarget.style.transform = 'scale(1.02)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (activeToolsTab !== tool.key) {
+                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                          e.currentTarget.style.transform = 'scale(1)';
+                        }
+                      }}
+                    >
+                      <span style={{ fontSize: '1.2rem', marginBottom: '2px' }}>{tool.icon}</span>
+                      <span style={{
+                        fontSize: '0.65rem',
+                        color: 'white',
+                        fontWeight: activeToolsTab === tool.key ? '600' : '400',
+                        textAlign: 'center',
+                        lineHeight: 1.1,
+                        opacity: activeToolsTab === tool.key ? 1 : 0.8
+                      }}>
+                        {tool.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Countdown Timer Tab */}
+                {activeToolsTab === 'countdown' && (
+                  <div style={{ color: 'white' }}>
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'block' }}>
+                        {t('presenter.setDuration')}
+                      </label>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <Form.Control
+                          type="number"
+                          min="0"
+                          max="23"
+                          value={countdownHours}
+                          onChange={(e) => setCountdownHours(parseInt(e.target.value) || 0)}
+                          style={{ width: '60px', textAlign: 'center' }}
+                          size="sm"
+                        />
+                        <span>:</span>
+                        <Form.Control
+                          type="number"
+                          min="0"
+                          max="59"
+                          value={countdownMinutes}
+                          onChange={(e) => setCountdownMinutes(parseInt(e.target.value) || 0)}
+                          style={{ width: '60px', textAlign: 'center' }}
+                          size="sm"
+                        />
+                        <span>:</span>
+                        <Form.Control
+                          type="number"
+                          min="0"
+                          max="59"
+                          value={countdownSeconds}
+                          onChange={(e) => setCountdownSeconds(parseInt(e.target.value) || 0)}
+                          style={{ width: '60px', textAlign: 'center' }}
+                          size="sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'block' }}>
+                        {t('presenter.countdownMessage')}
+                      </label>
+                      <Form.Control
+                        type="text"
+                        value={countdownMessage}
+                        onChange={(e) => setCountdownMessage(e.target.value)}
+                        placeholder={t('presenter.countdownPlaceholder')}
+                        size="sm"
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.8rem', alignSelf: 'center' }}>{t('presenter.quickTimes')}:</span>
+                      {[5, 10, 15, 30].map((mins) => (
+                        <Button
+                          key={mins}
+                          variant="outline-light"
+                          size="sm"
+                          onClick={() => {
+                            setCountdownHours(0);
+                            setCountdownMinutes(mins);
+                            setCountdownSeconds(0);
+                          }}
+                          style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                        >
+                          {mins}m
+                        </Button>
+                      ))}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <Button
+                        variant={countdownRunning ? 'warning' : 'success'}
+                        size="sm"
+                        onClick={toggleCountdown}
+                      >
+                        {countdownRunning ? t('presenter.pause') : t('presenter.start')}
+                      </Button>
+                      <Button
+                        variant="outline-light"
+                        size="sm"
+                        onClick={resetCountdown}
+                      >
+                        {t('presenter.reset')}
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={broadcastCountdown}
+                      >
+                        {t('presenter.broadcast')}
+                      </Button>
+                    </div>
+
+                    {countdownRemaining > 0 && (
+                      <div style={{
+                        marginTop: '12px',
+                        textAlign: 'center',
+                        fontSize: '1.5rem',
+                        fontWeight: 'bold',
+                        fontFamily: 'monospace'
+                      }}>
+                        {formatTime(countdownRemaining)}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Clock Tab */}
+                {activeToolsTab === 'clock' && (
+                  <div style={{ color: 'white' }}>
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'block' }}>
+                        {t('presenter.clockFormat')}
+                      </label>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <Button
+                          variant={clockFormat === '24h' ? 'primary' : 'outline-light'}
+                          size="sm"
+                          onClick={() => setClockFormat('24h')}
+                        >
+                          24H
+                        </Button>
+                        <Button
+                          variant={clockFormat === '12h' ? 'primary' : 'outline-light'}
+                          size="sm"
+                          onClick={() => setClockFormat('12h')}
+                        >
+                          12H
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <Form.Check
+                        type="checkbox"
+                        label={t('presenter.showDate')}
+                        checked={clockShowDate}
+                        onChange={(e) => setClockShowDate(e.target.checked)}
+                        style={{ color: 'white' }}
+                      />
+                    </div>
+
+                    <Button
+                      variant={clockBroadcasting ? 'danger' : 'primary'}
+                      size="sm"
+                      onClick={toggleClockBroadcast}
+                    >
+                      {clockBroadcasting ? t('presenter.stopBroadcast') : t('presenter.broadcastClock')}
+                    </Button>
+                  </div>
+                )}
+
+                {/* Stopwatch Tab */}
+                {activeToolsTab === 'stopwatch' && (
+                  <div style={{ color: 'white' }}>
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'block' }}>
+                        {t('presenter.stopwatchLabel')}
+                      </label>
+                      <Form.Control
+                        type="text"
+                        value={stopwatchLabel}
+                        onChange={(e) => setStopwatchLabel(e.target.value)}
+                        placeholder={t('presenter.stopwatchPlaceholder')}
+                        size="sm"
+                      />
+                    </div>
+
+                    <div style={{
+                      textAlign: 'center',
+                      fontSize: '1.5rem',
+                      fontWeight: 'bold',
+                      fontFamily: 'monospace',
+                      marginBottom: '12px'
+                    }}>
+                      {formatTime(stopwatchTime)}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <Button
+                        variant={stopwatchRunning ? 'warning' : 'success'}
+                        size="sm"
+                        onClick={toggleStopwatch}
+                      >
+                        {stopwatchRunning ? t('presenter.pause') : t('presenter.start')}
+                      </Button>
+                      <Button
+                        variant="outline-light"
+                        size="sm"
+                        onClick={resetStopwatch}
+                      >
+                        {t('presenter.reset')}
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={broadcastStopwatch}
+                      >
+                        {t('presenter.broadcast')}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Announcement Tab */}
+                {activeToolsTab === 'announce' && (
+                  <div style={{ color: 'white' }}>
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'block' }}>
+                        {t('presenter.quickAnnouncements')}
+                      </label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {[
+                          { key: 'welcome', en: 'Welcome', he: 'ברוכים הבאים' },
+                          { key: 'silencePhones', en: 'Please silence your phones', he: 'נא להשתיק טלפונים' },
+                          { key: 'offeringTime', en: 'Offering Time', he: 'זמן התרומה' },
+                          { key: 'refreshments', en: 'Join us for refreshments', he: 'הצטרפו לכיבוד' }
+                        ].map((item) => (
+                          <Button
+                            key={item.key}
+                            variant="outline-light"
+                            size="sm"
+                            onClick={() => updateAnnouncementText(i18n.language === 'he' ? item.he : item.en)}
+                            style={{ textAlign: i18n.language === 'he' ? 'right' : 'left' }}
+                          >
+                            {i18n.language === 'he' ? item.he : item.en}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'block' }}>
+                        {t('presenter.customAnnouncement')}
+                      </label>
+                      <Form.Control
+                        type="text"
+                        value={announcementText}
+                        onChange={(e) => updateAnnouncementText(e.target.value)}
+                        placeholder={t('presenter.announcementPlaceholder')}
+                        size="sm"
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <Button
+                        variant={announcementVisible ? 'danger' : 'success'}
+                        size="sm"
+                        onClick={toggleAnnouncement}
+                        disabled={!announcementText.trim()}
+                      >
+                        {announcementVisible ? t('presenter.hideAnnouncement') : t('presenter.showAnnouncement')}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Rotating Messages Tab */}
+                {activeToolsTab === 'messages' && (
+                  <div style={{ color: 'white' }}>
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'block' }}>
+                        {t('presenter.rotationInterval')}
+                      </label>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        {[5, 10, 15, 30].map((secs) => (
+                          <Button
+                            key={secs}
+                            variant={rotatingInterval === secs ? 'primary' : 'outline-light'}
+                            size="sm"
+                            onClick={() => setRotatingInterval(secs)}
+                            style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                          >
+                            {secs}s
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '12px', maxHeight: '100px', overflowY: 'auto' }}>
+                      {rotatingMessages.map((msg, index) => (
+                        <div
+                          key={msg.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            marginBottom: '4px',
+                            padding: '4px',
+                            backgroundColor: msg.enabled ? 'rgba(255,255,255,0.1)' : 'transparent',
+                            borderRadius: '4px'
+                          }}
+                        >
+                          <Form.Check
+                            type="checkbox"
+                            checked={msg.enabled}
+                            onChange={() => toggleMessageEnabled(msg.id)}
+                            style={{ margin: 0 }}
+                          />
+                          <span style={{ flex: 1, fontSize: '0.85rem' }}>
+                            {msg.isPreset ? t(`presenter.${msg.text}`) : msg.text}
+                          </span>
+                          {!msg.isPreset && (
+                            <Button
+                              variant="outline-danger"
+                              size="sm"
+                              onClick={() => removeCustomMessage(msg.id)}
+                              style={{ padding: '0 4px', fontSize: '0.7rem' }}
+                            >
+                              X
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <Form.Control
+                          type="text"
+                          value={customMessageInput}
+                          onChange={(e) => setCustomMessageInput(e.target.value)}
+                          placeholder={t('presenter.addCustomMessage')}
+                          size="sm"
+                          style={{ flex: 1 }}
+                        />
+                        <Button
+                          variant="outline-success"
+                          size="sm"
+                          onClick={addCustomMessage}
+                          disabled={!customMessageInput.trim()}
+                        >
+                          +
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <Button
+                        variant={rotatingRunning ? 'danger' : 'success'}
+                        size="sm"
+                        onClick={toggleRotatingMessages}
+                        disabled={rotatingMessages.filter(m => m.enabled).length === 0}
+                      >
+                        {rotatingRunning ? t('presenter.stopMessages') : t('presenter.startMessages')}
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>

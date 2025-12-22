@@ -33,6 +33,15 @@ function ViewerPage() {
   const [showControls, setShowControls] = useState(false);
   const [imageUrl, setImageUrl] = useState(null); // For image-only slides
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [toolsData, setToolsData] = useState(null); // For tools display (countdown, clock, stopwatch, announcement)
+  const [clockTime, setClockTime] = useState(new Date());
+  const [countdownRemaining, setCountdownRemaining] = useState(0);
+  const [stopwatchElapsed, setStopwatchElapsed] = useState(0);
+  const clockIntervalRef = useRef(null);
+  const countdownIntervalRef = useRef(null);
+  const stopwatchIntervalRef = useRef(null);
+  // Announcement animation state
+  const [announcementBanner, setAnnouncementBanner] = useState({ visible: false, text: '', animating: false });
 
   // Viewer display toggles
   const [showOriginal, setShowOriginal] = useState(true);
@@ -124,6 +133,91 @@ function ViewerPage() {
     };
   }, [joined]);
 
+  // Clock timer effect - updates every second when clock is displayed
+  useEffect(() => {
+    if (toolsData?.type === 'clock') {
+      clockIntervalRef.current = setInterval(() => {
+        setClockTime(new Date());
+      }, 1000);
+    }
+    return () => {
+      if (clockIntervalRef.current) {
+        clearInterval(clockIntervalRef.current);
+        clockIntervalRef.current = null;
+      }
+    };
+  }, [toolsData?.type]);
+
+  // Countdown timer effect - decrements every second when running
+  useEffect(() => {
+    // Only start interval if countdown is active and has time remaining
+    if (toolsData?.type === 'countdown' && toolsData?.countdown?.running && countdownRemaining > 0) {
+      countdownIntervalRef.current = setInterval(() => {
+        setCountdownRemaining(prev => {
+          const next = Math.max(0, prev - 1);
+          // Auto-clear interval when countdown reaches 0
+          if (next === 0 && countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+            countdownIntervalRef.current = null;
+          }
+          return next;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+    };
+    // Note: countdownRemaining is intentionally excluded to prevent interval restart every second
+    // The interval self-clears when countdown reaches 0
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toolsData?.type, toolsData?.countdown?.running]);
+
+  // Stopwatch timer effect - increments every second when running
+  useEffect(() => {
+    if (toolsData?.type === 'stopwatch' && toolsData?.stopwatch?.running) {
+      stopwatchIntervalRef.current = setInterval(() => {
+        setStopwatchElapsed(prev => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (stopwatchIntervalRef.current) {
+        clearInterval(stopwatchIntervalRef.current);
+        stopwatchIntervalRef.current = null;
+      }
+    };
+  }, [toolsData?.type, toolsData?.stopwatch?.running]);
+
+  // Announcement banner animation effect
+  useEffect(() => {
+    if (toolsData?.type === 'announcement') {
+      const { visible, text } = toolsData.announcement || {};
+      if (visible && text) {
+        // Show banner with slide-up animation
+        setAnnouncementBanner({ visible: true, text, animating: 'in' });
+        // After animation completes, remove animating state
+        setTimeout(() => {
+          setAnnouncementBanner(prev => ({ ...prev, animating: false }));
+        }, 500);
+      } else if (!visible && announcementBanner.visible) {
+        // Hide banner with slide-down animation
+        setAnnouncementBanner(prev => ({ ...prev, animating: 'out' }));
+        // After animation completes, hide the banner
+        setTimeout(() => {
+          setAnnouncementBanner({ visible: false, text: '', animating: false });
+        }, 500);
+      } else if (visible && text !== announcementBanner.text) {
+        // Text changed while visible - update without animation
+        setAnnouncementBanner(prev => ({ ...prev, text }));
+      }
+    } else if (announcementBanner.visible) {
+      // Tool type changed away from announcement - hide immediately
+      setAnnouncementBanner({ visible: false, text: '', animating: false });
+    }
+  }, [toolsData?.type, toolsData?.announcement?.visible, toolsData?.announcement?.text, announcementBanner.visible, announcementBanner.text]);
+
   useEffect(() => {
     console.log('🚀 Component mounted');
     console.log(`📍 URL: ${window.location.href}`);
@@ -177,16 +271,62 @@ function ViewerPage() {
 
     socketService.onSlideUpdate((data) => {
       lastActivityRef.current = Date.now();
-      if (data.isBlank) {
+
+      // Handle tools data
+      if (data.toolsData) {
+        setToolsData(data.toolsData);
+
+        // Announcements are overlays - don't clear existing content
+        // Other tools (countdown, clock, stopwatch, rotatingMessage) replace content
+        if (data.toolsData.type !== 'announcement') {
+          setCurrentSlide(null);
+          setImageUrl(null);
+        } else {
+          // For announcements, also update the underlying slide if provided
+          if (data.slideData) {
+            setCurrentSlide(data.slideData);
+          }
+          if (data.imageUrl) {
+            setImageUrl(data.imageUrl);
+          }
+        }
+
+        // Handle specific tool types
+        if (data.toolsData.type === 'countdown' && data.toolsData.countdown) {
+          const { remaining, endTime, running } = data.toolsData.countdown;
+          if (running && endTime) {
+            // Calculate remaining based on endTime for sync
+            const now = Date.now();
+            const remainingSecs = Math.max(0, Math.round((endTime - now) / 1000));
+            setCountdownRemaining(remainingSecs);
+          } else {
+            setCountdownRemaining(remaining || 0);
+          }
+        } else if (data.toolsData.type === 'stopwatch' && data.toolsData.stopwatch) {
+          const { elapsed, startTime, running } = data.toolsData.stopwatch;
+          if (running && startTime) {
+            // Calculate elapsed based on startTime for sync
+            const now = Date.now();
+            const elapsedSecs = Math.round((now - startTime) / 1000);
+            setStopwatchElapsed(elapsedSecs);
+          } else {
+            setStopwatchElapsed(elapsed || 0);
+          }
+        }
+      } else if (data.isBlank) {
         setCurrentSlide({ isBlank: true });
         setImageUrl(null);
+        setToolsData(null);
       } else if (data.imageUrl) {
         setImageUrl(data.imageUrl);
         setCurrentSlide(null);
+        setToolsData(null);
       } else {
         setCurrentSlide(data.slideData);
         setImageUrl(null);
+        setToolsData(null);
       }
+
       if (data.backgroundImage !== undefined) {
         setBackgroundImage(data.backgroundImage || '');
       }
@@ -312,7 +452,149 @@ function ViewerPage() {
     }
   };
 
+  // Format time helper for tools display
+  const formatTime = (totalSeconds) => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) {
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Format clock time
+  const formatClockTime = (date, format) => {
+    if (format === '12h') {
+      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+    }
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  };
+
+  const formatClockDate = (date) => {
+    return date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  };
+
   const renderSlide = () => {
+    // Handle tools display
+    if (toolsData) {
+      const toolsStyle = {
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: textColor,
+        textAlign: 'center'
+      };
+
+      // Countdown timer display
+      if (toolsData.type === 'countdown') {
+        const { message } = toolsData.countdown || {};
+        return (
+          <div style={toolsStyle}>
+            {message && (
+              <div style={{
+                fontSize: 'clamp(2rem, 5vw, 4rem)',
+                fontWeight: '300',
+                marginBottom: '20px',
+                textShadow: '2px 2px 8px rgba(0, 0, 0, 0.8)'
+              }}>
+                {message}
+              </div>
+            )}
+            <div style={{
+              fontSize: 'clamp(4rem, 15vw, 12rem)',
+              fontWeight: '200',
+              fontFamily: 'monospace',
+              letterSpacing: '0.05em',
+              textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
+            }}>
+              {formatTime(countdownRemaining)}
+            </div>
+          </div>
+        );
+      }
+
+      // Clock display
+      if (toolsData.type === 'clock') {
+        const { format, showDate } = toolsData.clock || {};
+        return (
+          <div style={toolsStyle}>
+            <div style={{
+              fontSize: 'clamp(4rem, 15vw, 12rem)',
+              fontWeight: '200',
+              fontFamily: 'monospace',
+              letterSpacing: '0.05em',
+              textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
+            }}>
+              {formatClockTime(clockTime, format)}
+            </div>
+            {showDate && (
+              <div style={{
+                fontSize: 'clamp(1.5rem, 3vw, 2.5rem)',
+                fontWeight: '300',
+                marginTop: '20px',
+                textShadow: '2px 2px 6px rgba(0, 0, 0, 0.8)'
+              }}>
+                {formatClockDate(clockTime)}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // Stopwatch display
+      if (toolsData.type === 'stopwatch') {
+        const { label } = toolsData.stopwatch || {};
+        return (
+          <div style={toolsStyle}>
+            {label && (
+              <div style={{
+                fontSize: 'clamp(1.5rem, 3vw, 2.5rem)',
+                fontWeight: '300',
+                marginBottom: '20px',
+                textShadow: '2px 2px 6px rgba(0, 0, 0, 0.8)'
+              }}>
+                {label}
+              </div>
+            )}
+            <div style={{
+              fontSize: 'clamp(4rem, 15vw, 12rem)',
+              fontWeight: '200',
+              fontFamily: 'monospace',
+              letterSpacing: '0.05em',
+              textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
+            }}>
+              {formatTime(stopwatchElapsed)}
+            </div>
+          </div>
+        );
+      }
+
+      // Rotating message display
+      if (toolsData.type === 'rotatingMessage') {
+        const { text } = toolsData.rotatingMessage || {};
+        return (
+          <div style={{
+            ...toolsStyle,
+            animation: 'fadeIn 0.5s ease-in-out'
+          }}>
+            <div style={{
+              fontSize: 'clamp(3rem, 10vw, 8rem)',
+              fontWeight: '300',
+              maxWidth: '90%',
+              lineHeight: 1.3,
+              textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
+            }}>
+              {text}
+            </div>
+          </div>
+        );
+      }
+    }
+
     // Handle image-only slide
     if (imageUrl) {
       const isGradient = imageUrl.startsWith('linear-gradient');
@@ -1006,6 +1288,36 @@ function ViewerPage() {
             background-position: 0% 50%;
           }
         }
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        @keyframes slideUp {
+          from {
+            transform: translateY(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+        @keyframes slideDown {
+          from {
+            transform: translateY(0);
+            opacity: 1;
+          }
+          to {
+            transform: translateY(100%);
+            opacity: 0;
+          }
+        }
       `}</style>
       <div
         style={{
@@ -1377,6 +1689,32 @@ function ViewerPage() {
       </div>
 
       {renderSlide()}
+
+      {/* Announcement Overlay Banner - Bottom */}
+      {(announcementBanner.visible || announcementBanner.animating === 'out') && announcementBanner.text && (
+        <div style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.85)',
+          color: 'white',
+          padding: '20px 40px',
+          textAlign: 'center',
+          fontSize: 'clamp(1.5rem, 4vw, 3rem)',
+          fontWeight: '400',
+          zIndex: 1000,
+          animation: announcementBanner.animating === 'out'
+            ? 'slideDown 0.5s ease-in forwards'
+            : announcementBanner.animating === 'in'
+              ? 'slideUp 0.5s ease-out'
+              : 'none',
+          backdropFilter: 'blur(10px)',
+          borderTop: '1px solid rgba(255, 255, 255, 0.2)'
+        }}>
+          {announcementBanner.text}
+        </div>
+      )}
       </div>
     </>
   );

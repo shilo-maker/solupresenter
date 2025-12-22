@@ -24,7 +24,7 @@ function SongCreate() {
   const [submitForApproval, setSubmitForApproval] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [expressMode, setExpressMode] = useState(searchParams.get('express') === 'true');
+  const [expressMode, setExpressMode] = useState(searchParams.get('express') !== 'false');
   const [expressText, setExpressText] = useState('');
   const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
@@ -289,7 +289,7 @@ function SongCreate() {
                     className="me-2"
                     onClick={toggleExpressMode}
                   >
-                    {expressMode ? 'Switch to Standard Form' : 'Switch to Express Form'}
+                    {expressMode ? t('songs.switchToStandardForm') : t('songs.switchToExpressForm')}
                   </Button>
                   {!expressMode && (
                     <Button size="sm" variant="primary" onClick={addSlide}>

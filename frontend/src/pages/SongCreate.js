@@ -223,9 +223,14 @@ function SongCreate() {
     <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>{t('songs.createNewSong')}</h2>
-        <Button variant="outline-secondary" onClick={() => navigate('/songs')}>
-          {t('common.cancel')}
-        </Button>
+        <div>
+          <Button variant="primary" className="me-2" onClick={() => navigate('/operator')}>
+            {t('dashboard.operator')}
+          </Button>
+          <Button variant="outline-secondary" onClick={() => navigate('/songs')}>
+            {t('common.cancel')}
+          </Button>
+        </div>
       </div>
 
       {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}

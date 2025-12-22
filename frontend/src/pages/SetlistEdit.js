@@ -293,17 +293,20 @@ function SetlistEdit() {
   return (
     <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Edit Setlist</h2>
+        <h2>{t('setlists.editSetlist')}</h2>
         <div className="d-flex gap-2">
+          <Button variant="primary" onClick={() => navigate('/operator')}>
+            {t('dashboard.operator')}
+          </Button>
           <Button
             variant="success"
             onClick={handleSubmit}
             disabled={saving}
           >
-            {saving ? 'Saving...' : 'Save Changes'}
+            {saving ? t('songs.saving') : t('songs.saveChanges')}
           </Button>
           <Button variant="outline-secondary" onClick={() => navigate(`/setlists/${id}`)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
         </div>
       </div>

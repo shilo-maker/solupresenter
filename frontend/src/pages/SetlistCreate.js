@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Form, ListGroup, InputGroup, Alert } from 'react-bootstrap';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api, { getFullImageUrl } from '../services/api';
 
 function SetlistCreate() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
 
   // Get default date (today) and time (next round hour)
   const getDefaultDateTime = () => {
@@ -200,10 +202,15 @@ function SetlistCreate() {
   return (
     <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Create New Setlist</h2>
-        <Button variant="outline-secondary" onClick={() => navigate('/setlists')}>
-          Cancel
-        </Button>
+        <h2>{t('setlists.createNewSetlist')}</h2>
+        <div>
+          <Button variant="primary" className="me-2" onClick={() => navigate('/operator')}>
+            {t('dashboard.operator')}
+          </Button>
+          <Button variant="outline-secondary" onClick={() => navigate('/setlists')}>
+            {t('common.cancel')}
+          </Button>
+        </div>
       </div>
 
       {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}

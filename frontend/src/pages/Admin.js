@@ -113,9 +113,14 @@ function Admin() {
           <h2>{t('admin.title')}</h2>
           <p className="text-muted">{t('admin.subtitle')}</p>
         </div>
-        <Button variant="outline-secondary" onClick={() => navigate('/dashboard')}>
-          {t('songs.backToDashboard')}
-        </Button>
+        <div>
+          <Button variant="primary" className="me-2" onClick={() => navigate('/operator')}>
+            {t('dashboard.operator')}
+          </Button>
+          <Button variant="outline-secondary" onClick={() => navigate('/dashboard')}>
+            {t('songs.backToDashboard')}
+          </Button>
+        </div>
       </div>
 
       {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}

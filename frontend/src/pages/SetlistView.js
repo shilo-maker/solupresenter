@@ -98,12 +98,15 @@ function SetlistView() {
           </div>
         </div>
         <div>
+          <Button variant="primary" className="me-2" onClick={() => navigate('/operator')}>
+            {t('dashboard.operator')}
+          </Button>
           <Button variant="outline-secondary" className="me-2" onClick={() => navigate('/setlists')}>
             {t('setlists.backToList')}
           </Button>
           {isOwner && (
             <>
-              <Button variant="primary" className="me-2" onClick={() => navigate(`/setlists/${id}/edit`)}>
+              <Button variant="info" className="me-2" onClick={() => navigate(`/setlists/${id}/edit`)}>
                 {t('common.edit')}
               </Button>
               <Button variant="outline-danger" onClick={deleteSetlist}>

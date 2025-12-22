@@ -97,11 +97,14 @@ function SongView() {
           </div>
         </div>
         <div>
-          <Button variant="outline-secondary" className="me-2" onClick={() => navigate('/songs')}>
-            Back to List
+          <Button variant="primary" className="me-2" onClick={() => navigate('/operator')}>
+            {t('dashboard.operator')}
           </Button>
-          <Button variant="primary" className="me-2" onClick={() => navigate(`/songs/${id}/edit`)}>
-            Edit
+          <Button variant="outline-secondary" className="me-2" onClick={() => navigate('/songs')}>
+            {t('songs.backToSongs')}
+          </Button>
+          <Button variant="info" className="me-2" onClick={() => navigate(`/songs/${id}/edit`)}>
+            {t('common.edit')}
           </Button>
           {isOwner && (
             <Button variant="outline-danger" onClick={deleteSong}>

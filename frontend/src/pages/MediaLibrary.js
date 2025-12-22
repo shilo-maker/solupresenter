@@ -171,7 +171,10 @@ function MediaLibrary() {
           <p className="text-muted">{t('media.subtitle')}</p>
         </div>
         <div>
-          <Button variant="primary" className="me-2" onClick={() => setShowAddModal(true)}>
+          <Button variant="primary" className="me-2" onClick={() => navigate('/operator')}>
+            {t('dashboard.operator')}
+          </Button>
+          <Button variant="success" className="me-2" onClick={() => setShowAddModal(true)}>
             + {t('media.addBackground')}
           </Button>
           <Button variant="outline-secondary" onClick={() => navigate('/dashboard')}>

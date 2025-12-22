@@ -149,6 +149,9 @@ function Settings() {
         <h2>{t('settings.title')}</h2>
         <div>
           <span className="me-3">{t('dashboard.welcome')}, {user?.email}</span>
+          <Button variant="primary" size="sm" className="me-2" onClick={() => navigate('/operator')}>
+            {t('dashboard.operator')}
+          </Button>
           <Button variant="outline-secondary" size="sm" className="me-2" onClick={() => navigate('/dashboard')}>
             {t('nav.dashboard')}
           </Button>

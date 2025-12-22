@@ -184,6 +184,9 @@ function SongList() {
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>{t('songs.songLibrary')}</h2>
         <div>
+          <Button variant="primary" onClick={() => navigate('/operator')} className="me-2">
+            {t('dashboard.operator')}
+          </Button>
           <Button variant="outline-secondary" onClick={() => navigate('/dashboard')} className="me-2">
             {t('songs.backToDashboard')}
           </Button>

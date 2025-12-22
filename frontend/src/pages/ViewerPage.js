@@ -471,31 +471,34 @@ function ViewerPage() {
         boxSizing: 'border-box',
         position: 'relative'
       }}>
-        {/* Verse Type/Reference Label - Top Left (subtle) */}
-        {(slide.verseType || slide.reference) && (
+        {/* Bible Reference Label - Top Left (only for Bible verses) */}
+        {slide.reference && (
           <div style={{
             position: 'absolute',
             top: '15px',
             left: '15px',
-            backgroundColor: 'rgba(0, 0, 0, 0.25)',
-            color: 'rgba(255, 255, 255, 0.5)',
-            padding: '4px 10px',
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            color: 'white',
+            padding: '6px 12px',
             borderRadius: '8px',
-            fontSize: 'clamp(0.7rem, 1vw, 0.85rem)',
-            fontWeight: '400',
+            fontSize: 'clamp(0.85rem, 1.2vw, 1rem)',
+            fontWeight: '500',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-start',
-            gap: '2px'
+            gap: '2px',
+            textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
           }}>
             {slide.hebrewReference && (
               <div style={{ direction: 'rtl', width: '100%' }}>
                 {slide.hebrewReference}
               </div>
             )}
-            <div>
-              {slide.reference || slide.verseType}
-            </div>
+            {displayMode === 'bilingual' && (
+              <div>
+                {slide.reference}
+              </div>
+            )}
           </div>
         )}
 

@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Form, Button, Alert, Card, Container } from 'react-bootstrap';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 
 function ForgotPassword() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -13,7 +15,7 @@ function ForgotPassword() {
     e.preventDefault();
 
     if (!email) {
-      setError('Please enter your email address');
+      setError(t('auth.emailRequired'));
       return;
     }
 
@@ -27,7 +29,7 @@ function ForgotPassword() {
       setEmail('');
     } catch (err) {
       console.error('Forgot password error:', err);
-      setError(err.response?.data?.error || 'An error occurred. Please try again.');
+      setError(err.response?.data?.error || t('common.unexpectedError'));
     } finally {
       setLoading(false);
     }
@@ -48,6 +50,11 @@ function ForgotPassword() {
         <div className="d-flex justify-content-center">
           <Card style={{ width: '100%', maxWidth: '450px', boxShadow: '0 10px 40px rgba(0,0,0,0.1)' }}>
             <Card.Body className="p-4">
+              <div className="mb-3">
+                <Link to="/" style={{ textDecoration: 'none', color: '#666', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                  ← {t('common.back')}
+                </Link>
+              </div>
               <div className="text-center mb-4">
                 <h1 className="h3 mb-2" style={{
                   background: 'linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%)',
@@ -55,10 +62,10 @@ function ForgotPassword() {
                   WebkitTextFillColor: 'transparent',
                   fontWeight: 'bold'
                 }}>
-                  Reset Password
+                  {t('auth.resetPassword')}
                 </h1>
                 <p className="text-muted">
-                  Enter your email address and we'll send you a link to reset your password.
+                  {t('auth.resetPasswordDescription')}
                 </p>
               </div>
 
@@ -66,10 +73,9 @@ function ForgotPassword() {
 
               {success && (
                 <Alert variant="success">
-                  <strong>Check your email!</strong>
+                  <strong>{t('auth.checkYourEmail')}</strong>
                   <p className="mb-0 mt-2">
-                    If an account exists with that email, we've sent you a password reset link.
-                    Please check your inbox and follow the instructions.
+                    {t('auth.resetEmailSent')}
                   </p>
                 </Alert>
               )}
@@ -77,10 +83,10 @@ function ForgotPassword() {
               {!success && (
                 <Form onSubmit={handleSubmit}>
                   <Form.Group className="mb-3">
-                    <Form.Label>Email Address</Form.Label>
+                    <Form.Label>{t('auth.emailAddress')}</Form.Label>
                     <Form.Control
                       type="email"
-                      placeholder="Enter your email"
+                      placeholder={t('auth.enterEmail')}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       disabled={loading}
@@ -99,7 +105,7 @@ function ForgotPassword() {
                       padding: '12px'
                     }}
                   >
-                    {loading ? 'Sending...' : 'Send Reset Link'}
+                    {loading ? t('common.sending') : t('auth.sendResetLink')}
                   </Button>
                 </Form>
               )}
@@ -113,7 +119,7 @@ function ForgotPassword() {
                     fontWeight: '500'
                   }}
                 >
-                  Back to Login
+                  {t('auth.backToLogin')}
                 </Link>
               </div>
             </Card.Body>

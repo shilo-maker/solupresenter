@@ -47,7 +47,8 @@
     "admin": "ניהול",
     "logout": "התנתק",
     "login": "התחבר",
-    "register": "הרשם"
+    "register": "הרשם",
+    "unexpectedError": "אירעה שגיאה בלתי צפויה. אנא נסה שוב."
   },
   "auth": {
     "login": "התחברות",
@@ -85,7 +86,16 @@
     "returnToLogin": "חזור להתחברות",
     "requestNewVerification": "כדי לבקש אימייל אימות חדש.",
     "goToLogin": "עבור להתחברות",
-    "creatingAccount": "יוצר חשבון..."
+    "creatingAccount": "יוצר חשבון...",
+    "emailAndPasswordRequired": "אנא הזן אימייל וסיסמה",
+    "pleaseVerifyEmail": "אנא אמת את האימייל לפני ההתחברות",
+    "failedToResendVerification": "שליחת אימייל האימות נכשלה",
+    "resetPasswordDescription": "הזן את כתובת האימייל שלך ונשלח לך קישור לאיפוס הסיסמה.",
+    "resetEmailSent": "אם קיים חשבון עם אימייל זה, שלחנו לך קישור לאיפוס סיסמה. אנא בדוק את תיבת הדואר הנכנס ופעל לפי ההוראות.",
+    "emailAddress": "כתובת אימייל",
+    "enterEmail": "הזן את האימייל שלך",
+    "sendResetLink": "שלח קישור לאיפוס",
+    "backToLogin": "חזרה להתחברות"
   },
   "settings": {
     "title": "הגדרות",
@@ -379,6 +389,7 @@
   },
   "viewer": {
     "title": "צופה",
+    "tagline": "מהללים כאחד",
     "joinRoom": "הצטרף לחדר",
     "enterPin": "הזן קוד חדר",
     "enterRoomName": "הזן שם חדר",

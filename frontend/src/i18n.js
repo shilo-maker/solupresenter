@@ -20,13 +20,14 @@ i18n
       en: { translation: en },
       he: { translation: he }
     },
-    fallbackLng: 'en',
+    fallbackLng: 'he', // Default to Hebrew if no language is set
     interpolation: {
       escapeValue: false // React already escapes
     },
     detection: {
-      order: ['localStorage', 'navigator'],
-      caches: ['localStorage']
+      order: ['localStorage'], // Only check localStorage, ignore browser language
+      caches: ['localStorage'],
+      lookupLocalStorage: 'i18nextLng'
     }
   });
 

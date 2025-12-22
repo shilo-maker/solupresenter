@@ -2,13 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Form, Button, Alert, Spinner } from 'react-bootstrap';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { changeLanguage } from '../i18n';
 import socketService from '../services/socket';
 import ConnectionStatus from '../components/ConnectionStatus';
 import { getFullImageUrl, publicRoomAPI } from '../services/api';
 
 function ViewerPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const location = useLocation();
+
   const [pin, setPin] = useState('');
   const [joined, setJoined] = useState(false);
   const [error, setError] = useState('');
@@ -647,6 +649,23 @@ function ViewerPage() {
             }
           }
         `}</style>
+        {/* Language Toggle Button - Top Left */}
+        <Button
+          variant="outline-light"
+          style={{
+            position: 'absolute',
+            top: '20px',
+            left: '20px',
+            borderRadius: '6px',
+            padding: '8px 16px',
+            fontSize: '0.9rem',
+            fontWeight: '500'
+          }}
+          onClick={() => changeLanguage(i18n.language === 'he' ? 'en' : 'he')}
+        >
+          {i18n.language === 'he' ? 'English' : 'עברית'}
+        </Button>
+
         {/* Login/Operator Button - Top Right */}
         <Button
           variant="light"
@@ -699,7 +718,7 @@ function ViewerPage() {
               letterSpacing: '2px',
               textTransform: 'uppercase'
             }}>
-              WORSHIP AS ONE
+              {t('viewer.tagline')}
             </div>
           </div>
 
@@ -714,6 +733,7 @@ function ViewerPage() {
             onClick={() => setJoinMode(joinMode === 'name' ? 'pin' : 'name')}
             style={{
               display: 'flex',
+              flexDirection: i18n.language === 'he' ? 'row' : 'row-reverse',
               alignItems: 'center',
               gap: '12px',
               marginBottom: '20px',
@@ -749,7 +769,7 @@ function ViewerPage() {
                 borderRadius: '50%',
                 position: 'absolute',
                 top: '2px',
-                left: joinMode === 'name' ? '22px' : '2px',
+                left: joinMode === 'name' ? '2px' : '22px',
                 transition: 'left 0.3s ease',
                 boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
               }} />
@@ -771,16 +791,6 @@ function ViewerPage() {
               <div style={{
                 textAlign: 'center'
               }}>
-                <h3 style={{
-                  color: 'white',
-                  fontSize: '1.1rem',
-                  fontWeight: '300',
-                  marginBottom: '20px',
-                  letterSpacing: '0.5px'
-                }}>
-                  {t('viewer.enterRoomCode')}
-                </h3>
-
                 {/* PIN Input - Individual Boxes */}
                 <div
                   onClick={() => {
@@ -791,35 +801,40 @@ function ViewerPage() {
                     display: 'flex',
                     gap: '12px',
                     justifyContent: 'center',
-                    cursor: 'text'
+                    cursor: 'text',
+                    direction: 'ltr'
                   }}
                 >
-                  {[0, 1, 2, 3].map((index) => (
-                    <div
-                      key={index}
-                      style={{
-                        width: '60px',
-                        height: '70px',
-                        background: 'rgba(255, 255, 255, 0.08)',
-                        backdropFilter: 'blur(10px)',
-                        border: '2px solid rgba(255, 255, 255, 0.2)',
-                        borderRadius: '12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '2rem',
-                        fontWeight: '600',
-                        color: 'white',
-                        letterSpacing: '0',
-                        transition: 'all 0.3s ease',
-                        boxShadow: pin[index] ? '0 0 20px rgba(255, 255, 255, 0.2)' : 'none',
-                        transform: pin[index] ? 'scale(1.05)' : 'scale(1)',
-                        cursor: 'text'
-                      }}
-                    >
-                      {pin[index] || ''}
-                    </div>
-                  ))}
+                  {[0, 1, 2, 3].map((index) => {
+                    const isActive = index === pin.length && pin.length < 4;
+                    const isFilled = !!pin[index];
+                    return (
+                      <div
+                        key={index}
+                        style={{
+                          width: '60px',
+                          height: '70px',
+                          background: isActive ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.08)',
+                          backdropFilter: 'blur(10px)',
+                          border: isActive ? '2px solid rgba(255, 255, 255, 0.6)' : '2px solid rgba(255, 255, 255, 0.2)',
+                          borderRadius: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '2rem',
+                          fontWeight: '600',
+                          color: 'white',
+                          letterSpacing: '0',
+                          transition: 'all 0.3s ease',
+                          boxShadow: isActive ? '0 0 25px rgba(255, 255, 255, 0.3)' : (isFilled ? '0 0 20px rgba(255, 255, 255, 0.2)' : 'none'),
+                          transform: isFilled ? 'scale(1.05)' : 'scale(1)',
+                          cursor: 'text'
+                        }}
+                      >
+                        {pin[index] || ''}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Hidden actual input - auto-joins when 4 chars entered */}
@@ -840,10 +855,10 @@ function ViewerPage() {
                   style={{
                     position: 'absolute',
                     opacity: 0,
-                    pointerEvents: 'auto',
-                    width: '1px',
-                    height: '1px',
-                    left: '-9999px'
+                    pointerEvents: 'none',
+                    width: '0',
+                    height: '0',
+                    overflow: 'hidden'
                   }}
                   autoFocus
                 />
@@ -858,16 +873,6 @@ function ViewerPage() {
                 marginBottom: '20px',
                 textAlign: 'center'
               }}>
-                <h3 style={{
-                  color: 'white',
-                  fontSize: '1.1rem',
-                  fontWeight: '300',
-                  marginBottom: '20px',
-                  letterSpacing: '0.5px'
-                }}>
-                  {t('viewer.searchRoomName')}
-                </h3>
-
                 {/* Search Input - Glassmorphic style matching code boxes */}
                 <div style={{ position: 'relative' }}>
                   <input

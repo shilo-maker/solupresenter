@@ -2526,7 +2526,17 @@ function PresenterMode() {
                         size="sm"
                         value={selectedBibleBook}
                         onChange={(e) => setSelectedBibleBook(e.target.value)}
-                        style={{ fontSize: '0.85rem', backgroundColor: '#333', color: 'white', borderColor: '#555' }}
+                        style={{
+                          fontSize: '0.9rem',
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          backdropFilter: 'blur(10px)',
+                          border: '2px solid rgba(255, 255, 255, 0.2)',
+                          borderRadius: '10px',
+                          color: 'white',
+                          padding: '8px 12px',
+                          outline: 'none',
+                          transition: 'all 0.3s ease'
+                        }}
                       >
                         <option value="">{t('common.select')}...</option>
                         <optgroup label={i18n.language === 'he' ? 'תורה' : 'Torah (Pentateuch)'}>
@@ -2623,7 +2633,17 @@ function PresenterMode() {
                         value={selectedBibleChapter}
                         onChange={(e) => setSelectedBibleChapter(e.target.value)}
                         disabled={!selectedBibleBook}
-                        style={{ fontSize: '0.85rem', backgroundColor: '#333', color: 'white', borderColor: '#555' }}
+                        style={{
+                          fontSize: '0.9rem',
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          backdropFilter: 'blur(10px)',
+                          border: '2px solid rgba(255, 255, 255, 0.2)',
+                          borderRadius: '10px',
+                          color: 'white',
+                          padding: '8px 12px',
+                          outline: 'none',
+                          transition: 'all 0.3s ease'
+                        }}
                       >
                         <option value="">{t('common.select')}...</option>
                         {selectedBibleBook && (() => {

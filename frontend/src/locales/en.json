@@ -47,7 +47,8 @@
     "admin": "Admin",
     "logout": "Logout",
     "login": "Login",
-    "register": "Register"
+    "register": "Register",
+    "unexpectedError": "An unexpected error occurred. Please try again."
   },
   "auth": {
     "login": "Login",
@@ -85,7 +86,16 @@
     "returnToLogin": "return to login",
     "requestNewVerification": "to request a new verification email.",
     "goToLogin": "Go to Login",
-    "creatingAccount": "Creating account..."
+    "creatingAccount": "Creating account...",
+    "emailAndPasswordRequired": "Please enter both email and password",
+    "pleaseVerifyEmail": "Please verify your email before logging in",
+    "failedToResendVerification": "Failed to resend verification email",
+    "resetPasswordDescription": "Enter your email address and we'll send you a link to reset your password.",
+    "resetEmailSent": "If an account exists with that email, we've sent you a password reset link. Please check your inbox and follow the instructions.",
+    "emailAddress": "Email Address",
+    "enterEmail": "Enter your email",
+    "sendResetLink": "Send Reset Link",
+    "backToLogin": "Back to Login"
   },
   "settings": {
     "title": "Settings",
@@ -379,6 +389,7 @@
   },
   "viewer": {
     "title": "Viewer",
+    "tagline": "WORSHIP AS ONE",
     "joinRoom": "Join Room",
     "enterPin": "Enter Room PIN",
     "enterRoomName": "Enter Room Name",

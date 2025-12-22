@@ -26,7 +26,7 @@ function Login() {
 
     // Validate inputs
     if (!email || !password) {
-      setError('Please enter both email and password');
+      setError(t('auth.emailAndPasswordRequired'));
       return;
     }
 
@@ -42,15 +42,15 @@ function Login() {
       } else if (result && result.requiresVerification) {
         setRequiresVerification(true);
         setUnverifiedEmail(result.email);
-        setError(result.error || 'Please verify your email before logging in');
+        setError(result.error || t('auth.pleaseVerifyEmail'));
         setLoading(false);
       } else {
-        setError(result?.error || 'Invalid email or password');
+        setError(result?.error || t('auth.invalidCredentials'));
         setLoading(false);
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError('An unexpected error occurred. Please try again.');
+      setError(t('common.unexpectedError'));
       setLoading(false);
     }
   };
@@ -64,7 +64,7 @@ function Login() {
       await api.post('/auth/resend-verification', { email: unverifiedEmail });
       setResendSuccess(true);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to resend verification email');
+      setError(err.response?.data?.error || t('auth.failedToResendVerification'));
     } finally {
       setResendingEmail(false);
     }
@@ -97,6 +97,11 @@ function Login() {
       <div style={{ maxWidth: '400px', width: '100%' }}>
         <Card>
           <Card.Body>
+            <div className="mb-3">
+              <Link to="/" style={{ textDecoration: 'none', color: '#666', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                ← {t('common.back')}
+              </Link>
+            </div>
             <div className="text-center mb-4">
               <img src="/new_cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '150px', height: 'auto', marginBottom: '0.8rem' }} />
               <div style={{
@@ -115,7 +120,7 @@ function Login() {
                 letterSpacing: '2px',
                 textTransform: 'uppercase'
               }}>
-                WORSHIP AS ONE
+                {t('viewer.tagline')}
               </div>
             </div>
             <h4 className="text-center mb-4">{t('auth.login')}</h4>

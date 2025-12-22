@@ -53,6 +53,11 @@ function Register() {
       <div style={{ maxWidth: '400px', width: '100%' }}>
         <Card>
           <Card.Body>
+            <div className="mb-3">
+              <Link to="/" style={{ textDecoration: 'none', color: '#666', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                ← {t('common.back')}
+              </Link>
+            </div>
             <div className="text-center mb-3">
               <img src="/new_cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '200px', height: 'auto' }} />
             </div>

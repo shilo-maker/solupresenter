@@ -271,9 +271,11 @@ function ViewerPage() {
 
     socketService.onSlideUpdate((data) => {
       lastActivityRef.current = Date.now();
+      console.log('📡 slide:update received:', { hasToolsData: !!data.toolsData, toolsType: data.toolsData?.type, isBlank: data.isBlank });
 
       // Handle tools data
       if (data.toolsData) {
+        console.log('🔧 Setting toolsData:', data.toolsData);
         setToolsData(data.toolsData);
 
         // Announcements are overlays - don't clear existing content
@@ -478,6 +480,7 @@ function ViewerPage() {
   const renderSlide = () => {
     // Handle tools display
     if (toolsData) {
+      console.log('🎨 renderSlide - toolsData:', toolsData.type, toolsData);
       const toolsStyle = {
         width: '100%',
         height: '100%',
@@ -593,6 +596,16 @@ function ViewerPage() {
           </div>
         );
       }
+
+      // Fallback for unknown tool types - prevents falling through to "Waiting"
+      console.warn('⚠️ Unknown toolsData type:', toolsData.type);
+      return (
+        <div style={toolsStyle}>
+          <div style={{ fontSize: '2rem', opacity: 0.7 }}>
+            Tool: {toolsData.type || 'unknown'}
+          </div>
+        </div>
+      );
     }
 
     // Handle image-only slide

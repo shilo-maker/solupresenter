@@ -478,8 +478,8 @@ function ViewerPage() {
   };
 
   const renderSlide = () => {
-    // Handle tools display
-    if (toolsData) {
+    // Handle tools display (except announcements which are overlays)
+    if (toolsData && toolsData.type !== 'announcement') {
       console.log('🎨 renderSlide - toolsData:', toolsData.type, toolsData);
       const toolsStyle = {
         width: '100%',

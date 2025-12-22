@@ -1945,7 +1945,8 @@ function PresenterMode() {
               <div style={{
                 position: 'absolute',
                 top: '100%',
-                left: '0',
+                left: i18n.language === 'he' ? 'auto' : '0',
+                right: i18n.language === 'he' ? '0' : 'auto',
                 marginTop: '8px',
                 backgroundColor: 'rgba(30, 30, 40, 0.95)',
                 borderRadius: '10px',

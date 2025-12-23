@@ -318,15 +318,18 @@ function ViewerPage() {
       } else if (data.isBlank) {
         setCurrentSlide({ isBlank: true });
         setImageUrl(null);
-        setToolsData(null);
+        // Preserve announcement overlays when going to blank
+        setToolsData(prev => prev?.type === 'announcement' ? prev : null);
       } else if (data.imageUrl) {
         setImageUrl(data.imageUrl);
         setCurrentSlide(null);
-        setToolsData(null);
+        // Preserve announcement overlays when showing images
+        setToolsData(prev => prev?.type === 'announcement' ? prev : null);
       } else {
         setCurrentSlide(data.slideData);
         setImageUrl(null);
-        setToolsData(null);
+        // Preserve announcement overlays when switching slides
+        setToolsData(prev => prev?.type === 'announcement' ? prev : null);
       }
 
       if (data.backgroundImage !== undefined) {

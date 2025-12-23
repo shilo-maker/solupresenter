@@ -1039,6 +1039,38 @@ function PresenterMode() {
     }
   };
 
+  // Stop tools except overlays (announcements) - used when switching slides
+  const stopNonOverlayTools = () => {
+    // Stop rotating messages
+    if (rotatingRunning) {
+      if (rotatingIntervalRef.current) {
+        clearInterval(rotatingIntervalRef.current);
+        rotatingIntervalRef.current = null;
+      }
+      setRotatingRunning(false);
+    }
+    // Stop clock broadcast
+    if (clockBroadcasting) {
+      if (clockIntervalRef.current) {
+        clearInterval(clockIntervalRef.current);
+        clockIntervalRef.current = null;
+      }
+      setClockBroadcasting(false);
+    }
+    // Stop countdown broadcast
+    if (countdownBroadcasting) {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+      setCountdownRunning(false);
+      setCountdownBroadcasting(false);
+      setActiveSetlistCountdownIndex(null);
+      setFocusedCountdownIndex(null);
+    }
+    // NOTE: Announcements are overlays - they persist when switching slides
+  };
+
   // Switch resource panel and apply search
   const switchResourcePanel = (panel) => {
     setActiveResourcePanel(panel);
@@ -2733,8 +2765,8 @@ function PresenterMode() {
       return;
     }
 
-    // Stop any running tools when broadcasting a slide
-    stopAllTools();
+    // Stop non-overlay tools when broadcasting a slide (keep announcements as they're overlays)
+    stopNonOverlayTools();
 
     // Send slide data directly to avoid backend DB queries
     const payload = {
@@ -2758,6 +2790,17 @@ function PresenterMode() {
       };
     }
 
+    // Include announcement overlay if one is active (announcements persist across slide changes)
+    if (announcementVisible && announcementText) {
+      payload.toolsData = {
+        type: 'announcement',
+        announcement: {
+          text: announcementText,
+          visible: true
+        }
+      };
+    }
+
     socketService.operatorUpdateSlide(payload);
   };
 
@@ -2767,10 +2810,10 @@ function PresenterMode() {
       return;
     }
 
-    // Stop any running tools when broadcasting an image
-    stopAllTools();
+    // Stop non-overlay tools when broadcasting an image (keep announcements as they're overlays)
+    stopNonOverlayTools();
 
-    socketService.operatorUpdateSlide({
+    const payload = {
       roomId: room.id,
       roomPin: room.pin,
       backgroundImage: room.backgroundImage || '',
@@ -2779,7 +2822,20 @@ function PresenterMode() {
       displayMode: displayMode,
       isBlank: false,
       imageUrl: imageData?.url || null
-    });
+    };
+
+    // Include announcement overlay if one is active (announcements persist across slide changes)
+    if (announcementVisible && announcementText) {
+      payload.toolsData = {
+        type: 'announcement',
+        announcement: {
+          text: announcementText,
+          visible: true
+        }
+      };
+    }
+
+    socketService.operatorUpdateSlide(payload);
   };
 
   const toggleDisplayMode = () => {

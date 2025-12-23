@@ -48,6 +48,15 @@ function PresenterMode() {
         scrollbar-width: thin;
         scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1);
       }
+
+      /* Hide scrollbar for scroll wheel picker */
+      .hide-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .hide-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
     `;
     document.head.appendChild(style);
     return () => document.head.removeChild(style);
@@ -97,6 +106,8 @@ function PresenterMode() {
   const searchInputRef = useRef(null);
   const lastTapRef = useRef({ time: 0, songId: null }); // For double-tap detection on database
   const lastSetlistTapRef = useRef({ time: 0, index: null }); // For double-tap detection on setlist
+  const lastMessageTapRef = useRef({ time: 0, msgId: null }); // For double-tap detection on messages
+  const messageTapTimeoutRef = useRef(null); // Timeout for delayed single-tap action
   const [allSongs, setAllSongs] = useState([]);
   const [songsLoading, setSongsLoading] = useState(true);
 
@@ -108,6 +119,7 @@ function PresenterMode() {
   const [setlist, setSetlist] = useState([]);
   const [currentItem, setCurrentItem] = useState(null); // Current setlist item (song or image)
   const [selectedFromSetlist, setSelectedFromSetlist] = useState(false); // Track if selection came from setlist
+  const [selectedSetlistIndex, setSelectedSetlistIndex] = useState(null); // Track which setlist index is selected
 
   // Current song and slides
   const [currentSong, setCurrentSong] = useState(null);
@@ -196,13 +208,40 @@ function PresenterMode() {
   // Tools state
   const [activeToolsTab, setActiveToolsTab] = useState('countdown'); // 'countdown', 'clock', 'stopwatch', 'announce', 'messages'
   // Countdown state
-  const [countdownHours, setCountdownHours] = useState(0);
-  const [countdownMinutes, setCountdownMinutes] = useState(5);
-  const [countdownSeconds, setCountdownSeconds] = useState(0);
+  const [countdownTargetTime, setCountdownTargetTime] = useState(() => {
+    // Default to 15 minutes from now
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 15);
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  });
   const [countdownMessage, setCountdownMessage] = useState('');
   const [countdownRunning, setCountdownRunning] = useState(false);
   const [countdownRemaining, setCountdownRemaining] = useState(0); // in seconds
+  const [countdownBroadcasting, setCountdownBroadcasting] = useState(false);
+  const [activeSetlistCountdownIndex, setActiveSetlistCountdownIndex] = useState(null); // Track which setlist countdown is broadcasting
+  const [focusedCountdownIndex, setFocusedCountdownIndex] = useState(null); // Track which countdown is focused (for selection highlight)
+  const [activeSetlistAnnouncementIndex, setActiveSetlistAnnouncementIndex] = useState(null); // Track which setlist announcement is showing
+  const [focusedAnnouncementIndex, setFocusedAnnouncementIndex] = useState(null); // Track which announcement is focused (for selection highlight)
+  const [activeSetlistMessagesIndex, setActiveSetlistMessagesIndex] = useState(null); // Track which setlist messages is broadcasting
+  const [focusedMessagesIndex, setFocusedMessagesIndex] = useState(null); // Track which messages is focused (for selection highlight)
   const countdownIntervalRef = useRef(null);
+  const preCountdownStateRef = useRef(null); // Store state before countdown to restore after
+  const preMessagesStateRef = useRef(null); // Store state before messages to restore after
+
+  // Calculate remaining seconds from target time
+  const getCountdownSeconds = () => {
+    const [hours, minutes] = countdownTargetTime.split(':').map(Number);
+    const now = new Date();
+    const target = new Date();
+    target.setHours(hours, minutes, 0, 0);
+
+    // If target time is earlier than now, assume it's for tomorrow
+    if (target <= now) {
+      target.setDate(target.getDate() + 1);
+    }
+
+    return Math.max(0, Math.floor((target - now) / 1000));
+  };
   // Clock state
   const [clockFormat, setClockFormat] = useState('24h');
   const [clockShowDate, setClockShowDate] = useState(false);
@@ -226,9 +265,8 @@ function PresenterMode() {
     { id: 5, text: 'sermon', enabled: false, isPreset: true },
     { id: 6, text: 'offeringTimeMsg', enabled: false, isPreset: true },
     { id: 7, text: 'seeYouNextWeek', enabled: false, isPreset: true },
-    { id: 8, text: 'godBlessYou', enabled: false, isPreset: true },
   ]);
-  const [rotatingInterval, setRotatingInterval] = useState(10); // seconds
+  const [rotatingInterval, setRotatingInterval] = useState(5); // seconds
   const [rotatingRunning, setRotatingRunning] = useState(false);
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
   const [customMessageInput, setCustomMessageInput] = useState('');
@@ -247,55 +285,356 @@ function PresenterMode() {
   };
 
   // Countdown functions
-  const toggleCountdown = () => {
-    if (countdownRunning) {
-      // Pause
+  const toggleCountdownBroadcast = () => {
+    if (!room) return;
+
+    if (countdownBroadcasting) {
+      // Stop broadcasting - clear the countdown from viewer
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
         countdownIntervalRef.current = null;
       }
       setCountdownRunning(false);
+      setCountdownBroadcasting(false);
+      setActiveSetlistCountdownIndex(null);
+      // Send blank to clear the countdown
+      socketService.operatorUpdateSlide({
+        roomId: room.id,
+        roomPin: room.pin,
+        backgroundImage: room.backgroundImage || '',
+        songId: null,
+        slideIndex: 0,
+        displayMode: displayMode,
+        isBlank: true,
+        toolsData: null
+      });
     } else {
-      // Start
-      if (countdownRemaining === 0) {
-        // Calculate total seconds from inputs
-        const total = countdownHours * 3600 + countdownMinutes * 60 + countdownSeconds;
-        if (total <= 0) return;
-        setCountdownRemaining(total);
-      }
+      // Start broadcasting - calculate time and start countdown
+      const total = getCountdownSeconds();
+      if (total <= 0) return;
+
+      setCountdownRemaining(total);
       setCountdownRunning(true);
-    }
-  };
+      setCountdownBroadcasting(true);
 
-  const resetCountdown = () => {
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
-    }
-    setCountdownRunning(false);
-    setCountdownRemaining(0);
-  };
-
-  const broadcastCountdown = () => {
-    if (!room) return;
-    socketService.operatorUpdateSlide({
-      roomId: room.id,
-      roomPin: room.pin,
-      backgroundImage: room.backgroundImage || '',
-      songId: null,
-      slideIndex: 0,
-      displayMode: displayMode,
-      isBlank: false,
-      toolsData: {
-        type: 'countdown',
-        countdown: {
-          remaining: countdownRemaining > 0 ? countdownRemaining : (countdownHours * 3600 + countdownMinutes * 60 + countdownSeconds),
-          message: countdownMessage,
-          running: countdownRunning,
-          endTime: countdownRunning ? Date.now() + (countdownRemaining * 1000) : null
+      // Broadcast the countdown
+      socketService.operatorUpdateSlide({
+        roomId: room.id,
+        roomPin: room.pin,
+        backgroundImage: room.backgroundImage || '',
+        songId: null,
+        slideIndex: 0,
+        displayMode: displayMode,
+        isBlank: false,
+        toolsData: {
+          type: 'countdown',
+          countdown: {
+            remaining: total,
+            message: countdownMessage,
+            running: true,
+            endTime: Date.now() + (total * 1000)
+          }
         }
+      });
+    }
+  };
+
+  // Toggle setlist countdown broadcast (for setlist items)
+  const toggleSetlistCountdown = (index, toolData) => {
+    if (!room) return;
+
+    if (activeSetlistCountdownIndex === index) {
+      // Hide countdown - restore previous state
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
       }
-    });
+      setCountdownRunning(false);
+      setCountdownBroadcasting(false);
+      setActiveSetlistCountdownIndex(null);
+      setFocusedCountdownIndex(null);
+
+      // Restore previous state
+      const savedState = preCountdownStateRef.current;
+      if (savedState) {
+        socketService.operatorUpdateSlide({
+          roomId: room.id,
+          roomPin: room.pin,
+          backgroundImage: room.backgroundImage || '',
+          songId: savedState.songId,
+          slideIndex: savedState.slideIndex,
+          displayMode: savedState.displayMode,
+          isBlank: savedState.isBlank,
+          imageUrl: savedState.imageUrl,
+          toolsData: null
+        });
+        preCountdownStateRef.current = null;
+      } else {
+        socketService.operatorUpdateSlide({
+          roomId: room.id,
+          roomPin: room.pin,
+          backgroundImage: room.backgroundImage || '',
+          songId: currentSong?.id || null,
+          slideIndex: currentSlideIndex,
+          displayMode: displayMode,
+          isBlank: isBlankActive,
+          toolsData: null
+        });
+      }
+    } else {
+      // Show - start broadcasting this countdown
+      const total = (() => {
+        const [hours, minutes] = toolData.targetTime.split(':').map(Number);
+        const now = new Date();
+        const target = new Date();
+        target.setHours(hours, minutes, 0, 0);
+        if (target <= now) {
+          target.setDate(target.getDate() + 1);
+        }
+        return Math.max(0, Math.floor((target - now) / 1000));
+      })();
+
+      if (total > 0) {
+        // Save current state before showing countdown
+        preCountdownStateRef.current = {
+          songId: currentSong?.id || null,
+          slideIndex: currentSlideIndex,
+          displayMode: displayMode,
+          isBlank: isBlankActive,
+          imageUrl: currentItem?.type === 'image' ? currentItem.data?.url : null
+        };
+
+        setCountdownTargetTime(toolData.targetTime);
+        setCountdownMessage(toolData.message || '');
+        setCountdownRemaining(total);
+        setCountdownRunning(true);
+        setCountdownBroadcasting(true);
+        setActiveSetlistCountdownIndex(index);
+
+        socketService.operatorUpdateSlide({
+          roomId: room.id,
+          roomPin: room.pin,
+          backgroundImage: room.backgroundImage || '',
+          songId: currentSong?.id || null,
+          slideIndex: currentSlideIndex,
+          displayMode: displayMode,
+          isBlank: isBlankActive,
+          toolsData: {
+            type: 'countdown',
+            countdown: {
+              remaining: total,
+              message: toolData.message || '',
+              running: true,
+              endTime: Date.now() + (total * 1000)
+            }
+          }
+        });
+      }
+    }
+  };
+
+  // Toggle setlist announcement (for setlist items)
+  const toggleSetlistAnnouncement = (index, toolData) => {
+    if (!room) return;
+
+    // Get current image URL if an image is being displayed
+    const currentImageUrl = currentItem?.type === 'image' ? currentItem.data?.url : null;
+
+    if (activeSetlistAnnouncementIndex === index) {
+      // Hide - just hide the announcement overlay, keep content underneath
+      setAnnouncementVisible(false);
+      setActiveSetlistAnnouncementIndex(null);
+      setFocusedAnnouncementIndex(null);
+      // Clear timer if exists
+      if (announcementTimerRef.current) {
+        clearTimeout(announcementTimerRef.current);
+        announcementTimerRef.current = null;
+      }
+      // Send announcement with visible: false to hide overlay
+      socketService.operatorUpdateSlide({
+        roomId: room.id,
+        roomPin: room.pin,
+        backgroundImage: room.backgroundImage || '',
+        songId: currentSong?.id || null,
+        slideIndex: currentSlideIndex,
+        displayMode: displayMode,
+        isBlank: isBlankActive,
+        imageUrl: currentImageUrl,
+        toolsData: {
+          type: 'announcement',
+          announcement: {
+            text: '',
+            visible: false
+          }
+        }
+      });
+    } else {
+      // Show - display this announcement
+      // Clear any existing timer
+      if (announcementTimerRef.current) {
+        clearTimeout(announcementTimerRef.current);
+      }
+
+      setAnnouncementText(toolData.text);
+      setAnnouncementVisible(true);
+      setActiveSetlistAnnouncementIndex(index);
+      socketService.operatorUpdateSlide({
+        roomId: room.id,
+        roomPin: room.pin,
+        backgroundImage: room.backgroundImage || '',
+        songId: currentSong?.id || null,
+        slideIndex: currentSlideIndex,
+        displayMode: displayMode,
+        isBlank: isBlankActive,
+        imageUrl: currentImageUrl,
+        toolsData: {
+          type: 'announcement',
+          announcement: {
+            text: toolData.text,
+            visible: true
+          }
+        }
+      });
+
+      // Auto-hide after 15 seconds
+      announcementTimerRef.current = setTimeout(() => {
+        setAnnouncementVisible(false);
+        // Get current image URL at the time of auto-hide
+        const imageUrlAtHide = currentItem?.type === 'image' ? currentItem.data?.url : null;
+        socketService.operatorUpdateSlide({
+          roomId: room.id,
+          roomPin: room.pin,
+          backgroundImage: room.backgroundImage || '',
+          songId: currentSong?.id || null,
+          slideIndex: currentSlideIndex,
+          displayMode: displayMode,
+          isBlank: isBlankActive,
+          imageUrl: imageUrlAtHide,
+          toolsData: {
+            type: 'announcement',
+            announcement: {
+              text: '',
+              visible: false
+            }
+          }
+        });
+        // Delay clearing the selection until after the banner animation completes on viewer
+        setTimeout(() => {
+          setActiveSetlistAnnouncementIndex(null);
+          setFocusedAnnouncementIndex(null);
+        }, 2000);
+      }, 15000);
+    }
+  };
+
+  // Toggle setlist messages (for setlist items)
+  const setlistMessagesIntervalRef = useRef(null);
+  const setlistMessagesIndexRef = useRef(0);
+  const toggleSetlistMessages = (index, toolData) => {
+    if (!room) return;
+
+    if (activeSetlistMessagesIndex === index) {
+      // Hide messages - restore previous state
+      if (setlistMessagesIntervalRef.current) {
+        clearInterval(setlistMessagesIntervalRef.current);
+        setlistMessagesIntervalRef.current = null;
+      }
+      setlistMessagesIndexRef.current = 0;
+      setActiveSetlistMessagesIndex(null);
+      setFocusedMessagesIndex(null);
+
+      // Restore previous state
+      const savedState = preMessagesStateRef.current;
+      if (savedState) {
+        socketService.operatorUpdateSlide({
+          roomId: room.id,
+          roomPin: room.pin,
+          backgroundImage: room.backgroundImage || '',
+          songId: savedState.songId,
+          slideIndex: savedState.slideIndex,
+          displayMode: savedState.displayMode,
+          isBlank: savedState.isBlank,
+          imageUrl: savedState.imageUrl,
+          toolsData: null
+        });
+        preMessagesStateRef.current = null;
+      } else {
+        socketService.operatorUpdateSlide({
+          roomId: room.id,
+          roomPin: room.pin,
+          backgroundImage: room.backgroundImage || '',
+          songId: currentSong?.id || null,
+          slideIndex: currentSlideIndex,
+          displayMode: displayMode,
+          isBlank: isBlankActive,
+          toolsData: null
+        });
+      }
+    } else {
+      // Show - start broadcasting these messages
+      const messages = toolData.messages || [];
+      const interval = toolData.interval || 5;
+      if (messages.length === 0) return;
+
+      // Stop any currently active messages first
+      if (setlistMessagesIntervalRef.current) {
+        clearInterval(setlistMessagesIntervalRef.current);
+        setlistMessagesIntervalRef.current = null;
+      }
+      setlistMessagesIndexRef.current = 0;
+
+      // Only save state if no messages were previously active (preserve original state)
+      if (activeSetlistMessagesIndex === null) {
+        preMessagesStateRef.current = {
+          songId: currentSong?.id || null,
+          slideIndex: currentSlideIndex,
+          displayMode: displayMode,
+          isBlank: isBlankActive,
+          imageUrl: currentItem?.type === 'image' ? currentItem.data?.url : null
+        };
+      }
+
+      setActiveSetlistMessagesIndex(index);
+
+      // Broadcast first message immediately
+      socketService.operatorUpdateSlide({
+        roomId: room.id,
+        roomPin: room.pin,
+        backgroundImage: room.backgroundImage || '',
+        songId: null,
+        slideIndex: 0,
+        displayMode: displayMode,
+        isBlank: false,
+        toolsData: {
+          type: 'rotatingMessage',
+          rotatingMessage: {
+            text: messages[0],
+            interval: interval
+          }
+        }
+      });
+
+      // Start interval for rotation
+      setlistMessagesIntervalRef.current = setInterval(() => {
+        setlistMessagesIndexRef.current = (setlistMessagesIndexRef.current + 1) % messages.length;
+        socketService.operatorUpdateSlide({
+          roomId: room.id,
+          roomPin: room.pin,
+          backgroundImage: room.backgroundImage || '',
+          songId: null,
+          slideIndex: 0,
+          displayMode: displayMode,
+          isBlank: false,
+          toolsData: {
+            type: 'rotatingMessage',
+            rotatingMessage: {
+              text: messages[setlistMessagesIndexRef.current],
+              interval: interval
+            }
+          }
+        });
+      }, interval * 1000);
+    }
   };
 
   // Clock functions
@@ -401,6 +740,7 @@ function PresenterMode() {
       announcementTimerRef.current = null;
     }
     setAnnouncementVisible(false);
+    setActiveSetlistAnnouncementIndex(null);
 
     if (!room) return;
     socketService.operatorUpdateSlide({
@@ -598,8 +938,23 @@ function PresenterMode() {
       }
       setClockBroadcasting(false);
     }
-    // Note: Countdown and Stopwatch don't auto-broadcast, so no need to stop them
-    // But we can reset their "broadcasting" state if needed
+    // Stop countdown broadcast
+    if (countdownBroadcasting) {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+      setCountdownRunning(false);
+      setCountdownBroadcasting(false);
+      setActiveSetlistCountdownIndex(null);
+      setFocusedCountdownIndex(null);
+    }
+    // Stop announcement
+    if (announcementVisible) {
+      setAnnouncementVisible(false);
+      setActiveSetlistAnnouncementIndex(null);
+      setFocusedAnnouncementIndex(null);
+    }
   };
 
   // Switch resource panel and apply search
@@ -1535,7 +1890,185 @@ function PresenterMode() {
     setHasUnsavedChanges(true);
   };
 
+  // Add tool items to setlist
+  const addCountdownToSetlist = () => {
+    setSetlist([...setlist, {
+      type: 'tool',
+      data: {
+        toolType: 'countdown',
+        targetTime: countdownTargetTime,
+        message: countdownMessage
+      }
+    }]);
+    setHasUnsavedChanges(true);
+  };
+
+  const addMessagesToSetlist = () => {
+    const enabledMessages = rotatingMessages
+      .filter(m => m.enabled)
+      .map(m => m.isPreset ? t(`presenter.${m.text}`) : m.text);
+    if (enabledMessages.length === 0) return;
+    setSetlist([...setlist, {
+      type: 'tool',
+      data: {
+        toolType: 'messages',
+        messages: enabledMessages,
+        interval: rotatingInterval
+      }
+    }]);
+    setHasUnsavedChanges(true);
+  };
+
+  const addSingleMessageToSetlist = (msg) => {
+    const messageText = msg.isPreset ? t(`presenter.${msg.text}`) : msg.text;
+    setSetlist([...setlist, {
+      type: 'tool',
+      data: {
+        toolType: 'messages',
+        messages: [messageText],
+        interval: rotatingInterval
+      }
+    }]);
+    setHasUnsavedChanges(true);
+  };
+
+  const addAnnouncementToSetlist = () => {
+    if (!announcementText.trim()) return;
+    setSetlist([...setlist, {
+      type: 'tool',
+      data: {
+        toolType: 'announcement',
+        text: announcementText
+      }
+    }]);
+    setHasUnsavedChanges(true);
+  };
+
   const removeFromSetlist = (index) => {
+    const item = setlist[index];
+
+    // If removing an active countdown, hide it and restore previous state
+    if (item?.type === 'tool' && item?.data?.toolType === 'countdown' && activeSetlistCountdownIndex === index) {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+      setCountdownRunning(false);
+      setCountdownBroadcasting(false);
+      setActiveSetlistCountdownIndex(null);
+      setFocusedCountdownIndex(null);
+      // Restore previous state
+      if (room) {
+        const savedState = preCountdownStateRef.current;
+        if (savedState) {
+          socketService.operatorUpdateSlide({
+            roomId: room.id,
+            roomPin: room.pin,
+            backgroundImage: room.backgroundImage || '',
+            songId: savedState.songId,
+            slideIndex: savedState.slideIndex,
+            displayMode: savedState.displayMode,
+            isBlank: savedState.isBlank,
+            imageUrl: savedState.imageUrl,
+            toolsData: null
+          });
+          preCountdownStateRef.current = null;
+        } else {
+          socketService.operatorUpdateSlide({
+            roomId: room.id,
+            roomPin: room.pin,
+            backgroundImage: room.backgroundImage || '',
+            songId: currentSong?.id || null,
+            slideIndex: currentSlideIndex,
+            displayMode: displayMode,
+            isBlank: isBlankActive,
+            toolsData: null
+          });
+        }
+      }
+    }
+
+    // If removing an active announcement, hide it first
+    if (item?.type === 'tool' && item?.data?.toolType === 'announcement' && activeSetlistAnnouncementIndex === index) {
+      setAnnouncementVisible(false);
+      setActiveSetlistAnnouncementIndex(null);
+      setFocusedAnnouncementIndex(null);
+      if (announcementTimerRef.current) {
+        clearTimeout(announcementTimerRef.current);
+        announcementTimerRef.current = null;
+      }
+      // Send update to hide announcement
+      if (room) {
+        socketService.operatorUpdateSlide({
+          roomId: room.id,
+          roomPin: room.pin,
+          backgroundImage: room.backgroundImage || '',
+          songId: currentSong?.id || null,
+          slideIndex: currentSlideIndex,
+          displayMode: displayMode,
+          isBlank: isBlankActive,
+          toolsData: {
+            type: 'announcement',
+            announcement: {
+              text: '',
+              visible: false
+            }
+          }
+        });
+      }
+    }
+
+    // If removing active messages, hide and restore previous state
+    if (item?.type === 'tool' && item?.data?.toolType === 'messages' && activeSetlistMessagesIndex === index) {
+      if (setlistMessagesIntervalRef.current) {
+        clearInterval(setlistMessagesIntervalRef.current);
+        setlistMessagesIntervalRef.current = null;
+      }
+      setlistMessagesIndexRef.current = 0;
+      setActiveSetlistMessagesIndex(null);
+      setFocusedMessagesIndex(null);
+      // Restore previous state
+      if (room) {
+        const savedState = preMessagesStateRef.current;
+        if (savedState) {
+          socketService.operatorUpdateSlide({
+            roomId: room.id,
+            roomPin: room.pin,
+            backgroundImage: room.backgroundImage || '',
+            songId: savedState.songId,
+            slideIndex: savedState.slideIndex,
+            displayMode: savedState.displayMode,
+            isBlank: savedState.isBlank,
+            imageUrl: savedState.imageUrl,
+            toolsData: null
+          });
+          preMessagesStateRef.current = null;
+        } else {
+          socketService.operatorUpdateSlide({
+            roomId: room.id,
+            roomPin: room.pin,
+            backgroundImage: room.backgroundImage || '',
+            songId: currentSong?.id || null,
+            slideIndex: currentSlideIndex,
+            displayMode: displayMode,
+            isBlank: isBlankActive,
+            toolsData: null
+          });
+        }
+      }
+    }
+
+    // Clear focus if removing a focused item
+    if (focusedCountdownIndex === index) {
+      setFocusedCountdownIndex(null);
+    }
+    if (focusedAnnouncementIndex === index) {
+      setFocusedAnnouncementIndex(null);
+    }
+    if (focusedMessagesIndex === index) {
+      setFocusedMessagesIndex(null);
+    }
+
     setSetlist(setlist.filter((_, i) => i !== index));
     setHasUnsavedChanges(true);
   };
@@ -1980,10 +2513,11 @@ function PresenterMode() {
     touchStartPos.current = null;
   };
 
-  const selectItem = (item) => {
+  const selectItem = (item, setlistIndex = null) => {
     setCurrentItem(item);
     setIsBlankActive(false);
     setSelectedFromSetlist(true); // Mark as selected from setlist
+    setSelectedSetlistIndex(setlistIndex); // Track which setlist index is selected
 
     if (item.type === 'song' || item.type === 'bible') {
       setCurrentSong(item.data);
@@ -1992,12 +2526,38 @@ function PresenterMode() {
       // updateSlide will be called when user clicks selectSlide()
     } else if (item.type === 'image') {
       setCurrentSong(null);
-      setCurrentSlideIndex(0);
-      updateImageSlide(item.data);
+      setCurrentSlideIndex(null); // Don't highlight until user clicks
+      // Don't auto-transmit - wait for user to click on the image in preview
     } else if (item.type === 'blank') {
       setCurrentSong(null);
       setIsBlankActive(true);
       updateSlide(null, 0, displayMode, true);
+    } else if (item.type === 'tool') {
+      const toolData = item.data;
+      if (toolData.toolType === 'countdown') {
+        // Don't change selection - countdown is an overlay
+        // Just set the values and switch to tools tab
+        setCountdownTargetTime(toolData.targetTime);
+        setCountdownMessage(toolData.message || '');
+        setActiveResourcePanel('tools');
+        setActiveToolsTab('countdown');
+        // Return early - don't change currentItem or selectedSetlistIndex
+        return 'countdown';
+      } else if (toolData.toolType === 'messages') {
+        setCurrentSong(null);
+        // Set up and start rotating messages
+        // This would need the actual message objects, for now just switch to tab
+        setActiveResourcePanel('tools');
+        setActiveToolsTab('messages');
+      } else if (toolData.toolType === 'announcement') {
+        // Don't change selection - announcement is an overlay
+        // Just focus the announcement item and switch to tools tab
+        setAnnouncementText(toolData.text);
+        setActiveResourcePanel('tools');
+        setActiveToolsTab('announce');
+        // Return early - don't change currentItem or selectedSetlistIndex
+        return 'announcement';
+      }
     }
   };
 
@@ -2007,6 +2567,7 @@ function PresenterMode() {
     if (song.slides && song.slides.length > 0) {
       selectItem({ type: 'song', data: song });
       setSelectedFromSetlist(false); // Override - selected from database
+      setSelectedSetlistIndex(null);
     } else {
       // Fallback: fetch full song details if slides are missing (backward compatibility)
       try {
@@ -2014,6 +2575,7 @@ function PresenterMode() {
         const fullSong = response.data.song;
         selectItem({ type: 'song', data: fullSong });
         setSelectedFromSetlist(false); // Override - selected from database
+        setSelectedSetlistIndex(null);
       } catch (error) {
         console.error('Error fetching song details:', error);
         setError('Failed to load song details');
@@ -2805,7 +3367,8 @@ function PresenterMode() {
               </Button>
             </div>
 
-            {/* Search bar - Glassmorphic style */}
+            {/* Search bar - Glassmorphic style (hidden when Tools tab is active) */}
+            {activeResourcePanel !== 'tools' && (
             <div style={{ flex: '1 1 200px', minWidth: '200px', position: 'relative' }}>
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -2887,6 +3450,7 @@ function PresenterMode() {
                 </button>
               )}
             </div>
+            )}
 
             {/* New button */}
             {(activeResourcePanel === 'songs' || activeResourcePanel === 'images') && (
@@ -3197,20 +3761,35 @@ function PresenterMode() {
                 )}
               </div>
             ) : activeResourcePanel === 'tools' ? (
-              <div className="dark-scrollbar" style={{ maxHeight: '220px', overflowY: 'auto' }}>
+              <div className="dark-scrollbar" style={{ maxHeight: activeToolsTab === 'countdown' ? '220px' : 'none', overflowY: activeToolsTab === 'countdown' ? 'auto' : 'visible' }}>
                 {/* Tools Selector - Modern Card Style */}
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(5, 1fr)',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
                   gap: '6px',
                   marginBottom: '14px'
                 }}>
                   {[
-                    { key: 'countdown', icon: '⏱️', label: t('presenter.toolsCountdown') },
-                    { key: 'clock', icon: '🕐', label: t('presenter.toolsClock') },
-                    { key: 'stopwatch', icon: '⏲️', label: t('presenter.toolsStopwatch') },
-                    { key: 'announce', icon: '📢', label: t('presenter.toolsAnnounce') },
-                    { key: 'messages', icon: '💬', label: t('presenter.toolsMessages') }
+                    { key: 'countdown', icon: (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="13" r="8"/>
+                        <path d="M12 9v4l2 2"/>
+                        <path d="M5 3L2 6"/>
+                        <path d="M22 6l-3-3"/>
+                        <path d="M12 2v2"/>
+                      </svg>
+                    ), label: t('presenter.toolsCountdown') },
+                    { key: 'announce', icon: (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                      </svg>
+                    ), label: t('presenter.toolsAnnounce') },
+                    { key: 'messages', icon: (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                      </svg>
+                    ), label: t('presenter.toolsMessages') }
                   ].map((tool) => (
                     <div
                       key={tool.key}
@@ -3248,7 +3827,7 @@ function PresenterMode() {
                         }
                       }}
                     >
-                      <span style={{ fontSize: '1.2rem', marginBottom: '2px' }}>{tool.icon}</span>
+                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '2px' }}>{tool.icon}</span>
                       <span style={{
                         fontSize: '0.65rem',
                         color: 'white',
@@ -3266,207 +3845,56 @@ function PresenterMode() {
                 {/* Countdown Timer Tab */}
                 {activeToolsTab === 'countdown' && (
                   <div style={{ color: 'white' }}>
-                    <div style={{ marginBottom: '12px' }}>
-                      <label style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'block' }}>
-                        {t('presenter.setDuration')}
-                      </label>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <Form.Control
-                          type="number"
-                          min="0"
-                          max="23"
-                          value={countdownHours}
-                          onChange={(e) => setCountdownHours(parseInt(e.target.value) || 0)}
-                          style={{ width: '60px', textAlign: 'center' }}
-                          size="sm"
-                        />
-                        <span>:</span>
-                        <Form.Control
-                          type="number"
-                          min="0"
-                          max="59"
-                          value={countdownMinutes}
-                          onChange={(e) => setCountdownMinutes(parseInt(e.target.value) || 0)}
-                          style={{ width: '60px', textAlign: 'center' }}
-                          size="sm"
-                        />
-                        <span>:</span>
-                        <Form.Control
-                          type="number"
-                          min="0"
-                          max="59"
-                          value={countdownSeconds}
-                          onChange={(e) => setCountdownSeconds(parseInt(e.target.value) || 0)}
-                          style={{ width: '60px', textAlign: 'center' }}
-                          size="sm"
-                        />
-                      </div>
-                    </div>
-
-                    <div style={{ marginBottom: '12px' }}>
-                      <label style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'block' }}>
-                        {t('presenter.countdownMessage')}
-                      </label>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'center' }}>
+                      <Form.Control
+                        type="time"
+                        value={countdownTargetTime}
+                        onChange={(e) => {
+                          setCountdownTargetTime(e.target.value);
+                          // Stop broadcasting if currently broadcasting
+                          if (countdownBroadcasting) {
+                            if (countdownIntervalRef.current) {
+                              clearInterval(countdownIntervalRef.current);
+                              countdownIntervalRef.current = null;
+                            }
+                            setCountdownRunning(false);
+                            setCountdownBroadcasting(false);
+                            setActiveSetlistCountdownIndex(null);
+                            // Clear from viewer
+                            if (room) {
+                              socketService.operatorUpdateSlide({
+                                roomId: room.id,
+                                roomPin: room.pin,
+                                backgroundImage: room.backgroundImage || '',
+                                songId: null,
+                                slideIndex: 0,
+                                displayMode: displayMode,
+                                isBlank: true,
+                                toolsData: null
+                              });
+                            }
+                          }
+                        }}
+                        style={{ width: '140px', flexShrink: 0 }}
+                        size="sm"
+                      />
                       <Form.Control
                         type="text"
                         value={countdownMessage}
                         onChange={(e) => setCountdownMessage(e.target.value)}
                         placeholder={t('presenter.countdownPlaceholder')}
                         size="sm"
-                      />
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '0.8rem', alignSelf: 'center' }}>{t('presenter.quickTimes')}:</span>
-                      {[5, 10, 15, 30].map((mins) => (
-                        <Button
-                          key={mins}
-                          variant="outline-light"
-                          size="sm"
-                          onClick={() => {
-                            setCountdownHours(0);
-                            setCountdownMinutes(mins);
-                            setCountdownSeconds(0);
-                          }}
-                          style={{ fontSize: '0.75rem', padding: '2px 8px' }}
-                        >
-                          {mins}m
-                        </Button>
-                      ))}
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <Button
-                        variant={countdownRunning ? 'warning' : 'success'}
-                        size="sm"
-                        onClick={toggleCountdown}
-                      >
-                        {countdownRunning ? t('presenter.pause') : t('presenter.start')}
-                      </Button>
-                      <Button
-                        variant="outline-light"
-                        size="sm"
-                        onClick={resetCountdown}
-                      >
-                        {t('presenter.reset')}
-                      </Button>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={broadcastCountdown}
-                      >
-                        {t('presenter.broadcast')}
-                      </Button>
-                    </div>
-
-                    {countdownRemaining > 0 && (
-                      <div style={{
-                        marginTop: '12px',
-                        textAlign: 'center',
-                        fontSize: '1.5rem',
-                        fontWeight: 'bold',
-                        fontFamily: 'monospace'
-                      }}>
-                        {formatTime(countdownRemaining)}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Clock Tab */}
-                {activeToolsTab === 'clock' && (
-                  <div style={{ color: 'white' }}>
-                    <div style={{ marginBottom: '12px' }}>
-                      <label style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'block' }}>
-                        {t('presenter.clockFormat')}
-                      </label>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <Button
-                          variant={clockFormat === '24h' ? 'primary' : 'outline-light'}
-                          size="sm"
-                          onClick={() => setClockFormat('24h')}
-                        >
-                          24H
-                        </Button>
-                        <Button
-                          variant={clockFormat === '12h' ? 'primary' : 'outline-light'}
-                          size="sm"
-                          onClick={() => setClockFormat('12h')}
-                        >
-                          12H
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div style={{ marginBottom: '12px' }}>
-                      <Form.Check
-                        type="checkbox"
-                        label={t('presenter.showDate')}
-                        checked={clockShowDate}
-                        onChange={(e) => setClockShowDate(e.target.checked)}
-                        style={{ color: 'white' }}
+                        style={{ flex: 1 }}
                       />
                     </div>
 
                     <Button
-                      variant={clockBroadcasting ? 'danger' : 'primary'}
-                      size="sm"
-                      onClick={toggleClockBroadcast}
+                      variant="outline-success"
+                      onClick={addCountdownToSetlist}
+                      style={{ width: '100%', padding: '10px 20px', fontSize: '1rem', borderColor: '#198754', color: '#198754' }}
                     >
-                      {clockBroadcasting ? t('presenter.stopBroadcast') : t('presenter.broadcastClock')}
+                      {t('presenter.addToSetlist')}
                     </Button>
-                  </div>
-                )}
-
-                {/* Stopwatch Tab */}
-                {activeToolsTab === 'stopwatch' && (
-                  <div style={{ color: 'white' }}>
-                    <div style={{ marginBottom: '12px' }}>
-                      <label style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'block' }}>
-                        {t('presenter.stopwatchLabel')}
-                      </label>
-                      <Form.Control
-                        type="text"
-                        value={stopwatchLabel}
-                        onChange={(e) => setStopwatchLabel(e.target.value)}
-                        placeholder={t('presenter.stopwatchPlaceholder')}
-                        size="sm"
-                      />
-                    </div>
-
-                    <div style={{
-                      textAlign: 'center',
-                      fontSize: '1.5rem',
-                      fontWeight: 'bold',
-                      fontFamily: 'monospace',
-                      marginBottom: '12px'
-                    }}>
-                      {formatTime(stopwatchTime)}
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <Button
-                        variant={stopwatchRunning ? 'warning' : 'success'}
-                        size="sm"
-                        onClick={toggleStopwatch}
-                      >
-                        {stopwatchRunning ? t('presenter.pause') : t('presenter.start')}
-                      </Button>
-                      <Button
-                        variant="outline-light"
-                        size="sm"
-                        onClick={resetStopwatch}
-                      >
-                        {t('presenter.reset')}
-                      </Button>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={broadcastStopwatch}
-                      >
-                        {t('presenter.broadcast')}
-                      </Button>
-                    </div>
                   </div>
                 )}
 
@@ -3474,22 +3902,19 @@ function PresenterMode() {
                 {activeToolsTab === 'announce' && (
                   <div style={{ color: 'white' }}>
                     <div style={{ marginBottom: '12px' }}>
-                      <label style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'block' }}>
-                        {t('presenter.quickAnnouncements')}
-                      </label>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
                         {[
                           { key: 'welcome', en: 'Welcome', he: 'ברוכים הבאים' },
-                          { key: 'silencePhones', en: 'Please silence your phones', he: 'נא להשתיק טלפונים' },
-                          { key: 'offeringTime', en: 'Offering Time', he: 'זמן התרומה' },
-                          { key: 'refreshments', en: 'Join us for refreshments', he: 'הצטרפו לכיבוד' }
+                          { key: 'silencePhones', en: 'Silence phones', he: 'השתיקו טלפונים' },
+                          { key: 'pleaseBeSeated', en: 'Please be seated', he: 'נא לשבת' },
+                          { key: 'registerNow', en: 'Register now!', he: 'הרשמו עכשיו!' }
                         ].map((item) => (
                           <Button
                             key={item.key}
                             variant="outline-light"
                             size="sm"
                             onClick={() => updateAnnouncementText(i18n.language === 'he' ? item.he : item.en)}
-                            style={{ textAlign: i18n.language === 'he' ? 'right' : 'left' }}
+                            style={{ textAlign: 'center', fontSize: '0.75rem', padding: '4px 6px' }}
                           >
                             {i18n.language === 'he' ? item.he : item.en}
                           </Button>
@@ -3498,9 +3923,6 @@ function PresenterMode() {
                     </div>
 
                     <div style={{ marginBottom: '12px' }}>
-                      <label style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'block' }}>
-                        {t('presenter.customAnnouncement')}
-                      </label>
                       <Form.Control
                         type="text"
                         value={announcementText}
@@ -3510,70 +3932,80 @@ function PresenterMode() {
                       />
                     </div>
 
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <Button
-                        variant={announcementVisible ? 'danger' : 'success'}
-                        size="sm"
-                        onClick={toggleAnnouncement}
-                        disabled={!announcementText.trim()}
-                      >
-                        {announcementVisible ? t('presenter.hideAnnouncement') : t('presenter.showAnnouncement')}
-                      </Button>
-                    </div>
+                    <Button
+                      variant="outline-success"
+                      onClick={addAnnouncementToSetlist}
+                      disabled={!announcementText.trim()}
+                      style={{ width: '100%', padding: '10px 20px', fontSize: '1rem', borderColor: '#198754', color: '#198754' }}
+                    >
+                      {t('presenter.addToSetlist')}
+                    </Button>
                   </div>
                 )}
 
                 {/* Rotating Messages Tab */}
                 {activeToolsTab === 'messages' && (
                   <div style={{ color: 'white' }}>
-                    <div style={{ marginBottom: '12px' }}>
-                      <label style={{ fontSize: '0.85rem', marginBottom: '6px', display: 'block' }}>
-                        {t('presenter.rotationInterval')}
-                      </label>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        {[5, 10, 15, 30].map((secs) => (
-                          <Button
-                            key={secs}
-                            variant={rotatingInterval === secs ? 'primary' : 'outline-light'}
-                            size="sm"
-                            onClick={() => setRotatingInterval(secs)}
-                            style={{ fontSize: '0.75rem', padding: '2px 8px' }}
-                          >
-                            {secs}s
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div style={{ marginBottom: '12px', maxHeight: '100px', overflowY: 'auto' }}>
+                    <div style={{ marginBottom: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', maxHeight: '100px', overflowY: 'auto' }}>
                       {rotatingMessages.map((msg, index) => (
                         <div
                           key={msg.id}
+                          onClick={() => {
+                            const now = Date.now();
+                            const DOUBLE_TAP_DELAY = 300;
+                            if (lastMessageTapRef.current.msgId === msg.id && now - lastMessageTapRef.current.time < DOUBLE_TAP_DELAY) {
+                              // Double tap detected - cancel pending single tap and add to setlist
+                              if (messageTapTimeoutRef.current) {
+                                clearTimeout(messageTapTimeoutRef.current);
+                                messageTapTimeoutRef.current = null;
+                              }
+                              addSingleMessageToSetlist(msg);
+                              lastMessageTapRef.current = { time: 0, msgId: null };
+                            } else {
+                              // First tap - wait to see if second tap comes
+                              lastMessageTapRef.current = { time: now, msgId: msg.id };
+                              if (messageTapTimeoutRef.current) {
+                                clearTimeout(messageTapTimeoutRef.current);
+                              }
+                              messageTapTimeoutRef.current = setTimeout(() => {
+                                // No second tap came - toggle enabled state
+                                toggleMessageEnabled(msg.id);
+                                messageTapTimeoutRef.current = null;
+                              }, DOUBLE_TAP_DELAY);
+                            }
+                          }}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '8px',
-                            marginBottom: '4px',
-                            padding: '4px',
+                            gap: '4px',
+                            padding: '3px 4px',
                             backgroundColor: msg.enabled ? 'rgba(255,255,255,0.1)' : 'transparent',
-                            borderRadius: '4px'
+                            borderRadius: '4px',
+                            cursor: 'pointer'
                           }}
                         >
                           <Form.Check
                             type="checkbox"
                             checked={msg.enabled}
-                            onChange={() => toggleMessageEnabled(msg.id)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              toggleMessageEnabled(msg.id);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
                             style={{ margin: 0 }}
                           />
-                          <span style={{ flex: 1, fontSize: '0.85rem' }}>
+                          <span style={{ flex: 1, fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {msg.isPreset ? t(`presenter.${msg.text}`) : msg.text}
                           </span>
                           {!msg.isPreset && (
                             <Button
                               variant="outline-danger"
                               size="sm"
-                              onClick={() => removeCustomMessage(msg.id)}
-                              style={{ padding: '0 4px', fontSize: '0.7rem' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeCustomMessage(msg.id);
+                              }}
+                              style={{ padding: '0 4px', fontSize: '0.6rem' }}
                             >
                               X
                             </Button>
@@ -3603,16 +4035,26 @@ function PresenterMode() {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '0.75rem' }}>{t('presenter.rotationInterval')}:</span>
                       <Button
-                        variant={rotatingRunning ? 'danger' : 'success'}
+                        variant="outline-light"
                         size="sm"
-                        onClick={toggleRotatingMessages}
-                        disabled={rotatingMessages.filter(m => m.enabled).length === 0}
+                        onClick={() => setRotatingInterval(rotatingInterval === 5 ? 10 : 5)}
+                        style={{ fontSize: '0.75rem', padding: '2px 8px' }}
                       >
-                        {rotatingRunning ? t('presenter.stopMessages') : t('presenter.startMessages')}
+                        {rotatingInterval}s
                       </Button>
                     </div>
+                    <Button
+                      variant="outline-success"
+                      size="sm"
+                      onClick={addMessagesToSetlist}
+                      disabled={rotatingMessages.filter(m => m.enabled).length === 0}
+                      style={{ width: '100%' }}
+                    >
+                      {t('presenter.addToSetlist')}
+                    </Button>
                   </div>
                 )}
               </div>
@@ -4069,29 +4511,55 @@ function PresenterMode() {
                     const currentItemNumber = itemNumber;
 
                     // Check if this item is selected (only show as selected if selection came from setlist)
+                    // For tool items, use the exact index since multiple tools of the same type can exist
                     const isItemSelected = selectedFromSetlist && currentItem && (
                       (item.type === 'song' && currentItem.type === 'song' && item.data?.id === currentItem.data?.id) ||
                       (item.type === 'bible' && currentItem.type === 'bible' && item.data?.id === currentItem.data?.id) ||
                       (item.type === 'image' && currentItem.type === 'image' && item.data?.id === currentItem.data?.id) ||
-                      (item.type === 'blank' && currentItem.type === 'blank')
+                      (item.type === 'blank' && currentItem.type === 'blank') ||
+                      (item.type === 'tool' && selectedSetlistIndex === index)
                     );
 
                     const getItemDisplay = () => {
                       if (item.type === 'song') {
                         return {
-                          title: item.data?.title || t('presenter.unknownSong'),
+                          title: (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="white">
+                                <path d="M9 13c0 1.105-1.12 2-2.5 2S4 14.105 4 13s1.12-2 2.5-2 2.5.895 2.5 2z"/>
+                                <path fillRule="evenodd" d="M9 3v10H8V3h1z"/>
+                                <path d="M8 2.82a1 1 0 0 1 .804-.98l3-.6A1 1 0 0 1 13 2.22V4L8 5V2.82z"/>
+                              </svg>
+                              {item.data?.title || t('presenter.unknownSong')}
+                            </span>
+                          ),
                           bgColor: 'transparent',
                           borderLeft: '4px solid #667eea'
                         };
                       } else if (item.type === 'bible') {
                         return {
-                          title: item.data?.title || t('presenter.biblePassage'),
+                          title: (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="white">
+                                <path d="M8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 0 0 0 2.5v11a.5.5 0 0 0 .707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 0 0 .78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5.5 0 0 0 16 13.5v-11a.5.5 0 0 0-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.809 8.985.936 8 1.783z"/>
+                              </svg>
+                              {item.data?.title || t('presenter.biblePassage')}
+                            </span>
+                          ),
                           bgColor: 'transparent',
                           borderLeft: '4px solid #764ba2'
                         };
                       } else if (item.type === 'image') {
                         return {
-                          title: item.data?.name || t('presenter.imageSlide'),
+                          title: (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="white">
+                                <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                                <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
+                              </svg>
+                              {item.data?.name || t('presenter.imageSlide')}
+                            </span>
+                          ),
                           bgColor: 'transparent',
                           borderLeft: '4px solid #4facfe'
                         };
@@ -4107,6 +4575,72 @@ function PresenterMode() {
                           bgColor: 'rgba(255, 255, 255, 0.1)',
                           borderLeft: 'none',
                           isSection: true
+                        };
+                      } else if (item.type === 'tool') {
+                        const toolData = item.data;
+                        let title = '';
+                        if (toolData.toolType === 'countdown') {
+                          // Build message preview: first word + first letter of second word
+                          let messagePreview = '';
+                          if (toolData.message) {
+                            const words = toolData.message.trim().split(' ');
+                            messagePreview = words[0] || '';
+                            if (words[1]) {
+                              messagePreview += ' ' + words[1].charAt(0) + '...';
+                            }
+                          }
+                          title = (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="13" r="8"/>
+                                <path d="M12 9v4l2 2"/>
+                                <path d="M5 3L2 6"/>
+                                <path d="M22 6l-3-3"/>
+                                <path d="M12 2v2"/>
+                              </svg>
+                              {toolData.targetTime}{messagePreview && ` "${messagePreview}"`}
+                            </span>
+                          );
+                        } else if (toolData.toolType === 'messages') {
+                          // Build preview: first word of each message followed by ..
+                          let messagePreview = '';
+                          if (toolData.messages && toolData.messages.length > 0) {
+                            messagePreview = toolData.messages
+                              .map(msg => {
+                                const firstWord = msg.trim().split(' ')[0] || '';
+                                return firstWord + '..';
+                              })
+                              .join(' ');
+                          }
+                          title = (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="white">
+                                <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z"/>
+                                <path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zM3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6zm0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z"/>
+                              </svg>
+                              "{messagePreview}"
+                            </span>
+                          );
+                        } else if (toolData.toolType === 'announcement') {
+                          // Build text preview: first word + first letter of second word
+                          const words = toolData.text.split(' ');
+                          let preview = words[0] || '';
+                          if (words[1]) {
+                            preview += ' ' + words[1].charAt(0) + '...';
+                          }
+                          title = (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="white">
+                                <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2zm.995-14.901a1 1 0 1 0-1.99 0A5.002 5.002 0 0 0 3 6c0 1.098-.5 6-2 7h14c-1.5-1-2-5.902-2-7 0-2.42-1.72-4.44-4.005-4.901z"/>
+                              </svg>
+                              "{preview}"
+                            </span>
+                          );
+                        }
+                        return {
+                          title,
+                          bgColor: 'transparent',
+                          borderLeft: '4px solid #f59e0b'
                         };
                       }
                       return { title: t('presenter.unknown'), bgColor: 'transparent', borderLeft: '4px solid #718096' };
@@ -4192,12 +4726,16 @@ function PresenterMode() {
                             ? 'rgba(102, 126, 234, 0.3)'
                             : touchHoldingIndex === index
                               ? 'rgba(102, 126, 234, 0.15)'
-                              : isItemSelected
-                                ? 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)'
-                                : display.bgColor,
-                          background: isItemSelected && touchDragIndex !== index && touchHoldingIndex !== index
-                            ? 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)'
-                            : undefined,
+                              : (focusedAnnouncementIndex === index || activeSetlistAnnouncementIndex === index || focusedCountdownIndex === index || activeSetlistCountdownIndex === index || focusedMessagesIndex === index || activeSetlistMessagesIndex === index)
+                                ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                                : isItemSelected
+                                  ? 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)'
+                                  : display.bgColor,
+                          background: (focusedAnnouncementIndex === index || activeSetlistAnnouncementIndex === index || focusedCountdownIndex === index || activeSetlistCountdownIndex === index || focusedMessagesIndex === index || activeSetlistMessagesIndex === index) && touchDragIndex !== index && touchHoldingIndex !== index
+                            ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                            : isItemSelected && touchDragIndex !== index && touchHoldingIndex !== index
+                              ? 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)'
+                              : undefined,
                           borderRadius: '8px',
                           borderLeft: display.borderLeft,
                           marginBottom: '6px',
@@ -4206,14 +4744,20 @@ function PresenterMode() {
                           alignItems: 'center',
                           cursor: 'grab',
                           transition: 'all 0.2s ease',
-                          border: isItemSelected ? '2px solid var(--color-primary)' : '1px solid rgba(255,255,255,0.3)',
+                          border: (focusedAnnouncementIndex === index || activeSetlistAnnouncementIndex === index || focusedCountdownIndex === index || activeSetlistCountdownIndex === index || focusedMessagesIndex === index || activeSetlistMessagesIndex === index)
+                            ? '2px solid #764ba2'
+                            : isItemSelected
+                              ? '2px solid var(--color-primary)'
+                              : '1px solid rgba(255,255,255,0.3)',
                           boxShadow: touchDragIndex === index
                             ? '0 4px 12px rgba(0, 0, 0, 0.3)'
                             : touchHoldingIndex === index
                               ? '0 2px 8px rgba(102, 126, 234, 0.3)'
-                              : isItemSelected
-                                ? '0 2px 8px rgba(0,123,255,0.25)'
-                                : 'none',
+                              : (focusedAnnouncementIndex === index || activeSetlistAnnouncementIndex === index || focusedCountdownIndex === index || activeSetlistCountdownIndex === index || focusedMessagesIndex === index || activeSetlistMessagesIndex === index)
+                                ? '0 2px 8px rgba(118, 75, 162, 0.4)'
+                                : isItemSelected
+                                  ? '0 2px 8px rgba(0,123,255,0.25)'
+                                  : 'none',
                           transform: touchDragIndex === index ? 'scale(1.02)' : 'none',
                           touchAction: 'none'
                         }}
@@ -4241,23 +4785,105 @@ function PresenterMode() {
                                 lastSetlistTapRef.current = { time: 0, index: null };
                               } else {
                                 // Single tap - select item
-                                selectItem(item);
+                                if (item.type === 'tool' && item.data?.toolType === 'announcement') {
+                                  // For announcements, just focus it without changing current selection
+                                  setFocusedAnnouncementIndex(index);
+                                  setFocusedCountdownIndex(null);
+                                  setFocusedMessagesIndex(null);
+                                  setAnnouncementText(item.data.text);
+                                  setActiveResourcePanel('tools');
+                                  setActiveToolsTab('announce');
+                                } else if (item.type === 'tool' && item.data?.toolType === 'countdown') {
+                                  // For countdowns, just focus it without changing current selection
+                                  setFocusedCountdownIndex(index);
+                                  setFocusedAnnouncementIndex(null);
+                                  setFocusedMessagesIndex(null);
+                                  setCountdownTargetTime(item.data.targetTime);
+                                  setCountdownMessage(item.data.message || '');
+                                  setActiveResourcePanel('tools');
+                                  setActiveToolsTab('countdown');
+                                } else if (item.type === 'tool' && item.data?.toolType === 'messages') {
+                                  // For messages, just focus it without changing current selection
+                                  setFocusedMessagesIndex(index);
+                                  setFocusedAnnouncementIndex(null);
+                                  setFocusedCountdownIndex(null);
+                                  setActiveResourcePanel('tools');
+                                  setActiveToolsTab('messages');
+                                } else {
+                                  // For other items, clear tool focus and select normally
+                                  setFocusedAnnouncementIndex(null);
+                                  setFocusedCountdownIndex(null);
+                                  setFocusedMessagesIndex(null);
+                                  selectItem(item, index);
+                                }
                                 lastSetlistTapRef.current = { time: now, index: index };
                               }
                             }}
                           >
-                            {currentItemNumber}. {display.title}
+                            {display.title}
                           </span>
                         </div>
+                        {/* Show/Hide button for countdown tools - visible when focused or active */}
+                        {item.type === 'tool' && item.data?.toolType === 'countdown' && (focusedCountdownIndex === index || activeSetlistCountdownIndex === index) && (
+                          <Button
+                            variant={activeSetlistCountdownIndex === index ? 'danger' : 'success'}
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSetlistCountdown(index, item.data);
+                            }}
+                            style={{
+                              fontSize: '0.7rem',
+                              padding: '2px 8px',
+                              marginRight: '8px'
+                            }}
+                          >
+                            {activeSetlistCountdownIndex === index ? t('presenter.hide') : t('presenter.show')}
+                          </Button>
+                        )}
+                        {/* Show/Hide button for announcement tools - visible when focused or active */}
+                        {item.type === 'tool' && item.data?.toolType === 'announcement' && (focusedAnnouncementIndex === index || activeSetlistAnnouncementIndex === index) && (
+                          <Button
+                            variant={activeSetlistAnnouncementIndex === index ? 'danger' : 'success'}
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSetlistAnnouncement(index, item.data);
+                            }}
+                            style={{
+                              fontSize: '0.7rem',
+                              padding: '2px 8px',
+                              marginRight: '8px'
+                            }}
+                          >
+                            {activeSetlistAnnouncementIndex === index ? t('presenter.hide') : t('presenter.show')}
+                          </Button>
+                        )}
+                        {/* Show/Hide button for messages tools - visible when focused or active */}
+                        {item.type === 'tool' && item.data?.toolType === 'messages' && (focusedMessagesIndex === index || activeSetlistMessagesIndex === index) && (
+                          <Button
+                            variant={activeSetlistMessagesIndex === index ? 'danger' : 'success'}
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSetlistMessages(index, item.data);
+                            }}
+                            style={{
+                              fontSize: '0.7rem',
+                              padding: '2px 8px',
+                              marginRight: '8px'
+                            }}
+                          >
+                            {activeSetlistMessagesIndex === index ? t('presenter.hide') : t('presenter.show')}
+                          </Button>
+                        )}
                         <span
                           onClick={() => removeFromSetlist(index)}
                           style={{
                             cursor: 'pointer',
                             fontSize: '0.85rem',
-                            color: '#ff6b6b',
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            backgroundColor: 'rgba(255,107,107,0.15)'
+                            color: (isItemSelected || focusedAnnouncementIndex === index || activeSetlistAnnouncementIndex === index || focusedCountdownIndex === index || activeSetlistCountdownIndex === index || focusedMessagesIndex === index || activeSetlistMessagesIndex === index) ? '#ffffff' : '#ff6b6b',
+                            padding: '4px 8px'
                           }}
                         >
                           ✕
@@ -4655,17 +5281,43 @@ function PresenterMode() {
 
         {slideSectionOpen && currentItem && currentItem.type === 'image' && (
           <div style={{ padding: '20px' }}>
-            <div style={{
-              width: '100%',
-              height: '400px',
-              background: currentItem.data?.url.startsWith('linear-gradient')
-                ? currentItem.data.url
-                : `url(${getFullImageUrl(currentItem.data?.url)})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              borderRadius: '10px',
-              border: '2px solid #007bff'
-            }} />
+            <div
+              onClick={() => {
+                setCurrentSlideIndex(0);
+                updateImageSlide(currentItem.data);
+              }}
+              style={{
+                width: '100%',
+                height: '400px',
+                background: currentItem.data?.url.startsWith('linear-gradient')
+                  ? currentItem.data.url
+                  : `url(${getFullImageUrl(currentItem.data?.url)})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                borderRadius: '10px',
+                border: currentSlideIndex === 0 ? '4px solid #28a745' : '2px solid rgba(255,255,255,0.3)',
+                boxShadow: currentSlideIndex === 0 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                position: 'relative'
+              }}
+            >
+              {currentSlideIndex === 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '10px',
+                  right: '10px',
+                  backgroundColor: '#28a745',
+                  color: 'white',
+                  padding: '4px 12px',
+                  borderRadius: '20px',
+                  fontSize: '0.8rem',
+                  fontWeight: '600'
+                }}>
+                  LIVE
+                </div>
+              )}
+            </div>
             <div style={{
               marginTop: '15px',
               textAlign: 'center',

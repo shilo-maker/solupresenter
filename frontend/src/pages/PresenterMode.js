@@ -395,14 +395,43 @@ function PresenterMode() {
       })();
 
       if (total > 0) {
-        // Save current state before showing countdown
-        preCountdownStateRef.current = {
-          songId: currentSong?.id || null,
-          slideIndex: currentSlideIndex,
-          displayMode: displayMode,
-          isBlank: isBlankActive,
-          imageUrl: currentItem?.type === 'image' ? currentItem.data?.url : null
-        };
+        // Stop any active messages first
+        if (activeSetlistMessagesIndex !== null) {
+          if (setlistMessagesIntervalRef.current) {
+            clearInterval(setlistMessagesIntervalRef.current);
+            setlistMessagesIntervalRef.current = null;
+          }
+          setlistMessagesIndexRef.current = 0;
+          setActiveSetlistMessagesIndex(null);
+          setFocusedMessagesIndex(null);
+          // Transfer saved state from messages to countdown if it exists
+          if (preMessagesStateRef.current) {
+            preCountdownStateRef.current = preMessagesStateRef.current;
+            preMessagesStateRef.current = null;
+          }
+        }
+
+        // Stop any active announcement first
+        if (activeSetlistAnnouncementIndex !== null) {
+          setAnnouncementVisible(false);
+          setActiveSetlistAnnouncementIndex(null);
+          setFocusedAnnouncementIndex(null);
+          if (announcementTimerRef.current) {
+            clearTimeout(announcementTimerRef.current);
+            announcementTimerRef.current = null;
+          }
+        }
+
+        // Save current state before showing countdown (if not already saved from messages)
+        if (!preCountdownStateRef.current) {
+          preCountdownStateRef.current = {
+            songId: currentSong?.id || null,
+            slideIndex: currentSlideIndex,
+            displayMode: displayMode,
+            isBlank: isBlankActive,
+            imageUrl: currentItem?.type === 'image' ? currentItem.data?.url : null
+          };
+        }
 
         setCountdownTargetTime(toolData.targetTime);
         setCountdownMessage(toolData.message || '');
@@ -473,6 +502,31 @@ function PresenterMode() {
       // Clear any existing timer
       if (announcementTimerRef.current) {
         clearTimeout(announcementTimerRef.current);
+      }
+
+      // Stop any active countdown first
+      if (activeSetlistCountdownIndex !== null) {
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
+        setCountdownRunning(false);
+        setCountdownBroadcasting(false);
+        setActiveSetlistCountdownIndex(null);
+        setFocusedCountdownIndex(null);
+        preCountdownStateRef.current = null;
+      }
+
+      // Stop any active messages first
+      if (activeSetlistMessagesIndex !== null) {
+        if (setlistMessagesIntervalRef.current) {
+          clearInterval(setlistMessagesIntervalRef.current);
+          setlistMessagesIntervalRef.current = null;
+        }
+        setlistMessagesIndexRef.current = 0;
+        setActiveSetlistMessagesIndex(null);
+        setFocusedMessagesIndex(null);
+        preMessagesStateRef.current = null;
       }
 
       setAnnouncementText(toolData.text);
@@ -583,8 +637,36 @@ function PresenterMode() {
       }
       setlistMessagesIndexRef.current = 0;
 
-      // Only save state if no messages were previously active (preserve original state)
-      if (activeSetlistMessagesIndex === null) {
+      // Stop any active countdown first
+      if (activeSetlistCountdownIndex !== null) {
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
+        setCountdownRunning(false);
+        setCountdownBroadcasting(false);
+        setActiveSetlistCountdownIndex(null);
+        setFocusedCountdownIndex(null);
+        // Transfer saved state from countdown to messages if it exists
+        if (preCountdownStateRef.current) {
+          preMessagesStateRef.current = preCountdownStateRef.current;
+          preCountdownStateRef.current = null;
+        }
+      }
+
+      // Stop any active announcement first
+      if (activeSetlistAnnouncementIndex !== null) {
+        setAnnouncementVisible(false);
+        setActiveSetlistAnnouncementIndex(null);
+        setFocusedAnnouncementIndex(null);
+        if (announcementTimerRef.current) {
+          clearTimeout(announcementTimerRef.current);
+          announcementTimerRef.current = null;
+        }
+      }
+
+      // Only save state if no other tool was previously active (preserve original state)
+      if (activeSetlistMessagesIndex === null && !preMessagesStateRef.current) {
         preMessagesStateRef.current = {
           songId: currentSong?.id || null,
           slideIndex: currentSlideIndex,
@@ -1314,6 +1396,7 @@ function PresenterMode() {
         console.log('✅ Room created successfully:', response.data);
         setRoom(response.data.room);
         setRoomPin(response.data.room.pin);
+        setSelectedBackground(response.data.room.backgroundImage || '');
         setRoomCreated(true);
         setIsCreatingRoom(false);
 
@@ -1549,6 +1632,8 @@ function PresenterMode() {
     setShowBackgroundModal(false);
 
     if (room) {
+      // Update room state with new background so slide changes use the correct background
+      setRoom(prevRoom => ({ ...prevRoom, backgroundImage: backgroundUrl }));
       socketService.operatorUpdateBackground(room.id, backgroundUrl);
     }
   };
@@ -1901,6 +1986,50 @@ function PresenterMode() {
       }
     }]);
     setHasUnsavedChanges(true);
+  };
+
+  // Update countdown message in focused setlist item
+  const updateFocusedCountdownMessage = () => {
+    if (focusedCountdownIndex === null) return;
+
+    // Update the setlist item
+    setSetlist(prevSetlist => {
+      const newSetlist = [...prevSetlist];
+      if (newSetlist[focusedCountdownIndex]?.type === 'tool' &&
+          newSetlist[focusedCountdownIndex]?.data?.toolType === 'countdown') {
+        newSetlist[focusedCountdownIndex] = {
+          ...newSetlist[focusedCountdownIndex],
+          data: {
+            ...newSetlist[focusedCountdownIndex].data,
+            message: countdownMessage
+          }
+        };
+      }
+      return newSetlist;
+    });
+    setHasUnsavedChanges(true);
+
+    // If this countdown is currently broadcasting, update the viewer too
+    if (activeSetlistCountdownIndex === focusedCountdownIndex && room) {
+      socketService.operatorUpdateSlide({
+        roomId: room.id,
+        roomPin: room.pin,
+        backgroundImage: room.backgroundImage || '',
+        songId: currentSong?.id || null,
+        slideIndex: currentSlideIndex,
+        displayMode: displayMode,
+        isBlank: isBlankActive,
+        toolsData: {
+          type: 'countdown',
+          countdown: {
+            remaining: countdownRemaining,
+            message: countdownMessage,
+            running: true,
+            endTime: Date.now() + (countdownRemaining * 1000)
+          }
+        }
+      });
+    }
   };
 
   const addMessagesToSetlist = () => {
@@ -3882,6 +4011,12 @@ function PresenterMode() {
                         type="text"
                         value={countdownMessage}
                         onChange={(e) => setCountdownMessage(e.target.value)}
+                        onBlur={() => updateFocusedCountdownMessage()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.target.blur();
+                          }
+                        }}
                         placeholder={t('presenter.countdownPlaceholder')}
                         size="sm"
                         style={{ flex: 1 }}

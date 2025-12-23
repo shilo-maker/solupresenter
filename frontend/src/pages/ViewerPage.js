@@ -509,9 +509,10 @@ function ViewerPage() {
             )}
             <div style={{
               fontSize: 'clamp(4rem, 15vw, 12rem)',
-              fontWeight: '200',
-              fontFamily: 'monospace',
-              letterSpacing: '0.05em',
+              fontWeight: '300',
+              fontFamily: "'Montserrat', sans-serif",
+              letterSpacing: '-0.02em',
+              fontVariantNumeric: 'tabular-nums',
               textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
             }}>
               {formatTime(countdownRemaining)}

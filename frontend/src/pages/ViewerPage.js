@@ -432,6 +432,12 @@ function ViewerPage() {
     const params = new URLSearchParams(location.search);
     const urlPin = params.get('pin');
     const urlRoom = params.get('room');
+    const isLocalViewer = params.get('local') === 'true';
+
+    // Local display mode - Presentation API opens in fullscreen automatically
+    if (isLocalViewer) {
+      console.log('🖥️ Local viewer mode - opened via Presentation API');
+    }
 
     if (urlRoom) {
       // Auto-join by room name (slug)
@@ -1461,6 +1467,7 @@ function ViewerPage() {
           }
         }
       `}</style>
+
       <div
         style={{
           background: backgroundImage

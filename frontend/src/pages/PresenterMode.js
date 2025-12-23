@@ -199,6 +199,11 @@ function PresenterMode() {
   const reconnectAttempts = useRef(0); // Track reconnection attempts
   const maxReconnectAttempts = 5; // Maximum auto-reconnect attempts
 
+  // Local Display state (Presentation API)
+  const [presentationSupported, setPresentationSupported] = useState(false);
+  const [presentationConnection, setPresentationConnection] = useState(null);
+  const presentationRequestRef = useRef(null);
+
   // Quick Slide state
   const [showQuickSlideModal, setShowQuickSlideModal] = useState(false);
   const [quickSlideText, setQuickSlideText] = useState(''); // Persisted value for restore
@@ -313,6 +318,111 @@ function PresenterMode() {
       }
     }
   }, [combinedSlides, currentSlideIndex]);
+
+  // Check if Presentation API is supported
+  useEffect(() => {
+    if ('PresentationRequest' in window) {
+      setPresentationSupported(true);
+    }
+  }, []);
+
+  // Initialize presentation request when room is available
+  useEffect(() => {
+    if (room && presentationSupported) {
+      const viewerUrl = `${window.location.origin}/viewer?pin=${room.pin}&local=true`;
+      presentationRequestRef.current = new PresentationRequest([viewerUrl]);
+
+      // Monitor for available displays
+      if (navigator.presentation && navigator.presentation.defaultRequest) {
+        navigator.presentation.defaultRequest = presentationRequestRef.current;
+      }
+    }
+  }, [room, presentationSupported]);
+
+  // Clean up presentation connection on unmount
+  useEffect(() => {
+    return () => {
+      if (presentationConnection) {
+        try {
+          presentationConnection.terminate();
+        } catch (err) {
+          console.log('Error terminating presentation:', err);
+        }
+      }
+    };
+  }, [presentationConnection]);
+
+  // Start presentation on external display
+  const startPresentation = async () => {
+    if (!room) return;
+
+    if (!presentationSupported) {
+      // Fallback for browsers without Presentation API
+      openLocalViewerFallback();
+      return;
+    }
+
+    try {
+      // Update the URL in case room changed
+      const viewerUrl = `${window.location.origin}/viewer?pin=${room.pin}&local=true`;
+      const request = new PresentationRequest([viewerUrl]);
+
+      // Start the presentation - browser shows display picker
+      const connection = await request.start();
+
+      setPresentationConnection(connection);
+
+      connection.onconnect = () => {
+        console.log('✅ Presentation connected');
+      };
+
+      connection.onclose = () => {
+        console.log('📴 Presentation closed');
+        setPresentationConnection(null);
+      };
+
+      connection.onterminate = () => {
+        console.log('🛑 Presentation terminated');
+        setPresentationConnection(null);
+      };
+
+    } catch (err) {
+      console.error('Presentation error:', err);
+      if (err.name === 'NotAllowedError') {
+        // User cancelled the display picker
+        console.log('User cancelled display selection');
+      } else if (err.name === 'NotFoundError') {
+        alert(t('presenter.noDisplayFound') || 'No external display found. Please connect a display and try again.');
+      } else {
+        // Fallback to simple window
+        openLocalViewerFallback();
+      }
+    }
+  };
+
+  // Fallback: open viewer in a new window (for browsers without Presentation API)
+  const openLocalViewerFallback = () => {
+    if (!room) return;
+
+    const viewerUrl = `${window.location.origin}/viewer?pin=${room.pin}&local=true`;
+    const newWindow = window.open(viewerUrl, 'localViewer', 'width=1280,height=720');
+
+    if (newWindow) {
+      alert(t('presenter.moveToExternalDisplay') || 'Drag this window to your external display and press F11 for fullscreen.');
+    }
+  };
+
+  // Stop/close presentation
+  const stopPresentation = () => {
+    if (presentationConnection) {
+      try {
+        presentationConnection.terminate();
+      } catch (err) {
+        console.log('Error terminating:', err);
+      }
+      setPresentationConnection(null);
+    }
+  };
 
   // Countdown functions
   const toggleCountdownBroadcast = () => {
@@ -3735,6 +3845,34 @@ function PresenterMode() {
                   </svg>
                 </Button>
               )}
+              {/* Present to Local Display Button */}
+              <Button
+                variant={presentationConnection ? "info" : "outline-info"}
+                onClick={() => {
+                  if (presentationConnection) {
+                    stopPresentation();
+                  } else {
+                    startPresentation();
+                  }
+                }}
+                title={presentationConnection
+                  ? (t('presenter.stopPresentation') || 'Stop Presentation')
+                  : (t('presenter.presentToDisplay') || 'Present to Display')}
+                style={{
+                  padding: '0.375rem 0.75rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
+                </svg>
+                {presentationConnection && (
+                  <span style={{ fontSize: '0.7rem', fontWeight: 'bold' }}>LIVE</span>
+                )}
+              </Button>
             </div>
           </div>
         )}

@@ -898,24 +898,58 @@ function ViewerPage() {
         )}
 
         {displayMode === 'original' ? (
-          // Original language only - single line display
+          // Original language only - check for combined slides
           showOriginal && (
-            <div style={{
-              fontSize: `calc(clamp(2.5rem, 8vw, 8rem) * ${fontSize / 100})`,
-              lineHeight: 1.4,
-              fontWeight: '400',
-              width: '100%',
-              maxWidth: '100%',
-              wordWrap: 'break-word',
-              overflowWrap: 'break-word',
-              color: textColor,
-              textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
-              direction: getTextDirection(slide.originalText),
-              unicodeBidi: 'plaintext',
-              textAlign: isBible ? 'right' : 'center'
-            }}>
-              {slide.originalText}
-            </div>
+            currentSlide.combinedSlides && currentSlide.combinedSlides.length > 1 ? (
+              // Combined slides - show both texts stacked vertically
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'clamp(2rem, 5vh, 5rem)',
+                width: '100%',
+                maxWidth: '100%'
+              }}>
+                {currentSlide.combinedSlides.map((combinedSlide, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      fontSize: `calc(clamp(2.2rem, 7vw, 7rem) * ${fontSize / 100})`,
+                      lineHeight: 1.4,
+                      fontWeight: '400',
+                      width: '100%',
+                      maxWidth: '100%',
+                      wordWrap: 'break-word',
+                      overflowWrap: 'break-word',
+                      color: textColor,
+                      textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                      direction: getTextDirection(combinedSlide.originalText),
+                      unicodeBidi: 'plaintext',
+                      textAlign: isBible ? 'right' : 'center'
+                    }}
+                  >
+                    {combinedSlide.originalText}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              // Single slide - original display
+              <div style={{
+                fontSize: `calc(clamp(2.5rem, 8vw, 8rem) * ${fontSize / 100})`,
+                lineHeight: 1.4,
+                fontWeight: '400',
+                width: '100%',
+                maxWidth: '100%',
+                wordWrap: 'break-word',
+                overflowWrap: 'break-word',
+                color: textColor,
+                textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                direction: getTextDirection(slide.originalText),
+                unicodeBidi: 'plaintext',
+                textAlign: isBible ? 'right' : 'center'
+              }}>
+                {slide.originalText}
+              </div>
+            )
           )
         ) : (
           // Bilingual mode - all 4 lines (respects viewer toggles)

@@ -368,6 +368,7 @@ io.on('connection', (socket) => {
           // Use slide data sent from frontend (new optimized path)
           broadcastSlideData = {
             slide: slideData.slide,
+            combinedSlides: slideData.combinedSlides || null, // For original-only mode paired slides
             displayMode: currentSlideData.displayMode,
             songTitle: slideData.title,
             backgroundImage: backgroundImage || '',

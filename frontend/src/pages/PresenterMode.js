@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import api, { getFullImageUrl, publicRoomAPI, roomAPI } from '../services/api';
 import socketService from '../services/socket';
+import { createCombinedSlides, getCombinedSlideLabel } from '../utils/slideCombining';
 
 function PresenterMode() {
   const navigate = useNavigate();
@@ -126,6 +127,7 @@ function PresenterMode() {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [displayMode, setDisplayMode] = useState('bilingual');
   const [isBlankActive, setIsBlankActive] = useState(false);
+  const [selectedCombinedIndex, setSelectedCombinedIndex] = useState(0); // Track selected combined slide in original mode
 
   // Background state
   const [media, setMedia] = useState([]);
@@ -295,6 +297,22 @@ function PresenterMode() {
       message: countdownMessage
     };
   }, [countdownRunning, countdownBroadcasting, countdownRemaining, countdownMessage]);
+
+  // Combined slides for original-only mode (pairs consecutive same-verseType slides)
+  const combinedSlides = useMemo(() => {
+    if (displayMode !== 'original' || !currentSong?.slides) return null;
+    return createCombinedSlides(currentSong.slides);
+  }, [displayMode, currentSong?.slides]);
+
+  // Sync selectedCombinedIndex when mode changes or song changes
+  useEffect(() => {
+    if (combinedSlides && currentSlideIndex !== null) {
+      const combinedIdx = combinedSlides.originalToCombined.get(currentSlideIndex);
+      if (combinedIdx !== undefined) {
+        setSelectedCombinedIndex(combinedIdx);
+      }
+    }
+  }, [combinedSlides, currentSlideIndex]);
 
   // Countdown functions
   const toggleCountdownBroadcast = () => {
@@ -2807,7 +2825,7 @@ function PresenterMode() {
     }
   };
 
-  const updateSlide = (song, slideIndex, mode, isBlank) => {
+  const updateSlide = (song, slideIndex, mode, isBlank, combinedIndices = null) => {
     if (!room) {
       console.error('❌ Cannot update slide: room is null');
       return;
@@ -2834,7 +2852,11 @@ function PresenterMode() {
         title: song.title,
         isBible: song.isBible || false,
         isTemporary: song.isTemporary || false,
-        originalLanguage: song.originalLanguage || 'en'
+        originalLanguage: song.originalLanguage || 'en',
+        // Include combined slides if provided (for original-only mode with paired slides)
+        combinedSlides: combinedIndices && combinedIndices.length > 1
+          ? combinedIndices.map(i => song.slides[i]).filter(Boolean)
+          : null
       };
     }
 
@@ -2892,6 +2914,62 @@ function PresenterMode() {
     if (currentSong) {
       updateSlide(currentSong, currentSlideIndex, newMode, false);
     }
+  };
+
+  // Helper function to get border color based on verse type (for slide previews)
+  const getSlidePreviewBorderColor = (verseType, isSelected) => {
+    if (isSelected) return '#00d4ff';
+    switch(verseType) {
+      case 'Intro': return 'rgba(255,255,255,0.4)';
+      case 'Verse1': return 'rgba(255,193,7,0.6)';
+      case 'Verse2': return 'rgba(255,167,38,0.6)';
+      case 'Verse3': return 'rgba(255,213,79,0.6)';
+      case 'Verse4': return 'rgba(251,192,45,0.6)';
+      case 'PreChorus': return 'rgba(233,30,99,0.5)';
+      case 'Chorus': return 'rgba(3,169,244,0.6)';
+      case 'Bridge': return 'rgba(156,39,176,0.5)';
+      case 'Instrumental': return 'rgba(76,175,80,0.5)';
+      case 'Outro': return 'rgba(255,152,0,0.6)';
+      case 'Tag': return 'rgba(103,58,183,0.5)';
+      default: return 'rgba(255,255,255,0.3)';
+    }
+  };
+
+  const getSlidePreviewBackgroundColor = (verseType, isSelected) => {
+    if (isSelected) return 'rgba(0,212,255,0.15)';
+    switch(verseType) {
+      case 'Intro': return 'rgba(255,255,255,0.08)';
+      case 'Verse1': return 'rgba(255,193,7,0.15)';
+      case 'Verse2': return 'rgba(255,167,38,0.15)';
+      case 'Verse3': return 'rgba(255,213,79,0.15)';
+      case 'Verse4': return 'rgba(251,192,45,0.15)';
+      case 'PreChorus': return 'rgba(233,30,99,0.12)';
+      case 'Chorus': return 'rgba(3,169,244,0.15)';
+      case 'Bridge': return 'rgba(156,39,176,0.12)';
+      case 'Instrumental': return 'rgba(76,175,80,0.12)';
+      case 'Outro': return 'rgba(255,152,0,0.15)';
+      case 'Tag': return 'rgba(103,58,183,0.12)';
+      default: return 'transparent';
+    }
+  };
+
+  // Select a combined slide (for original-only mode)
+  const selectCombinedSlide = (combinedIndex) => {
+    if (!combinedSlides || !currentSong) return;
+
+    setSelectedCombinedIndex(combinedIndex);
+    setIsBlankActive(false);
+
+    const originalIndices = combinedSlides.combinedToOriginal.get(combinedIndex);
+    const firstOriginalIndex = originalIndices[0];
+
+    // Update currentSlideIndex to the first slide of the pair
+    setCurrentSlideIndex(firstOriginalIndex);
+
+    // Broadcast with combined slide data
+    setTimeout(() => {
+      updateSlide(currentSong, firstOriginalIndex, displayMode, false, originalIndices);
+    }, 0);
   };
 
   const toggleBlankSlide = useCallback(() => {
@@ -3015,8 +3093,15 @@ function PresenterMode() {
   const nextSlide = useCallback(() => {
     if (isBlankActive) return;
 
-    // If current item is a song, navigate through its slides
-    if (currentSong && currentSlideIndex < currentSong.slides.length - 1) {
+    // If in original mode with combined slides, navigate by combined index
+    if (displayMode === 'original' && combinedSlides && currentSong) {
+      if (selectedCombinedIndex < combinedSlides.combinedSlides.length - 1) {
+        selectCombinedSlide(selectedCombinedIndex + 1);
+        return;
+      }
+      // Fall through to next item in setlist
+    } else if (currentSong && currentSlideIndex < currentSong.slides.length - 1) {
+      // Normal single-slide navigation
       const newIndex = currentSlideIndex + 1;
       setCurrentSlideIndex(newIndex);
       updateSlide(currentSong, newIndex, displayMode, false);
@@ -3037,14 +3122,21 @@ function PresenterMode() {
       const nextItem = setlist[currentItemIndex + 1];
       selectItem(nextItem);
     }
-  }, [currentSong, currentItem, currentSlideIndex, displayMode, isBlankActive, setlist]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentSong, currentItem, currentSlideIndex, displayMode, isBlankActive, setlist, combinedSlides, selectedCombinedIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Navigate to previous slide
   const previousSlide = useCallback(() => {
     if (isBlankActive) return;
 
-    // If current item is a song and not at first slide, go to previous slide
-    if (currentSong && currentSlideIndex > 0) {
+    // If in original mode with combined slides, navigate by combined index
+    if (displayMode === 'original' && combinedSlides && currentSong) {
+      if (selectedCombinedIndex > 0) {
+        selectCombinedSlide(selectedCombinedIndex - 1);
+        return;
+      }
+      // Fall through to previous item in setlist
+    } else if (currentSong && currentSlideIndex > 0) {
+      // Normal single-slide navigation
       const newIndex = currentSlideIndex - 1;
       setCurrentSlideIndex(newIndex);
       updateSlide(currentSong, newIndex, displayMode, false);
@@ -3071,7 +3163,7 @@ function PresenterMode() {
         setCurrentSlideIndex(lastSlideIndex);
       }
     }
-  }, [currentSong, currentItem, currentSlideIndex, displayMode, isBlankActive, setlist]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentSong, currentItem, currentSlideIndex, displayMode, isBlankActive, setlist, combinedSlides, selectedCombinedIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Navigate to next song/item
   const nextSong = useCallback(() => {
@@ -5402,149 +5494,175 @@ function PresenterMode() {
               gap: '6px',
               alignContent: 'start'
             }}>
-            {currentSong.slides.map((slide, index) => {
-              // Function to get border color based on verse type
-              const getBorderColor = (verseType, isSelected) => {
-                if (isSelected) return '#007bff'; // Blue for selected
+            {/* Combined slides view for original-only mode */}
+            {displayMode === 'original' && combinedSlides ? (
+              combinedSlides.combinedSlides.map((item, combinedIndex) => {
+                const isSelected = selectedCombinedIndex === combinedIndex;
+                const verseType = item.verseType || '';
 
-                switch(verseType) {
-                  case 'Intro':
-                    return 'rgba(255,255,255,0.4)';
-                  case 'Verse1':
-                    return 'rgba(255,193,7,0.6)'; // Bright yellow
-                  case 'Verse2':
-                    return 'rgba(255,167,38,0.6)'; // Orange-yellow
-                  case 'Verse3':
-                    return 'rgba(255,213,79,0.6)'; // Light yellow
-                  case 'Verse4':
-                    return 'rgba(251,192,45,0.6)'; // Golden yellow
-                  case 'PreChorus':
-                    return 'rgba(233,30,99,0.5)'; // Pink
-                  case 'Chorus':
-                    return 'rgba(3,169,244,0.6)'; // Cyan
-                  case 'Bridge':
-                    return 'rgba(156,39,176,0.5)'; // Purple
-                  case 'Instrumental':
-                    return 'rgba(76,175,80,0.5)'; // Green
-                  case 'Outro':
-                    return 'rgba(255,152,0,0.6)'; // Orange
-                  case 'Tag':
-                    return 'rgba(103,58,183,0.5)'; // Indigo
-                  default:
-                    return 'rgba(255,255,255,0.3)';
-                }
-              };
-
-              const getBackgroundColor = (verseType, isSelected) => {
-                if (isSelected) return 'rgba(0,123,255,0.25)'; // Blue for selected
-
-                switch(verseType) {
-                  case 'Intro':
-                    return 'rgba(255,255,255,0.08)';
-                  case 'Verse1':
-                    return 'rgba(255,193,7,0.15)'; // Bright yellow
-                  case 'Verse2':
-                    return 'rgba(255,167,38,0.15)'; // Orange-yellow
-                  case 'Verse3':
-                    return 'rgba(255,213,79,0.15)'; // Light yellow
-                  case 'Verse4':
-                    return 'rgba(251,192,45,0.15)'; // Golden yellow
-                  case 'PreChorus':
-                    return 'rgba(233,30,99,0.12)'; // Pink
-                  case 'Chorus':
-                    return 'rgba(3,169,244,0.15)'; // Cyan
-                  case 'Bridge':
-                    return 'rgba(156,39,176,0.12)'; // Purple
-                  case 'Instrumental':
-                    return 'rgba(76,175,80,0.12)'; // Green
-                  case 'Outro':
-                    return 'rgba(255,152,0,0.15)'; // Orange
-                  case 'Tag':
-                    return 'rgba(103,58,183,0.12)'; // Indigo
-                  default:
-                    return 'transparent';
-                }
-              };
-
-              const isSelected = currentSlideIndex === index;
-
-              return (
-              <div
-                key={index}
-                onClick={() => selectSlide(index)}
-                style={{
-                  position: 'relative',
-                  border: isSelected ? '2px solid #00d4ff' : `1px solid ${getBorderColor(slide.verseType, false)}`,
-                  borderRadius: '6px',
-                  padding: '6px 8px',
-                  paddingLeft: isSelected ? '14px' : '8px',
-                  cursor: 'pointer',
-                  backgroundColor: getBackgroundColor(slide.verseType, false),
-                  boxShadow: isSelected ? '0 0 12px rgba(0, 212, 255, 0.5), inset 0 0 20px rgba(0, 212, 255, 0.1)' : 'none',
-                  transition: 'all 0.15s ease',
-                  userSelect: 'none',
-                  transform: isSelected ? 'scale(1.02)' : 'scale(1)'
-                }}
-                onMouseDown={(e) => {
-                  if (!isSelected) e.currentTarget.style.transform = 'scale(0.98)';
-                }}
-                onMouseUp={(e) => {
-                  e.currentTarget.style.transform = isSelected ? 'scale(1.02)' : 'scale(1)';
-                }}
-              >
-                {/* Left accent bar for selected slide */}
-                {isSelected && (
-                  <div style={{
-                    position: 'absolute',
-                    left: '0',
-                    top: '0',
-                    bottom: '0',
-                    width: '4px',
-                    background: 'linear-gradient(180deg, #00d4ff 0%, #0099ff 100%)',
-                    borderRadius: '6px 0 0 6px'
-                  }} />
-                )}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  color: isSelected ? '#00d4ff' : 'rgba(255,255,255,0.7)',
-                  fontWeight: 'bold',
-                  marginBottom: '4px',
-                  fontSize: '0.75rem'
-                }}>
-                  {isSelected && <span style={{ fontSize: '0.7rem' }}>▶</span>}
-                  {currentSong.isBible
-                    ? `${t('presenter.verse')} ${slide.verseNumber || index + 1}`
-                    : slide.verseType
-                    ? (index === 0 || currentSong.slides[index - 1]?.verseType !== slide.verseType)
-                      ? `${slide.verseType}`
-                      : `${index + 1}`
-                    : `${index + 1}`}
-                </div>
-                <div style={{ fontSize: '0.85rem', lineHeight: '1.3', color: 'white' }}>
-                  <div style={{ marginBottom: '2px', textAlign: currentSong.isBible ? 'right' : 'inherit', direction: currentSong.isBible ? 'rtl' : 'inherit' }}>
-                    {slide.originalText}
+                return (
+                  <div
+                    key={combinedIndex}
+                    onClick={() => selectCombinedSlide(combinedIndex)}
+                    style={{
+                      position: 'relative',
+                      border: isSelected ? '2px solid #00d4ff' : `1px solid ${getSlidePreviewBorderColor(verseType, false)}`,
+                      borderRadius: '6px',
+                      padding: '6px 8px',
+                      paddingLeft: isSelected ? '14px' : '8px',
+                      cursor: 'pointer',
+                      backgroundColor: getSlidePreviewBackgroundColor(verseType, false),
+                      boxShadow: isSelected ? '0 0 12px rgba(0, 212, 255, 0.5), inset 0 0 20px rgba(0, 212, 255, 0.1)' : 'none',
+                      transition: 'all 0.15s ease',
+                      userSelect: 'none',
+                      transform: isSelected ? 'scale(1.02)' : 'scale(1)'
+                    }}
+                    onMouseDown={(e) => {
+                      if (!isSelected) e.currentTarget.style.transform = 'scale(0.98)';
+                    }}
+                    onMouseUp={(e) => {
+                      e.currentTarget.style.transform = isSelected ? 'scale(1.02)' : 'scale(1)';
+                    }}
+                  >
+                    {/* Left accent bar for selected slide */}
+                    {isSelected && (
+                      <div style={{
+                        position: 'absolute',
+                        left: '0',
+                        top: '0',
+                        bottom: '0',
+                        width: '4px',
+                        background: 'linear-gradient(180deg, #00d4ff 0%, #0099ff 100%)',
+                        borderRadius: '6px 0 0 6px'
+                      }} />
+                    )}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      color: isSelected ? '#00d4ff' : 'rgba(255,255,255,0.7)',
+                      fontWeight: 'bold',
+                      marginBottom: '4px',
+                      fontSize: '0.75rem'
+                    }}>
+                      {isSelected && <span style={{ fontSize: '0.7rem' }}>▶</span>}
+                      {/* Show label like "Verse 1-2" or "3-4" */}
+                      {item.type === 'combined' ? (
+                        <span>
+                          {verseType ? `${verseType} ` : ''}{item.label}
+                          <span style={{ marginLeft: '4px', fontSize: '0.65rem', opacity: 0.7 }}>●●</span>
+                        </span>
+                      ) : (
+                        <span>{verseType ? `${verseType} ` : ''}{item.label}</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', lineHeight: '1.3', color: 'white' }}>
+                      {item.type === 'combined' ? (
+                        <>
+                          <div style={{ marginBottom: '4px', textAlign: currentSong.isBible ? 'right' : 'inherit', direction: currentSong.isBible ? 'rtl' : 'inherit' }}>
+                            {item.slides[0].originalText}
+                          </div>
+                          <div style={{
+                            paddingTop: '4px',
+                            borderTop: '1px dashed rgba(255,255,255,0.3)',
+                            textAlign: currentSong.isBible ? 'right' : 'inherit',
+                            direction: currentSong.isBible ? 'rtl' : 'inherit'
+                          }}>
+                            {item.slides[1].originalText}
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ textAlign: currentSong.isBible ? 'right' : 'inherit', direction: currentSong.isBible ? 'rtl' : 'inherit' }}>
+                          {item.slide.originalText}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  {displayMode === 'bilingual' && slide.transliteration && (
-                    <div style={{ marginBottom: '2px', color: 'rgba(255,255,255,0.85)' }}>
-                      {slide.transliteration}
+                );
+              })
+            ) : (
+              /* Regular single-slide view for bilingual mode */
+              currentSong.slides.map((slide, index) => {
+                const isSelected = currentSlideIndex === index;
+
+                return (
+                  <div
+                    key={index}
+                    onClick={() => selectSlide(index)}
+                    style={{
+                      position: 'relative',
+                      border: isSelected ? '2px solid #00d4ff' : `1px solid ${getSlidePreviewBorderColor(slide.verseType, false)}`,
+                      borderRadius: '6px',
+                      padding: '6px 8px',
+                      paddingLeft: isSelected ? '14px' : '8px',
+                      cursor: 'pointer',
+                      backgroundColor: getSlidePreviewBackgroundColor(slide.verseType, false),
+                      boxShadow: isSelected ? '0 0 12px rgba(0, 212, 255, 0.5), inset 0 0 20px rgba(0, 212, 255, 0.1)' : 'none',
+                      transition: 'all 0.15s ease',
+                      userSelect: 'none',
+                      transform: isSelected ? 'scale(1.02)' : 'scale(1)'
+                    }}
+                    onMouseDown={(e) => {
+                      if (!isSelected) e.currentTarget.style.transform = 'scale(0.98)';
+                    }}
+                    onMouseUp={(e) => {
+                      e.currentTarget.style.transform = isSelected ? 'scale(1.02)' : 'scale(1)';
+                    }}
+                  >
+                    {/* Left accent bar for selected slide */}
+                    {isSelected && (
+                      <div style={{
+                        position: 'absolute',
+                        left: '0',
+                        top: '0',
+                        bottom: '0',
+                        width: '4px',
+                        background: 'linear-gradient(180deg, #00d4ff 0%, #0099ff 100%)',
+                        borderRadius: '6px 0 0 6px'
+                      }} />
+                    )}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      color: isSelected ? '#00d4ff' : 'rgba(255,255,255,0.7)',
+                      fontWeight: 'bold',
+                      marginBottom: '4px',
+                      fontSize: '0.75rem'
+                    }}>
+                      {isSelected && <span style={{ fontSize: '0.7rem' }}>▶</span>}
+                      {currentSong.isBible
+                        ? `${t('presenter.verse')} ${slide.verseNumber || index + 1}`
+                        : slide.verseType
+                        ? (index === 0 || currentSong.slides[index - 1]?.verseType !== slide.verseType)
+                          ? `${slide.verseType}`
+                          : `${index + 1}`
+                        : `${index + 1}`}
                     </div>
-                  )}
-                  {displayMode === 'bilingual' && slide.translation && (
-                    <div style={{ marginBottom: '2px', color: 'rgba(255,255,255,0.85)', textAlign: currentSong.isBible ? 'left' : 'inherit', direction: currentSong.isBible ? 'ltr' : 'inherit' }}>
-                      {slide.translation}
+                    <div style={{ fontSize: '0.85rem', lineHeight: '1.3', color: 'white' }}>
+                      <div style={{ marginBottom: '2px', textAlign: currentSong.isBible ? 'right' : 'inherit', direction: currentSong.isBible ? 'rtl' : 'inherit' }}>
+                        {slide.originalText}
+                      </div>
+                      {displayMode === 'bilingual' && slide.transliteration && (
+                        <div style={{ marginBottom: '2px', color: 'rgba(255,255,255,0.85)' }}>
+                          {slide.transliteration}
+                        </div>
+                      )}
+                      {displayMode === 'bilingual' && slide.translation && (
+                        <div style={{ marginBottom: '2px', color: 'rgba(255,255,255,0.85)', textAlign: currentSong.isBible ? 'left' : 'inherit', direction: currentSong.isBible ? 'ltr' : 'inherit' }}>
+                          {slide.translation}
+                        </div>
+                      )}
+                      {displayMode === 'bilingual' && slide.translationOverflow && (
+                        <div style={{ marginBottom: '2px', color: 'rgba(255,255,255,0.85)', textAlign: currentSong.isBible ? 'left' : 'inherit', direction: currentSong.isBible ? 'ltr' : 'inherit' }}>
+                          {slide.translationOverflow}
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {displayMode === 'bilingual' && slide.translationOverflow && (
-                    <div style={{ marginBottom: '2px', color: 'rgba(255,255,255,0.85)', textAlign: currentSong.isBible ? 'left' : 'inherit', direction: currentSong.isBible ? 'ltr' : 'inherit' }}>
-                      {slide.translationOverflow}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-            })}
+                  </div>
+                );
+              })
+            )}
           </div>
           </div>
         )}

@@ -175,6 +175,7 @@ app.use((err, req, res, next) => {
 // Socket.IO for real-time room synchronization
 const operatorSockets = new Map(); // Map of userId -> socketId
 const viewerRooms = new Map(); // Map of socketId -> roomPin
+const roomToolsData = new Map(); // Map of roomPin -> toolsData (for new viewers)
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
@@ -273,15 +274,16 @@ io.on('connection', (socket) => {
         if (room.currentImageUrl) {
           imageUrl = room.currentImageUrl;
         }
-        // Check if there's stored Bible data
+        // Check if there's stored slide data (can be Bible or song data)
         else if (room.currentBibleData) {
           slideData = {
             slide: room.currentBibleData.slide,
             displayMode: room.currentSlide.displayMode,
             songTitle: room.currentBibleData.title,
             backgroundImage: room.backgroundImage || '',
-            isBible: true,
-            originalLanguage: room.currentBibleData.originalLanguage || 'he'
+            isBible: room.currentBibleData.isBible || false,
+            isTemporary: room.currentBibleData.isTemporary || false,
+            originalLanguage: room.currentBibleData.originalLanguage || 'en'
           };
         }
         // Otherwise, fetch song from database (only needed fields)
@@ -296,6 +298,7 @@ io.on('connection', (socket) => {
               displayMode: room.currentSlide.displayMode,
               songTitle: song.title,
               backgroundImage: room.backgroundImage || '',
+              isBible: false,
               originalLanguage: song.originalLanguage || 'en'
             };
           }
@@ -309,7 +312,8 @@ io.on('connection', (socket) => {
         slideData: slideData,
         imageUrl: imageUrl,
         isBlank: room.currentSlide?.isBlank || false,
-        backgroundImage: room.backgroundImage || ''
+        backgroundImage: room.backgroundImage || '',
+        toolsData: roomToolsData.get(room.pin) || null
       };
 
       console.log(`📤 Sending to viewer:`, JSON.stringify(viewerJoinedData, null, 2));
@@ -396,6 +400,13 @@ io.on('connection', (socket) => {
             };
           }
         }
+      }
+
+      // Store tools data in memory for new viewers
+      if (toolsData) {
+        roomToolsData.set(pin, toolsData);
+      } else {
+        roomToolsData.delete(pin);
       }
 
       // 🚀 BROADCAST IMMEDIATELY - no DB query needed when PIN is provided!

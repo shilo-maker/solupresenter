@@ -218,6 +218,8 @@ function PresenterMode() {
   const [countdownRunning, setCountdownRunning] = useState(false);
   const [countdownRemaining, setCountdownRemaining] = useState(0); // in seconds
   const [countdownBroadcasting, setCountdownBroadcasting] = useState(false);
+  // Refs to track current countdown state (for use in timeouts/closures)
+  const countdownStateRef = useRef({ running: false, broadcasting: false, remaining: 0, message: '' });
   const [activeSetlistCountdownIndex, setActiveSetlistCountdownIndex] = useState(null); // Track which setlist countdown is broadcasting
   const [focusedCountdownIndex, setFocusedCountdownIndex] = useState(null); // Track which countdown is focused (for selection highlight)
   const [activeSetlistAnnouncementIndex, setActiveSetlistAnnouncementIndex] = useState(null); // Track which setlist announcement is showing
@@ -283,6 +285,16 @@ function PresenterMode() {
     }
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
+
+  // Keep countdown state ref in sync (for use in timeouts/closures)
+  useEffect(() => {
+    countdownStateRef.current = {
+      running: countdownRunning,
+      broadcasting: countdownBroadcasting,
+      remaining: countdownRemaining,
+      message: countdownMessage
+    };
+  }, [countdownRunning, countdownBroadcasting, countdownRemaining, countdownMessage]);
 
   // Countdown functions
   const toggleCountdownBroadcast = () => {
@@ -411,16 +423,7 @@ function PresenterMode() {
           }
         }
 
-        // Stop any active announcement first
-        if (activeSetlistAnnouncementIndex !== null) {
-          setAnnouncementVisible(false);
-          setActiveSetlistAnnouncementIndex(null);
-          setFocusedAnnouncementIndex(null);
-          if (announcementTimerRef.current) {
-            clearTimeout(announcementTimerRef.current);
-            announcementTimerRef.current = null;
-          }
-        }
+        // NOTE: Don't stop announcement - it's an overlay that persists on top of countdown
 
         // Save current state before showing countdown (if not already saved from messages)
         if (!preCountdownStateRef.current) {
@@ -440,6 +443,26 @@ function PresenterMode() {
         setCountdownBroadcasting(true);
         setActiveSetlistCountdownIndex(index);
 
+        // Build toolsData - include announcement if one is active
+        const countdownToolsData = {
+          type: 'countdown',
+          countdown: {
+            remaining: total,
+            message: toolData.message || '',
+            running: true,
+            endTime: Date.now() + (total * 1000)
+          }
+        };
+
+        // If announcement is active, include it so viewer shows both
+        if (announcementVisible && announcementText) {
+          countdownToolsData.type = 'announcement';
+          countdownToolsData.announcement = {
+            text: announcementText,
+            visible: true
+          };
+        }
+
         socketService.operatorUpdateSlide({
           roomId: room.id,
           roomPin: room.pin,
@@ -448,15 +471,7 @@ function PresenterMode() {
           slideIndex: currentSlideIndex,
           displayMode: displayMode,
           isBlank: isBlankActive,
-          toolsData: {
-            type: 'countdown',
-            countdown: {
-              remaining: total,
-              message: toolData.message || '',
-              running: true,
-              endTime: Date.now() + (total * 1000)
-            }
-          }
+          toolsData: countdownToolsData
         });
       }
     }
@@ -498,26 +513,14 @@ function PresenterMode() {
         }
       });
     } else {
-      // Show - display this announcement
+      // Show - display this announcement as an overlay
       // Clear any existing timer
       if (announcementTimerRef.current) {
         clearTimeout(announcementTimerRef.current);
       }
 
-      // Stop any active countdown first
-      if (activeSetlistCountdownIndex !== null) {
-        if (countdownIntervalRef.current) {
-          clearInterval(countdownIntervalRef.current);
-          countdownIntervalRef.current = null;
-        }
-        setCountdownRunning(false);
-        setCountdownBroadcasting(false);
-        setActiveSetlistCountdownIndex(null);
-        setFocusedCountdownIndex(null);
-        preCountdownStateRef.current = null;
-      }
-
-      // Stop any active messages first
+      // NOTE: Don't stop countdown - announcements are overlays that can appear on top of countdowns
+      // Stop any active messages first (messages and announcements conflict)
       if (activeSetlistMessagesIndex !== null) {
         if (setlistMessagesIntervalRef.current) {
           clearInterval(setlistMessagesIntervalRef.current);
@@ -532,6 +535,26 @@ function PresenterMode() {
       setAnnouncementText(toolData.text);
       setAnnouncementVisible(true);
       setActiveSetlistAnnouncementIndex(index);
+
+      // Build toolsData - include countdown if one is active
+      const announcementToolsData = {
+        type: 'announcement',
+        announcement: {
+          text: toolData.text,
+          visible: true
+        }
+      };
+
+      // If countdown is active, include it so viewer can show both
+      if (countdownBroadcasting && countdownRunning) {
+        announcementToolsData.countdown = {
+          remaining: countdownRemaining,
+          message: countdownMessage,
+          running: true,
+          endTime: Date.now() + (countdownRemaining * 1000)
+        };
+      }
+
       socketService.operatorUpdateSlide({
         roomId: room.id,
         roomPin: room.pin,
@@ -541,13 +564,7 @@ function PresenterMode() {
         displayMode: displayMode,
         isBlank: isBlankActive,
         imageUrl: currentImageUrl,
-        toolsData: {
-          type: 'announcement',
-          announcement: {
-            text: toolData.text,
-            visible: true
-          }
-        }
+        toolsData: announcementToolsData
       });
 
       // Auto-hide after 15 seconds
@@ -555,6 +572,31 @@ function PresenterMode() {
         setAnnouncementVisible(false);
         // Get current image URL at the time of auto-hide
         const imageUrlAtHide = currentItem?.type === 'image' ? currentItem.data?.url : null;
+
+        // Build toolsData for hide - restore countdown if still active
+        // Use ref to get current countdown state (not stale closure values)
+        const currentCountdown = countdownStateRef.current;
+        let hideToolsData = {
+          type: 'announcement',
+          announcement: {
+            text: '',
+            visible: false
+          }
+        };
+
+        // If countdown is still running, switch back to showing it
+        if (currentCountdown.broadcasting && currentCountdown.running) {
+          hideToolsData = {
+            type: 'countdown',
+            countdown: {
+              remaining: currentCountdown.remaining,
+              message: currentCountdown.message,
+              running: true,
+              endTime: Date.now() + (currentCountdown.remaining * 1000)
+            }
+          };
+        }
+
         socketService.operatorUpdateSlide({
           roomId: room.id,
           roomPin: room.pin,
@@ -564,13 +606,7 @@ function PresenterMode() {
           displayMode: displayMode,
           isBlank: isBlankActive,
           imageUrl: imageUrlAtHide,
-          toolsData: {
-            type: 'announcement',
-            announcement: {
-              text: '',
-              visible: false
-            }
-          }
+          toolsData: hideToolsData
         });
         // Delay clearing the selection until after the banner animation completes on viewer
         setTimeout(() => {
@@ -2045,6 +2081,26 @@ function PresenterMode() {
 
     // If this countdown is currently broadcasting, update the viewer too
     if (activeSetlistCountdownIndex === focusedCountdownIndex && room) {
+      // Build toolsData - include announcement if one is active
+      const updateToolsData = {
+        type: 'countdown',
+        countdown: {
+          remaining: countdownRemaining,
+          message: countdownMessage,
+          running: true,
+          endTime: Date.now() + (countdownRemaining * 1000)
+        }
+      };
+
+      // If announcement is active, include it so viewer shows both
+      if (announcementVisible && announcementText) {
+        updateToolsData.type = 'announcement';
+        updateToolsData.announcement = {
+          text: announcementText,
+          visible: true
+        };
+      }
+
       socketService.operatorUpdateSlide({
         roomId: room.id,
         roomPin: room.pin,
@@ -2053,15 +2109,7 @@ function PresenterMode() {
         slideIndex: currentSlideIndex,
         displayMode: displayMode,
         isBlank: isBlankActive,
-        toolsData: {
-          type: 'countdown',
-          countdown: {
-            remaining: countdownRemaining,
-            message: countdownMessage,
-            running: true,
-            endTime: Date.now() + (countdownRemaining * 1000)
-          }
-        }
+        toolsData: updateToolsData
       });
     }
   };

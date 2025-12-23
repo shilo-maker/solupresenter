@@ -7,6 +7,24 @@ import socketService from '../services/socket';
 import ConnectionStatus from '../components/ConnectionStatus';
 import { getFullImageUrl, publicRoomAPI } from '../services/api';
 
+// Inject animation keyframes
+const animationStyles = document.createElement('style');
+animationStyles.textContent = `
+  @keyframes breathing {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+  }
+  @keyframes messageUpdate {
+    0% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+`;
+if (!document.getElementById('viewer-animations')) {
+  animationStyles.id = 'viewer-animations';
+  document.head.appendChild(animationStyles);
+}
+
 function ViewerPage() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
@@ -37,6 +55,8 @@ function ViewerPage() {
   const [clockTime, setClockTime] = useState(new Date());
   const [countdownRemaining, setCountdownRemaining] = useState(0);
   const [stopwatchElapsed, setStopwatchElapsed] = useState(0);
+  const [countdownMessageKey, setCountdownMessageKey] = useState(0); // For triggering message update animation
+  const prevCountdownMessageRef = useRef('');
   const clockIntervalRef = useRef(null);
   const countdownIntervalRef = useRef(null);
   const stopwatchIntervalRef = useRef(null);
@@ -149,9 +169,10 @@ function ViewerPage() {
   }, [toolsData?.type]);
 
   // Countdown timer effect - decrements every second when running
+  // Countdown can be standalone OR underneath an announcement overlay
   useEffect(() => {
-    // Only start interval if countdown is active and has time remaining
-    if (toolsData?.type === 'countdown' && toolsData?.countdown?.running && countdownRemaining > 0) {
+    // Start interval if countdown is running (regardless of whether it's standalone or under announcement)
+    if (toolsData?.countdown?.running && countdownRemaining > 0) {
       countdownIntervalRef.current = setInterval(() => {
         setCountdownRemaining(prev => {
           const next = Math.max(0, prev - 1);
@@ -173,7 +194,17 @@ function ViewerPage() {
     // Note: countdownRemaining is intentionally excluded to prevent interval restart every second
     // The interval self-clears when countdown reaches 0
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toolsData?.type, toolsData?.countdown?.running]);
+  }, [toolsData?.countdown?.running]);
+
+  // Detect countdown message changes and trigger animation
+  useEffect(() => {
+    const currentMessage = toolsData?.countdown?.message || '';
+    if (currentMessage && currentMessage !== prevCountdownMessageRef.current) {
+      // Message changed - trigger animation by updating key
+      setCountdownMessageKey(prev => prev + 1);
+    }
+    prevCountdownMessageRef.current = currentMessage;
+  }, [toolsData?.countdown?.message]);
 
   // Stopwatch timer effect - increments every second when running
   useEffect(() => {
@@ -266,6 +297,37 @@ function ViewerPage() {
         setDisplayMode(data.currentSlide.displayMode);
       }
 
+      // Handle tools data for new viewers
+      if (data.toolsData) {
+        console.log('🔧 Initial toolsData for new viewer:', data.toolsData);
+        setToolsData(data.toolsData);
+
+        // Handle countdown timing sync
+        if (data.toolsData.countdown) {
+          const { remaining, endTime, running } = data.toolsData.countdown;
+          if (running && endTime) {
+            // Calculate remaining based on endTime for sync
+            const now = Date.now();
+            const remainingSecs = Math.max(0, Math.round((endTime - now) / 1000));
+            setCountdownRemaining(remainingSecs);
+          } else {
+            setCountdownRemaining(remaining || 0);
+          }
+        }
+
+        // Handle stopwatch timing sync
+        if (data.toolsData.type === 'stopwatch' && data.toolsData.stopwatch) {
+          const { elapsed, startTime, running } = data.toolsData.stopwatch;
+          if (running && startTime) {
+            const now = Date.now();
+            const elapsedSecs = Math.round((now - startTime) / 1000);
+            setStopwatchElapsed(elapsedSecs);
+          } else {
+            setStopwatchElapsed(elapsed || 0);
+          }
+        }
+      }
+
       setError('');
     });
 
@@ -294,7 +356,8 @@ function ViewerPage() {
         }
 
         // Handle specific tool types
-        if (data.toolsData.type === 'countdown' && data.toolsData.countdown) {
+        // Countdown can be standalone OR included with an announcement overlay
+        if (data.toolsData.countdown) {
           const { remaining, endTime, running } = data.toolsData.countdown;
           if (running && endTime) {
             // Calculate remaining based on endTime for sync
@@ -304,7 +367,9 @@ function ViewerPage() {
           } else {
             setCountdownRemaining(remaining || 0);
           }
-        } else if (data.toolsData.type === 'stopwatch' && data.toolsData.stopwatch) {
+        }
+
+        if (data.toolsData.type === 'stopwatch' && data.toolsData.stopwatch) {
           const { elapsed, startTime, running } = data.toolsData.stopwatch;
           if (running && startTime) {
             // Calculate elapsed based on startTime for sync
@@ -480,7 +545,57 @@ function ViewerPage() {
     return date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   };
 
+  // Helper to render countdown (used standalone or under announcement overlay)
+  const renderCountdown = () => {
+    const { message } = toolsData?.countdown || {};
+    const toolsStyle = {
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: textColor,
+      textAlign: 'center'
+    };
+    return (
+      <div style={toolsStyle}>
+        {message && (
+          <div
+            key={countdownMessageKey}
+            style={{
+              fontSize: 'clamp(2rem, 5vw, 4rem)',
+              fontWeight: '300',
+              fontFamily: "'Montserrat', sans-serif",
+              marginBottom: '0.3em',
+              lineHeight: '1',
+              textShadow: '2px 2px 8px rgba(0, 0, 0, 0.8)',
+              animation: 'messageUpdate 0.5s ease-out, breathing 3s ease-in-out 0.5s infinite'
+            }}>
+            {message}
+          </div>
+        )}
+        <div style={{
+          fontSize: 'clamp(4rem, 15vw, 12rem)',
+          fontWeight: '300',
+          fontFamily: "'Montserrat', sans-serif",
+          letterSpacing: '-0.02em',
+          lineHeight: '1',
+          fontVariantNumeric: 'tabular-nums',
+          textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
+        }}>
+          {formatTime(countdownRemaining)}
+        </div>
+      </div>
+    );
+  };
+
   const renderSlide = () => {
+    // If announcement is active with countdown underneath, show countdown
+    if (toolsData?.type === 'announcement' && toolsData?.countdown?.running) {
+      return renderCountdown();
+    }
+
     // Handle tools display (except announcements which are overlays)
     if (toolsData && toolsData.type !== 'announcement') {
       console.log('🎨 renderSlide - toolsData:', toolsData.type, toolsData);
@@ -497,32 +612,7 @@ function ViewerPage() {
 
       // Countdown timer display
       if (toolsData.type === 'countdown') {
-        const { message } = toolsData.countdown || {};
-        return (
-          <div style={toolsStyle}>
-            {message && (
-              <div style={{
-                fontSize: 'clamp(2rem, 5vw, 4rem)',
-                fontWeight: '300',
-                fontFamily: "'Montserrat', sans-serif",
-                marginBottom: '20px',
-                textShadow: '2px 2px 8px rgba(0, 0, 0, 0.8)'
-              }}>
-                {message}
-              </div>
-            )}
-            <div style={{
-              fontSize: 'clamp(4rem, 15vw, 12rem)',
-              fontWeight: '300',
-              fontFamily: "'Montserrat', sans-serif",
-              letterSpacing: '-0.02em',
-              fontVariantNumeric: 'tabular-nums',
-              textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
-            }}>
-              {formatTime(countdownRemaining)}
-            </div>
-          </div>
-        );
+        return renderCountdown();
       }
 
       // Clock display

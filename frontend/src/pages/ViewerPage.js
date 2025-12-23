@@ -501,6 +501,7 @@ function ViewerPage() {
               <div style={{
                 fontSize: 'clamp(2rem, 5vw, 4rem)',
                 fontWeight: '300',
+                fontFamily: "'Montserrat', sans-serif",
                 marginBottom: '20px',
                 textShadow: '2px 2px 8px rgba(0, 0, 0, 0.8)'
               }}>

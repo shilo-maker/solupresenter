@@ -1042,8 +1042,9 @@ function PresenterMode() {
   // Switch resource panel and apply search
   const switchResourcePanel = (panel) => {
     setActiveResourcePanel(panel);
-    // Re-apply current search query to new panel
-    handleSearch(searchQuery);
+    // Reset search query when switching tabs
+    setSearchQuery('');
+    handleSearch('');
 
     // If switching to Bible panel, load books data if needed
     if (panel === 'bible' && bibleBooks.length === 0) {
@@ -1992,7 +1993,7 @@ function PresenterMode() {
   const updateFocusedCountdownMessage = () => {
     if (focusedCountdownIndex === null) return;
 
-    // Update the setlist item
+    // Update the setlist item with both message and target time
     setSetlist(prevSetlist => {
       const newSetlist = [...prevSetlist];
       if (newSetlist[focusedCountdownIndex]?.type === 'tool' &&
@@ -2001,7 +2002,8 @@ function PresenterMode() {
           ...newSetlist[focusedCountdownIndex],
           data: {
             ...newSetlist[focusedCountdownIndex].data,
-            message: countdownMessage
+            message: countdownMessage,
+            targetTime: countdownTargetTime
           }
         };
       }
@@ -3980,8 +3982,9 @@ function PresenterMode() {
                         value={countdownTargetTime}
                         onChange={(e) => {
                           setCountdownTargetTime(e.target.value);
-                          // Stop broadcasting if currently broadcasting
-                          if (countdownBroadcasting) {
+                          // If editing a setlist countdown, don't stop broadcasting - changes apply on Update
+                          // Only stop broadcasting if NOT editing a focused setlist countdown
+                          if (countdownBroadcasting && focusedCountdownIndex === null) {
                             if (countdownIntervalRef.current) {
                               clearInterval(countdownIntervalRef.current);
                               countdownIntervalRef.current = null;
@@ -4023,13 +4026,41 @@ function PresenterMode() {
                       />
                     </div>
 
-                    <Button
-                      variant="outline-success"
-                      onClick={addCountdownToSetlist}
-                      style={{ width: '100%', padding: '10px 20px', fontSize: '1rem', borderColor: '#198754', color: '#198754' }}
-                    >
-                      {t('presenter.addToSetlist')}
-                    </Button>
+                    {/* Show Update button when editing a broadcasting countdown, otherwise show Add to Setlist */}
+                    {focusedCountdownIndex !== null && activeSetlistCountdownIndex === focusedCountdownIndex ? (
+                      <Button
+                        variant="warning"
+                        onClick={updateFocusedCountdownMessage}
+                        style={{ width: '100%', padding: '10px 20px', fontSize: '1rem' }}
+                      >
+                        {t('presenter.updateCountdown', 'Update Countdown')}
+                      </Button>
+                    ) : focusedCountdownIndex !== null ? (
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <Button
+                          variant="outline-warning"
+                          onClick={updateFocusedCountdownMessage}
+                          style={{ flex: 1, padding: '10px 20px', fontSize: '1rem' }}
+                        >
+                          {t('presenter.saveChanges', 'Save Changes')}
+                        </Button>
+                        <Button
+                          variant="outline-secondary"
+                          onClick={() => setFocusedCountdownIndex(null)}
+                          style={{ padding: '10px 15px', fontSize: '1rem' }}
+                        >
+                          ✕
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline-success"
+                        onClick={addCountdownToSetlist}
+                        style={{ width: '100%', padding: '10px 20px', fontSize: '1rem', borderColor: '#198754', color: '#198754' }}
+                      >
+                        {t('presenter.addToSetlist')}
+                      </Button>
+                    )}
                   </div>
                 )}
 

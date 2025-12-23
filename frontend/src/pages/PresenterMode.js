@@ -512,6 +512,23 @@ function PresenterMode() {
         clearTimeout(announcementTimerRef.current);
         announcementTimerRef.current = null;
       }
+
+      // Build slideData including combinedSlides for original mode
+      let hideSetlistSlideData = null;
+      if (currentSong?.slides?.[currentSlideIndex]) {
+        const originalIndices = combinedSlides?.combinedToOriginal?.get(selectedCombinedIndex);
+        hideSetlistSlideData = {
+          slide: currentSong.slides[currentSlideIndex],
+          title: currentSong.title,
+          isBible: currentSong.isBible || false,
+          isTemporary: currentSong.isTemporary || false,
+          originalLanguage: currentSong.originalLanguage || 'en',
+          combinedSlides: displayMode === 'original' && originalIndices?.length > 1
+            ? originalIndices.map(i => currentSong.slides[i]).filter(Boolean)
+            : null
+        };
+      }
+
       // Send announcement with visible: false to hide overlay
       socketService.operatorUpdateSlide({
         roomId: room.id,
@@ -522,6 +539,7 @@ function PresenterMode() {
         displayMode: displayMode,
         isBlank: isBlankActive,
         imageUrl: currentImageUrl,
+        slideData: hideSetlistSlideData,
         toolsData: {
           type: 'announcement',
           announcement: {
@@ -573,6 +591,22 @@ function PresenterMode() {
         };
       }
 
+      // Build slideData including combinedSlides for original mode
+      let announcementSlideData = null;
+      if (currentSong?.slides?.[currentSlideIndex]) {
+        const originalIndices = combinedSlides?.combinedToOriginal?.get(selectedCombinedIndex);
+        announcementSlideData = {
+          slide: currentSong.slides[currentSlideIndex],
+          title: currentSong.title,
+          isBible: currentSong.isBible || false,
+          isTemporary: currentSong.isTemporary || false,
+          originalLanguage: currentSong.originalLanguage || 'en',
+          combinedSlides: displayMode === 'original' && originalIndices?.length > 1
+            ? originalIndices.map(i => currentSong.slides[i]).filter(Boolean)
+            : null
+        };
+      }
+
       socketService.operatorUpdateSlide({
         roomId: room.id,
         roomPin: room.pin,
@@ -582,6 +616,7 @@ function PresenterMode() {
         displayMode: displayMode,
         isBlank: isBlankActive,
         imageUrl: currentImageUrl,
+        slideData: announcementSlideData,
         toolsData: announcementToolsData
       });
 
@@ -615,6 +650,22 @@ function PresenterMode() {
           };
         }
 
+        // Build slideData including combinedSlides for original mode
+        let autoHideSlideData = null;
+        if (currentSong?.slides?.[currentSlideIndex]) {
+          const originalIndices = combinedSlides?.combinedToOriginal?.get(selectedCombinedIndex);
+          autoHideSlideData = {
+            slide: currentSong.slides[currentSlideIndex],
+            title: currentSong.title,
+            isBible: currentSong.isBible || false,
+            isTemporary: currentSong.isTemporary || false,
+            originalLanguage: currentSong.originalLanguage || 'en',
+            combinedSlides: displayMode === 'original' && originalIndices?.length > 1
+              ? originalIndices.map(i => currentSong.slides[i]).filter(Boolean)
+              : null
+          };
+        }
+
         socketService.operatorUpdateSlide({
           roomId: room.id,
           roomPin: room.pin,
@@ -624,6 +675,7 @@ function PresenterMode() {
           displayMode: displayMode,
           isBlank: isBlankActive,
           imageUrl: imageUrlAtHide,
+          slideData: autoHideSlideData,
           toolsData: hideToolsData
         });
         // Delay clearing the selection until after the banner animation completes on viewer
@@ -879,6 +931,23 @@ function PresenterMode() {
     setActiveSetlistAnnouncementIndex(null);
 
     if (!room) return;
+
+    // Build slideData including combinedSlides for original mode
+    let hideSlideData = null;
+    if (currentSong?.slides?.[currentSlideIndex]) {
+      const originalIndices = combinedSlides?.combinedToOriginal?.get(selectedCombinedIndex);
+      hideSlideData = {
+        slide: currentSong.slides[currentSlideIndex],
+        title: currentSong.title,
+        isBible: currentSong.isBible || false,
+        isTemporary: currentSong.isTemporary || false,
+        originalLanguage: currentSong.originalLanguage || 'en',
+        combinedSlides: displayMode === 'original' && originalIndices?.length > 1
+          ? originalIndices.map(i => currentSong.slides[i]).filter(Boolean)
+          : null
+      };
+    }
+
     socketService.operatorUpdateSlide({
       roomId: room.id,
       roomPin: room.pin,
@@ -887,6 +956,7 @@ function PresenterMode() {
       slideIndex: currentSlideIndex,
       displayMode: displayMode,
       isBlank: isBlankActive,
+      slideData: hideSlideData,
       toolsData: {
         type: 'announcement',
         announcement: {
@@ -906,6 +976,23 @@ function PresenterMode() {
     setAnnouncementVisible(true);
 
     if (!room) return;
+
+    // Build slideData including combinedSlides for original mode
+    let showSlideData = null;
+    if (currentSong?.slides?.[currentSlideIndex]) {
+      const originalIndices = combinedSlides?.combinedToOriginal?.get(selectedCombinedIndex);
+      showSlideData = {
+        slide: currentSong.slides[currentSlideIndex],
+        title: currentSong.title,
+        isBible: currentSong.isBible || false,
+        isTemporary: currentSong.isTemporary || false,
+        originalLanguage: currentSong.originalLanguage || 'en',
+        combinedSlides: displayMode === 'original' && originalIndices?.length > 1
+          ? originalIndices.map(i => currentSong.slides[i]).filter(Boolean)
+          : null
+      };
+    }
+
     socketService.operatorUpdateSlide({
       roomId: room.id,
       roomPin: room.pin,
@@ -914,6 +1001,7 @@ function PresenterMode() {
       slideIndex: currentSlideIndex,
       displayMode: displayMode,
       isBlank: isBlankActive,
+      slideData: showSlideData,
       toolsData: {
         type: 'announcement',
         announcement: {
@@ -948,6 +1036,22 @@ function PresenterMode() {
         clearTimeout(announcementTimerRef.current);
       }
 
+      // Build slideData including combinedSlides for original mode
+      let updateSlideData = null;
+      if (currentSong?.slides?.[currentSlideIndex]) {
+        const originalIndices = combinedSlides?.combinedToOriginal?.get(selectedCombinedIndex);
+        updateSlideData = {
+          slide: currentSong.slides[currentSlideIndex],
+          title: currentSong.title,
+          isBible: currentSong.isBible || false,
+          isTemporary: currentSong.isTemporary || false,
+          originalLanguage: currentSong.originalLanguage || 'en',
+          combinedSlides: displayMode === 'original' && originalIndices?.length > 1
+            ? originalIndices.map(i => currentSong.slides[i]).filter(Boolean)
+            : null
+        };
+      }
+
       socketService.operatorUpdateSlide({
         roomId: room.id,
         roomPin: room.pin,
@@ -956,6 +1060,7 @@ function PresenterMode() {
         slideIndex: currentSlideIndex,
         displayMode: displayMode,
         isBlank: isBlankActive,
+        slideData: updateSlideData,
         toolsData: {
           type: 'announcement',
           announcement: {
@@ -2228,6 +2333,22 @@ function PresenterMode() {
       }
       // Send update to hide announcement
       if (room) {
+        // Build slideData including combinedSlides for original mode
+        let removeSlideData = null;
+        if (currentSong?.slides?.[currentSlideIndex]) {
+          const originalIndices = combinedSlides?.combinedToOriginal?.get(selectedCombinedIndex);
+          removeSlideData = {
+            slide: currentSong.slides[currentSlideIndex],
+            title: currentSong.title,
+            isBible: currentSong.isBible || false,
+            isTemporary: currentSong.isTemporary || false,
+            originalLanguage: currentSong.originalLanguage || 'en',
+            combinedSlides: displayMode === 'original' && originalIndices?.length > 1
+              ? originalIndices.map(i => currentSong.slides[i]).filter(Boolean)
+              : null
+          };
+        }
+
         socketService.operatorUpdateSlide({
           roomId: room.id,
           roomPin: room.pin,
@@ -2236,6 +2357,7 @@ function PresenterMode() {
           slideIndex: currentSlideIndex,
           displayMode: displayMode,
           isBlank: isBlankActive,
+          slideData: removeSlideData,
           toolsData: {
             type: 'announcement',
             announcement: {

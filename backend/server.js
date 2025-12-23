@@ -278,6 +278,7 @@ io.on('connection', (socket) => {
         else if (room.currentBibleData) {
           slideData = {
             slide: room.currentBibleData.slide,
+            combinedSlides: room.currentBibleData.combinedSlides || null, // For original-only mode paired slides
             displayMode: room.currentSlide.displayMode,
             songTitle: room.currentBibleData.title,
             backgroundImage: room.backgroundImage || '',

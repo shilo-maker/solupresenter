@@ -905,7 +905,7 @@ function ViewerPage() {
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 'clamp(2rem, 5vh, 5rem)',
+                gap: 'clamp(0.5rem, 2vh, 1.5rem)',
                 width: '100%',
                 maxWidth: '100%'
               }}>

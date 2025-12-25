@@ -258,7 +258,7 @@ function OBSOverlay() {
   // Render nothing if blank or no slide
   const shouldHide = !currentSlide || !slide || currentSlide.isBlank;
 
-  // Error display (minimal, for debugging)
+  // Error display (visible for debugging)
   if (error && !joined) {
     return (
       <div style={{
@@ -267,15 +267,39 @@ function OBSOverlay() {
         left: 0,
         width: '100vw',
         height: '100vh',
-        backgroundColor: 'transparent',
+        backgroundColor: 'rgba(0,0,0,0.8)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: 'rgba(255,255,255,0.5)',
-        fontSize: '14px',
-        fontFamily: 'system-ui, sans-serif'
+        color: '#ff6b6b',
+        fontSize: '18px',
+        fontFamily: 'system-ui, sans-serif',
+        padding: '20px',
+        textAlign: 'center'
       }}>
         {error}
+      </div>
+    );
+  }
+
+  // Connecting state (before joined)
+  if (!joined) {
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'rgba(255,255,255,0.7)',
+        fontSize: '16px',
+        fontFamily: 'system-ui, sans-serif'
+      }}>
+        Connecting to {roomSlug || pin}...
       </div>
     );
   }

@@ -108,7 +108,7 @@ function OBSOverlay() {
       // If room slug provided, look up the PIN
       if (roomSlug && !roomPin) {
         try {
-          const response = await publicRoomAPI.getBySlug(roomSlug);
+          const response = await publicRoomAPI.joinBySlug(roomSlug);
           if (response.data && response.data.pin) {
             roomPin = response.data.pin;
           } else {

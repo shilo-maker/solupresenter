@@ -3,9 +3,15 @@ import { useLocation } from 'react-router-dom';
 import socketService from '../services/socket';
 import { publicRoomAPI } from '../services/api';
 
-// CSS animations for smooth transitions
+// CSS animations for smooth transitions and transparent background
 const animationStyles = document.createElement('style');
 animationStyles.textContent = `
+  html, body, #root {
+    background: transparent !important;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
   @keyframes fadeInUp {
     from {
       opacity: 0;
@@ -62,7 +68,7 @@ function OBSOverlay() {
   const showOriginal = params.get('original') !== 'false';
   const showTransliteration = params.get('transliteration') !== 'false';
   const showTranslation = params.get('translation') !== 'false';
-  const paddingBottom = parseInt(params.get('paddingBottom') || '5', 10); // vh units
+  const paddingBottom = parseInt(params.get('paddingBottom') || '3', 10); // vh units
   const paddingTop = parseInt(params.get('paddingTop') || '5', 10); // vh units
   const maxWidth = parseInt(params.get('maxWidth') || '90', 10); // percentage
 
@@ -124,22 +130,27 @@ function OBSOverlay() {
       socketService.connect();
 
       // Set up event handlers
-      socketService.onConnect(() => {
-        console.log('OBS Overlay: Connected to server');
-        socketService.joinRoom(roomPin);
+      socketService.onConnectionStatusChange((status) => {
+        console.log('OBS Overlay: Connection status:', status);
+        if (status === 'connected') {
+          // Join room once connected
+          socketService.viewerJoinRoom(roomPin);
+        }
       });
 
-      socketService.onRoomJoined((data) => {
+      socketService.onViewerJoined((data) => {
         console.log('OBS Overlay: Joined room', data);
         setJoined(true);
         setError('');
 
-        // Set initial slide if provided
-        if (data.currentSlide?.slideData) {
-          setCurrentSlide(data.currentSlide.slideData);
+        // Set initial slide if provided (matches ViewerPage structure)
+        if (data.isBlank) {
+          setCurrentSlide({ isBlank: true });
+        } else if (data.slideData) {
+          setCurrentSlide(data.slideData);
         }
-        if (data.currentSlide?.displayMode) {
-          setDisplayMode(data.currentSlide.displayMode);
+        if (data.displayMode) {
+          setDisplayMode(data.displayMode);
         }
       });
 
@@ -163,8 +174,8 @@ function OBSOverlay() {
           updateSlide(data.slideData);
         }
 
-        if (data.currentSlide?.displayMode) {
-          setDisplayMode(data.currentSlide.displayMode);
+        if (data.displayMode) {
+          setDisplayMode(data.displayMode);
         }
       });
 
@@ -192,27 +203,39 @@ function OBSOverlay() {
     };
   }, [pin, roomSlug]);
 
-  // Calculate position styles
-  const getPositionStyles = () => {
+  // Calculate position styles for the wrapper
+  const getWrapperStyles = () => {
+    const base = {
+      position: 'fixed',
+      left: 0,
+      right: 0,
+      display: 'flex',
+      justifyContent: 'center',
+      pointerEvents: 'none'
+    };
+
     switch (position) {
       case 'top':
         return {
+          ...base,
           top: `${paddingTop}vh`,
           bottom: 'auto',
-          justifyContent: 'flex-start'
+          alignItems: 'flex-start'
         };
       case 'center':
         return {
-          top: '50%',
-          transform: 'translateY(-50%)',
-          justifyContent: 'center'
+          ...base,
+          top: 0,
+          bottom: 0,
+          alignItems: 'center'
         };
       case 'bottom':
       default:
         return {
-          bottom: `${paddingBottom}vh`,
+          ...base,
           top: 'auto',
-          justifyContent: 'flex-end'
+          bottom: `${paddingBottom}vh`,
+          alignItems: 'flex-end'
         };
     }
   };
@@ -222,20 +245,18 @@ function OBSOverlay() {
     return isHebrew(text) ? 'rtl' : 'ltr';
   };
 
-  // Check if current song is transliteration language (Hebrew/Arabic)
-  const isTransliterationLanguage = currentSlide?.originalText && isHebrew(currentSlide.originalText);
+  // Get the actual slide data (nested under .slide property)
+  const slide = currentSlide?.slide;
 
-  // Calculate font sizes
+  // Check if current song is transliteration language (Hebrew/Arabic)
+  const isTransliterationLanguage = slide?.originalText && isHebrew(slide.originalText);
+
+  // Calculate font size (same for all lines)
   const baseFontSize = fontSize / 100;
-  const line1FontSize = isTransliterationLanguage
-    ? `calc(clamp(1.5rem, 4vw, 4rem) * ${baseFontSize})`
-    : `calc(clamp(1.3rem, 3.5vw, 3.5rem) * ${baseFontSize})`;
-  const otherLinesFontSize = isTransliterationLanguage
-    ? `calc(clamp(1.1rem, 3vw, 3rem) * ${baseFontSize})`
-    : `calc(clamp(1.3rem, 3.5vw, 3.5rem) * ${baseFontSize})`;
+  const lineFontSize = `calc(clamp(1rem, 2.7vw, 2.7rem) * ${baseFontSize})`;
 
   // Render nothing if blank or no slide
-  const shouldHide = !currentSlide || currentSlide.isBlank;
+  const shouldHide = !currentSlide || !slide || currentSlide.isBlank;
 
   // Error display (minimal, for debugging)
   if (error && !joined) {
@@ -274,81 +295,85 @@ function OBSOverlay() {
       <div
         className={shouldHide ? '' : (isTransitioning ? 'obs-slide-exit' : 'obs-slide-enter')}
         style={{
-          position: 'absolute',
-          left: '50%',
-          transform: position === 'center' ? 'translate(-50%, -50%)' : 'translateX(-50%)',
+          ...getWrapperStyles(),
+          opacity: shouldHide ? 0 : 1,
+          transition: 'opacity 0.3s ease'
+        }}
+      >
+        <div style={{
           width: `${maxWidth}%`,
           maxWidth: '1600px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           textAlign: 'center',
-          padding: '1.5rem 2rem',
-          opacity: shouldHide ? 0 : 1,
-          transition: 'opacity 0.3s ease',
-          ...getPositionStyles()
-        }}
-      >
-        {currentSlide && !currentSlide.isBlank && (
+          padding: '1.5rem 2rem'
+        }}>
+        {slide && (
           <div style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: 'clamp(0.3rem, 1vh, 1rem)',
-            width: '100%',
-            background: 'linear-gradient(180deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.85) 100%)',
-            borderRadius: '12px',
-            padding: 'clamp(0.8rem, 2vh, 1.5rem) clamp(1rem, 3vw, 2rem)',
-            boxShadow: '0 4px 30px rgba(0,0,0,0.5)'
+            alignItems: 'center',
+            gap: 0,
+            width: '100%'
           }}>
             {/* Original Text */}
-            {showOriginal && currentSlide.originalText && (
+            {showOriginal && slide.originalText && (
               <div style={{
-                fontSize: line1FontSize,
-                lineHeight: 1.3,
-                fontWeight: isTransliterationLanguage ? '500' : '400',
+                display: 'inline-block',
+                fontSize: lineFontSize,
+                lineHeight: 1.0,
+                fontWeight: 'bold',
                 color: textColor,
-                textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
-                direction: getTextDirection(currentSlide.originalText),
+                background: 'rgba(0,0,0,1)',
+                padding: '0.15em 0.6em',
+                borderRadius: '6px',
+                direction: getTextDirection(slide.originalText),
                 unicodeBidi: 'plaintext'
               }}>
-                {currentSlide.originalText}
+                {slide.originalText}
               </div>
             )}
 
             {/* Transliteration */}
-            {showTransliteration && currentSlide.transliteration && displayMode === 'bilingual' && (
+            {displayMode === 'bilingual' && showTransliteration && slide.transliteration && (
               <div style={{
-                fontSize: otherLinesFontSize,
-                lineHeight: 1.3,
+                display: 'inline-block',
+                fontSize: lineFontSize,
+                lineHeight: 1.0,
                 color: textColor,
-                opacity: 0.9,
-                textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
-                direction: getTextDirection(currentSlide.transliteration),
+                background: 'rgba(0,0,0,1)',
+                padding: '0.15em 0.6em',
+                borderRadius: '6px',
+                direction: getTextDirection(slide.transliteration),
                 unicodeBidi: 'plaintext'
               }}>
-                {currentSlide.transliteration}
+                {slide.transliteration}
               </div>
             )}
 
             {/* Translation */}
-            {showTranslation && currentSlide.translation && displayMode === 'bilingual' && (
+            {displayMode === 'bilingual' && showTranslation && slide.translation && (
               <div style={{
-                fontSize: otherLinesFontSize,
-                lineHeight: 1.3,
+                display: 'inline-block',
+                fontSize: lineFontSize,
+                lineHeight: 1.0,
                 color: textColor,
-                opacity: 0.9,
-                textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
-                direction: getTextDirection(currentSlide.translation),
+                background: 'rgba(0,0,0,1)',
+                padding: '0.15em 0.6em',
+                borderRadius: '6px',
+                direction: getTextDirection(slide.translation),
                 unicodeBidi: 'plaintext'
               }}>
-                {currentSlide.translation}
-                {currentSlide.translationOverflow && (
-                  <span> {currentSlide.translationOverflow}</span>
+                {slide.translation}
+                {slide.translationOverflow && (
+                  <span> {slide.translationOverflow}</span>
                 )}
               </div>
             )}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

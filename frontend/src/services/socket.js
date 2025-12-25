@@ -327,6 +327,13 @@ class SocketService {
       this.socket.removeAllListeners();
     }
   }
+
+  // Emit generic event (for direct socket.emit access)
+  emit(event, data) {
+    if (this.socket?.connected) {
+      this.socket.emit(event, data);
+    }
+  }
 }
 
 const socketService = new SocketService();

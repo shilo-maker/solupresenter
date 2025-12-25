@@ -495,6 +495,45 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle local video broadcast (for HDMI display only)
+  socket.on('operator:localVideo', async (data) => {
+    try {
+      const { roomId, videoData } = data;
+      const room = await Room.findByPk(roomId);
+
+      if (!room) {
+        socket.emit('error', { message: 'Room not found' });
+        return;
+      }
+
+      console.log(`📺 Broadcasting local video to room ${room.pin}: ${videoData.fileName}`);
+
+      // Broadcast to all viewers in the room (local viewers will display, online viewers can ignore)
+      io.to(`room:${room.pin}`).emit('localVideo:update', videoData);
+    } catch (error) {
+      console.error('Error in operator:localVideo:', error);
+      socket.emit('error', { message: 'Failed to broadcast local video' });
+    }
+  });
+
+  // Handle stop local video
+  socket.on('operator:stopLocalVideo', async (data) => {
+    try {
+      const { roomId } = data;
+      const room = await Room.findByPk(roomId);
+
+      if (!room) {
+        socket.emit('error', { message: 'Room not found' });
+        return;
+      }
+
+      console.log(`🛑 Stopping local video in room ${room.pin}`);
+      io.to(`room:${room.pin}`).emit('localVideo:stop');
+    } catch (error) {
+      console.error('Error in operator:stopLocalVideo:', error);
+    }
+  });
+
   // Heartbeat - ping/pong
   socket.on('ping', (timestamp) => {
     socket.emit('pong', timestamp);

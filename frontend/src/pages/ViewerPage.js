@@ -50,6 +50,9 @@ function ViewerPage() {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const [imageUrl, setImageUrl] = useState(null); // For image-only slides
+  const [localMedia, setLocalMedia] = useState(null); // For local media (Base64 images)
+  const [localVideo, setLocalVideo] = useState(null); // For local video (Base64 from presenter)
+  const localVideoRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [toolsData, setToolsData] = useState(null); // For tools display (countdown, clock, stopwatch, announcement)
   const [clockTime, setClockTime] = useState(new Date());
@@ -380,19 +383,30 @@ function ViewerPage() {
             setStopwatchElapsed(elapsed || 0);
           }
         }
+      } else if (data.localMedia) {
+        // Handle local media (Base64 images from operator)
+        console.log('🖼️ Received local media:', data.localMedia.type, data.localMedia.fileName);
+        setLocalMedia(data.localMedia);
+        setCurrentSlide(null);
+        setImageUrl(null);
+        // Preserve announcement overlays
+        setToolsData(prev => prev?.type === 'announcement' ? prev : null);
       } else if (data.isBlank) {
         setCurrentSlide({ isBlank: true });
         setImageUrl(null);
+        setLocalMedia(null);
         // Preserve announcement overlays when going to blank
         setToolsData(prev => prev?.type === 'announcement' ? prev : null);
       } else if (data.imageUrl) {
         setImageUrl(data.imageUrl);
         setCurrentSlide(null);
+        setLocalMedia(null);
         // Preserve announcement overlays when showing images
         setToolsData(prev => prev?.type === 'announcement' ? prev : null);
       } else {
         setCurrentSlide(data.slideData);
         setImageUrl(null);
+        setLocalMedia(null);
         // Preserve announcement overlays when switching slides
         setToolsData(prev => prev?.type === 'announcement' ? prev : null);
       }
@@ -437,6 +451,116 @@ function ViewerPage() {
     // Local display mode - Presentation API opens in fullscreen automatically
     if (isLocalViewer) {
       console.log('🖥️ Local viewer mode - opened via Presentation API');
+
+      // Set up Presentation API receiver to listen for video data from presenter
+      if (navigator.presentation && navigator.presentation.receiver) {
+        console.log('📺 Setting up Presentation API receiver...');
+
+        let videoChunks = [];
+        let videoMeta = null;
+
+        navigator.presentation.receiver.connectionList.then((connectionList) => {
+          console.log('📺 Got connection list, connections:', connectionList.connections.length);
+
+          const handleConnection = (connection) => {
+            console.log('📺 Presentation connection established');
+
+            connection.onmessage = (event) => {
+              try {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'videoStart') {
+                  console.log(`🎬 Starting video receive: ${data.fileName} (${data.totalChunks} chunks)`);
+                  videoChunks = [];
+                  videoMeta = data;
+                } else if (data.type === 'videoChunk') {
+                  videoChunks[data.chunkIndex] = data.data;
+                  if (data.chunkIndex % 10 === 0) {
+                    console.log(`🎬 Received chunk ${data.chunkIndex + 1}/${videoMeta?.totalChunks || '?'}`);
+                  }
+                } else if (data.type === 'videoEnd') {
+                  console.log('🎬 Video transfer complete, assembling...');
+
+                  // Convert Base64 chunks back to Uint8Array
+                  const allChunks = [];
+                  for (let i = 0; i < videoChunks.length; i++) {
+                    const binary = atob(videoChunks[i]);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let j = 0; j < binary.length; j++) {
+                      bytes[j] = binary.charCodeAt(j);
+                    }
+                    allChunks.push(bytes);
+                  }
+
+                  // Combine into single Uint8Array
+                  const totalLength = allChunks.reduce((sum, arr) => sum + arr.length, 0);
+                  const combined = new Uint8Array(totalLength);
+                  let offset = 0;
+                  for (const chunk of allChunks) {
+                    combined.set(chunk, offset);
+                    offset += chunk.length;
+                  }
+
+                  // Create blob and URL
+                  const blob = new Blob([combined], { type: videoMeta?.mimeType || 'video/mp4' });
+                  const blobUrl = URL.createObjectURL(blob);
+                  console.log('🎬 Video assembled, blob URL created');
+
+                  setLocalVideo({
+                    data: blobUrl,
+                    fileName: videoMeta?.fileName || 'video',
+                    mimeType: videoMeta?.mimeType || 'video/mp4'
+                  });
+                  setCurrentSlide(null);
+                  setLocalMedia(null);
+
+                  // Clean up
+                  videoChunks = [];
+                  videoMeta = null;
+                } else if (data.type === 'stopLocalVideo') {
+                  console.log('🛑 Stopping local video');
+                  setLocalVideo(null);
+                } else if (data.type === 'videoPause') {
+                  console.log('⏸️ Pausing video');
+                  if (localVideoRef.current) {
+                    localVideoRef.current.pause();
+                  }
+                } else if (data.type === 'videoPlay') {
+                  console.log('▶️ Playing video');
+                  if (localVideoRef.current) {
+                    localVideoRef.current.play().catch(err => console.log('Play failed:', err));
+                  }
+                } else if (data.type === 'showImage') {
+                  console.log('🖼️ Showing image:', data.fileName);
+                  setLocalMedia({
+                    type: 'image',
+                    data: data.data,
+                    fileName: data.fileName
+                  });
+                  setLocalVideo(null); // Hide any video
+                  setCurrentSlide(null);
+                } else if (data.type === 'hideImage') {
+                  console.log('🖼️ Hiding image');
+                  setLocalMedia(null);
+                }
+              } catch (err) {
+                console.error('📺 Failed to parse presentation message:', err);
+              }
+            };
+          };
+
+          // Handle existing connections
+          connectionList.connections.forEach(handleConnection);
+
+          // Handle new connections
+          connectionList.onconnectionavailable = (event) => {
+            console.log('📺 New presentation connection available');
+            handleConnection(event.connection);
+          };
+        }).catch((err) => {
+          console.log('📺 Presentation receiver not available:', err.message);
+        });
+      }
     }
 
     if (urlRoom) {
@@ -465,6 +589,117 @@ function ViewerPage() {
       unsubscribe(); // Unsubscribe from connection status changes
       socketService.removeAllListeners();
       socketService.disconnect();
+    };
+  }, [location.search]);
+
+  // Read video from IndexedDB and create a local blob URL
+  const loadVideoFromIndexedDB = () => {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('solupresenter-videos', 1);
+
+      request.onerror = () => reject(request.error);
+
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains('videos')) {
+          db.createObjectStore('videos', { keyPath: 'id' });
+        }
+      };
+
+      request.onsuccess = (event) => {
+        const db = event.target.result;
+        const transaction = db.transaction(['videos'], 'readonly');
+        const store = transaction.objectStore('videos');
+        const getRequest = store.get('current-video');
+
+        getRequest.onsuccess = () => {
+          db.close();
+          if (getRequest.result) {
+            const { data, fileName, mimeType, timestamp } = getRequest.result;
+            // Create a blob URL from the ArrayBuffer
+            const blob = new Blob([data], { type: mimeType });
+            const blobUrl = URL.createObjectURL(blob);
+            resolve({ blobUrl, fileName, mimeType, timestamp });
+          } else {
+            reject(new Error('No video found in IndexedDB'));
+          }
+        };
+
+        getRequest.onerror = () => {
+          db.close();
+          reject(getRequest.error);
+        };
+      };
+    });
+  };
+
+  // Listen for local video from presenter (via IndexedDB polling - most reliable for Presentation API)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const isLocalViewer = params.get('local') === 'true';
+
+    if (!isLocalViewer) return;
+
+    let lastVideoTimestamp = 0;
+    let pollInterval = null;
+
+    const checkForNewVideo = async () => {
+      try {
+        const videoData = await loadVideoFromIndexedDB();
+        // Check if this is a new video (different timestamp)
+        if (videoData.timestamp && videoData.timestamp > lastVideoTimestamp) {
+          console.log('🎬 New video detected in IndexedDB:', videoData.fileName);
+          lastVideoTimestamp = videoData.timestamp;
+          setLocalVideo({
+            data: videoData.blobUrl,
+            fileName: videoData.fileName,
+            mimeType: videoData.mimeType
+          });
+          // Clear other content to show video
+          setCurrentSlide(null);
+          setLocalMedia(null);
+        }
+      } catch (err) {
+        // No video in IndexedDB - this is normal for Presentation API viewers
+      }
+    };
+
+    // Also listen for localStorage changes as backup (works for separate tabs)
+    const handleStorageChange = async (event) => {
+      if (event.key !== 'solupresenter-local-video') return;
+
+      if (!event.newValue) {
+        console.log('🛑 Local video cleared via storage event');
+        setLocalVideo(null);
+        return;
+      }
+
+      try {
+        const data = JSON.parse(event.newValue);
+        if (data.type === 'localVideo') {
+          console.log('🎬 Received video signal via storage event:', data.fileName);
+          await checkForNewVideo();
+        } else if (data.type === 'stopLocalVideo') {
+          console.log('🛑 Stopping local video');
+          setLocalVideo(null);
+        }
+      } catch (err) {
+        console.error('Failed to parse storage event:', err);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    console.log('👂 Local viewer listening for video (polling + storage events)');
+
+    // Check immediately on mount
+    checkForNewVideo();
+
+    // Poll every 500ms for new videos (reliable for Presentation API windows)
+    pollInterval = setInterval(checkForNewVideo, 500);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      if (pollInterval) clearInterval(pollInterval);
     };
   }, [location.search]);
 
@@ -707,6 +942,65 @@ function ViewerPage() {
           </div>
         </div>
       );
+    }
+
+    // Handle local video (Base64 video from operator's device via postMessage/Presentation API)
+    if (localVideo) {
+      return (
+        <div style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#000'
+        }}>
+          <video
+            ref={localVideoRef}
+            src={localVideo.data}
+            autoPlay
+            loop
+            playsInline
+            controls
+            style={{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              objectFit: 'contain'
+            }}
+            onLoadedData={(e) => {
+              console.log('🎬 Local video loaded and playing');
+              // Try to unmute after user interaction
+              e.target.play().catch(err => console.log('Autoplay blocked:', err));
+            }}
+            onError={(e) => console.error('🎬 Local video error:', e.target.error)}
+          />
+        </div>
+      );
+    }
+
+    // Handle local media (Base64 image from operator's device)
+    if (localMedia) {
+      if (localMedia.type === 'image') {
+        return (
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <img
+              src={localMedia.data}
+              alt={localMedia.fileName || 'Local image'}
+              style={{
+                maxWidth: '100%',
+                maxHeight: '100%',
+                objectFit: 'contain'
+              }}
+            />
+          </div>
+        );
+      }
     }
 
     // Handle image-only slide

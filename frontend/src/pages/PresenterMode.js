@@ -188,7 +188,7 @@ function PresenterMode() {
   const [bibleLoading, setBibleLoading] = useState(false);
 
   // Collapsible sections
-  const [activeResourcePanel, setActiveResourcePanel] = useState('songs'); // 'songs', 'images', 'bible', or 'tools'
+  const [activeResourcePanel, setActiveResourcePanel] = useState('songs'); // 'songs', 'images', 'bible', 'tools', or 'media'
   const [setlistSectionOpen, setSetlistSectionOpen] = useState(true);
   const [slideSectionOpen, setSlideSectionOpen] = useState(true);
 
@@ -203,6 +203,16 @@ function PresenterMode() {
   const [presentationSupported, setPresentationSupported] = useState(false);
   const [presentationConnection, setPresentationConnection] = useState(null);
   const presentationRequestRef = useRef(null);
+  const localViewerWindowRef = useRef(null); // Reference to fallback window for postMessage
+
+  // Local Media state (for broadcasting local files without upload)
+  const [selectedMediaFile, setSelectedMediaFile] = useState(null);
+  const [mediaPreviewUrl, setMediaPreviewUrl] = useState(null);
+  const [mediaType, setMediaType] = useState(null); // 'image' or 'video'
+  const [videoOnDisplay, setVideoOnDisplay] = useState(false); // Is video currently showing on HDMI
+  const [videoPlaying, setVideoPlaying] = useState(true); // Is the displayed video playing or paused
+  const [imageOnDisplay, setImageOnDisplay] = useState(false); // Is image currently showing on HDMI
+  const localVideoRef = useRef(null); // Reference to local video element for preview
 
   // Quick Slide state
   const [showQuickSlideModal, setShowQuickSlideModal] = useState(false);
@@ -408,7 +418,179 @@ function PresenterMode() {
     const newWindow = window.open(viewerUrl, 'localViewer', 'width=1280,height=720');
 
     if (newWindow) {
+      localViewerWindowRef.current = newWindow;
       alert(t('presenter.moveToExternalDisplay') || 'Drag this window to your external display and press F11 for fullscreen.');
+    }
+  };
+
+  // Store video in IndexedDB (accessible from all same-origin tabs/windows)
+  const storeVideoInIndexedDB = (file) => {
+    return new Promise((resolve, reject) => {
+      // First, read the file as ArrayBuffer (async operation)
+      const reader = new FileReader();
+      reader.onload = () => {
+        const arrayBuffer = reader.result;
+
+        // Now open IndexedDB and store the data
+        const request = indexedDB.open('solupresenter-videos', 1);
+
+        request.onerror = () => reject(request.error);
+
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains('videos')) {
+            db.createObjectStore('videos', { keyPath: 'id' });
+          }
+        };
+
+        request.onsuccess = (event) => {
+          const db = event.target.result;
+          const transaction = db.transaction(['videos'], 'readwrite');
+          const store = transaction.objectStore('videos');
+
+          const videoRecord = {
+            id: 'current-video',
+            data: arrayBuffer,
+            fileName: file.name,
+            mimeType: file.type,
+            timestamp: Date.now()
+          };
+
+          const putRequest = store.put(videoRecord);
+          putRequest.onsuccess = () => {
+            db.close();
+            resolve();
+          };
+          putRequest.onerror = () => {
+            db.close();
+            reject(putRequest.error);
+          };
+        };
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  // Send video to local HDMI display via Presentation API connection
+  const sendVideoToDisplay = async () => {
+    if (!selectedMediaFile || mediaType !== 'video' || !room) return;
+
+    console.log('📺 sendVideoToDisplay called:', {
+      roomId: room.id,
+      fileName: selectedMediaFile.name,
+      fileSize: selectedMediaFile.size,
+      hasPresentationConnection: !!presentationConnection,
+      connectionState: presentationConnection?.state
+    });
+
+    if (!presentationConnection || presentationConnection.state !== 'connected') {
+      console.error('📺 No active presentation connection');
+      alert(t('presenter.noDisplayConnected') || 'No display connected. Click "Present to Display" first.');
+      return;
+    }
+
+    try {
+      // Read file as ArrayBuffer
+      const arrayBuffer = await selectedMediaFile.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+
+      // Convert to Base64 in chunks (to avoid memory issues)
+      const CHUNK_SIZE = 512 * 1024; // 512KB chunks
+      const totalChunks = Math.ceil(uint8Array.length / CHUNK_SIZE);
+
+      console.log(`📺 Sending video in ${totalChunks} chunks...`);
+
+      // Send start message
+      presentationConnection.send(JSON.stringify({
+        type: 'videoStart',
+        fileName: selectedMediaFile.name,
+        mimeType: selectedMediaFile.type,
+        totalChunks: totalChunks,
+        totalSize: uint8Array.length
+      }));
+
+      // Send chunks
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, uint8Array.length);
+        const chunk = uint8Array.slice(start, end);
+
+        // Convert chunk to Base64
+        let binary = '';
+        for (let j = 0; j < chunk.length; j++) {
+          binary += String.fromCharCode(chunk[j]);
+        }
+        const base64Chunk = btoa(binary);
+
+        presentationConnection.send(JSON.stringify({
+          type: 'videoChunk',
+          chunkIndex: i,
+          data: base64Chunk
+        }));
+
+        // Log progress every 10 chunks
+        if (i % 10 === 0 || i === totalChunks - 1) {
+          console.log(`📺 Sent chunk ${i + 1}/${totalChunks}`);
+        }
+      }
+
+      // Send end message
+      presentationConnection.send(JSON.stringify({
+        type: 'videoEnd'
+      }));
+
+      console.log('📺 Video sent via Presentation API');
+      setVideoOnDisplay(true);
+      setVideoPlaying(true);
+    } catch (err) {
+      console.error('📺 Failed to send video:', err);
+    }
+  };
+
+  // Pause/Play video on HDMI display
+  const toggleVideoPlayback = () => {
+    if (!presentationConnection || presentationConnection.state !== 'connected') return;
+
+    const newState = !videoPlaying;
+    presentationConnection.send(JSON.stringify({
+      type: newState ? 'videoPlay' : 'videoPause'
+    }));
+    setVideoPlaying(newState);
+    console.log(`📺 Video ${newState ? 'playing' : 'paused'}`);
+  };
+
+  // Stop/Hide video on HDMI display
+  const hideVideoFromDisplay = () => {
+    if (!presentationConnection || presentationConnection.state !== 'connected') return;
+
+    presentationConnection.send(JSON.stringify({
+      type: 'stopLocalVideo'
+    }));
+    setVideoOnDisplay(false);
+    setVideoPlaying(true);
+    setImageOnDisplay(false);
+    console.log('📺 Video hidden from display');
+  };
+
+  // Stop video on local display
+  const stopVideoOnDisplay = () => {
+    const stopMessage = { type: 'stopLocalVideo' };
+
+    if (presentationConnection && presentationConnection.state === 'connected') {
+      try {
+        presentationConnection.send(JSON.stringify(stopMessage));
+      } catch (err) {
+        console.error('Failed to send stop via Presentation API:', err);
+      }
+    }
+
+    if (localViewerWindowRef.current && !localViewerWindowRef.current.closed) {
+      try {
+        localViewerWindowRef.current.postMessage(stopMessage, window.location.origin);
+      } catch (err) {
+        console.error('Failed to send stop via postMessage:', err);
+      }
     }
   };
 
@@ -422,6 +604,58 @@ function PresenterMode() {
       }
       setPresentationConnection(null);
     }
+  };
+
+  // Local Media Functions
+  // Send image to local HDMI display via Presentation API
+  const sendImageToDisplay = async () => {
+    if (!selectedMediaFile || mediaType !== 'image') return;
+
+    console.log('🖼️ sendImageToDisplay called:', {
+      fileName: selectedMediaFile.name,
+      fileSize: selectedMediaFile.size,
+      hasPresentationConnection: !!presentationConnection,
+      connectionState: presentationConnection?.state
+    });
+
+    if (!presentationConnection || presentationConnection.state !== 'connected') {
+      console.error('🖼️ No active presentation connection');
+      alert(t('presenter.noDisplayConnected') || 'No display connected. Click "Present to Display" first.');
+      return;
+    }
+
+    try {
+      // Read file as Base64
+      const reader = new FileReader();
+      reader.onload = () => {
+        presentationConnection.send(JSON.stringify({
+          type: 'showImage',
+          data: reader.result, // Base64 encoded image
+          fileName: selectedMediaFile.name,
+          mimeType: selectedMediaFile.type
+        }));
+        console.log('🖼️ Image sent via Presentation API');
+        setImageOnDisplay(true);
+        setVideoOnDisplay(false); // Hide any video
+      };
+      reader.onerror = () => {
+        console.error('🖼️ Failed to read image file');
+      };
+      reader.readAsDataURL(selectedMediaFile);
+    } catch (err) {
+      console.error('🖼️ Failed to send image:', err);
+    }
+  };
+
+  // Hide image from HDMI display
+  const hideImageFromDisplay = () => {
+    if (!presentationConnection || presentationConnection.state !== 'connected') return;
+
+    presentationConnection.send(JSON.stringify({
+      type: 'hideImage'
+    }));
+    setImageOnDisplay(false);
+    console.log('🖼️ Image hidden from display');
   };
 
   // Countdown functions
@@ -3952,10 +4186,18 @@ function PresenterMode() {
               >
                 {t('presenter.tools')}
               </Button>
+              <Button
+                variant={activeResourcePanel === 'media' ? 'primary' : 'outline-light'}
+                size="sm"
+                onClick={() => switchResourcePanel('media')}
+                style={{ fontWeight: '500' }}
+              >
+                {t('presenter.localMedia')}
+              </Button>
             </div>
 
-            {/* Search bar - Glassmorphic style (hidden when Tools tab is active) */}
-            {activeResourcePanel !== 'tools' && (
+            {/* Search bar - Glassmorphic style (hidden when Tools/Media tabs are active) */}
+            {activeResourcePanel !== 'tools' && activeResourcePanel !== 'media' && (
             <div style={{ flex: '1 1 200px', minWidth: '200px', position: 'relative' }}>
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -4677,6 +4919,170 @@ function PresenterMode() {
                     >
                       {t('presenter.addToSetlist')}
                     </Button>
+                  </div>
+                )}
+              </div>
+            ) : activeResourcePanel === 'media' ? (
+              /* Local Media Panel */
+              <div style={{ padding: '10px', color: 'white' }}>
+                {/* File Input */}
+                <div style={{ marginBottom: '15px' }}>
+                  <input
+                    type="file"
+                    accept="image/*,video/*"
+                    id="local-media-input"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        // Check file size for images (2MB limit)
+                        if (file.type.startsWith('image/') && file.size > 2 * 1024 * 1024) {
+                          alert(t('presenter.imageTooLarge'));
+                          return;
+                        }
+                        setSelectedMediaFile(file);
+                        setMediaType(file.type.startsWith('image/') ? 'image' : 'video');
+                        // Create preview URL
+                        const url = URL.createObjectURL(file);
+                        setMediaPreviewUrl(url);
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outline-light"
+                    onClick={() => document.getElementById('local-media-input').click()}
+                    style={{ width: '100%', marginBottom: '10px' }}
+                  >
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
+                      <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                      <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+                    </svg>
+                    {t('presenter.selectMediaFile')}
+                  </Button>
+                </div>
+
+                {/* Preview Area */}
+                <div style={{
+                  backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                  borderRadius: '10px',
+                  padding: '10px',
+                  marginBottom: '15px',
+                  minHeight: '120px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {!mediaPreviewUrl ? (
+                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem' }}>
+                      {t('presenter.noMediaSelected')}
+                    </span>
+                  ) : mediaType === 'image' ? (
+                    <img
+                      src={mediaPreviewUrl}
+                      alt="Preview"
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: '150px',
+                        borderRadius: '8px',
+                        objectFit: 'contain'
+                      }}
+                    />
+                  ) : (
+                    <video
+                      ref={localVideoRef}
+                      src={mediaPreviewUrl}
+                      controls
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: '150px',
+                        borderRadius: '8px'
+                      }}
+                      onLoadedData={() => console.log('🎬 Video loaded and ready')}
+                      onError={(e) => console.error('🎬 Video error:', e)}
+                    />
+                  )}
+                </div>
+
+                {/* Broadcast/Stream Buttons */}
+                {selectedMediaFile && (
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    {mediaType === 'image' ? (
+                      imageOnDisplay ? (
+                        <Button
+                          variant="danger"
+                          onClick={hideImageFromDisplay}
+                          style={{ flex: 1 }}
+                        >
+                          <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
+                            <path d="M5 3.5h6A1.5 1.5 0 0 1 12.5 5v6a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 11V5A1.5 1.5 0 0 1 5 3.5z"/>
+                          </svg>
+                          {t('presenter.hideImage') || 'Hide'}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="info"
+                          onClick={sendImageToDisplay}
+                          style={{ flex: 1 }}
+                          disabled={!presentationConnection}
+                        >
+                          <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
+                            <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                            <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
+                          </svg>
+                          {t('presenter.showOnDisplay')}
+                        </Button>
+                      )
+                    ) : videoOnDisplay ? (
+                      <>
+                        <Button
+                          variant={videoPlaying ? "warning" : "success"}
+                          onClick={toggleVideoPlayback}
+                          style={{ flex: 1 }}
+                        >
+                          {videoPlaying ? (
+                            <>
+                              <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
+                                <path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/>
+                              </svg>
+                              {t('presenter.pauseVideo') || 'Pause'}
+                            </>
+                          ) : (
+                            <>
+                              <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
+                                <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+                              </svg>
+                              {t('presenter.playVideo') || 'Play'}
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="danger"
+                          onClick={hideVideoFromDisplay}
+                          style={{ flex: 1 }}
+                        >
+                          <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
+                            <path d="M5 3.5h6A1.5 1.5 0 0 1 12.5 5v6a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 11V5A1.5 1.5 0 0 1 5 3.5z"/>
+                          </svg>
+                          {t('presenter.hideVideo') || 'Hide'}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        variant="info"
+                        onClick={sendVideoToDisplay}
+                        style={{ flex: 1 }}
+                        disabled={!room || !presentationConnection}
+                      >
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
+                          <path d="M0 5a2 2 0 0 1 2-2h7.5a2 2 0 0 1 1.983 1.738l3.11-1.382A1 1 0 0 1 16 4.269v7.462a1 1 0 0 1-1.406.913l-3.111-1.382A2 2 0 0 1 9.5 13H2a2 2 0 0 1-2-2V5z"/>
+                        </svg>
+                        {t('presenter.showOnDisplay')}
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>

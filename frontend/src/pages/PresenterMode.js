@@ -873,7 +873,33 @@ function PresenterMode() {
         };
       }
 
-      // Send announcement with visible: false to hide overlay
+      // Build toolsData - if countdown is running, restore it as the active tool
+      // Use ref to get current countdown state (not stale closure values)
+      const currentCountdown = countdownStateRef.current;
+      let hideToolsData;
+      if (currentCountdown.broadcasting && currentCountdown.running) {
+        // Countdown was running underneath - restore it as the main tool
+        hideToolsData = {
+          type: 'countdown',
+          countdown: {
+            remaining: currentCountdown.remaining,
+            endTime: Date.now() + (currentCountdown.remaining * 1000),
+            running: true,
+            message: currentCountdown.message
+          }
+        };
+      } else {
+        // No countdown - just hide the announcement
+        hideToolsData = {
+          type: 'announcement',
+          announcement: {
+            text: '',
+            visible: false
+          }
+        };
+      }
+
+      // Send update to hide overlay (and restore countdown if active)
       socketService.operatorUpdateSlide({
         roomId: room.id,
         roomPin: room.pin,
@@ -884,13 +910,7 @@ function PresenterMode() {
         isBlank: isBlankActive,
         imageUrl: currentImageUrl,
         slideData: hideSetlistSlideData,
-        toolsData: {
-          type: 'announcement',
-          announcement: {
-            text: '',
-            visible: false
-          }
-        }
+        toolsData: hideToolsData
       });
     } else {
       // Show - display this announcement as an overlay
@@ -1292,6 +1312,34 @@ function PresenterMode() {
       };
     }
 
+    // Build toolsData - if countdown is running, restore it as the active tool
+    // Use ref to get current countdown state (not stale closure values)
+    const currentCountdown = countdownStateRef.current;
+    let hideToolsData;
+    console.log('🔧 hideAnnouncement - checking countdown state:', currentCountdown);
+    if (currentCountdown.broadcasting && currentCountdown.running) {
+      // Countdown was running underneath - restore it as the main tool
+      console.log('🔧 hideAnnouncement - restoring countdown');
+      hideToolsData = {
+        type: 'countdown',
+        countdown: {
+          remaining: currentCountdown.remaining,
+          endTime: Date.now() + (currentCountdown.remaining * 1000),
+          running: true,
+          message: currentCountdown.message
+        }
+      };
+    } else {
+      // No countdown - just hide the announcement
+      hideToolsData = {
+        type: 'announcement',
+        announcement: {
+          text: announcementText,
+          visible: false
+        }
+      };
+    }
+
     socketService.operatorUpdateSlide({
       roomId: room.id,
       roomPin: room.pin,
@@ -1301,13 +1349,7 @@ function PresenterMode() {
       displayMode: displayMode,
       isBlank: isBlankActive,
       slideData: hideSlideData,
-      toolsData: {
-        type: 'announcement',
-        announcement: {
-          text: announcementText,
-          visible: false
-        }
-      }
+      toolsData: hideToolsData
     });
   };
 

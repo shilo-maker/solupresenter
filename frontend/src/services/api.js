@@ -114,6 +114,19 @@ export const adminAPI = {
   deleteUser: (id) => api.delete(`/api/admin/users/${id}`)
 };
 
+// Viewer Theme endpoints
+export const themeAPI = {
+  getAll: () => api.get('/api/viewer-themes'),
+  getById: (id) => api.get(`/api/viewer-themes/${id}`),
+  create: (themeData) => api.post('/api/viewer-themes', themeData),
+  update: (id, themeData) => api.put(`/api/viewer-themes/${id}`, themeData),
+  delete: (id) => api.delete(`/api/viewer-themes/${id}`),
+  duplicate: (id, name) => api.post(`/api/viewer-themes/${id}/duplicate`, { name }),
+  setDefault: (id) => api.post(`/api/viewer-themes/${id}/set-default`),
+  clearDefault: () => api.post('/api/viewer-themes/clear-default'),
+  getDefault: () => api.get('/api/viewer-themes/default')
+};
+
 // Helper function to get full image URL
 export const getFullImageUrl = (url) => {
   if (!url) return '';

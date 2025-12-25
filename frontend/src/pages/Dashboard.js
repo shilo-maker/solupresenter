@@ -104,6 +104,20 @@ function Dashboard() {
         <Col md={6}>
           <Card className="h-100">
             <Card.Body>
+              <Card.Title>{t('themes.manageThemes', 'Viewer Themes')}</Card.Title>
+              <Card.Text>
+                {t('dashboard.themesDesc', 'Customize how slides appear on viewer screens with custom themes.')}
+              </Card.Text>
+              <Button variant="info" onClick={() => navigate('/themes')}>
+                {t('themes.manage', 'Manage Themes')}
+              </Button>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        <Col md={6}>
+          <Card className="h-100">
+            <Card.Body>
               <Card.Title>{t('settings.title')}</Card.Title>
               <Card.Text>
                 {t('dashboard.settingsDesc')}

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import api, { getFullImageUrl, publicRoomAPI, roomAPI } from '../services/api';
 import socketService from '../services/socket';
 import { createCombinedSlides, getCombinedSlideLabel } from '../utils/slideCombining';
+import ThemeSelector from '../components/ThemeSelector';
 
 function PresenterMode() {
   const navigate = useNavigate();
@@ -4165,6 +4166,8 @@ function PresenterMode() {
                   )}
                 </Button>
               )}
+              {/* Viewer Theme Selector */}
+              <ThemeSelector roomId={room?.id || room?._id} />
             </div>
           </div>
         )}

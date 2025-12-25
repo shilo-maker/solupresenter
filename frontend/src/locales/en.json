@@ -1,5 +1,6 @@
 {
   "common": {
+    "apply": "Apply",
     "save": "Save",
     "cancel": "Cancel",
     "delete": "Delete",
@@ -148,7 +149,8 @@
     "mediaDesc": "Manage background images and gradients for your presentations.",
     "viewMedia": "View Media",
     "adminDesc": "Review and approve song submissions. Manage users and the public song database.",
-    "settingsDesc": "Configure public room names so viewers can find and join your presentations by name."
+    "settingsDesc": "Configure public room names so viewers can find and join your presentations by name.",
+    "themesDesc": "Customize how slides appear on viewer screens with custom themes."
   },
   "songs": {
     "title": "Songs",
@@ -742,5 +744,79 @@
     "bilingual": "Bilingual",
     "verse": "Verse",
     "slide": "Slide"
+  },
+  "themes": {
+    "noTheme": "Classic",
+    "clearTheme": "Clear Theme",
+    "manage": "Manage Themes...",
+    "manageThemes": "Manage Viewer Themes",
+    "yourThemes": "Your Themes",
+    "selectToEdit": "Select a theme to edit",
+    "builtIn": "Built-in",
+    "builtInInfo": "Built-in themes cannot be edited. Duplicate this theme to customize it.",
+    "enterName": "Enter theme name:",
+    "createError": "Failed to create theme",
+    "duplicateError": "Failed to duplicate theme",
+    "deleteError": "Failed to delete theme",
+    "saveError": "Failed to save theme",
+    "saved": "Theme saved successfully",
+    "cannotDeleteBuiltIn": "Cannot delete built-in themes",
+    "confirmDelete": "Delete this theme?",
+    "duplicate": "Duplicate",
+    "delete": "Delete",
+    "save": "Save Changes",
+    "createNew": "New Theme",
+    "noThemes": "No themes yet",
+    "created": "Theme created successfully",
+    "duplicated": "Theme duplicated successfully",
+    "deleted": "Theme deleted successfully",
+    "fetchError": "Failed to load themes",
+    "lineOrder": "Line Order",
+    "dragToReorder": "Drag to reorder",
+    "visible": "Visible",
+    "fontSize": "Font Size",
+    "opacity": "Opacity",
+    "color": "Color",
+    "fontWeight": "Font Weight",
+    "light": "Light",
+    "normal": "Normal",
+    "medium": "Medium",
+    "semibold": "Semi-Bold",
+    "bold": "Bold",
+    "positioning": "Positioning",
+    "vertical": "Vertical",
+    "horizontal": "Horizontal",
+    "tabs": {
+      "lines": "Lines",
+      "styling": "Styling",
+      "position": "Position"
+    },
+    "lineTypes": {
+      "original": "Original",
+      "transliteration": "Transliteration",
+      "translation": "Translation"
+    },
+    "positions": {
+      "top": "Top",
+      "center": "Center",
+      "bottom": "Bottom",
+      "left": "Left",
+      "right": "Right"
+    },
+    "resolution": "Canvas Resolution",
+    "customSize": "Custom",
+    "selectBox": "Click a text box to edit its style",
+    "resetPositions": "Reset Positions",
+    "background": "Viewer Background",
+    "bgInherit": "Inherit from Room",
+    "bgColor": "Solid Color",
+    "bgTransparent": "Transparent (OBS)",
+    "setDefault": "Set as Default",
+    "clearDefault": "Clear Default",
+    "defaultSet": "Default theme set successfully",
+    "defaultCleared": "Default theme cleared",
+    "defaultError": "Failed to set default theme",
+    "defaultTheme": "Your Default Theme",
+    "default": "Default"
   }
 }

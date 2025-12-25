@@ -50,6 +50,7 @@ const SetlistEdit = lazy(() => import('./pages/SetlistEdit'));
 const Admin = lazy(() => import('./pages/Admin'));
 const MediaLibrary = lazy(() => import('./pages/MediaLibrary'));
 const Settings = lazy(() => import('./pages/Settings'));
+const Themes = lazy(() => import('./pages/Themes'));
 
 function App() {
   return (
@@ -178,6 +179,16 @@ function App() {
             element={
               <PrivateRoute>
                 <Settings />
+              </PrivateRoute>
+            }
+          />
+
+          {/* Themes Route */}
+          <Route
+            path="/themes"
+            element={
+              <PrivateRoute>
+                <Themes />
               </PrivateRoute>
             }
           />

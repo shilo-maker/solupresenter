@@ -6,6 +6,8 @@ const Setlist = require('./Setlist');
 const Media = require('./Media');
 const BibleVerse = require('./BibleVerse');
 const PublicRoom = require('./PublicRoom');
+const SongMapping = require('./SongMapping');
+const ViewerTheme = require('./ViewerTheme');
 
 // Define relationships
 User.hasOne(Room, { as: 'activeRoom', foreignKey: 'operatorId' });
@@ -28,6 +30,14 @@ PublicRoom.belongsTo(User, { as: 'owner', foreignKey: 'ownerId', constraints: fa
 PublicRoom.belongsTo(Room, { as: 'activeRoom', foreignKey: 'activeRoomId', constraints: false });
 User.hasMany(PublicRoom, { as: 'publicRooms', foreignKey: 'ownerId', constraints: false });
 
+// SongMapping relationships
+SongMapping.belongsTo(Song, { as: 'presenterSong', foreignKey: 'solupresenterId', constraints: false });
+
+// ViewerTheme relationships
+ViewerTheme.belongsTo(User, { as: 'creator', foreignKey: 'createdById', constraints: false });
+User.hasMany(ViewerTheme, { as: 'viewerThemes', foreignKey: 'createdById', constraints: false });
+Room.belongsTo(ViewerTheme, { as: 'activeTheme', foreignKey: 'activeThemeId', constraints: false });
+
 // Export models and sequelize instance
 module.exports = {
   sequelize,
@@ -37,5 +47,7 @@ module.exports = {
   Setlist,
   Media,
   BibleVerse,
-  PublicRoom
+  PublicRoom,
+  SongMapping,
+  ViewerTheme
 };

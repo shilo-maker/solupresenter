@@ -237,6 +237,26 @@ class SocketService {
     }
   }
 
+  operatorApplyTheme(roomId, themeId) {
+    if (!this.socket) {
+      console.error('❌ No socket available to apply theme');
+      return;
+    }
+
+    console.log('🎨 Applying viewer theme:', { roomId, themeId });
+
+    if (this.socket.connected) {
+      this.socket.emit('operator:applyTheme', { roomId, themeId });
+      console.log('📡 operator:applyTheme event emitted');
+    } else {
+      console.log('⏳ Socket not connected, waiting...');
+      this.socket.once('connect', () => {
+        console.log('✅ Socket connected, now applying theme');
+        this.socket.emit('operator:applyTheme', { roomId, themeId });
+      });
+    }
+  }
+
   // Viewer methods
   viewerJoinRoom(pin) {
     if (!this.socket) {
@@ -312,6 +332,12 @@ class SocketService {
   onRoomClosed(callback) {
     if (this.socket) {
       this.socket.on('room:closed', callback);
+    }
+  }
+
+  onThemeUpdate(callback) {
+    if (this.socket) {
+      this.socket.on('theme:update', callback);
     }
   }
 

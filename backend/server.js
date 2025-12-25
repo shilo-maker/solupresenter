@@ -10,7 +10,7 @@ const session = require('express-session');
 const multer = require('multer');
 const compression = require('compression');
 const helmet = require('helmet');
-const { sequelize, Room, Song, PublicRoom } = require('./models');
+const { sequelize, Room, Song, PublicRoom, ViewerTheme } = require('./models');
 const passport = require('./config/passport');
 
 // Import routes
@@ -22,6 +22,7 @@ const adminRoutes = require('./routes/admin');
 const mediaRoutes = require('./routes/media');
 const bibleRoutes = require('./routes/bible');
 const publicRoomsRoutes = require('./routes/publicRooms');
+const viewerThemesRoutes = require('./routes/viewerThemes');
 
 // Import cleanup jobs
 const cleanupTemporarySetlists = require('./jobs/cleanupTemporarySetlists');
@@ -104,6 +105,9 @@ sequelize.authenticate()
     // Use alter: true to add new columns to existing tables
     await sequelize.sync({ alter: true });
     console.log('✅ Database models ready');
+
+    // Seed the Classic theme if it doesn't exist
+    await ViewerTheme.seedClassicTheme();
   })
   .catch(err => {
     console.error('❌ Unable to connect to PostgreSQL:', err);
@@ -147,6 +151,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/bible', bibleRoutes);
 app.use('/api/public-rooms', publicRoomsRoutes);
+app.use('/api/viewer-themes', viewerThemesRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -176,6 +181,7 @@ app.use((err, req, res, next) => {
 const operatorSockets = new Map(); // Map of userId -> socketId
 const viewerRooms = new Map(); // Map of socketId -> roomPin
 const roomToolsData = new Map(); // Map of roomPin -> toolsData (for new viewers)
+const roomActiveTheme = new Map(); // Map of roomPin -> theme (for new viewers)
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
@@ -314,7 +320,8 @@ io.on('connection', (socket) => {
         imageUrl: imageUrl,
         isBlank: room.currentSlide?.isBlank || false,
         backgroundImage: room.backgroundImage || '',
-        toolsData: roomToolsData.get(room.pin) || null
+        toolsData: roomToolsData.get(room.pin) || null,
+        theme: roomActiveTheme.get(room.pin) || null
       };
 
       console.log(`📤 Sending to viewer:`, JSON.stringify(viewerJoinedData, null, 2));
@@ -531,6 +538,56 @@ io.on('connection', (socket) => {
       io.to(`room:${room.pin}`).emit('localVideo:stop');
     } catch (error) {
       console.error('Error in operator:stopLocalVideo:', error);
+    }
+  });
+
+  // Operator applies a viewer theme
+  socket.on('operator:applyTheme', async (data) => {
+    try {
+      const { roomId, themeId } = data;
+
+      const room = await Room.findByPk(roomId);
+      if (!room) {
+        socket.emit('error', { message: 'Room not found' });
+        return;
+      }
+
+      let theme = null;
+      if (themeId) {
+        theme = await ViewerTheme.findByPk(themeId);
+        if (!theme) {
+          socket.emit('error', { message: 'Theme not found' });
+          return;
+        }
+      }
+
+      // Store theme in memory for new viewers
+      if (theme) {
+        roomActiveTheme.set(room.pin, theme.toJSON());
+      } else {
+        roomActiveTheme.delete(room.pin);
+      }
+
+      // 🚀 Broadcast immediately to all viewers
+      io.to(`room:${room.pin}`).emit('theme:update', {
+        theme: theme ? theme.toJSON() : null
+      });
+
+      console.log(`Theme ${themeId || 'none'} applied to room ${room.pin}`);
+
+      // 💾 Save to database asynchronously
+      setImmediate(async () => {
+        try {
+          room.activeThemeId = themeId || null;
+          await room.save();
+        } catch (err) {
+          console.error('⚠️ Error saving theme to DB:', err);
+        }
+      });
+
+    } catch (error) {
+      console.error('Error in operator:applyTheme:', error);
+      socket.emit('error', { message: 'Failed to apply theme' });
     }
   });
 

@@ -1,5 +1,6 @@
 {
   "common": {
+    "apply": "החל",
     "save": "שמור",
     "cancel": "ביטול",
     "delete": "מחק",
@@ -148,7 +149,8 @@
     "mediaDesc": "נהל תמונות רקע ומעברי צבע להצגות שלך.",
     "viewMedia": "צפה במדיה",
     "adminDesc": "סקור ואשר הגשות שירים. נהל משתמשים ומאגר השירים הציבורי.",
-    "settingsDesc": "הגדר שמות חדרים ציבוריים כדי שצופים יוכלו למצוא ולהצטרף להצגות שלך."
+    "settingsDesc": "הגדר שמות חדרים ציבוריים כדי שצופים יוכלו למצוא ולהצטרף להצגות שלך.",
+    "themesDesc": "התאם אישית את אופן התצוגה של שקפים על מסכי הצופים עם עיצובים מותאמים."
   },
   "songs": {
     "title": "שירים",
@@ -742,5 +744,79 @@
     "bilingual": "דו-לשוני",
     "verse": "פסוק",
     "slide": "שקף"
+  },
+  "themes": {
+    "noTheme": "קלאסי",
+    "clearTheme": "נקה עיצוב",
+    "manage": "נהל עיצובים...",
+    "manageThemes": "נהל עיצובי צפייה",
+    "yourThemes": "העיצובים שלך",
+    "selectToEdit": "בחר עיצוב לעריכה",
+    "builtIn": "מובנה",
+    "builtInInfo": "לא ניתן לערוך עיצובים מובנים. שכפל עיצוב זה כדי להתאים אותו.",
+    "enterName": "הזן שם עיצוב:",
+    "createError": "נכשל ביצירת עיצוב",
+    "duplicateError": "נכשל בשכפול עיצוב",
+    "deleteError": "נכשל במחיקת עיצוב",
+    "saveError": "נכשל בשמירת עיצוב",
+    "saved": "העיצוב נשמר בהצלחה",
+    "cannotDeleteBuiltIn": "לא ניתן למחוק עיצובים מובנים",
+    "confirmDelete": "למחוק עיצוב זה?",
+    "duplicate": "שכפל",
+    "delete": "מחק",
+    "save": "שמור שינויים",
+    "createNew": "עיצוב חדש",
+    "noThemes": "אין עיצובים עדיין",
+    "created": "העיצוב נוצר בהצלחה",
+    "duplicated": "העיצוב שוכפל בהצלחה",
+    "deleted": "העיצוב נמחק בהצלחה",
+    "fetchError": "נכשל בטעינת עיצובים",
+    "lineOrder": "סדר שורות",
+    "dragToReorder": "גרור לשינוי סדר",
+    "visible": "גלוי",
+    "fontSize": "גודל גופן",
+    "opacity": "שקיפות",
+    "color": "צבע",
+    "fontWeight": "עובי גופן",
+    "light": "דק",
+    "normal": "רגיל",
+    "medium": "בינוני",
+    "semibold": "חצי-עבה",
+    "bold": "עבה",
+    "positioning": "מיקום",
+    "vertical": "אנכי",
+    "horizontal": "אופקי",
+    "tabs": {
+      "lines": "שורות",
+      "styling": "עיצוב",
+      "position": "מיקום"
+    },
+    "lineTypes": {
+      "original": "מקור",
+      "transliteration": "תעתיק",
+      "translation": "תרגום"
+    },
+    "positions": {
+      "top": "למעלה",
+      "center": "מרכז",
+      "bottom": "למטה",
+      "left": "שמאל",
+      "right": "ימין"
+    },
+    "resolution": "רזולוציית קנבס",
+    "customSize": "מותאם אישית",
+    "selectBox": "לחץ על תיבת טקסט כדי לערוך את הסגנון שלה",
+    "resetPositions": "אפס מיקומים",
+    "background": "רקע צפייה",
+    "bgInherit": "ירש מהחדר",
+    "bgColor": "צבע אחיד",
+    "bgTransparent": "שקוף (OBS)",
+    "setDefault": "הגדר כברירת מחדל",
+    "clearDefault": "נקה ברירת מחדל",
+    "defaultSet": "ערכת נושא ברירת מחדל הוגדרה בהצלחה",
+    "defaultCleared": "ברירת מחדל של ערכת הנושא נוקתה",
+    "defaultError": "נכשל בהגדרת ברירת מחדל",
+    "defaultTheme": "ערכת הנושא שלך כברירת מחדל",
+    "default": "ברירת מחדל"
   }
 }

@@ -66,6 +66,9 @@ function ViewerPage() {
   // Announcement animation state
   const [announcementBanner, setAnnouncementBanner] = useState({ visible: false, text: '', animating: false });
 
+  // Theme state
+  const [viewerTheme, setViewerTheme] = useState(null);
+
   // Viewer display toggles
   const [showOriginal, setShowOriginal] = useState(true);
   const [showTransliteration, setShowTransliteration] = useState(true);
@@ -300,6 +303,12 @@ function ViewerPage() {
         setDisplayMode(data.currentSlide.displayMode);
       }
 
+      // Handle theme data for new viewers
+      if (data.theme) {
+        console.log('🎨 Initial theme for new viewer:', data.theme);
+        setViewerTheme(data.theme);
+      }
+
       // Handle tools data for new viewers
       if (data.toolsData) {
         console.log('🔧 Initial toolsData for new viewer:', data.toolsData);
@@ -439,7 +448,14 @@ function ViewerPage() {
       setRoomSearch('');
       setSearchResults([]);
       setSelectedRoom(null);
+      setViewerTheme(null);
       setError(tRef.current('viewer.sessionEnded'));
+    });
+
+    // Handle theme updates from operator
+    socketService.onThemeUpdate((data) => {
+      console.log('🎨 Theme update received:', data.theme);
+      setViewerTheme(data.theme);
     });
 
     // Check if PIN or room name is in URL query params and auto-join
@@ -831,6 +847,221 @@ function ViewerPage() {
     );
   };
 
+  // Theme styling helper functions
+  const getThemeLineStyle = (lineType) => {
+    if (!viewerTheme?.lineStyles?.[lineType]) {
+      return {};
+    }
+    const style = viewerTheme.lineStyles[lineType];
+    return {
+      fontSize: style.fontSize ? `${style.fontSize}%` : undefined,
+      fontWeight: style.fontWeight || undefined,
+      color: style.color || undefined,
+      opacity: style.opacity !== undefined ? style.opacity : undefined
+    };
+  };
+
+  const isLineVisible = (lineType) => {
+    if (!viewerTheme?.lineStyles?.[lineType]) {
+      return true; // Default visible
+    }
+    return viewerTheme.lineStyles[lineType].visible !== false;
+  };
+
+  const getThemePositioningStyle = () => {
+    if (!viewerTheme?.positioning) {
+      return {
+        alignItems: 'center',
+        justifyContent: 'center'
+      };
+    }
+    const { vertical, horizontal } = viewerTheme.positioning;
+    return {
+      alignItems: horizontal === 'left' ? 'flex-start' : horizontal === 'right' ? 'flex-end' : 'center',
+      justifyContent: vertical === 'top' ? 'flex-start' : vertical === 'bottom' ? 'flex-end' : 'center'
+    };
+  };
+
+  const getThemeContainerStyle = () => {
+    if (!viewerTheme?.container) {
+      return {
+        padding: '2vh 6vw'
+      };
+    }
+    const { maxWidth, padding, backgroundColor, borderRadius } = viewerTheme.container;
+    return {
+      maxWidth: maxWidth || '100%',
+      padding: padding || '2vh 6vw',
+      backgroundColor: backgroundColor || 'transparent',
+      borderRadius: borderRadius || '0px'
+    };
+  };
+
+  // Get background style based on theme viewerBackground settings
+  const getViewerBackgroundStyle = () => {
+    const themeType = viewerTheme?.viewerBackground?.type;
+    const themeColor = viewerTheme?.viewerBackground?.color;
+    const isGradient = backgroundImage && backgroundImage.startsWith('linear-gradient');
+
+    // Default (inherit) - use room's background
+    if (!themeType || themeType === 'inherit') {
+      return {
+        background: backgroundImage
+          ? (isGradient ? backgroundImage : `url(${getFullImageUrl(backgroundImage)})`)
+          : 'linear-gradient(-45deg, #0a0a0a, #1a1a2e, #16161d, #1f1f1f, #1a1a2e, #0a0a0a)',
+        backgroundSize: backgroundImage ? 'cover' : '400% 400%',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        animation: backgroundImage ? 'none' : 'gradientShift 20s ease infinite'
+      };
+    }
+
+    // Transparent - for OBS overlays
+    if (themeType === 'transparent') {
+      return {
+        background: 'transparent',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        animation: 'none'
+      };
+    }
+
+    // Solid color from theme
+    if (themeType === 'color' && themeColor) {
+      return {
+        background: themeColor,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        animation: 'none'
+      };
+    }
+
+    // Fallback to default
+    return {
+      background: 'linear-gradient(-45deg, #0a0a0a, #1a1a2e, #16161d, #1f1f1f, #1a1a2e, #0a0a0a)',
+      backgroundSize: '400% 400%',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+      animation: 'gradientShift 20s ease infinite'
+    };
+  };
+
+  // Render slide content with WYSIWYG absolute positioning (when linePositions is set)
+  const renderWithAbsolutePositioning = (slide, isTransliterationLanguage, getTextDirection) => {
+    const containerStyle = getThemeContainerStyle();
+
+    // Helper to get responsive font size
+    const getResponsiveFontSize = (lineType, themeLineStyle) => {
+      const baseFontSize = lineType === 'original' && isTransliterationLanguage
+        ? 'clamp(2rem, 6vw, 6rem)'
+        : 'clamp(1.5rem, 4.5vw, 4.5rem)';
+      const themeFontScale = themeLineStyle.fontSize ? parseFloat(themeLineStyle.fontSize) / 100 : 1;
+      return `calc(${baseFontSize} * ${fontSize / 100} * ${themeFontScale})`;
+    };
+
+    // Get text content for each line type
+    const getTextForLine = (lineType) => {
+      if (lineType === 'original') return slide.originalText;
+      if (lineType === 'transliteration') return slide.transliteration;
+      if (lineType === 'translation') return slide.translation;
+      return null;
+    };
+
+    // Check if line should be shown (viewer toggle + theme visibility + has content)
+    const shouldShowLine = (lineType) => {
+      const text = getTextForLine(lineType);
+      if (!text) return false;
+      if (!isLineVisible(lineType)) return false;
+      if (lineType === 'original' && !showOriginal) return false;
+      if (lineType === 'transliteration' && !showTransliteration) return false;
+      if (lineType === 'translation' && !showTranslation) return false;
+      return true;
+    };
+
+    return (
+      <div style={{
+        width: '100%',
+        height: '100%',
+        position: 'relative',
+        ...containerStyle
+      }}>
+        {/* Bible Reference Label - Top Left (only for Bible verses) */}
+        {slide.reference && (
+          <div style={{
+            position: 'absolute',
+            top: '15px',
+            left: '15px',
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            color: 'white',
+            padding: '6px 12px',
+            borderRadius: '8px',
+            fontSize: 'clamp(0.85rem, 1.2vw, 1rem)',
+            fontWeight: '500',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            gap: '2px',
+            textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
+            zIndex: 10
+          }}>
+            {slide.hebrewReference && (
+              <div style={{ direction: 'rtl', width: '100%' }}>
+                {slide.hebrewReference}
+              </div>
+            )}
+            <div>{slide.reference}</div>
+          </div>
+        )}
+
+        {/* Render each line with absolute positioning */}
+        {(viewerTheme?.lineOrder || ['original', 'transliteration', 'translation']).map((lineType) => {
+          if (!shouldShowLine(lineType)) return null;
+
+          const position = viewerTheme.linePositions?.[lineType];
+          if (!position) return null;
+
+          const themeLineStyle = getThemeLineStyle(lineType);
+          const text = getTextForLine(lineType);
+          const overflowText = lineType === 'translation' ? slide.translationOverflow : null;
+
+          return (
+            <div
+              key={lineType}
+              style={{
+                position: 'absolute',
+                left: `${position.x}%`,
+                top: `${position.y}%`,
+                width: `${position.width}%`,
+                height: `${position.height}%`,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: getResponsiveFontSize(lineType, themeLineStyle),
+                lineHeight: 1.4,
+                fontWeight: themeLineStyle.fontWeight || '400',
+                color: themeLineStyle.color || textColor,
+                opacity: themeLineStyle.opacity !== undefined ? themeLineStyle.opacity : 1,
+                textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                direction: getTextDirection(text),
+                unicodeBidi: 'plaintext',
+                textAlign: 'center',
+                overflow: 'hidden',
+                wordWrap: 'break-word',
+                overflowWrap: 'break-word'
+              }}
+            >
+              <span>{text}</span>
+              {overflowText && <span style={{ marginTop: '0.2em' }}>{overflowText}</span>}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const renderSlide = () => {
     // If announcement is active with countdown underneath, show countdown
     if (toolsData?.type === 'announcement' && toolsData?.countdown?.running) {
@@ -1144,6 +1375,11 @@ function ViewerPage() {
       return isHebrew(text) ? 'rtl' : 'ltr';
     };
 
+    // Use WYSIWYG absolute positioning if linePositions is set
+    if (viewerTheme?.linePositions) {
+      return renderWithAbsolutePositioning(slide, isTransliterationLanguage, getTextDirection);
+    }
+
     // Font size for lines - equal for English songs, bigger first line for Hebrew/Arabic
     const line1FontSize = isTransliterationLanguage
       ? `calc(clamp(2rem, 6vw, 6rem) * ${fontSize / 100})`
@@ -1152,17 +1388,21 @@ function ViewerPage() {
       ? `calc(clamp(1.5rem, 4.5vw, 4.5rem) * ${fontSize / 100})`
       : `calc(clamp(1.8rem, 5vw, 5rem) * ${fontSize / 100})`;
 
+    // Get theme positioning and container styles
+    const positioningStyle = getThemePositioningStyle();
+    const containerStyle = getThemeContainerStyle();
+
     return (
       <div style={{
         width: '100%',
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '2vh 6vw',
+        ...positioningStyle,
+        ...containerStyle,
         color: textColor,
-        textAlign: 'center',
+        textAlign: viewerTheme?.positioning?.horizontal === 'left' ? 'left' :
+                   viewerTheme?.positioning?.horizontal === 'right' ? 'right' : 'center',
         boxSizing: 'border-box',
         position: 'relative'
       }}>
@@ -1252,7 +1492,7 @@ function ViewerPage() {
             )
           )
         ) : (
-          // Bilingual mode - all 4 lines (respects viewer toggles)
+          // Bilingual mode - render lines according to theme order (respects viewer toggles + theme visibility)
           <div style={{
             display: 'flex',
             flexDirection: 'column',
@@ -1260,88 +1500,120 @@ function ViewerPage() {
             width: '100%',
             maxWidth: '100%'
           }}>
-            {/* Line 1 - Original Text / Lyrics */}
-            {showOriginal && (
-              <div style={{
-                fontSize: line1FontSize,
-                lineHeight: 1.4,
-                fontWeight: isTransliterationLanguage ? '500' : '400',
-                width: '100%',
-                wordWrap: 'break-word',
-                overflowWrap: 'break-word',
-                color: textColor,
-                textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
-                direction: getTextDirection(slide.originalText),
-                unicodeBidi: 'plaintext',
-                textAlign: isBible ? 'right' : 'center'
-              }}>
-                {slide.originalText}
-              </div>
-            )}
+            {/* Render lines in theme-specified order */}
+            {(viewerTheme?.lineOrder || ['original', 'transliteration', 'translation']).map((lineType) => {
+              // Get theme styles for this line
+              const themeLineStyle = getThemeLineStyle(lineType);
+              const themeVisible = isLineVisible(lineType);
 
-            {/* Line 2 - Transliteration / Lyrics continued */}
-            {showTransliteration && slide.transliteration && (
-              <div style={{
-                fontSize: otherLinesFontSize,
-                lineHeight: 1.4,
-                opacity: isTransliterationLanguage ? 0.95 : 1,
-                width: '100%',
-                wordWrap: 'break-word',
-                overflowWrap: 'break-word',
-                color: textColor,
-                textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
-                direction: getTextDirection(slide.transliteration),
-                unicodeBidi: 'plaintext'
-              }}>
-                {slide.transliteration}
-              </div>
-            )}
-
-            {/* Lines 3 & 4 - Translation / Lyrics continued */}
-            {showTranslation && slide.translation && (
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: slide.translationOverflow ? 'clamp(0.1rem, 0.3vh, 0.3rem)' : '0',
-                width: '100%'
-              }}>
-                {/* Line 3 */}
-                <div style={{
-                  fontSize: otherLinesFontSize,
-                  lineHeight: 1.4,
-                  opacity: isTransliterationLanguage ? 0.95 : 1,
-                  width: '100%',
-                  wordWrap: 'break-word',
-                  overflowWrap: 'break-word',
-                  color: isBible ? '#FFD700' : textColor,
-                  textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
-                  direction: getTextDirection(slide.translation),
-                  unicodeBidi: 'plaintext',
-                  textAlign: isBible ? 'left' : 'center'
-                }}>
-                  {slide.translation}
-                </div>
-
-                {/* Line 4 */}
-                {slide.translationOverflow && (
-                  <div style={{
-                    fontSize: otherLinesFontSize,
+              if (lineType === 'original') {
+                // Original Text / Lyrics
+                if (!showOriginal || !themeVisible) return null;
+                const baseFontSize = isTransliterationLanguage
+                  ? 'clamp(2rem, 6vw, 6rem)'
+                  : 'clamp(1.8rem, 5vw, 5rem)';
+                const themeFontScale = themeLineStyle.fontSize ? parseFloat(themeLineStyle.fontSize) / 100 : 1;
+                return (
+                  <div key="original" style={{
+                    fontSize: `calc(${baseFontSize} * ${fontSize / 100} * ${themeFontScale})`,
                     lineHeight: 1.4,
-                    opacity: isTransliterationLanguage ? 0.95 : 1,
+                    fontWeight: themeLineStyle.fontWeight || (isTransliterationLanguage ? '500' : '400'),
                     width: '100%',
                     wordWrap: 'break-word',
                     overflowWrap: 'break-word',
-                    color: isBible ? '#FFD700' : textColor,
+                    color: themeLineStyle.color || textColor,
+                    opacity: themeLineStyle.opacity !== undefined ? themeLineStyle.opacity : 1,
                     textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
-                    direction: getTextDirection(slide.translationOverflow),
+                    direction: getTextDirection(slide.originalText),
                     unicodeBidi: 'plaintext',
-                    textAlign: isBible ? 'left' : 'center'
+                    textAlign: isBible ? 'right' : 'center'
                   }}>
-                    {slide.translationOverflow}
+                    {slide.originalText}
                   </div>
-                )}
-              </div>
-            )}
+                );
+              }
+
+              if (lineType === 'transliteration') {
+                // Transliteration / Lyrics continued
+                if (!showTransliteration || !themeVisible || !slide.transliteration) return null;
+                const baseFontSize = isTransliterationLanguage
+                  ? 'clamp(1.5rem, 4.5vw, 4.5rem)'
+                  : 'clamp(1.8rem, 5vw, 5rem)';
+                const themeFontScale = themeLineStyle.fontSize ? parseFloat(themeLineStyle.fontSize) / 100 : 1;
+                return (
+                  <div key="transliteration" style={{
+                    fontSize: `calc(${baseFontSize} * ${fontSize / 100} * ${themeFontScale})`,
+                    lineHeight: 1.4,
+                    fontWeight: themeLineStyle.fontWeight || '400',
+                    width: '100%',
+                    wordWrap: 'break-word',
+                    overflowWrap: 'break-word',
+                    color: themeLineStyle.color || textColor,
+                    opacity: themeLineStyle.opacity !== undefined ? themeLineStyle.opacity : (isTransliterationLanguage ? 0.95 : 1),
+                    textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                    direction: getTextDirection(slide.transliteration),
+                    unicodeBidi: 'plaintext'
+                  }}>
+                    {slide.transliteration}
+                  </div>
+                );
+              }
+
+              if (lineType === 'translation') {
+                // Translation / Lyrics continued (with overflow line)
+                if (!showTranslation || !themeVisible || !slide.translation) return null;
+                const baseFontSize = isTransliterationLanguage
+                  ? 'clamp(1.5rem, 4.5vw, 4.5rem)'
+                  : 'clamp(1.8rem, 5vw, 5rem)';
+                const themeFontScale = themeLineStyle.fontSize ? parseFloat(themeLineStyle.fontSize) / 100 : 1;
+                return (
+                  <div key="translation" style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: slide.translationOverflow ? 'clamp(0.1rem, 0.3vh, 0.3rem)' : '0',
+                    width: '100%'
+                  }}>
+                    <div style={{
+                      fontSize: `calc(${baseFontSize} * ${fontSize / 100} * ${themeFontScale})`,
+                      lineHeight: 1.4,
+                      fontWeight: themeLineStyle.fontWeight || '400',
+                      width: '100%',
+                      wordWrap: 'break-word',
+                      overflowWrap: 'break-word',
+                      color: themeLineStyle.color || (isBible ? '#FFD700' : textColor),
+                      opacity: themeLineStyle.opacity !== undefined ? themeLineStyle.opacity : (isTransliterationLanguage ? 0.95 : 1),
+                      textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                      direction: getTextDirection(slide.translation),
+                      unicodeBidi: 'plaintext',
+                      textAlign: isBible ? 'left' : 'center'
+                    }}>
+                      {slide.translation}
+                    </div>
+
+                    {slide.translationOverflow && (
+                      <div style={{
+                        fontSize: `calc(${baseFontSize} * ${fontSize / 100} * ${themeFontScale})`,
+                        lineHeight: 1.4,
+                        fontWeight: themeLineStyle.fontWeight || '400',
+                        width: '100%',
+                        wordWrap: 'break-word',
+                        overflowWrap: 'break-word',
+                        color: themeLineStyle.color || (isBible ? '#FFD700' : textColor),
+                        opacity: themeLineStyle.opacity !== undefined ? themeLineStyle.opacity : (isTransliterationLanguage ? 0.95 : 1),
+                        textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                        direction: getTextDirection(slide.translationOverflow),
+                        unicodeBidi: 'plaintext',
+                        textAlign: isBible ? 'left' : 'center'
+                      }}>
+                        {slide.translationOverflow}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              return null;
+            })}
           </div>
         )}
       </div>
@@ -1713,8 +1985,8 @@ function ViewerPage() {
     );
   }
 
-  // Determine if backgroundImage is a gradient or URL
-  const isGradient = backgroundImage && backgroundImage.startsWith('linear-gradient');
+  // Get theme-aware background style
+  const viewerBackgroundStyle = getViewerBackgroundStyle();
 
   return (
     <>
@@ -1764,13 +2036,7 @@ function ViewerPage() {
 
       <div
         style={{
-          background: backgroundImage
-            ? (isGradient ? backgroundImage : `url(${getFullImageUrl(backgroundImage)})`)
-            : 'linear-gradient(-45deg, #0a0a0a, #1a1a2e, #16161d, #1f1f1f, #1a1a2e, #0a0a0a)',
-          backgroundSize: backgroundImage ? 'cover' : '400% 400%',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          animation: backgroundImage ? 'none' : 'gradientShift 20s ease infinite',
+          ...viewerBackgroundStyle,
           width: '100vw',
           height: '100vh',
           position: 'fixed',

@@ -4228,6 +4228,7 @@ function PresenterMode() {
               >
                 {t('presenter.tools')}
               </Button>
+              {/* Media tab hidden - feature in beta
               <Button
                 variant={activeResourcePanel === 'media' ? 'primary' : 'outline-light'}
                 size="sm"
@@ -4236,6 +4237,7 @@ function PresenterMode() {
               >
                 {t('presenter.localMedia')}
               </Button>
+              */}
             </div>
 
             {/* Search bar - Glassmorphic style (hidden when Tools/Media tabs are active) */}

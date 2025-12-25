@@ -4107,7 +4107,7 @@ function PresenterMode() {
               {/* Note: Chromecast also appears in the Presentation API picker when available */}
               {presentationSupported && (
                 <Button
-                  variant={presentationConnection ? "info" : "outline-info"}
+                  variant={presentationConnection ? "danger" : "info"}
                   onClick={() => {
                     if (presentationConnection) {
                       stopPresentation();
@@ -4126,8 +4126,10 @@ function PresenterMode() {
                     gap: '6px'
                   }}
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                    <line x1="8" y1="21" x2="16" y2="21"/>
+                    <line x1="12" y1="17" x2="12" y2="21"/>
                   </svg>
                   {presentationConnection && (
                     <span style={{ fontSize: '0.7rem', fontWeight: 'bold' }}>LIVE</span>

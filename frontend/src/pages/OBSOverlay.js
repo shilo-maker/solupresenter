@@ -235,9 +235,6 @@ function OBSOverlay() {
   // Get the actual slide data (nested under .slide property)
   const slide = currentSlide?.slide;
 
-  // Check if current song is transliteration language (Hebrew/Arabic)
-  const isTransliterationLanguage = slide?.originalText && isHebrew(slide.originalText);
-
   // Calculate font size (same for all lines)
   const baseFontSize = fontSize / 100;
   const lineFontSize = `calc(clamp(1rem, 2.7vw, 2.7rem) * ${baseFontSize})`;

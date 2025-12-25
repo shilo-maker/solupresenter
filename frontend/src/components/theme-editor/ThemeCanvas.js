@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import DraggableTextBox from './DraggableTextBox';
+import DraggableBox from './DraggableBox';
 
 const SAMPLE_TEXTS = {
   original: 'שיר השירים אשר לשלמה',
@@ -12,9 +13,14 @@ const ThemeCanvas = ({
   linePositions, // { original: { x, y, width, height }, ... }
   lineStyles, // { original: { fontSize, fontWeight, color, opacity, visible }, ... }
   lineOrder, // ['original', 'transliteration', 'translation']
+  backgroundBoxes, // [{ id, x, y, width, height, color, opacity, borderRadius }, ...]
   selectedLine,
+  selectedBoxId,
   onPositionChange, // (lineType, position) => void
   onSelectLine, // (lineType) => void
+  onBoxChange, // (box) => void
+  onSelectBox, // (boxId) => void
+  onDeleteBox, // (boxId) => void
   viewerBackground, // { type, color }
   disabled
 }) => {
@@ -81,6 +87,7 @@ const ThemeCanvas = ({
 
   const positions = linePositions || defaultPositions;
   const order = lineOrder || ['original', 'transliteration', 'translation'];
+  const boxes = backgroundBoxes || [];
 
   return (
     <div ref={containerRef} style={{ width: '100%' }}>
@@ -101,6 +108,7 @@ const ThemeCanvas = ({
           // Deselect when clicking canvas background
           if (e.target === e.currentTarget) {
             onSelectLine(null);
+            if (onSelectBox) onSelectBox(null);
           }
         }}
       >
@@ -120,7 +128,25 @@ const ThemeCanvas = ({
           {canvasDimensions.width} x {canvasDimensions.height}
         </div>
 
-        {/* Draggable text boxes */}
+        {/* Background boxes (rendered first, behind text) */}
+        {boxes.map((box, index) => (
+          <DraggableBox
+            key={box.id}
+            box={box}
+            index={index}
+            isSelected={selectedBoxId === box.id}
+            canvasSize={canvasSize}
+            onPositionChange={(updatedBox) => onBoxChange && onBoxChange(updatedBox)}
+            onSelect={() => {
+              onSelectLine(null); // Deselect text
+              if (onSelectBox) onSelectBox(box.id);
+            }}
+            onDelete={() => onDeleteBox && onDeleteBox(box.id)}
+            disabled={disabled}
+          />
+        ))}
+
+        {/* Draggable text boxes (rendered after, on top of background boxes) */}
         {order.map((lineType) => {
           const position = positions[lineType];
           const style = lineStyles?.[lineType];
@@ -136,7 +162,10 @@ const ThemeCanvas = ({
               isSelected={selectedLine === lineType}
               canvasSize={canvasSize}
               onPositionChange={(newPosition) => onPositionChange(lineType, newPosition)}
-              onSelect={() => onSelectLine(lineType)}
+              onSelect={() => {
+                if (onSelectBox) onSelectBox(null); // Deselect box
+                onSelectLine(lineType);
+              }}
               sampleText={SAMPLE_TEXTS[lineType]}
               disabled={disabled}
             />
@@ -154,7 +183,7 @@ const ThemeCanvas = ({
             color: 'rgba(255, 255, 255, 0.5)'
           }}
         >
-          Drag boxes to reposition • Drag edges to resize • Click to select and edit style
+          Drag boxes to reposition • Drag edges to resize • Click to select and edit
         </div>
       )}
     </div>

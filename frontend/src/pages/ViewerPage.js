@@ -1015,6 +1015,24 @@ function ViewerPage() {
           </div>
         )}
 
+        {/* Render background boxes (behind text) */}
+        {(viewerTheme?.backgroundBoxes || []).map((box, index) => (
+          <div
+            key={box.id || `box-${index}`}
+            style={{
+              position: 'absolute',
+              left: `${box.x}%`,
+              top: `${box.y}%`,
+              width: `${box.width}%`,
+              height: `${box.height}%`,
+              backgroundColor: box.color || '#000000',
+              opacity: box.opacity !== undefined ? box.opacity : 0.5,
+              borderRadius: box.borderRadius ? `${box.borderRadius}px` : '0px',
+              zIndex: 1
+            }}
+          />
+        ))}
+
         {/* Render each line with absolute positioning */}
         {(viewerTheme?.lineOrder || ['original', 'transliteration', 'translation']).map((lineType) => {
           if (!shouldShowLine(lineType)) return null;
@@ -1025,6 +1043,12 @@ function ViewerPage() {
           const themeLineStyle = getThemeLineStyle(lineType);
           const text = getTextForLine(lineType);
           const overflowText = lineType === 'translation' ? slide.translationOverflow : null;
+
+          // Get alignment values (default to center)
+          const alignH = position.alignH || 'center';
+          const alignV = position.alignV || 'center';
+          const alignItemsValue = alignH === 'left' ? 'flex-start' : alignH === 'right' ? 'flex-end' : 'center';
+          const justifyContentValue = alignV === 'top' ? 'flex-start' : alignV === 'bottom' ? 'flex-end' : 'center';
 
           return (
             <div
@@ -1037,8 +1061,11 @@ function ViewerPage() {
                 height: `${position.height}%`,
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
+                alignItems: alignItemsValue,
+                justifyContent: justifyContentValue,
+                paddingTop: position.paddingTop ? `${position.paddingTop}%` : undefined,
+                paddingBottom: position.paddingBottom ? `${position.paddingBottom}%` : undefined,
+                boxSizing: 'border-box',
                 fontSize: getResponsiveFontSize(lineType, themeLineStyle),
                 lineHeight: 1.4,
                 fontWeight: themeLineStyle.fontWeight || '400',
@@ -1047,14 +1074,15 @@ function ViewerPage() {
                 textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
                 direction: getTextDirection(text),
                 unicodeBidi: 'plaintext',
-                textAlign: 'center',
+                textAlign: alignH,
                 overflow: 'hidden',
                 wordWrap: 'break-word',
-                overflowWrap: 'break-word'
+                overflowWrap: 'break-word',
+                zIndex: 2
               }}
             >
-              <span>{text}</span>
-              {overflowText && <span style={{ marginTop: '0.2em' }}>{overflowText}</span>}
+              <span style={{ display: 'block', width: '100%' }}>{text}</span>
+              {overflowText && <span style={{ display: 'block', width: '100%', marginTop: '0.2em' }}>{overflowText}</span>}
             </div>
           );
         })}

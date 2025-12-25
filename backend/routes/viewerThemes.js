@@ -40,7 +40,14 @@ router.get('/default', authenticateToken, async (req, res) => {
     // If user has a custom default, return it
     if (defaultThemeId) {
       const theme = await ViewerTheme.findByPk(defaultThemeId);
-      return res.json({ defaultThemeId, theme });
+      if (theme) {
+        return res.json({ defaultThemeId, theme });
+      }
+      // Theme was deleted - clear the orphaned reference and fall through to classic theme
+      const { defaultThemeId: _, ...restPreferences } = user.preferences || {};
+      user.preferences = restPreferences;
+      user.changed('preferences', true);
+      await user.save();
     }
 
     // Otherwise, return the built-in Classic theme as default
@@ -102,7 +109,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Create new theme
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { name, lineOrder, lineStyles, positioning, container, viewerBackground, linePositions, canvasDimensions } = req.body;
+    const { name, lineOrder, lineStyles, positioning, container, viewerBackground, linePositions, canvasDimensions, backgroundBoxes } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: 'Theme name is required' });
@@ -118,7 +125,8 @@ router.post('/', authenticateToken, async (req, res) => {
       container: container || undefined,
       viewerBackground: viewerBackground || undefined,
       linePositions: linePositions || undefined,
-      canvasDimensions: canvasDimensions || undefined
+      canvasDimensions: canvasDimensions || undefined,
+      backgroundBoxes: backgroundBoxes || []
     });
 
     res.status(201).json({ theme });
@@ -146,7 +154,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const { name, lineOrder, lineStyles, positioning, container, viewerBackground, linePositions, canvasDimensions } = req.body;
+    const { name, lineOrder, lineStyles, positioning, container, viewerBackground, linePositions, canvasDimensions, backgroundBoxes } = req.body;
 
     if (name !== undefined) theme.name = name;
     if (lineOrder !== undefined) theme.lineOrder = lineOrder;
@@ -156,6 +164,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (viewerBackground !== undefined) theme.viewerBackground = viewerBackground;
     if (linePositions !== undefined) theme.linePositions = linePositions;
     if (canvasDimensions !== undefined) theme.canvasDimensions = canvasDimensions;
+    if (backgroundBoxes !== undefined) theme.backgroundBoxes = backgroundBoxes;
 
     await theme.save();
 
@@ -184,6 +193,15 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
     if (theme.createdById !== req.user.id) {
       return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Check if this theme is the user's default and clear it
+    const user = await User.findByPk(req.user.id);
+    if (user && user.preferences?.defaultThemeId === theme.id) {
+      const { defaultThemeId, ...restPreferences } = user.preferences || {};
+      user.preferences = restPreferences;
+      user.changed('preferences', true);
+      await user.save();
     }
 
     await theme.destroy();
@@ -255,7 +273,8 @@ router.post('/:id/duplicate', authenticateToken, async (req, res) => {
       container: sourceTheme.container,
       viewerBackground: sourceTheme.viewerBackground,
       linePositions: sourceTheme.linePositions,
-      canvasDimensions: sourceTheme.canvasDimensions
+      canvasDimensions: sourceTheme.canvasDimensions,
+      backgroundBoxes: sourceTheme.backgroundBoxes || []
     });
 
     res.status(201).json({ theme: newTheme });

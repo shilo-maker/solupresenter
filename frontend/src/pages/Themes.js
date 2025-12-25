@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { themeAPI } from '../services/api';
 import ThemeCanvas from '../components/theme-editor/ThemeCanvas';
 import PropertiesPanel from '../components/theme-editor/PropertiesPanel';
+import BoxPropertiesPanel from '../components/theme-editor/BoxPropertiesPanel';
 import ResolutionSelector from '../components/theme-editor/ResolutionSelector';
 
 const DEFAULT_LINE_STYLES = {
@@ -31,6 +32,7 @@ function Themes() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedLine, setSelectedLine] = useState(null);
+  const [selectedBoxId, setSelectedBoxId] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [defaultThemeId, setDefaultThemeId] = useState(null);
@@ -75,7 +77,8 @@ function Themes() {
       canvasDimensions: theme.canvasDimensions || DEFAULT_CANVAS_DIMENSIONS,
       lineStyles: theme.lineStyles || DEFAULT_LINE_STYLES,
       lineOrder: theme.lineOrder || ['original', 'transliteration', 'translation'],
-      viewerBackground: theme.viewerBackground || DEFAULT_VIEWER_BACKGROUND
+      viewerBackground: theme.viewerBackground || DEFAULT_VIEWER_BACKGROUND,
+      backgroundBoxes: theme.backgroundBoxes || []
     };
   };
 
@@ -174,7 +177,8 @@ function Themes() {
         lineStyles: editingTheme.lineStyles,
         linePositions: editingTheme.linePositions,
         canvasDimensions: editingTheme.canvasDimensions,
-        viewerBackground: editingTheme.viewerBackground
+        viewerBackground: editingTheme.viewerBackground,
+        backgroundBoxes: editingTheme.backgroundBoxes || []
       });
       await fetchThemes();
       setSuccessMessage(t('themes.saved', 'Theme saved successfully'));
@@ -214,6 +218,70 @@ function Themes() {
         }
       }
     });
+  };
+
+  // Update position field (for padding from PropertiesPanel)
+  const handlePositionFieldChange = (field, value) => {
+    if (!editingTheme || editingTheme.isBuiltIn || !selectedLine) return;
+
+    setEditingTheme({
+      ...editingTheme,
+      linePositions: {
+        ...editingTheme.linePositions,
+        [selectedLine]: {
+          ...editingTheme.linePositions[selectedLine],
+          [field]: value
+        }
+      }
+    });
+  };
+
+  // Add a new background box
+  const handleAddBox = () => {
+    if (!editingTheme || editingTheme.isBuiltIn) return;
+    const boxes = editingTheme.backgroundBoxes || [];
+    if (boxes.length >= 3) return;
+
+    const newBox = {
+      id: `box-${Date.now()}`,
+      x: 20 + (boxes.length * 10),
+      y: 20 + (boxes.length * 10),
+      width: 60,
+      height: 20,
+      color: '#000000',
+      opacity: 0.5,
+      borderRadius: 0
+    };
+
+    setEditingTheme({
+      ...editingTheme,
+      backgroundBoxes: [...boxes, newBox]
+    });
+    setSelectedBoxId(newBox.id);
+    setSelectedLine(null);
+  };
+
+  // Update a background box
+  const handleBoxChange = (updatedBox) => {
+    if (!editingTheme || editingTheme.isBuiltIn) return;
+
+    setEditingTheme({
+      ...editingTheme,
+      backgroundBoxes: (editingTheme.backgroundBoxes || []).map(box =>
+        box.id === updatedBox.id ? updatedBox : box
+      )
+    });
+  };
+
+  // Delete a background box
+  const handleDeleteBox = (boxId) => {
+    if (!editingTheme || editingTheme.isBuiltIn) return;
+
+    setEditingTheme({
+      ...editingTheme,
+      backgroundBoxes: (editingTheme.backgroundBoxes || []).filter(box => box.id !== boxId)
+    });
+    setSelectedBoxId(null);
   };
 
   // Update canvas dimensions
@@ -364,17 +432,19 @@ function Themes() {
                               <small style={{ color: '#a0aec0' }}> • <span style={{ color: '#fbbf24' }}>{t('themes.default', 'Default')}</span></small>
                             )}
                           </div>
-                          {!theme.isBuiltIn && (
-                            <div className="d-flex gap-1">
-                              <Button
-                                variant="link"
-                                size="sm"
-                                className="p-1"
-                                onClick={(e) => { e.stopPropagation(); handleDuplicateTheme(theme); }}
-                                title={t('themes.duplicate', 'Duplicate')}
-                              >
-                                <i className="bi bi-copy" style={{ color: '#a0aec0' }}></i>
-                              </Button>
+                          <div className="d-flex gap-1">
+                            {/* Duplicate button - available for all themes */}
+                            <Button
+                              variant="link"
+                              size="sm"
+                              className="p-1"
+                              onClick={(e) => { e.stopPropagation(); handleDuplicateTheme(theme); }}
+                              title={t('themes.duplicate', 'Duplicate')}
+                            >
+                              <i className="bi bi-copy" style={{ color: '#a0aec0' }}></i>
+                            </Button>
+                            {/* Delete button - only for user-created themes */}
+                            {!theme.isBuiltIn && (
                               <Button
                                 variant="link"
                                 size="sm"
@@ -384,8 +454,8 @@ function Themes() {
                               >
                                 <i className="bi bi-trash" style={{ color: '#ef4444' }}></i>
                               </Button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -525,9 +595,14 @@ function Themes() {
                         linePositions={editingTheme.linePositions}
                         lineStyles={editingTheme.lineStyles}
                         lineOrder={editingTheme.lineOrder}
+                        backgroundBoxes={editingTheme.backgroundBoxes}
                         selectedLine={selectedLine}
+                        selectedBoxId={selectedBoxId}
                         onPositionChange={handlePositionChange}
-                        onSelectLine={setSelectedLine}
+                        onSelectLine={(line) => { setSelectedLine(line); if (line) setSelectedBoxId(null); }}
+                        onBoxChange={handleBoxChange}
+                        onSelectBox={(boxId) => { setSelectedBoxId(boxId); if (boxId) setSelectedLine(null); }}
+                        onDeleteBox={handleDeleteBox}
                         viewerBackground={editingTheme.viewerBackground}
                         disabled={editingTheme.isBuiltIn}
                       />
@@ -538,9 +613,23 @@ function Themes() {
                       <PropertiesPanel
                         selectedLine={selectedLine}
                         lineStyle={selectedLine ? editingTheme.lineStyles?.[selectedLine] : null}
+                        linePosition={selectedLine ? editingTheme.linePositions?.[selectedLine] : null}
                         onStyleChange={handleStyleChange}
+                        onPositionChange={handlePositionFieldChange}
                         disabled={editingTheme.isBuiltIn}
                       />
+
+                      {/* Background Boxes Panel */}
+                      <div className="mt-3">
+                        <BoxPropertiesPanel
+                          box={selectedBoxId ? (editingTheme.backgroundBoxes || []).find(b => b.id === selectedBoxId) : null}
+                          boxCount={(editingTheme.backgroundBoxes || []).length}
+                          onBoxChange={handleBoxChange}
+                          onAddBox={handleAddBox}
+                          onDeleteBox={handleDeleteBox}
+                          disabled={editingTheme.isBuiltIn}
+                        />
+                      </div>
 
                       {/* Background Type Selector */}
                       <Card className="mt-3" style={{ backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>

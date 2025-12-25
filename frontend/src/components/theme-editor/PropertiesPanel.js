@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Form, Row, Col } from 'react-bootstrap';
+import { Card, Form, Row, Col, ButtonGroup, Button } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
 
 const LINE_TYPE_NAMES = {
@@ -11,7 +11,9 @@ const LINE_TYPE_NAMES = {
 const PropertiesPanel = ({
   selectedLine, // 'original' | 'transliteration' | 'translation' | null
   lineStyle, // { fontSize, fontWeight, color, opacity, visible }
+  linePosition, // { x, y, width, height, paddingTop, paddingBottom }
   onStyleChange, // (field, value) => void
+  onPositionChange, // (field, value) => void
   disabled
 }) => {
   const { t } = useTranslation();
@@ -48,6 +50,11 @@ const PropertiesPanel = ({
     color: '#FFFFFF',
     opacity: 1,
     visible: true
+  };
+
+  const position = linePosition || {
+    paddingTop: 0,
+    paddingBottom: 0
   };
 
   return (
@@ -196,6 +203,130 @@ const PropertiesPanel = ({
               </div>
             </Form.Group>
           </Col>
+
+          {/* Padding Section */}
+          {onPositionChange && (
+            <>
+              <Col xs={12}>
+                <hr style={{ borderColor: 'rgba(255, 255, 255, 0.1)', margin: '8px 0' }} />
+                <Form.Label style={{ color: '#a0aec0', fontSize: '0.85rem', marginBottom: '12px', display: 'block' }}>
+                  <i className="bi bi-arrows-expand" style={{ marginRight: '6px' }}></i>
+                  {t('themes.padding', 'Padding')}
+                </Form.Label>
+              </Col>
+
+              {/* Padding Top */}
+              <Col xs={6}>
+                <Form.Group>
+                  <Form.Label style={{ color: '#a0aec0', fontSize: '0.8rem' }}>
+                    {t('themes.paddingTop', 'Top')} ({position.paddingTop || 0}%)
+                  </Form.Label>
+                  <Form.Range
+                    min={0}
+                    max={45}
+                    value={position.paddingTop || 0}
+                    onChange={(e) => onPositionChange('paddingTop', parseInt(e.target.value))}
+                    disabled={disabled}
+                  />
+                </Form.Group>
+              </Col>
+
+              {/* Padding Bottom */}
+              <Col xs={6}>
+                <Form.Group>
+                  <Form.Label style={{ color: '#a0aec0', fontSize: '0.8rem' }}>
+                    {t('themes.paddingBottom', 'Bottom')} ({position.paddingBottom || 0}%)
+                  </Form.Label>
+                  <Form.Range
+                    min={0}
+                    max={45}
+                    value={position.paddingBottom || 0}
+                    onChange={(e) => onPositionChange('paddingBottom', parseInt(e.target.value))}
+                    disabled={disabled}
+                  />
+                </Form.Group>
+              </Col>
+
+              {/* Alignment Section */}
+              <Col xs={12}>
+                <hr style={{ borderColor: 'rgba(255, 255, 255, 0.1)', margin: '8px 0' }} />
+                <Form.Label style={{ color: '#a0aec0', fontSize: '0.85rem', marginBottom: '12px', display: 'block' }}>
+                  <i className="bi bi-text-center" style={{ marginRight: '6px' }}></i>
+                  {t('themes.alignment', 'Alignment')}
+                </Form.Label>
+              </Col>
+
+              {/* Horizontal Alignment */}
+              <Col xs={6}>
+                <Form.Group>
+                  <Form.Label style={{ color: '#a0aec0', fontSize: '0.8rem' }}>
+                    {t('themes.horizontal', 'Horizontal')}
+                  </Form.Label>
+                  <ButtonGroup className="w-100" size="sm">
+                    <Button
+                      variant={position.alignH === 'left' ? 'primary' : 'outline-secondary'}
+                      onClick={() => onPositionChange('alignH', 'left')}
+                      disabled={disabled}
+                      title={t('themes.left', 'Left')}
+                    >
+                      <i className="bi bi-text-left"></i>
+                    </Button>
+                    <Button
+                      variant={(!position.alignH || position.alignH === 'center') ? 'primary' : 'outline-secondary'}
+                      onClick={() => onPositionChange('alignH', 'center')}
+                      disabled={disabled}
+                      title={t('themes.center', 'Center')}
+                    >
+                      <i className="bi bi-text-center"></i>
+                    </Button>
+                    <Button
+                      variant={position.alignH === 'right' ? 'primary' : 'outline-secondary'}
+                      onClick={() => onPositionChange('alignH', 'right')}
+                      disabled={disabled}
+                      title={t('themes.right', 'Right')}
+                    >
+                      <i className="bi bi-text-right"></i>
+                    </Button>
+                  </ButtonGroup>
+                </Form.Group>
+              </Col>
+
+              {/* Vertical Alignment */}
+              <Col xs={6}>
+                <Form.Group>
+                  <Form.Label style={{ color: '#a0aec0', fontSize: '0.8rem' }}>
+                    {t('themes.vertical', 'Vertical')}
+                  </Form.Label>
+                  <ButtonGroup className="w-100" size="sm">
+                    <Button
+                      variant={position.alignV === 'top' ? 'primary' : 'outline-secondary'}
+                      onClick={() => onPositionChange('alignV', 'top')}
+                      disabled={disabled}
+                      title={t('themes.top', 'Top')}
+                    >
+                      <i className="bi bi-align-top"></i>
+                    </Button>
+                    <Button
+                      variant={(!position.alignV || position.alignV === 'center') ? 'primary' : 'outline-secondary'}
+                      onClick={() => onPositionChange('alignV', 'center')}
+                      disabled={disabled}
+                      title={t('themes.center', 'Center')}
+                    >
+                      <i className="bi bi-align-middle"></i>
+                    </Button>
+                    <Button
+                      variant={position.alignV === 'bottom' ? 'primary' : 'outline-secondary'}
+                      onClick={() => onPositionChange('alignV', 'bottom')}
+                      disabled={disabled}
+                      title={t('themes.bottom', 'Bottom')}
+                    >
+                      <i className="bi bi-align-bottom"></i>
+                    </Button>
+                  </ButtonGroup>
+                </Form.Group>
+              </Col>
+            </>
+          )}
         </Row>
       </Card.Body>
     </Card>

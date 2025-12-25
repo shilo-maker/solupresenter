@@ -96,6 +96,12 @@ const ViewerTheme = sequelize.define('ViewerTheme', {
   canvasDimensions: {
     type: DataTypes.JSON,
     defaultValue: { width: 1920, height: 1080 }
+  },
+  // Background boxes (up to 3 boxes behind text)
+  backgroundBoxes: {
+    type: DataTypes.JSON,
+    defaultValue: [],  // Array of { id, x, y, width, height, color, opacity, borderRadius }
+    allowNull: true
   }
 }, {
   tableName: 'viewer_themes',
@@ -176,7 +182,8 @@ ViewerTheme.CLASSIC_THEME = {
     color: null
   },
   linePositions: null,
-  canvasDimensions: { width: 1920, height: 1080 }
+  canvasDimensions: { width: 1920, height: 1080 },
+  backgroundBoxes: []
 };
 
 // Seed the Classic theme if it doesn't exist

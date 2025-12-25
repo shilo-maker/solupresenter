@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import socketService from '../services/socket';
-import { publicRoomAPI } from '../services/api';
 
 // CSS animations for smooth transitions and transparent background
 const animationStyles = document.createElement('style');
@@ -103,25 +102,7 @@ function OBSOverlay() {
   // Connect to room on mount
   useEffect(() => {
     const connectToRoom = async () => {
-      let roomPin = pin;
-
-      // If room slug provided, look up the PIN
-      if (roomSlug && !roomPin) {
-        try {
-          const response = await publicRoomAPI.joinBySlug(roomSlug);
-          if (response.data && response.data.pin) {
-            roomPin = response.data.pin;
-          } else {
-            setError('Room not found or not live');
-            return;
-          }
-        } catch (err) {
-          setError('Failed to find room');
-          return;
-        }
-      }
-
-      if (!roomPin) {
+      if (!roomSlug && !pin) {
         setError('No room PIN provided. Use ?pin=XXXX or ?room=name');
         return;
       }
@@ -133,8 +114,14 @@ function OBSOverlay() {
       socketService.onConnectionStatusChange((status) => {
         console.log('OBS Overlay: Connection status:', status);
         if (status === 'connected') {
-          // Join room once connected
-          socketService.viewerJoinRoom(roomPin);
+          // Join room once connected - use slug or PIN
+          if (roomSlug) {
+            console.log('OBS Overlay: Joining by slug:', roomSlug);
+            socketService.viewerJoinRoomBySlug(roomSlug.toLowerCase());
+          } else if (pin) {
+            console.log('OBS Overlay: Joining by PIN:', pin);
+            socketService.viewerJoinRoom(pin.toUpperCase());
+          }
         }
       });
 

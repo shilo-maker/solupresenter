@@ -564,6 +564,8 @@
     "hideVideo": "Hide",
     "hideImage": "Hide",
     "noDisplayConnected": "No display connected. Click \"Present to Display\" first.",
+    "presentToDisplay": "Present to connected display",
+    "stopPresentation": "Stop presentation",
     "videoReadError": "Failed to read video file",
     "mediaPreview": "Preview",
     "noMediaSelected": "No media selected",

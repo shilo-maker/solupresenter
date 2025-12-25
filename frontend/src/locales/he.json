@@ -564,6 +564,8 @@
     "hideVideo": "הסתר",
     "hideImage": "הסתר",
     "noDisplayConnected": "אין מסך מחובר. לחץ על \"הצג על המסך\" קודם.",
+    "presentToDisplay": "הצג על מסך מחובר",
+    "stopPresentation": "הפסק הצגה",
     "videoReadError": "קריאת קובץ הווידאו נכשלה",
     "mediaPreview": "תצוגה מקדימה",
     "noMediaSelected": "לא נבחרה מדיה",

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Form, Button, InputGroup, Modal, Row, Col, Alert, Badge, Dropdown } from 'react-bootstrap';
+import { Form, Button, InputGroup, Modal, Row, Col, Alert, Badge, Dropdown, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FixedSizeList } from 'react-window';
 import { useAuth } from '../contexts/AuthContext';
@@ -78,6 +78,7 @@ function PresenterMode() {
   const [linkedPublicRoomName, setLinkedPublicRoomName] = useState('');
   const [showRoomSelector, setShowRoomSelector] = useState(false);
   const [showGearMenu, setShowGearMenu] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
   const roomSelectorRef = useRef(null);
   const gearMenuRef = useRef(null);
 
@@ -3051,6 +3052,40 @@ function PresenterMode() {
     };
   }, [castConnected]);
 
+  // Copy to clipboard helper with toast notification
+  const copyToClipboard = (text, successMessage) => {
+    const showSuccess = () => {
+      setToast({ show: true, message: successMessage, variant: 'success' });
+    };
+    const showError = () => {
+      setToast({ show: true, message: t('common.failedToCopy') || 'Failed to copy', variant: 'danger' });
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(showSuccess)
+        .catch(() => fallbackCopy(text, showSuccess, showError));
+    } else {
+      fallbackCopy(text, showSuccess, showError);
+    }
+
+    function fallbackCopy(text, onSuccess, onError) {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.cssText = 'position:fixed;top:0;left:0;width:2em;height:2em;padding:0;border:none;outline:none;boxShadow:none;background:transparent';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        onSuccess();
+      } catch (err) {
+        onError();
+      }
+      document.body.removeChild(textArea);
+    }
+  };
+
   // Handle Chromecast
   const handleCast = () => {
     if (!window.chrome || !window.chrome.cast || !roomPin) {
@@ -4023,61 +4058,55 @@ function PresenterMode() {
         {roomPin && (
           <div style={{ marginTop: '20px' }}>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center' }}>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  const shareUrl = selectedPublicRoom?.slug ? `${window.location.origin}/viewer?room=${selectedPublicRoom.slug}` : `${window.location.origin}/viewer?pin=${roomPin}`;
-
-                  // Try modern clipboard API first, fallback to older method
-                  if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(shareUrl)
-                      .then(() => alert(t('common.copiedToClipboard')))
-                      .catch(() => {
-                        // Fallback method
-                        fallbackCopyTextToClipboard(shareUrl);
-                      });
-                  } else {
-                    // Fallback method for non-secure contexts
-                    fallbackCopyTextToClipboard(shareUrl);
-                  }
-
-                  function fallbackCopyTextToClipboard(text) {
-                    const textArea = document.createElement('textarea');
-                    textArea.value = text;
-                    textArea.style.position = 'fixed';
-                    textArea.style.top = '0';
-                    textArea.style.left = '0';
-                    textArea.style.width = '2em';
-                    textArea.style.height = '2em';
-                    textArea.style.padding = '0';
-                    textArea.style.border = 'none';
-                    textArea.style.outline = 'none';
-                    textArea.style.boxShadow = 'none';
-                    textArea.style.background = 'transparent';
-                    document.body.appendChild(textArea);
-                    textArea.focus();
-                    textArea.select();
-                    try {
-                      document.execCommand('copy');
-                      alert(t('common.copiedToClipboard'));
-                    } catch (err) {
-                      alert(t('common.failedToCopy'));
-                    }
-                    document.body.removeChild(textArea);
-                  }
-                }}
-                style={{
-                  padding: '0.375rem 0.75rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                title={t('presenter.copyShareLink')}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
-                </svg>
-              </Button>
+              <Dropdown>
+                <Dropdown.Toggle
+                  variant="primary"
+                  style={{
+                    padding: '0.375rem 0.75rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                  title={t('presenter.share')}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
+                  </svg>
+                </Dropdown.Toggle>
+                <Dropdown.Menu>
+                  <Dropdown.Item onClick={() => {
+                    const viewerUrl = selectedPublicRoom?.slug
+                      ? `${window.location.origin}/viewer?room=${selectedPublicRoom.slug}`
+                      : `${window.location.origin}/viewer?pin=${roomPin}`;
+                    copyToClipboard(viewerUrl, t('presenter.viewerUrlCopied') || 'Viewer URL copied!');
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                        <line x1="8" y1="21" x2="16" y2="21"/>
+                        <line x1="12" y1="17" x2="12" y2="21"/>
+                      </svg>
+                      {t('presenter.copyViewerUrl') || 'Copy Viewer URL'}
+                    </div>
+                  </Dropdown.Item>
+                  <Dropdown.Item onClick={() => {
+                    const obsUrl = selectedPublicRoom?.slug
+                      ? `${window.location.origin}/obs-overlay?room=${selectedPublicRoom.slug}`
+                      : `${window.location.origin}/obs-overlay?pin=${roomPin}`;
+                    copyToClipboard(obsUrl, t('presenter.obsUrlCopied') || 'OBS Overlay URL copied!');
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                      </svg>
+                      {t('presenter.copyObsUrl') || 'Copy OBS Lower-Thirds URL'}
+                    </div>
+                  </Dropdown.Item>
+                </Dropdown.Menu>
+              </Dropdown>
               <Button
                 variant="success"
                 onClick={() => {
@@ -7158,6 +7187,21 @@ function PresenterMode() {
           </Button>
         </Modal.Footer>
       </Modal>
+
+      {/* Toast Notification */}
+      <ToastContainer position="top-center" style={{ zIndex: 9999, marginTop: '20px' }}>
+        <Toast
+          show={toast.show}
+          onClose={() => setToast({ ...toast, show: false })}
+          delay={3000}
+          autohide
+          bg={toast.variant}
+        >
+          <Toast.Body style={{ color: 'white', textAlign: 'center', fontWeight: '500' }}>
+            {toast.message}
+          </Toast.Body>
+        </Toast>
+      </ToastContainer>
 
       </div>
     </div>

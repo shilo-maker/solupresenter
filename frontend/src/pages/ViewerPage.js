@@ -1345,10 +1345,11 @@ function ViewerPage({ remotePin, remoteConfig }) {
         }}>
           <div style={{
             position: 'relative',
-            width: '100%',
-            height: '100%',
-            maxWidth: `calc(100vh * ${aspectRatio})`,
-            maxHeight: `calc(100vw / ${aspectRatio})`
+            aspectRatio: `${aspectRatio}`,
+            maxWidth: '100%',
+            maxHeight: '100%',
+            width: 'auto',
+            height: '100%'
           }}>
             {/* Render text boxes */}
             {slide.textBoxes?.map((tb) => (

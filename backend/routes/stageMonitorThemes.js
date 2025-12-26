@@ -85,6 +85,22 @@ router.post('/clear-default', authenticateToken, async (req, res) => {
   }
 });
 
+// Get theme by ID (PUBLIC - for remote screens with specific theme)
+router.get('/public/:id', async (req, res) => {
+  try {
+    const theme = await StageMonitorTheme.findByPk(req.params.id);
+
+    if (!theme) {
+      return res.status(404).json({ error: 'Theme not found' });
+    }
+
+    res.json({ theme });
+  } catch (error) {
+    console.error('Error fetching stage monitor theme:', error);
+    res.status(500).json({ error: 'Failed to fetch theme' });
+  }
+});
+
 // Get operator's default theme (PUBLIC - for stage monitors connecting to rooms)
 router.get('/operator/:operatorId/default', async (req, res) => {
   try {

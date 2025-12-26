@@ -59,12 +59,13 @@ function StageMonitor({ remotePin, remoteConfig }) {
     return () => clearInterval(timer);
   }, [showClock]);
 
-  // Fetch custom theme by themeId if explicitly provided in URL (overrides operator's default)
+  // Fetch custom theme by themeId if explicitly provided (overrides operator's default)
   useEffect(() => {
     const fetchTheme = async () => {
       if (!themeId) return;
       try {
-        const response = await stageMonitorThemeAPI.getById(themeId);
+        // Use public endpoint to avoid auth requirement for remote screens
+        const response = await stageMonitorThemeAPI.getPublic(themeId);
         if (response.data.theme) {
           setCustomTheme(response.data.theme);
         }

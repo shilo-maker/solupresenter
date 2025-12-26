@@ -45,8 +45,10 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      // Only redirect to login if we're not already there (to prevent reload)
-      if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+      // Don't redirect on public pages (viewer, stage-monitor, remote screens, etc.)
+      const publicPaths = ['/login', '/register', '/viewer', '/stage-monitor', '/u/'];
+      const isPublicPath = publicPaths.some(path => window.location.pathname.startsWith(path));
+      if (!isPublicPath) {
         window.location.href = '/login';
       }
     }
@@ -131,6 +133,8 @@ export const themeAPI = {
 export const stageMonitorThemeAPI = {
   getAll: () => api.get('/api/stage-monitor-themes'),
   getById: (id) => api.get(`/api/stage-monitor-themes/${id}`),
+  // Public endpoint - get theme by ID without auth (for remote screens)
+  getPublic: (id) => api.get(`/api/stage-monitor-themes/public/${id}`),
   create: (themeData) => api.post('/api/stage-monitor-themes', themeData),
   update: (id, themeData) => api.put(`/api/stage-monitor-themes/${id}`, themeData),
   delete: (id) => api.delete(`/api/stage-monitor-themes/${id}`),

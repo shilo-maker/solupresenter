@@ -10,6 +10,7 @@ const SongMapping = require('./SongMapping');
 const ViewerTheme = require('./ViewerTheme');
 const StageMonitorTheme = require('./StageMonitorTheme');
 const RemoteScreen = require('./RemoteScreen');
+const Presentation = require('./Presentation');
 
 // Define relationships
 User.hasOne(Room, { as: 'activeRoom', foreignKey: 'operatorId' });
@@ -48,6 +49,10 @@ User.hasMany(StageMonitorTheme, { as: 'stageMonitorThemes', foreignKey: 'created
 RemoteScreen.belongsTo(User, { as: 'owner', foreignKey: 'userId', constraints: false });
 User.hasMany(RemoteScreen, { as: 'remoteScreens', foreignKey: 'userId', constraints: false });
 
+// Presentation relationships
+Presentation.belongsTo(User, { as: 'creator', foreignKey: 'createdById', constraints: false });
+User.hasMany(Presentation, { as: 'presentations', foreignKey: 'createdById', constraints: false });
+
 // Export models and sequelize instance
 module.exports = {
   sequelize,
@@ -61,5 +66,6 @@ module.exports = {
   SongMapping,
   ViewerTheme,
   StageMonitorTheme,
-  RemoteScreen
+  RemoteScreen,
+  Presentation
 };

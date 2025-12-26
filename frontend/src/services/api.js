@@ -157,6 +157,16 @@ export const remoteScreenAPI = {
   getScreenAccess: (userId, screenId) => api.get(`/api/screen-access/${userId}/${screenId}`)
 };
 
+// Presentation endpoints
+export const presentationAPI = {
+  getAll: () => api.get('/api/presentations'),
+  search: (params) => api.get('/api/presentations/search', { params }),
+  getById: (id) => api.get(`/api/presentations/${id}`),
+  create: (presentationData) => api.post('/api/presentations', presentationData),
+  update: (id, presentationData) => api.put(`/api/presentations/${id}`, presentationData),
+  delete: (id) => api.delete(`/api/presentations/${id}`)
+};
+
 // Helper function to get full image URL
 export const getFullImageUrl = (url) => {
   if (!url) return '';

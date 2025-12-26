@@ -4,10 +4,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { FixedSizeList } from 'react-window';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import api, { getFullImageUrl, publicRoomAPI, roomAPI } from '../services/api';
+import api, { getFullImageUrl, publicRoomAPI, roomAPI, presentationAPI } from '../services/api';
 import socketService from '../services/socket';
 import { createCombinedSlides, getCombinedSlideLabel } from '../utils/slideCombining';
 import ThemeSelector from '../components/ThemeSelector';
+import { PresentationEditor } from '../components/presentation-editor';
 
 function PresenterMode() {
   const navigate = useNavigate();
@@ -113,6 +114,15 @@ function PresenterMode() {
   const messageTapTimeoutRef = useRef(null); // Timeout for delayed single-tap action
   const [allSongs, setAllSongs] = useState([]);
   const [songsLoading, setSongsLoading] = useState(true);
+
+  // Presentations state
+  const [allPresentations, setAllPresentations] = useState([]);
+  const [presentationSearchResults, setPresentationSearchResults] = useState([]);
+  const [presentationsLoading, setPresentationsLoading] = useState(true);
+  const [showPresentationEditor, setShowPresentationEditor] = useState(false);
+  const [editingPresentation, setEditingPresentation] = useState(null);
+  const [selectedPresentation, setSelectedPresentation] = useState(null);
+  const [selectedPresentationSlideIndex, setSelectedPresentationSlideIndex] = useState(0);
 
   // Image search state
   const [imageSearchResults, setImageSearchResults] = useState([]);
@@ -2042,6 +2052,7 @@ function PresenterMode() {
     createOrGetRoom();
     fetchSongs();
     fetchMedia();
+    fetchPresentations();
 
     return () => {
       console.log('🧹 Cleaning up socketService');
@@ -2190,6 +2201,20 @@ function PresenterMode() {
       setError('Failed to load songs. Please refresh the page.');
     } finally {
       setSongsLoading(false);
+    }
+  };
+
+  const fetchPresentations = async () => {
+    setPresentationsLoading(true);
+    try {
+      const response = await presentationAPI.getAll();
+      const presentations = response.data.presentations || [];
+      setAllPresentations(presentations);
+      setPresentationSearchResults(presentations);
+    } catch (error) {
+      console.error('Error fetching presentations:', error);
+    } finally {
+      setPresentationsLoading(false);
     }
   };
 
@@ -4247,6 +4272,14 @@ function PresenterMode() {
               >
                 {t('presenter.tools')}
               </Button>
+              <Button
+                variant={activeResourcePanel === 'presentations' ? 'primary' : 'outline-light'}
+                size="sm"
+                onClick={() => switchResourcePanel('presentations')}
+                style={{ fontWeight: '500' }}
+              >
+                {t('presenter.presentations', 'Presentations')}
+              </Button>
               {/* Media tab hidden - feature in beta
               <Button
                 variant={activeResourcePanel === 'media' ? 'primary' : 'outline-light'}
@@ -4260,7 +4293,7 @@ function PresenterMode() {
             </div>
 
             {/* Search bar - Glassmorphic style (hidden when Tools/Media tabs are active) */}
-            {activeResourcePanel !== 'tools' && activeResourcePanel !== 'media' && (
+            {activeResourcePanel !== 'tools' && activeResourcePanel !== 'media' && activeResourcePanel !== 'presentations' && (
             <div style={{ flex: '1 1 200px', minWidth: '200px', position: 'relative' }}>
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -4345,16 +4378,23 @@ function PresenterMode() {
             )}
 
             {/* New button */}
-            {(activeResourcePanel === 'songs' || activeResourcePanel === 'images') && (
+            {(activeResourcePanel === 'songs' || activeResourcePanel === 'images' || activeResourcePanel === 'presentations') && (
               <Button
                 variant="success"
                 size="sm"
-                onClick={() => setShowCreateModal(true)}
+                onClick={() => {
+                  if (activeResourcePanel === 'presentations') {
+                    setEditingPresentation(null);
+                    setShowPresentationEditor(true);
+                  } else {
+                    setShowCreateModal(true);
+                  }
+                }}
                 style={{
                   fontWeight: '600',
                   fontSize: '0.75rem'
                 }}
-                title={activeResourcePanel === 'songs' ? t('presenter.createNewSong') : t('presenter.uploadNewImage')}
+                title={activeResourcePanel === 'presentations' ? t('presenter.createNewPresentation', 'Create new presentation') : (activeResourcePanel === 'songs' ? t('presenter.createNewSong') : t('presenter.uploadNewImage'))}
               >
                 {t('presenter.new')}
               </Button>
@@ -4982,6 +5022,108 @@ function PresenterMode() {
                     >
                       {t('presenter.addToSetlist')}
                     </Button>
+                  </div>
+                )}
+              </div>
+            ) : activeResourcePanel === 'presentations' ? (
+              /* Presentations Panel */
+              <div className="dark-scrollbar" style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                {presentationsLoading ? (
+                  <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
+                    {t('presenter.loading', 'Loading...')}
+                  </div>
+                ) : allPresentations.length === 0 ? (
+                  <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
+                    {t('presenter.noPresentations', 'No presentations yet. Click "New" to create one.')}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '4px' }}>
+                    {allPresentations.map((presentation) => {
+                      const isSelected = selectedPresentation?.id === presentation.id;
+                      return (
+                      <div
+                        key={presentation.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '8px 12px',
+                          backgroundColor: isSelected ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                          borderRadius: '6px',
+                          border: isSelected ? '1px solid rgba(99, 102, 241, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                            e.currentTarget.style.borderColor = 'rgba(255, 140, 66, 0.5)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                          }
+                        }}
+                        onClick={() => {
+                          setSelectedPresentation(presentation);
+                          setSelectedPresentationSlideIndex(0);
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            color: '#fff',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {presentation.title}
+                          </div>
+                          <div style={{
+                            color: 'rgba(255, 255, 255, 0.5)',
+                            fontSize: '11px'
+                          }}>
+                            {presentation.slides?.length || 0} {t('presenter.slides', 'slides')}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <Button
+                            variant="outline-light"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingPresentation(presentation);
+                              setShowPresentationEditor(true);
+                            }}
+                            style={{ fontSize: '12px', padding: '2px 8px' }}
+                            title={t('presenter.edit', 'Edit')}
+                          >
+                            ✎
+                          </Button>
+                          <Button
+                            variant="outline-success"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Add presentation to setlist
+                              setSetlist([...setlist, {
+                                type: 'presentation',
+                                data: { ...presentation, currentSlide: 0 }
+                              }]);
+                              setHasUnsavedChanges(true);
+                            }}
+                            style={{ fontSize: '12px', padding: '2px 8px' }}
+                            title={t('presenter.addToSetlist', 'Add to setlist')}
+                          >
+                            +
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                    })}
                   </div>
                 )}
               </div>
@@ -6033,15 +6175,19 @@ function PresenterMode() {
               whiteSpace: 'nowrap',
               color: 'white'
             }}>
-              {currentItem
-                ? currentItem.type === 'song'
-                  ? currentItem.data?.title
-                  : currentItem.type === 'bible'
-                  ? currentItem.data?.title
-                  : currentItem.type === 'image'
-                  ? `${t('presenter.image')}: ${currentItem.data?.name}`
-                  : t('presenter.blankSlide')
-                : t('presenter.noItemSelected')}
+              {selectedPresentation && activeResourcePanel === 'presentations'
+                ? selectedPresentation.title
+                : currentItem
+                  ? currentItem.type === 'song'
+                    ? currentItem.data?.title
+                    : currentItem.type === 'bible'
+                    ? currentItem.data?.title
+                    : currentItem.type === 'presentation'
+                    ? currentItem.data?.title
+                    : currentItem.type === 'image'
+                    ? `${t('presenter.image')}: ${currentItem.data?.name}`
+                    : t('presenter.blankSlide')
+                  : t('presenter.noItemSelected')}
             </span>
           </div>
 
@@ -6446,7 +6592,97 @@ function PresenterMode() {
           </div>
         )}
 
-        {slideSectionOpen && !currentItem && (
+        {/* Presentation slides preview when a presentation is selected from list */}
+        {slideSectionOpen && selectedPresentation && activeResourcePanel === 'presentations' && (
+          <div style={{ padding: '8px' }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+              gap: '8px'
+            }}>
+              {selectedPresentation.slides?.map((slide, index) => (
+                <div
+                  key={slide.id || index}
+                  onClick={() => {
+                    setSelectedPresentationSlideIndex(index);
+                    // Project the presentation slide to viewers
+                    socketService.operatorUpdateSlide({
+                      roomId: room.id,
+                      roomPin: room.pin,
+                      backgroundImage: room.backgroundImage || '',
+                      songId: null,
+                      slideIndex: index,
+                      displayMode: displayMode,
+                      isBlank: false,
+                      presentationData: {
+                        presentationId: selectedPresentation.id,
+                        slide: slide,
+                        canvasDimensions: selectedPresentation.canvasDimensions || { width: 1920, height: 1080 },
+                        bypassTheme: true
+                      }
+                    });
+                  }}
+                  style={{
+                    aspectRatio: '16/9',
+                    borderRadius: '6px',
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    border: selectedPresentationSlideIndex === index
+                      ? '2px solid #6366f1'
+                      : '1px solid rgba(255,255,255,0.2)',
+                    background: slide.backgroundColor || 'linear-gradient(-45deg, #0a0a0a, #1a1a2e)',
+                    position: 'relative',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {/* Slide number */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '4px',
+                    left: '4px',
+                    fontSize: '10px',
+                    color: 'rgba(255,255,255,0.8)',
+                    backgroundColor: 'rgba(0,0,0,0.6)',
+                    padding: '2px 6px',
+                    borderRadius: '3px',
+                    zIndex: 2
+                  }}>
+                    {index + 1}
+                  </div>
+                  {/* Text boxes preview */}
+                  {slide.textBoxes?.map((tb) => (
+                    <div
+                      key={tb.id}
+                      style={{
+                        position: 'absolute',
+                        left: `${tb.x}%`,
+                        top: `${tb.y}%`,
+                        width: `${tb.width}%`,
+                        height: `${tb.height}%`,
+                        fontSize: '8px',
+                        fontWeight: tb.bold ? 'bold' : 'normal',
+                        fontStyle: tb.italic ? 'italic' : 'normal',
+                        color: tb.color || '#fff',
+                        backgroundColor: tb.backgroundColor || 'transparent',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        alignItems: tb.textAlign === 'left' ? 'flex-start' : tb.textAlign === 'right' ? 'flex-end' : 'center',
+                        justifyContent: tb.verticalAlign === 'top' ? 'flex-start' : tb.verticalAlign === 'bottom' ? 'flex-end' : 'center',
+                        textAlign: tb.textAlign || 'center',
+                        padding: '2px',
+                        boxSizing: 'border-box'
+                      }}
+                    >
+                      {tb.text?.substring(0, 50) || ''}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {slideSectionOpen && !currentItem && !(selectedPresentation && activeResourcePanel === 'presentations') && (
           <div style={{ padding: '40px', textAlign: 'center', color: 'white' }}>
             {t('presenter.selectSongOrItem')}
           </div>
@@ -7190,6 +7426,20 @@ function PresenterMode() {
           </Button>
         </Modal.Footer>
       </Modal>
+
+      {/* Presentation Editor Modal */}
+      <PresentationEditor
+        show={showPresentationEditor}
+        onHide={() => {
+          setShowPresentationEditor(false);
+          setEditingPresentation(null);
+        }}
+        presentation={editingPresentation}
+        onSave={(savedPresentation) => {
+          // Refresh presentations list
+          fetchPresentations();
+        }}
+      />
 
       {/* Toast Notification */}
       <ToastContainer position="top-center" style={{ zIndex: 9999, marginTop: '20px' }}>

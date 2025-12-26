@@ -26,6 +26,7 @@ const viewerThemesRoutes = require('./routes/viewerThemes');
 const stageMonitorThemesRoutes = require('./routes/stageMonitorThemes');
 const remoteScreensRoutes = require('./routes/remoteScreens');
 const screenAccessRoutes = require('./routes/screenAccess');
+const presentationsRoutes = require('./routes/presentations');
 
 // Import cleanup jobs
 const cleanupTemporarySetlists = require('./jobs/cleanupTemporarySetlists');
@@ -159,6 +160,7 @@ app.use('/api/viewer-themes', viewerThemesRoutes);
 app.use('/api/stage-monitor-themes', stageMonitorThemesRoutes);
 app.use('/api/remote-screens', remoteScreensRoutes);
 app.use('/api/screen-access', screenAccessRoutes);
+app.use('/api/presentations', presentationsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -380,7 +382,7 @@ io.on('connection', (socket) => {
   // Operator updates slide
   socket.on('operator:updateSlide', async (data) => {
     try {
-      const { roomId, roomPin, backgroundImage: clientBackgroundImage, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData, slideData, nextSlideData, toolsData } = data;
+      const { roomId, roomPin, backgroundImage: clientBackgroundImage, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData, slideData, nextSlideData, toolsData, presentationData } = data;
 
       // Use PIN from client if available (fast path), otherwise query DB (fallback)
       let pin = roomPin;
@@ -466,7 +468,8 @@ io.on('connection', (socket) => {
         isBlank,
         imageUrl: imageUrl || null,
         backgroundImage: backgroundImage || '',
-        toolsData: toolsData || null
+        toolsData: toolsData || null,
+        presentationData: presentationData || null
       });
 
       // 💾 Save to database asynchronously (don't block broadcast)

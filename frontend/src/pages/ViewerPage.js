@@ -55,6 +55,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
   const localVideoRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [toolsData, setToolsData] = useState(null); // For tools display (countdown, clock, stopwatch, announcement)
+  const [presentationData, setPresentationData] = useState(null); // For presentation slides
   const [clockTime, setClockTime] = useState(new Date());
   const [countdownRemaining, setCountdownRemaining] = useState(0);
   const [stopwatchElapsed, setStopwatchElapsed] = useState(0);
@@ -290,20 +291,29 @@ function ViewerPage({ remotePin, remoteConfig }) {
       setBackgroundImage(data.backgroundImage || '');
 
       // Handle all possible current slide states
-      if (data.isBlank) {
+      if (data.presentationData) {
+        // Presentation slide (bypasses theme)
+        setPresentationData(data.presentationData);
+        setCurrentSlide(null);
+        setImageUrl(null);
+      } else if (data.isBlank) {
         // Blank slide
+        setPresentationData(null);
         setCurrentSlide({ isBlank: true });
         setImageUrl(null);
       } else if (data.imageUrl) {
         // Image-only slide
+        setPresentationData(null);
         setImageUrl(data.imageUrl);
         setCurrentSlide(null);
       } else if (data.slideData) {
         // Regular text slide
+        setPresentationData(null);
         setCurrentSlide(data.slideData);
         setImageUrl(null);
       } else {
         // No active slide yet
+        setPresentationData(null);
         setCurrentSlide(null);
         setImageUrl(null);
       }
@@ -402,27 +412,40 @@ function ViewerPage({ remotePin, remoteConfig }) {
             setStopwatchElapsed(elapsed || 0);
           }
         }
+      } else if (data.presentationData) {
+        // Handle presentation slides (bypass theme)
+        console.log('📊 Received presentation slide:', data.presentationData);
+        setPresentationData(data.presentationData);
+        setCurrentSlide(null);
+        setImageUrl(null);
+        setLocalMedia(null);
+        // Preserve announcement overlays
+        setToolsData(prev => prev?.type === 'announcement' ? prev : null);
       } else if (data.localMedia) {
         // Handle local media (Base64 images from operator)
         console.log('🖼️ Received local media:', data.localMedia.type, data.localMedia.fileName);
+        setPresentationData(null);
         setLocalMedia(data.localMedia);
         setCurrentSlide(null);
         setImageUrl(null);
         // Preserve announcement overlays
         setToolsData(prev => prev?.type === 'announcement' ? prev : null);
       } else if (data.isBlank) {
+        setPresentationData(null);
         setCurrentSlide({ isBlank: true });
         setImageUrl(null);
         setLocalMedia(null);
         // Preserve announcement overlays when going to blank
         setToolsData(prev => prev?.type === 'announcement' ? prev : null);
       } else if (data.imageUrl) {
+        setPresentationData(null);
         setImageUrl(data.imageUrl);
         setCurrentSlide(null);
         setLocalMedia(null);
         // Preserve announcement overlays when showing images
         setToolsData(prev => prev?.type === 'announcement' ? prev : null);
       } else {
+        setPresentationData(null);
         setCurrentSlide(data.slideData);
         setImageUrl(null);
         setLocalMedia(null);
@@ -1302,6 +1325,71 @@ function ViewerPage({ remotePin, remoteConfig }) {
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat'
           }} />
+        </div>
+      );
+    }
+
+    // Render presentation slide (bypasses theme)
+    if (presentationData && presentationData.slide) {
+      const { slide, canvasDimensions } = presentationData;
+      const aspectRatio = canvasDimensions ? canvasDimensions.width / canvasDimensions.height : 16/9;
+
+      return (
+        <div style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: slide.backgroundColor || 'transparent'
+        }}>
+          <div style={{
+            position: 'relative',
+            width: '100%',
+            height: '100%',
+            maxWidth: `calc(100vh * ${aspectRatio})`,
+            maxHeight: `calc(100vw / ${aspectRatio})`
+          }}>
+            {/* Render text boxes */}
+            {slide.textBoxes?.map((tb) => (
+              <div
+                key={tb.id}
+                style={{
+                  position: 'absolute',
+                  left: `${tb.x}%`,
+                  top: `${tb.y}%`,
+                  width: `${tb.width}%`,
+                  height: `${tb.height}%`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: tb.verticalAlign === 'top' ? 'flex-start'
+                    : tb.verticalAlign === 'bottom' ? 'flex-end' : 'center',
+                  justifyContent: tb.textAlign === 'left' ? 'flex-start'
+                    : tb.textAlign === 'right' ? 'flex-end' : 'center',
+                  padding: '8px',
+                  boxSizing: 'border-box',
+                  backgroundColor: tb.backgroundColor || 'transparent',
+                  opacity: tb.opacity !== undefined ? tb.opacity : 1,
+                  overflow: 'hidden'
+                }}
+              >
+                <div style={{
+                  fontSize: `${(tb.fontSize || 100) / 100 * 4}vw`,
+                  fontWeight: tb.bold ? 'bold' : (tb.fontWeight || '400'),
+                  fontStyle: tb.italic ? 'italic' : 'normal',
+                  textDecoration: tb.underline ? 'underline' : 'none',
+                  color: tb.color || '#FFFFFF',
+                  textAlign: tb.textAlign || 'center',
+                  textShadow: '2px 2px 8px rgba(0, 0, 0, 0.8)',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  width: '100%'
+                }}>
+                  {tb.text || ''}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       );
     }

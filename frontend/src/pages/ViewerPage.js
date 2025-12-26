@@ -414,7 +414,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
         }
       } else if (data.presentationData) {
         // Handle presentation slides (bypass theme)
-        console.log('📊 Received presentation slide:', data.presentationData);
         setPresentationData(data.presentationData);
         setCurrentSlide(null);
         setImageUrl(null);
@@ -1333,6 +1332,16 @@ function ViewerPage({ remotePin, remoteConfig }) {
     if (presentationData && presentationData.slide) {
       const { slide, canvasDimensions } = presentationData;
       const aspectRatio = canvasDimensions ? canvasDimensions.width / canvasDimensions.height : 16/9;
+      // Calculate container dimensions to fit 16:9 in viewport
+      const vpWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
+      const vpHeight = typeof window !== 'undefined' ? window.innerHeight : 1080;
+      const targetRatio = (canvasDimensions?.width || 1920) / (canvasDimensions?.height || 1080);
+      const vpRatio = vpWidth / vpHeight;
+
+      // If viewport is wider than target ratio, height is the constraint
+      // If viewport is narrower, width is the constraint
+      const containerWidth = vpRatio > targetRatio ? vpHeight * targetRatio : vpWidth;
+      const containerHeight = vpRatio > targetRatio ? vpHeight : vpWidth / targetRatio;
 
       return (
         <div style={{
@@ -1341,15 +1350,13 @@ function ViewerPage({ remotePin, remoteConfig }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: slide.backgroundColor || 'transparent'
+          background: '#000'
         }}>
           <div style={{
             position: 'relative',
-            aspectRatio: `${aspectRatio}`,
-            maxWidth: '100%',
-            maxHeight: '100%',
-            width: 'auto',
-            height: '100%'
+            width: `${containerWidth}px`,
+            height: `${containerHeight}px`,
+            background: slide.backgroundColor || '#000',
           }}>
             {/* Render text boxes */}
             {slide.textBoxes?.map((tb) => (
@@ -1367,7 +1374,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
                     : tb.textAlign === 'right' ? 'flex-end' : 'center',
                   justifyContent: tb.verticalAlign === 'top' ? 'flex-start'
                     : tb.verticalAlign === 'bottom' ? 'flex-end' : 'center',
-                  padding: '8px',
+                  padding: '0.5%',
                   boxSizing: 'border-box',
                   backgroundColor: tb.backgroundColor || 'transparent',
                   opacity: tb.opacity !== undefined ? tb.opacity : 1,

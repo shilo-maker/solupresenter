@@ -130,59 +130,59 @@ const TextPropertiesPanel = ({
         </div>
       </Form.Group>
 
-      {/* Horizontal Alignment */}
+      {/* Horizontal Alignment (controls textAlign: left/center/right) */}
       <Form.Group className="mb-3">
         <Form.Label style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '12px' }}>Horizontal Align</Form.Label>
         <div>
           <ButtonGroup size="sm">
             <Button
-              variant={textBox.verticalAlign === 'top' ? 'primary' : 'outline-light'}
-              onClick={() => handleChange('verticalAlign', 'top')}
+              variant={textBox.textAlign === 'left' ? 'primary' : 'outline-light'}
+              onClick={() => handleChange('textAlign', 'left')}
               title="Left"
               style={{ padding: '4px 8px' }}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <rect x="1" y="2" width="14" height="2" />
-                <rect x="6" y="6" width="9" height="2" />
-                <rect x="3" y="10" width="12" height="2" />
+                <rect x="1" y="2" width="10" height="2" />
+                <rect x="1" y="6" width="14" height="2" />
+                <rect x="1" y="10" width="8" height="2" />
               </svg>
             </Button>
             <Button
-              variant={(!textBox.verticalAlign || textBox.verticalAlign === 'center') ? 'primary' : 'outline-light'}
-              onClick={() => handleChange('verticalAlign', 'center')}
+              variant={(!textBox.textAlign || textBox.textAlign === 'center') ? 'primary' : 'outline-light'}
+              onClick={() => handleChange('textAlign', 'center')}
               title="Center"
               style={{ padding: '4px 8px' }}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <rect x="1" y="2" width="14" height="2" />
-                <rect x="3.5" y="6" width="9" height="2" />
-                <rect x="2" y="10" width="12" height="2" />
+                <rect x="3" y="2" width="10" height="2" />
+                <rect x="1" y="6" width="14" height="2" />
+                <rect x="4" y="10" width="8" height="2" />
               </svg>
             </Button>
             <Button
-              variant={textBox.verticalAlign === 'bottom' ? 'primary' : 'outline-light'}
-              onClick={() => handleChange('verticalAlign', 'bottom')}
+              variant={textBox.textAlign === 'right' ? 'primary' : 'outline-light'}
+              onClick={() => handleChange('textAlign', 'right')}
               title="Right"
               style={{ padding: '4px 8px' }}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <rect x="1" y="2" width="14" height="2" />
-                <rect x="1" y="6" width="9" height="2" />
-                <rect x="1" y="10" width="12" height="2" />
+                <rect x="5" y="2" width="10" height="2" />
+                <rect x="1" y="6" width="14" height="2" />
+                <rect x="7" y="10" width="8" height="2" />
               </svg>
             </Button>
           </ButtonGroup>
         </div>
       </Form.Group>
 
-      {/* Vertical Alignment */}
+      {/* Vertical Alignment (controls verticalAlign: top/center/bottom) */}
       <Form.Group className="mb-3">
         <Form.Label style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '12px' }}>Vertical Align</Form.Label>
         <div>
           <ButtonGroup size="sm">
             <Button
-              variant={textBox.textAlign === 'left' ? 'primary' : 'outline-light'}
-              onClick={() => handleChange('textAlign', 'left')}
+              variant={textBox.verticalAlign === 'top' ? 'primary' : 'outline-light'}
+              onClick={() => handleChange('verticalAlign', 'top')}
               title="Top"
               style={{ padding: '4px 8px' }}
             >
@@ -193,8 +193,8 @@ const TextPropertiesPanel = ({
               </svg>
             </Button>
             <Button
-              variant={(!textBox.textAlign || textBox.textAlign === 'center') ? 'primary' : 'outline-light'}
-              onClick={() => handleChange('textAlign', 'center')}
+              variant={(!textBox.verticalAlign || textBox.verticalAlign === 'center') ? 'primary' : 'outline-light'}
+              onClick={() => handleChange('verticalAlign', 'center')}
               title="Middle"
               style={{ padding: '4px 8px' }}
             >
@@ -205,8 +205,8 @@ const TextPropertiesPanel = ({
               </svg>
             </Button>
             <Button
-              variant={textBox.textAlign === 'right' ? 'primary' : 'outline-light'}
-              onClick={() => handleChange('textAlign', 'right')}
+              variant={textBox.verticalAlign === 'bottom' ? 'primary' : 'outline-light'}
+              onClick={() => handleChange('verticalAlign', 'bottom')}
               title="Bottom"
               style={{ padding: '4px 8px' }}
             >

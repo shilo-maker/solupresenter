@@ -43,7 +43,7 @@ if (!document.getElementById('obs-overlay-animations')) {
   document.head.appendChild(animationStyles);
 }
 
-function OBSOverlay() {
+function OBSOverlay({ remotePin, remoteConfig }) {
   const location = useLocation();
 
   // State
@@ -59,17 +59,19 @@ function OBSOverlay() {
 
   // Parse query parameters for customization
   const params = new URLSearchParams(location.search);
-  const pin = params.get('pin');
+  // Use remotePin prop if provided (from RemoteScreen), otherwise use URL params
+  const pin = remotePin || params.get('pin');
   const roomSlug = params.get('room');
-  const position = params.get('position') || 'bottom'; // bottom, top, center
-  const fontSize = parseInt(params.get('fontSize') || '100', 10); // percentage
-  const textColor = params.get('color') || 'white';
-  const showOriginal = params.get('original') !== 'false';
-  const showTransliteration = params.get('transliteration') !== 'false';
-  const showTranslation = params.get('translation') !== 'false';
-  const paddingBottom = parseInt(params.get('paddingBottom') || '3', 10); // vh units
-  const paddingTop = parseInt(params.get('paddingTop') || '5', 10); // vh units
-  const maxWidth = parseInt(params.get('maxWidth') || '90', 10); // percentage
+  // Allow remoteConfig to override URL params
+  const position = remoteConfig?.position ?? (params.get('position') || 'bottom'); // bottom, top, center
+  const fontSize = remoteConfig?.fontSize ?? parseInt(params.get('fontSize') || '100', 10); // percentage
+  const textColor = remoteConfig?.textColor ?? (params.get('color') || 'white');
+  const showOriginal = remoteConfig?.showOriginal ?? (params.get('original') !== 'false');
+  const showTransliteration = remoteConfig?.showTransliteration ?? (params.get('transliteration') !== 'false');
+  const showTranslation = remoteConfig?.showTranslation ?? (params.get('translation') !== 'false');
+  const paddingBottom = remoteConfig?.paddingBottom ?? parseInt(params.get('paddingBottom') || '3', 10); // vh units
+  const paddingTop = remoteConfig?.paddingTop ?? parseInt(params.get('paddingTop') || '5', 10); // vh units
+  const maxWidth = remoteConfig?.maxWidth ?? parseInt(params.get('maxWidth') || '90', 10); // percentage
 
   // Detect Hebrew/RTL text
   const isHebrew = (text) => {

@@ -127,6 +127,17 @@ export const themeAPI = {
   getDefault: () => api.get('/api/viewer-themes/default')
 };
 
+// Remote Screen endpoints
+export const remoteScreenAPI = {
+  getAll: () => api.get('/api/remote-screens'),
+  getById: (id) => api.get(`/api/remote-screens/${id}`),
+  create: (screenData) => api.post('/api/remote-screens', screenData),
+  update: (id, screenData) => api.put(`/api/remote-screens/${id}`, screenData),
+  delete: (id) => api.delete(`/api/remote-screens/${id}`),
+  // Public access (no auth) - for kiosk devices
+  getScreenAccess: (userId, screenId) => api.get(`/api/screen-access/${userId}/${screenId}`)
+};
+
 // Helper function to get full image URL
 export const getFullImageUrl = (url) => {
   if (!url) return '';

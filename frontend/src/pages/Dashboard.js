@@ -118,6 +118,20 @@ function Dashboard() {
         <Col md={6}>
           <Card className="h-100">
             <Card.Body>
+              <Card.Title>{t('remoteScreens.title', 'Remote Screens')}</Card.Title>
+              <Card.Text>
+                {t('dashboard.remoteScreensDesc', 'Create fixed URLs for kiosk displays or Raspberry Pi devices that auto-connect to your presentations.')}
+              </Card.Text>
+              <Button variant="success" onClick={() => navigate('/remote-screens')}>
+                {t('remoteScreens.manage', 'Manage Screens')}
+              </Button>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        <Col md={6}>
+          <Card className="h-100">
+            <Card.Body>
               <Card.Title>{t('settings.title')}</Card.Title>
               <Card.Text>
                 {t('dashboard.settingsDesc')}

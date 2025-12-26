@@ -23,6 +23,8 @@ const mediaRoutes = require('./routes/media');
 const bibleRoutes = require('./routes/bible');
 const publicRoomsRoutes = require('./routes/publicRooms');
 const viewerThemesRoutes = require('./routes/viewerThemes');
+const remoteScreensRoutes = require('./routes/remoteScreens');
+const screenAccessRoutes = require('./routes/screenAccess');
 
 // Import cleanup jobs
 const cleanupTemporarySetlists = require('./jobs/cleanupTemporarySetlists');
@@ -152,6 +154,8 @@ app.use('/api/media', mediaRoutes);
 app.use('/api/bible', bibleRoutes);
 app.use('/api/public-rooms', publicRoomsRoutes);
 app.use('/api/viewer-themes', viewerThemesRoutes);
+app.use('/api/remote-screens', remoteScreensRoutes);
+app.use('/api/screen-access', screenAccessRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

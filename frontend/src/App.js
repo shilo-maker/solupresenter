@@ -52,6 +52,8 @@ const Admin = lazy(() => import('./pages/Admin'));
 const MediaLibrary = lazy(() => import('./pages/MediaLibrary'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Themes = lazy(() => import('./pages/Themes'));
+const RemoteScreen = lazy(() => import('./pages/RemoteScreen'));
+const RemoteScreens = lazy(() => import('./pages/RemoteScreens'));
 
 function App() {
   return (
@@ -68,6 +70,7 @@ function App() {
             <Route path="/viewer" element={<ViewerPage />} />
             <Route path="/obs-overlay" element={<OBSOverlay />} />
             <Route path="/stage-monitor" element={<StageMonitor />} />
+            <Route path="/u/:userId/screen/:screenId" element={<RemoteScreen />} />
 
           {/* Private routes */}
           <Route
@@ -191,6 +194,16 @@ function App() {
             element={
               <PrivateRoute>
                 <Themes />
+              </PrivateRoute>
+            }
+          />
+
+          {/* Remote Screens Route */}
+          <Route
+            path="/remote-screens"
+            element={
+              <PrivateRoute>
+                <RemoteScreens />
               </PrivateRoute>
             }
           />

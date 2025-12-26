@@ -8,6 +8,7 @@ const BibleVerse = require('./BibleVerse');
 const PublicRoom = require('./PublicRoom');
 const SongMapping = require('./SongMapping');
 const ViewerTheme = require('./ViewerTheme');
+const RemoteScreen = require('./RemoteScreen');
 
 // Define relationships
 User.hasOne(Room, { as: 'activeRoom', foreignKey: 'operatorId' });
@@ -38,6 +39,10 @@ ViewerTheme.belongsTo(User, { as: 'creator', foreignKey: 'createdById', constrai
 User.hasMany(ViewerTheme, { as: 'viewerThemes', foreignKey: 'createdById', constraints: false });
 Room.belongsTo(ViewerTheme, { as: 'activeTheme', foreignKey: 'activeThemeId', constraints: false });
 
+// RemoteScreen relationships
+RemoteScreen.belongsTo(User, { as: 'owner', foreignKey: 'userId', constraints: false });
+User.hasMany(RemoteScreen, { as: 'remoteScreens', foreignKey: 'userId', constraints: false });
+
 // Export models and sequelize instance
 module.exports = {
   sequelize,
@@ -49,5 +54,6 @@ module.exports = {
   BibleVerse,
   PublicRoom,
   SongMapping,
-  ViewerTheme
+  ViewerTheme,
+  RemoteScreen
 };

@@ -25,7 +25,7 @@ if (!document.getElementById('viewer-animations')) {
   document.head.appendChild(animationStyles);
 }
 
-function ViewerPage() {
+function ViewerPage({ remotePin, remoteConfig }) {
   const { t, i18n } = useTranslation();
   const location = useLocation();
 
@@ -579,7 +579,15 @@ function ViewerPage() {
       }
     }
 
-    if (urlRoom) {
+    // Check for remotePin prop first (from RemoteScreen component)
+    if (remotePin) {
+      console.log(`🖥️ Remote screen PIN provided: ${remotePin.toUpperCase()}`);
+      setPin(remotePin.toUpperCase());
+      setTimeout(() => {
+        console.log(`🚪 Auto-joining room via remote screen: ${remotePin.toUpperCase()}`);
+        socketService.viewerJoinRoom(remotePin.toUpperCase());
+      }, 500);
+    } else if (urlRoom) {
       // Auto-join by room name (slug)
       console.log(`🏠 Room name found in URL: ${urlRoom}`);
       setJoinMode('name');
@@ -606,7 +614,7 @@ function ViewerPage() {
       socketService.removeAllListeners();
       socketService.disconnect();
     };
-  }, [location.search]);
+  }, [location.search, remotePin]);
 
   // Read video from IndexedDB and create a local blob URL
   const loadVideoFromIndexedDB = () => {

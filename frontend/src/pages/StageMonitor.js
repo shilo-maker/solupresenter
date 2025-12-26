@@ -24,7 +24,7 @@ if (!document.getElementById('stage-monitor-styles')) {
   document.head.appendChild(stageMonitorStyles);
 }
 
-function StageMonitor() {
+function StageMonitor({ remotePin, remoteConfig }) {
   const location = useLocation();
 
   // State
@@ -39,13 +39,15 @@ function StageMonitor() {
 
   // Parse query parameters
   const params = new URLSearchParams(location.search);
-  const pin = params.get('pin');
+  // Use remotePin prop if provided (from RemoteScreen), otherwise use URL params
+  const pin = remotePin || params.get('pin');
   const roomSlug = params.get('room');
-  const showClock = params.get('clock') !== 'false';
-  const showNext = params.get('next') !== 'false';
-  const showTitle = params.get('title') !== 'false';
-  const fontSize = parseInt(params.get('fontSize') || '100', 10);
-  const theme = params.get('theme') || 'dark'; // dark, light
+  // Allow remoteConfig to override URL params
+  const showClock = remoteConfig?.showClock ?? (params.get('clock') !== 'false');
+  const showNext = remoteConfig?.showNext ?? (params.get('next') !== 'false');
+  const showTitle = remoteConfig?.showTitle ?? (params.get('title') !== 'false');
+  const fontSize = remoteConfig?.fontSize ?? parseInt(params.get('fontSize') || '100', 10);
+  const theme = remoteConfig?.theme ?? (params.get('theme') || 'dark'); // dark, light
 
   // Clock update
   useEffect(() => {

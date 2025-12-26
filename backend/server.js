@@ -10,7 +10,7 @@ const session = require('express-session');
 const multer = require('multer');
 const compression = require('compression');
 const helmet = require('helmet');
-const { sequelize, Room, Song, PublicRoom, ViewerTheme } = require('./models');
+const { sequelize, Room, Song, PublicRoom, ViewerTheme, StageMonitorTheme, User } = require('./models');
 const passport = require('./config/passport');
 
 // Import routes
@@ -23,6 +23,7 @@ const mediaRoutes = require('./routes/media');
 const bibleRoutes = require('./routes/bible');
 const publicRoomsRoutes = require('./routes/publicRooms');
 const viewerThemesRoutes = require('./routes/viewerThemes');
+const stageMonitorThemesRoutes = require('./routes/stageMonitorThemes');
 const remoteScreensRoutes = require('./routes/remoteScreens');
 const screenAccessRoutes = require('./routes/screenAccess');
 
@@ -110,6 +111,7 @@ sequelize.authenticate()
 
     // Seed the Classic theme if it doesn't exist
     await ViewerTheme.seedClassicTheme();
+    await StageMonitorTheme.seedBuiltInThemes();
   })
   .catch(err => {
     console.error('❌ Unable to connect to PostgreSQL:', err);
@@ -154,6 +156,7 @@ app.use('/api/media', mediaRoutes);
 app.use('/api/bible', bibleRoutes);
 app.use('/api/public-rooms', publicRoomsRoutes);
 app.use('/api/viewer-themes', viewerThemesRoutes);
+app.use('/api/stage-monitor-themes', stageMonitorThemesRoutes);
 app.use('/api/remote-screens', remoteScreensRoutes);
 app.use('/api/screen-access', screenAccessRoutes);
 
@@ -247,13 +250,13 @@ io.on('connection', (socket) => {
 
         room = await Room.findOne({
           where: { id: publicRoom.activeRoomId, isActive: true },
-          attributes: ['id', 'pin', 'currentSlide', 'currentImageUrl', 'currentBibleData', 'backgroundImage', 'viewerCount', 'activeThemeId']
+          attributes: ['id', 'pin', 'operatorId', 'currentSlide', 'currentImageUrl', 'currentBibleData', 'backgroundImage', 'viewerCount', 'activeThemeId']
         });
       } else {
         // Otherwise, look up by PIN
         room = await Room.findOne({
           where: { pin: pin.toUpperCase(), isActive: true },
-          attributes: ['id', 'pin', 'currentSlide', 'currentImageUrl', 'currentBibleData', 'backgroundImage', 'viewerCount', 'activeThemeId']
+          attributes: ['id', 'pin', 'operatorId', 'currentSlide', 'currentImageUrl', 'currentBibleData', 'backgroundImage', 'viewerCount', 'activeThemeId']
         });
       }
 
@@ -316,7 +319,7 @@ io.on('connection', (socket) => {
         }
       }
 
-      // Load theme from memory cache or database
+      // Load viewer theme from memory cache or database
       let theme = roomActiveTheme.get(room.pin) || null;
       if (!theme && room.activeThemeId) {
         // Theme not in cache but room has activeThemeId - load from database
@@ -328,16 +331,37 @@ io.on('connection', (socket) => {
         }
       }
 
+      // Load operator's default stage monitor theme
+      let stageMonitorTheme = null;
+      if (room.operatorId) {
+        const operator = await User.findByPk(room.operatorId, { attributes: ['preferences'] });
+        if (operator?.preferences?.defaultStageMonitorThemeId) {
+          const smTheme = await StageMonitorTheme.findByPk(operator.preferences.defaultStageMonitorThemeId);
+          if (smTheme) {
+            stageMonitorTheme = smTheme.toJSON();
+          }
+        }
+        // Fallback to built-in classic dark if no default set
+        if (!stageMonitorTheme) {
+          const classicTheme = await StageMonitorTheme.findOne({ where: { isBuiltIn: true } });
+          if (classicTheme) {
+            stageMonitorTheme = classicTheme.toJSON();
+          }
+        }
+      }
+
       // Send current slide to viewer
       const viewerJoinedData = {
         roomPin: room.pin,
+        operatorId: room.operatorId,
         currentSlide: room.currentSlide,
         slideData: slideData,
         imageUrl: imageUrl,
         isBlank: room.currentSlide?.isBlank || false,
         backgroundImage: room.backgroundImage || '',
         toolsData: roomToolsData.get(room.pin) || null,
-        theme: theme
+        theme: theme,
+        stageMonitorTheme: stageMonitorTheme
       };
 
       console.log(`📤 Sending to viewer:`, JSON.stringify(viewerJoinedData, null, 2));

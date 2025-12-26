@@ -8,6 +8,7 @@ const BibleVerse = require('./BibleVerse');
 const PublicRoom = require('./PublicRoom');
 const SongMapping = require('./SongMapping');
 const ViewerTheme = require('./ViewerTheme');
+const StageMonitorTheme = require('./StageMonitorTheme');
 const RemoteScreen = require('./RemoteScreen');
 
 // Define relationships
@@ -39,6 +40,10 @@ ViewerTheme.belongsTo(User, { as: 'creator', foreignKey: 'createdById', constrai
 User.hasMany(ViewerTheme, { as: 'viewerThemes', foreignKey: 'createdById', constraints: false });
 Room.belongsTo(ViewerTheme, { as: 'activeTheme', foreignKey: 'activeThemeId', constraints: false });
 
+// StageMonitorTheme relationships
+StageMonitorTheme.belongsTo(User, { as: 'creator', foreignKey: 'createdById', constraints: false });
+User.hasMany(StageMonitorTheme, { as: 'stageMonitorThemes', foreignKey: 'createdById', constraints: false });
+
 // RemoteScreen relationships
 RemoteScreen.belongsTo(User, { as: 'owner', foreignKey: 'userId', constraints: false });
 User.hasMany(RemoteScreen, { as: 'remoteScreens', foreignKey: 'userId', constraints: false });
@@ -55,5 +60,6 @@ module.exports = {
   PublicRoom,
   SongMapping,
   ViewerTheme,
+  StageMonitorTheme,
   RemoteScreen
 };

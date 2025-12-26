@@ -127,6 +127,21 @@ export const themeAPI = {
   getDefault: () => api.get('/api/viewer-themes/default')
 };
 
+// Stage Monitor Theme endpoints
+export const stageMonitorThemeAPI = {
+  getAll: () => api.get('/api/stage-monitor-themes'),
+  getById: (id) => api.get(`/api/stage-monitor-themes/${id}`),
+  create: (themeData) => api.post('/api/stage-monitor-themes', themeData),
+  update: (id, themeData) => api.put(`/api/stage-monitor-themes/${id}`, themeData),
+  delete: (id) => api.delete(`/api/stage-monitor-themes/${id}`),
+  duplicate: (id, name) => api.post(`/api/stage-monitor-themes/${id}/duplicate`, { name }),
+  setDefault: (id) => api.post(`/api/stage-monitor-themes/${id}/set-default`),
+  clearDefault: () => api.post('/api/stage-monitor-themes/clear-default'),
+  getDefault: () => api.get('/api/stage-monitor-themes/default'),
+  // Public endpoint - get operator's default theme (for stage monitors)
+  getOperatorDefault: (operatorId) => api.get(`/api/stage-monitor-themes/operator/${operatorId}/default`)
+};
+
 // Remote Screen endpoints
 export const remoteScreenAPI = {
   getAll: () => api.get('/api/remote-screens'),

@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import socketService from '../services/socket';
+import { stageMonitorThemeAPI } from '../services/api';
 
 // CSS for stage monitor
 const stageMonitorStyles = document.createElement('style');
@@ -36,6 +37,7 @@ function StageMonitor({ remotePin, remoteConfig }) {
   const [error, setError] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isBlank, setIsBlank] = useState(false);
+  const [customTheme, setCustomTheme] = useState(null);
 
   // Parse query parameters
   const params = new URLSearchParams(location.search);
@@ -47,7 +49,8 @@ function StageMonitor({ remotePin, remoteConfig }) {
   const showNext = remoteConfig?.showNext ?? (params.get('next') !== 'false');
   const showTitle = remoteConfig?.showTitle ?? (params.get('title') !== 'false');
   const fontSize = remoteConfig?.fontSize ?? parseInt(params.get('fontSize') || '100', 10);
-  const theme = remoteConfig?.theme ?? (params.get('theme') || 'dark'); // dark, light
+  const theme = remoteConfig?.theme ?? (params.get('theme') || 'dark'); // dark, light, or theme ID
+  const themeId = remoteConfig?.stageThemeId ?? params.get('themeId'); // custom theme ID
 
   // Clock update
   useEffect(() => {
@@ -55,6 +58,22 @@ function StageMonitor({ remotePin, remoteConfig }) {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, [showClock]);
+
+  // Fetch custom theme by themeId if explicitly provided in URL (overrides operator's default)
+  useEffect(() => {
+    const fetchTheme = async () => {
+      if (!themeId) return;
+      try {
+        const response = await stageMonitorThemeAPI.getById(themeId);
+        if (response.data.theme) {
+          setCustomTheme(response.data.theme);
+        }
+      } catch (error) {
+        console.log('Using operator default stage monitor theme');
+      }
+    };
+    fetchTheme();
+  }, [themeId]);
 
   // Detect Hebrew/RTL text
   const isHebrew = (text) => {
@@ -90,6 +109,11 @@ function StageMonitor({ remotePin, remoteConfig }) {
         console.log('Stage Monitor: Joined room', data);
         setJoined(true);
         setError('');
+
+        // Apply stage monitor theme from join data (like viewer theme)
+        if (data.stageMonitorTheme) {
+          setCustomTheme(data.stageMonitorTheme);
+        }
 
         if (data.isBlank) {
           setIsBlank(true);
@@ -163,8 +187,15 @@ function StageMonitor({ remotePin, remoteConfig }) {
     return () => socketService.disconnect();
   }, [pin, roomSlug]);
 
-  // Theme colors
-  const colors = theme === 'light' ? {
+  // Theme colors - use custom theme if available, otherwise use preset
+  const colors = customTheme ? {
+    bg: customTheme.colors?.background || '#0a0a0a',
+    text: customTheme.colors?.text || '#ffffff',
+    accent: customTheme.colors?.accent || '#4a90d9',
+    secondary: customTheme.colors?.secondary || '#888',
+    nextBg: customTheme.nextSlideArea?.backgroundColor || '#1a1a1a',
+    border: customTheme.colors?.border || '#333'
+  } : (theme === 'light' ? {
     bg: '#f5f5f5',
     text: '#1a1a1a',
     accent: '#0066cc',
@@ -178,7 +209,15 @@ function StageMonitor({ remotePin, remoteConfig }) {
     secondary: '#888',
     nextBg: '#1a1a1a',
     border: '#333'
-  };
+  });
+
+  // Get layout from custom theme or use defaults
+  const headerLayout = customTheme?.header || { visible: true };
+  const clockLayout = customTheme?.clock || { visible: showClock };
+  const songTitleLayout = customTheme?.songTitle || { visible: showTitle };
+  const currentSlideLayout = customTheme?.currentSlideArea || {};
+  const currentSlideTextLayout = customTheme?.currentSlideText || {};
+  const nextSlideLayout = customTheme?.nextSlideArea || { visible: showNext };
 
   const baseFontSize = fontSize / 100;
   const slide = currentSlide?.slide;
@@ -192,6 +231,15 @@ function StageMonitor({ remotePin, remoteConfig }) {
     const mainFontSize = `calc(clamp(1.5rem, 4vw, 4rem) * ${baseFontSize * sizeMultiplier})`;
     const subFontSize = `calc(clamp(1rem, 2.5vw, 2.5rem) * ${baseFontSize * sizeMultiplier})`;
 
+    // Get text styles from custom theme if available
+    const originalStyle = currentSlideTextLayout?.original || {};
+    const transliterationStyle = currentSlideTextLayout?.transliteration || {};
+    const translationStyle = currentSlideTextLayout?.translation || {};
+
+    const showOriginal = originalStyle.visible !== false;
+    const showTransliteration = transliterationStyle.visible !== false && displayMode === 'bilingual';
+    const showTranslation = translationStyle.visible !== false && displayMode === 'bilingual';
+
     return (
       <div style={{
         display: 'flex',
@@ -201,26 +249,29 @@ function StageMonitor({ remotePin, remoteConfig }) {
         width: '100%'
       }}>
         {/* Original Text */}
-        {slideData.originalText && (
+        {showOriginal && slideData.originalText && (
           <div style={{
             fontSize: mainFontSize,
-            fontWeight: 'bold',
-            color: colors.text,
+            fontWeight: originalStyle.fontWeight || 'bold',
+            color: originalStyle.color || colors.text,
+            opacity: originalStyle.opacity ?? 1,
             direction: getTextDirection(slideData.originalText),
             unicodeBidi: 'plaintext',
             textAlign: 'center',
             lineHeight: 1.3,
-            textShadow: theme === 'dark' ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none'
+            textShadow: theme === 'dark' && !customTheme ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none'
           }}>
             {slideData.originalText}
           </div>
         )}
 
         {/* Transliteration */}
-        {displayMode === 'bilingual' && slideData.transliteration && (
+        {showTransliteration && slideData.transliteration && (
           <div style={{
             fontSize: subFontSize,
-            color: colors.secondary,
+            fontWeight: transliterationStyle.fontWeight || '400',
+            color: transliterationStyle.color || colors.secondary,
+            opacity: transliterationStyle.opacity ?? 1,
             direction: getTextDirection(slideData.transliteration),
             unicodeBidi: 'plaintext',
             textAlign: 'center',
@@ -231,11 +282,12 @@ function StageMonitor({ remotePin, remoteConfig }) {
         )}
 
         {/* Translation */}
-        {displayMode === 'bilingual' && slideData.translation && (
+        {showTranslation && slideData.translation && (
           <div style={{
             fontSize: subFontSize,
-            color: colors.text,
-            opacity: 0.9,
+            fontWeight: translationStyle.fontWeight || '400',
+            color: translationStyle.color || colors.text,
+            opacity: translationStyle.opacity ?? 0.9,
             direction: getTextDirection(slideData.translation),
             unicodeBidi: 'plaintext',
             textAlign: 'center',
@@ -289,6 +341,156 @@ function StageMonitor({ remotePin, remoteConfig }) {
     );
   }
 
+  // Determine visibility settings (custom theme overrides URL params)
+  const showClockResolved = customTheme ? (clockLayout.visible !== false) : showClock;
+  const showTitleResolved = customTheme ? (songTitleLayout.visible !== false) : showTitle;
+  const showNextResolved = customTheme ? (nextSlideLayout.visible !== false) : showNext;
+  const showHeader = headerLayout.visible !== false;
+
+  // Check if we should use absolute positioning (custom theme with position data)
+  const useAbsoluteLayout = customTheme &&
+    (currentSlideLayout.x !== undefined || currentSlideLayout.y !== undefined);
+
+  // For absolute layout, render with percentage-based positioning
+  if (useAbsoluteLayout) {
+    return (
+      <div style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: colors.bg,
+        fontFamily: "'Segoe UI', system-ui, sans-serif",
+        overflow: 'hidden'
+      }}>
+        {/* Header - absolute positioned */}
+        {showHeader && (
+          <div style={{
+            position: 'absolute',
+            left: `${headerLayout.x ?? 0}%`,
+            top: `${headerLayout.y ?? 0}%`,
+            width: `${headerLayout.width ?? 100}%`,
+            height: `${headerLayout.height ?? 8}%`,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '0 2%',
+            boxSizing: 'border-box',
+            borderBottom: `1px solid ${colors.border}`,
+            backgroundColor: headerLayout.backgroundColor || 'transparent'
+          }}>
+            {/* Song Title */}
+            {showTitleResolved && (
+              <div style={{
+                fontSize: 'clamp(1rem, 2vw, 1.5rem)',
+                color: songTitleLayout.color || colors.accent,
+                fontWeight: songTitleLayout.fontWeight || '600',
+                flex: 1
+              }}>
+                {songTitle || ''}
+              </div>
+            )}
+
+            {/* Clock */}
+            {showClockResolved && (
+              <div style={{
+                fontSize: 'clamp(1.5rem, 3vw, 2.5rem)',
+                fontWeight: clockLayout.fontWeight || 'bold',
+                color: clockLayout.color || colors.text,
+                fontFamily: clockLayout.fontFamily || 'monospace'
+              }}>
+                {currentTime.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Current Slide - absolute positioned */}
+        <div style={{
+          position: 'absolute',
+          left: `${currentSlideLayout.x ?? 1}%`,
+          top: `${currentSlideLayout.y ?? 10}%`,
+          width: `${currentSlideLayout.width ?? 65}%`,
+          height: `${currentSlideLayout.height ?? 85}%`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: currentSlideLayout.padding || '2%',
+          boxSizing: 'border-box',
+          backgroundColor: currentSlideLayout.backgroundColor || 'rgba(255,255,255,0.03)',
+          borderRadius: currentSlideLayout.borderRadius || '12px',
+          border: `1px solid ${colors.border}`,
+          overflow: 'hidden'
+        }}>
+          {isBlank ? (
+            <div style={{ color: colors.secondary, fontSize: '1.5rem' }}>
+            </div>
+          ) : slide ? (
+            <div className="stage-slide-enter" style={{ width: '100%' }}>
+              {renderSlideContent(slide)}
+            </div>
+          ) : (
+            <div style={{ color: colors.secondary, fontSize: '1.5rem' }}>
+              Waiting for content...
+            </div>
+          )}
+        </div>
+
+        {/* Next Slide Preview - absolute positioned */}
+        {showNextResolved && (
+          <div style={{
+            position: 'absolute',
+            left: `${nextSlideLayout.x ?? 68}%`,
+            top: `${nextSlideLayout.y ?? 10}%`,
+            width: `${nextSlideLayout.width ?? 30}%`,
+            height: `${nextSlideLayout.height ?? 85}%`,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.5rem',
+            boxSizing: 'border-box'
+          }}>
+            <div style={{
+              fontSize: '0.9rem',
+              color: nextSlideLayout.labelColor || colors.secondary,
+              textTransform: 'uppercase',
+              letterSpacing: '1px',
+              fontWeight: '600'
+            }}>
+              {nextSlideLayout.labelText || 'Next'}
+            </div>
+            <div style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1rem',
+              backgroundColor: colors.nextBg,
+              borderRadius: nextSlideLayout.borderRadius || '8px',
+              border: `1px solid ${colors.border}`,
+              opacity: nextSlideLayout.opacity ?? 0.8,
+              overflow: 'hidden',
+              position: 'relative'
+            }}>
+              {next ? (
+                <div style={{
+                  width: '100%',
+                  overflow: 'hidden',
+                  maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)',
+                  WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)'
+                }}>
+                  {renderSlideContent(next, true)}
+                </div>
+              ) : (
+                <div style={{ color: colors.secondary, fontSize: '1rem' }}>
+                  {isBlank ? '' : 'End of song'}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Fallback: Default flexbox layout (no custom theme or legacy theme without positions)
   return (
     <div style={{
       position: 'fixed',
@@ -300,20 +502,22 @@ function StageMonitor({ remotePin, remoteConfig }) {
       overflow: 'hidden'
     }}>
       {/* Header - Clock and Song Title */}
+      {showHeader && (
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: '1rem 2rem',
         borderBottom: `1px solid ${colors.border}`,
-        minHeight: '60px'
+        minHeight: '60px',
+        backgroundColor: headerLayout.backgroundColor || 'transparent'
       }}>
         {/* Song Title */}
-        {showTitle && (
+        {showTitleResolved && (
           <div style={{
             fontSize: 'clamp(1rem, 2vw, 1.5rem)',
-            color: colors.accent,
-            fontWeight: '600',
+            color: songTitleLayout.color || colors.accent,
+            fontWeight: songTitleLayout.fontWeight || '600',
             flex: 1
           }}>
             {songTitle || ''}
@@ -321,36 +525,37 @@ function StageMonitor({ remotePin, remoteConfig }) {
         )}
 
         {/* Clock */}
-        {showClock && (
+        {showClockResolved && (
           <div style={{
             fontSize: 'clamp(1.5rem, 3vw, 2.5rem)',
-            fontWeight: 'bold',
-            color: colors.text,
-            fontFamily: 'monospace'
+            fontWeight: clockLayout.fontWeight || 'bold',
+            color: clockLayout.color || colors.text,
+            fontFamily: clockLayout.fontFamily || 'monospace'
           }}>
             {currentTime.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
           </div>
         )}
       </div>
+      )}
 
       {/* Main Content Area */}
       <div style={{
         flex: 1,
         display: 'flex',
-        flexDirection: showNext ? 'row' : 'column',
+        flexDirection: showNextResolved ? 'row' : 'column',
         gap: '1rem',
         padding: '2rem',
         minHeight: 0
       }}>
         {/* Current Slide - Main Area */}
         <div style={{
-          flex: showNext ? 2 : 1,
+          flex: showNextResolved ? 2 : 1,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '2rem',
-          backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
-          borderRadius: '12px',
+          padding: currentSlideLayout.padding || '2rem',
+          backgroundColor: currentSlideLayout.backgroundColor || (theme === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'),
+          borderRadius: currentSlideLayout.borderRadius || '12px',
           border: `1px solid ${colors.border}`,
           minHeight: 0,
           overflow: 'hidden'
@@ -371,7 +576,7 @@ function StageMonitor({ remotePin, remoteConfig }) {
         </div>
 
         {/* Next Slide Preview */}
-        {showNext && (
+        {showNextResolved && (
           <div style={{
             flex: 1,
             display: 'flex',
@@ -381,12 +586,12 @@ function StageMonitor({ remotePin, remoteConfig }) {
           }}>
             <div style={{
               fontSize: '0.9rem',
-              color: colors.secondary,
+              color: nextSlideLayout.labelColor || colors.secondary,
               textTransform: 'uppercase',
               letterSpacing: '1px',
               fontWeight: '600'
             }}>
-              Next
+              {nextSlideLayout.labelText || 'Next'}
             </div>
             <div style={{
               flex: 1,
@@ -395,9 +600,9 @@ function StageMonitor({ remotePin, remoteConfig }) {
               justifyContent: 'center',
               padding: '1rem',
               backgroundColor: colors.nextBg,
-              borderRadius: '8px',
+              borderRadius: nextSlideLayout.borderRadius || '8px',
               border: `1px solid ${colors.border}`,
-              opacity: 0.8,
+              opacity: nextSlideLayout.opacity ?? 0.8,
               minHeight: 0,
               overflow: 'hidden',
               position: 'relative'

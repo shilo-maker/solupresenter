@@ -124,6 +124,12 @@ function RemoteScreen() {
           remoteConfig={config}
         />
       )}
+      {screenData?.displayType === 'custom' && (
+        <ViewerPage
+          remotePin={roomData.pin}
+          remoteConfig={{ ...config, initialTheme: roomData.theme }}
+        />
+      )}
       {(screenData?.displayType === 'viewer' || !screenData?.displayType) && (
         <ViewerPage
           remotePin={roomData.pin}

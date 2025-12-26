@@ -19,7 +19,7 @@ const RemoteScreen = sequelize.define('RemoteScreen', {
     allowNull: false
   },
   displayType: {
-    type: DataTypes.ENUM('viewer', 'stage', 'obs'),
+    type: DataTypes.ENUM('viewer', 'stage', 'obs', 'custom'),
     defaultValue: 'viewer',
     allowNull: false
   },

@@ -3,14 +3,15 @@ import { Container, Row, Col, Card, Button, Form, Modal, Badge, Alert, Spinner }
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { remoteScreenAPI } from '../services/api';
+import { remoteScreenAPI, themeAPI } from '../services/api';
 
 const MAX_SCREENS = 5;
 
 const DISPLAY_TYPES = [
   { value: 'viewer', labelKey: 'remoteScreens.types.viewer', descKey: 'remoteScreens.types.viewerDesc' },
   { value: 'stage', labelKey: 'remoteScreens.types.stage', descKey: 'remoteScreens.types.stageDesc' },
-  { value: 'obs', labelKey: 'remoteScreens.types.obs', descKey: 'remoteScreens.types.obsDesc' }
+  { value: 'obs', labelKey: 'remoteScreens.types.obs', descKey: 'remoteScreens.types.obsDesc' },
+  { value: 'custom', labelKey: 'remoteScreens.types.custom', descKey: 'remoteScreens.types.customDesc' }
 ];
 
 function RemoteScreens() {
@@ -24,7 +25,7 @@ function RemoteScreens() {
 
   // Create modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newScreen, setNewScreen] = useState({ name: '', displayType: 'viewer' });
+  const [newScreen, setNewScreen] = useState({ name: '', displayType: 'viewer', config: {} });
   const [creating, setCreating] = useState(false);
 
   // Edit modal state
@@ -35,9 +36,23 @@ function RemoteScreens() {
   // Copy feedback
   const [copiedId, setCopiedId] = useState(null);
 
+  // Themes for custom display type
+  const [themes, setThemes] = useState([]);
+
   useEffect(() => {
     loadScreens();
+    loadThemes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const loadThemes = async () => {
+    try {
+      const response = await themeAPI.getAll();
+      setThemes(response.data.themes || []);
+    } catch (err) {
+      console.error('Error loading themes:', err);
+    }
+  };
 
   const loadScreens = async () => {
     try {
@@ -62,7 +77,7 @@ function RemoteScreens() {
       await remoteScreenAPI.create(newScreen);
       await loadScreens();
       setShowCreateModal(false);
-      setNewScreen({ name: '', displayType: 'viewer' });
+      setNewScreen({ name: '', displayType: 'viewer', config: {} });
     } catch (err) {
       console.error('Error creating screen:', err);
       setError(err.response?.data?.error || t('remoteScreens.createError', 'Failed to create screen'));
@@ -98,7 +113,8 @@ function RemoteScreens() {
       setSaving(true);
       await remoteScreenAPI.update(editingScreen.id, {
         name: editingScreen.name,
-        displayType: editingScreen.displayType
+        displayType: editingScreen.displayType,
+        config: editingScreen.config || {}
       });
       await loadScreens();
       setShowEditModal(false);
@@ -130,12 +146,14 @@ function RemoteScreens() {
     const colors = {
       viewer: 'primary',
       stage: 'success',
-      obs: 'info'
+      obs: 'info',
+      custom: 'warning'
     };
     const labels = {
       viewer: t('remoteScreens.types.viewer', 'Viewer'),
       stage: t('remoteScreens.types.stage', 'Stage Monitor'),
-      obs: t('remoteScreens.types.obs', 'OBS Overlay')
+      obs: t('remoteScreens.types.obs', 'OBS Overlay'),
+      custom: t('remoteScreens.types.custom', 'Custom')
     };
     return <Badge bg={colors[type] || 'secondary'}>{labels[type] || type}</Badge>;
   };
@@ -285,7 +303,11 @@ function RemoteScreens() {
                   name="displayType"
                   value={type.value}
                   checked={newScreen.displayType === type.value}
-                  onChange={(e) => setNewScreen({ ...newScreen, displayType: e.target.value })}
+                  onChange={(e) => setNewScreen({
+                    ...newScreen,
+                    displayType: e.target.value,
+                    config: e.target.value === 'custom' ? { themeId: themes[0]?.id || '' } : {}
+                  })}
                   label={
                     <div>
                       <strong>{t(type.labelKey, type.value)}</strong>
@@ -298,6 +320,29 @@ function RemoteScreens() {
                 />
               ))}
             </Form.Group>
+
+            {newScreen.displayType === 'custom' && (
+              <Form.Group className="mt-3">
+                <Form.Label>{t('remoteScreens.selectTheme', 'Select Theme')}</Form.Label>
+                <Form.Select
+                  value={newScreen.config?.themeId || ''}
+                  onChange={(e) => setNewScreen({
+                    ...newScreen,
+                    config: { ...newScreen.config, themeId: e.target.value }
+                  })}
+                >
+                  <option value="">{t('remoteScreens.noTheme', '-- Select a theme --')}</option>
+                  {themes.map(theme => (
+                    <option key={theme.id} value={theme.id}>
+                      {theme.name} {theme.isBuiltIn ? `(${t('themes.builtIn', 'Built-in')})` : ''}
+                    </option>
+                  ))}
+                </Form.Select>
+                <Form.Text className="text-muted">
+                  {t('remoteScreens.themeNote', 'This theme will always be used for this screen, ignoring room settings.')}
+                </Form.Text>
+              </Form.Group>
+            )}
           </Modal.Body>
           <Modal.Footer>
             <Button variant="secondary" onClick={() => setShowCreateModal(false)}>
@@ -341,7 +386,13 @@ function RemoteScreens() {
                       name="editDisplayType"
                       value={type.value}
                       checked={editingScreen.displayType === type.value}
-                      onChange={(e) => setEditingScreen({ ...editingScreen, displayType: e.target.value })}
+                      onChange={(e) => setEditingScreen({
+                        ...editingScreen,
+                        displayType: e.target.value,
+                        config: e.target.value === 'custom'
+                          ? { themeId: editingScreen.config?.themeId || themes[0]?.id || '' }
+                          : {}
+                      })}
                       label={
                         <div>
                           <strong>{t(type.labelKey, type.value)}</strong>
@@ -354,6 +405,29 @@ function RemoteScreens() {
                     />
                   ))}
                 </Form.Group>
+
+                {editingScreen.displayType === 'custom' && (
+                  <Form.Group className="mt-3">
+                    <Form.Label>{t('remoteScreens.selectTheme', 'Select Theme')}</Form.Label>
+                    <Form.Select
+                      value={editingScreen.config?.themeId || ''}
+                      onChange={(e) => setEditingScreen({
+                        ...editingScreen,
+                        config: { ...editingScreen.config, themeId: e.target.value }
+                      })}
+                    >
+                      <option value="">{t('remoteScreens.noTheme', '-- Select a theme --')}</option>
+                      {themes.map(theme => (
+                        <option key={theme.id} value={theme.id}>
+                          {theme.name} {theme.isBuiltIn ? `(${t('themes.builtIn', 'Built-in')})` : ''}
+                        </option>
+                      ))}
+                    </Form.Select>
+                    <Form.Text className="text-muted">
+                      {t('remoteScreens.themeNote', 'This theme will always be used for this screen, ignoring room settings.')}
+                    </Form.Text>
+                  </Form.Group>
+                )}
               </>
             )}
           </Modal.Body>

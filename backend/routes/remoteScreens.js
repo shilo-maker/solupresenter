@@ -55,7 +55,7 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Screen name is required' });
     }
 
-    const validDisplayTypes = ['viewer', 'stage', 'obs'];
+    const validDisplayTypes = ['viewer', 'stage', 'obs', 'custom'];
     if (displayType && !validDisplayTypes.includes(displayType)) {
       return res.status(400).json({ error: 'Invalid display type' });
     }
@@ -97,7 +97,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     if (displayType !== undefined) {
-      const validDisplayTypes = ['viewer', 'stage', 'obs'];
+      const validDisplayTypes = ['viewer', 'stage', 'obs', 'custom'];
       if (!validDisplayTypes.includes(displayType)) {
         return res.status(400).json({ error: 'Invalid display type' });
       }

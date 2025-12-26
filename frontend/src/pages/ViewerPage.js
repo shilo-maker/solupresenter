@@ -66,8 +66,18 @@ function ViewerPage({ remotePin, remoteConfig }) {
   // Announcement animation state
   const [announcementBanner, setAnnouncementBanner] = useState({ visible: false, text: '', animating: false });
 
-  // Theme state
-  const [viewerTheme, setViewerTheme] = useState(null);
+  // Theme state - use initialTheme from remoteConfig if provided (for custom remote screens)
+  const [viewerTheme, setViewerTheme] = useState(remoteConfig?.initialTheme || null);
+  const hasFixedTheme = !!remoteConfig?.initialTheme;
+
+  // Update theme when remoteConfig.initialTheme changes (for custom remote screens)
+  const initialThemeId = remoteConfig?.initialTheme?.id;
+  useEffect(() => {
+    if (remoteConfig?.initialTheme) {
+      setViewerTheme(remoteConfig.initialTheme);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialThemeId]);
 
   // Viewer display toggles
   const [showOriginal, setShowOriginal] = useState(true);
@@ -303,8 +313,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
         setDisplayMode(data.currentSlide.displayMode);
       }
 
-      // Handle theme data for new viewers
-      if (data.theme) {
+      // Handle theme data for new viewers (skip if using fixed theme from remote config)
+      if (data.theme && !hasFixedTheme) {
         console.log('🎨 Initial theme for new viewer:', data.theme);
         setViewerTheme(data.theme);
       }
@@ -452,10 +462,12 @@ function ViewerPage({ remotePin, remoteConfig }) {
       setError(tRef.current('viewer.sessionEnded'));
     });
 
-    // Handle theme updates from operator
+    // Handle theme updates from operator (skip if using fixed theme from remote config)
     socketService.onThemeUpdate((data) => {
-      console.log('🎨 Theme update received:', data.theme);
-      setViewerTheme(data.theme);
+      if (!hasFixedTheme) {
+        console.log('🎨 Theme update received:', data.theme);
+        setViewerTheme(data.theme);
+      }
     });
 
     // Check if PIN or room name is in URL query params and auto-join
@@ -614,7 +626,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
       socketService.removeAllListeners();
       socketService.disconnect();
     };
-  }, [location.search, remotePin]);
+  }, [location.search, remotePin, hasFixedTheme]);
 
   // Read video from IndexedDB and create a local blob URL
   const loadVideoFromIndexedDB = () => {

@@ -395,7 +395,7 @@
   },
   "viewer": {
     "title": "Viewer",
-    "tagline": "WORSHIP AS ONE",
+    "tagline": "worship together",
     "joinRoom": "Join Room",
     "enterPin": "Enter Room PIN",
     "enterRoomName": "Enter Room Name",
@@ -868,8 +868,13 @@
       "stage": "Stage Monitor",
       "stageDesc": "Stage monitor display for performers",
       "obs": "OBS Overlay",
-      "obsDesc": "Transparent background for OBS captions"
+      "obsDesc": "Transparent background for OBS captions",
+      "custom": "Custom",
+      "customDesc": "Viewer with a fixed theme that you select"
     },
+    "selectTheme": "Select Theme",
+    "noTheme": "-- Select a theme --",
+    "themeNote": "This theme will always be used for this screen, ignoring room settings.",
     "noScreens": "No remote screens yet",
     "createFirst": "Create your first screen",
     "url": "Screen URL",

@@ -23,9 +23,13 @@ router.get('/:userId/:screenId', async (req, res) => {
       attributes: ['id', 'pin', 'backgroundImage', 'activeThemeId']
     });
 
-    // Get theme if room has one
+    // Get theme - for custom type use screen's config.themeId, otherwise use room's activeThemeId
     let theme = null;
-    if (activeRoom && activeRoom.activeThemeId) {
+    if (screen.displayType === 'custom' && screen.config?.themeId) {
+      // Custom display type uses the theme specified in screen config
+      theme = await ViewerTheme.findByPk(screen.config.themeId);
+    } else if (activeRoom && activeRoom.activeThemeId) {
+      // Other types use the room's active theme
       theme = await ViewerTheme.findByPk(activeRoom.activeThemeId);
     }
 

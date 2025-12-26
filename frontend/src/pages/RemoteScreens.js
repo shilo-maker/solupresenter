@@ -3,7 +3,7 @@ import { Container, Row, Col, Card, Button, Form, Modal, Badge, Alert, Spinner }
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { remoteScreenAPI, themeAPI } from '../services/api';
+import { remoteScreenAPI, themeAPI, stageMonitorThemeAPI } from '../services/api';
 
 const MAX_SCREENS = 5;
 
@@ -38,10 +38,13 @@ function RemoteScreens() {
 
   // Themes for custom display type
   const [themes, setThemes] = useState([]);
+  // Stage monitor themes
+  const [stageThemes, setStageThemes] = useState([]);
 
   useEffect(() => {
     loadScreens();
     loadThemes();
+    loadStageThemes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -51,6 +54,15 @@ function RemoteScreens() {
       setThemes(response.data.themes || []);
     } catch (err) {
       console.error('Error loading themes:', err);
+    }
+  };
+
+  const loadStageThemes = async () => {
+    try {
+      const response = await stageMonitorThemeAPI.getAll();
+      setStageThemes(response.data.themes || []);
+    } catch (err) {
+      console.error('Error loading stage monitor themes:', err);
     }
   };
 
@@ -306,7 +318,11 @@ function RemoteScreens() {
                   onChange={(e) => setNewScreen({
                     ...newScreen,
                     displayType: e.target.value,
-                    config: e.target.value === 'custom' ? { themeId: themes[0]?.id || '' } : {}
+                    config: e.target.value === 'custom'
+                      ? { themeId: themes[0]?.id || '' }
+                      : e.target.value === 'stage'
+                        ? { stageThemeId: '' }
+                        : {}
                   })}
                   label={
                     <div>
@@ -320,6 +336,29 @@ function RemoteScreens() {
                 />
               ))}
             </Form.Group>
+
+            {newScreen.displayType === 'stage' && (
+              <Form.Group className="mt-3">
+                <Form.Label>{t('remoteScreens.selectStageTheme', 'Stage Monitor Theme')}</Form.Label>
+                <Form.Select
+                  value={newScreen.config?.stageThemeId || ''}
+                  onChange={(e) => setNewScreen({
+                    ...newScreen,
+                    config: { ...newScreen.config, stageThemeId: e.target.value }
+                  })}
+                >
+                  <option value="">{t('remoteScreens.useDefaultTheme', 'Use default theme')}</option>
+                  {stageThemes.map(theme => (
+                    <option key={theme.id} value={theme.id}>
+                      {theme.name} {theme.isBuiltIn ? `(${t('themes.builtIn', 'Built-in')})` : ''}
+                    </option>
+                  ))}
+                </Form.Select>
+                <Form.Text className="text-muted">
+                  {t('remoteScreens.stageThemeNote', 'Leave empty to use your default stage monitor theme, or select a specific theme for this screen.')}
+                </Form.Text>
+              </Form.Group>
+            )}
 
             {newScreen.displayType === 'custom' && (
               <Form.Group className="mt-3">
@@ -391,7 +430,9 @@ function RemoteScreens() {
                         displayType: e.target.value,
                         config: e.target.value === 'custom'
                           ? { themeId: editingScreen.config?.themeId || themes[0]?.id || '' }
-                          : {}
+                          : e.target.value === 'stage'
+                            ? { stageThemeId: editingScreen.config?.stageThemeId || '' }
+                            : {}
                       })}
                       label={
                         <div>
@@ -405,6 +446,29 @@ function RemoteScreens() {
                     />
                   ))}
                 </Form.Group>
+
+                {editingScreen.displayType === 'stage' && (
+                  <Form.Group className="mt-3">
+                    <Form.Label>{t('remoteScreens.selectStageTheme', 'Stage Monitor Theme')}</Form.Label>
+                    <Form.Select
+                      value={editingScreen.config?.stageThemeId || ''}
+                      onChange={(e) => setEditingScreen({
+                        ...editingScreen,
+                        config: { ...editingScreen.config, stageThemeId: e.target.value }
+                      })}
+                    >
+                      <option value="">{t('remoteScreens.useDefaultTheme', 'Use default theme')}</option>
+                      {stageThemes.map(theme => (
+                        <option key={theme.id} value={theme.id}>
+                          {theme.name} {theme.isBuiltIn ? `(${t('themes.builtIn', 'Built-in')})` : ''}
+                        </option>
+                      ))}
+                    </Form.Select>
+                    <Form.Text className="text-muted">
+                      {t('remoteScreens.stageThemeNote', 'Leave empty to use your default stage monitor theme, or select a specific theme for this screen.')}
+                    </Form.Text>
+                  </Form.Group>
+                )}
 
                 {editingScreen.displayType === 'custom' && (
                   <Form.Group className="mt-3">

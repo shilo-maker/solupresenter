@@ -3326,6 +3326,11 @@ function PresenterMode() {
       setCurrentSong(null);
       setCurrentSlideIndex(null); // Don't highlight until user clicks
       // Don't auto-transmit - wait for user to click on the image in preview
+    } else if (item.type === 'presentation') {
+      setCurrentSong(null);
+      setSelectedPresentation(item.data);
+      setSelectedPresentationSlideIndex(0);
+      setActiveResourcePanel('presentations');
     } else if (item.type === 'blank') {
       setCurrentSong(null);
       setIsBlankActive(true);
@@ -5749,6 +5754,7 @@ function PresenterMode() {
                       (item.type === 'song' && currentItem.type === 'song' && item.data?.id === currentItem.data?.id) ||
                       (item.type === 'bible' && currentItem.type === 'bible' && item.data?.id === currentItem.data?.id) ||
                       (item.type === 'image' && currentItem.type === 'image' && item.data?.id === currentItem.data?.id) ||
+                      (item.type === 'presentation' && currentItem.type === 'presentation' && item.data?.id === currentItem.data?.id) ||
                       (item.type === 'blank' && currentItem.type === 'blank') ||
                       (item.type === 'tool' && selectedSetlistIndex === index)
                     );
@@ -5795,6 +5801,19 @@ function PresenterMode() {
                           ),
                           bgColor: 'transparent',
                           borderLeft: '4px solid #4facfe'
+                        };
+                      } else if (item.type === 'presentation') {
+                        return {
+                          title: (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="white">
+                                <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2zm2 .5a.5.5 0 0 0-.5.5v2a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V3a.5.5 0 0 0-.5-.5H4z"/>
+                              </svg>
+                              {item.data?.title || t('presenter.presentation', 'Presentation')}
+                            </span>
+                          ),
+                          bgColor: 'transparent',
+                          borderLeft: '4px solid #10b981'
                         };
                       } else if (item.type === 'blank') {
                         return {

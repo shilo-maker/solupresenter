@@ -1362,10 +1362,10 @@ function ViewerPage({ remotePin, remoteConfig }) {
                   height: `${tb.height}%`,
                   display: 'flex',
                   flexDirection: 'column',
-                  alignItems: tb.verticalAlign === 'top' ? 'flex-start'
-                    : tb.verticalAlign === 'bottom' ? 'flex-end' : 'center',
-                  justifyContent: tb.textAlign === 'left' ? 'flex-start'
+                  alignItems: tb.textAlign === 'left' ? 'flex-start'
                     : tb.textAlign === 'right' ? 'flex-end' : 'center',
+                  justifyContent: tb.verticalAlign === 'top' ? 'flex-start'
+                    : tb.verticalAlign === 'bottom' ? 'flex-end' : 'center',
                   padding: '8px',
                   boxSizing: 'border-box',
                   backgroundColor: tb.backgroundColor || 'transparent',

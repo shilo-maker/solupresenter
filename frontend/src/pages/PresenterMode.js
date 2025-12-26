@@ -3402,6 +3402,16 @@ function PresenterMode() {
           ? combinedIndices.map(i => song.slides[i]).filter(Boolean)
           : null
       };
+
+      // Include next slide data for stage monitors
+      const nextIndex = slideIndex + 1;
+      if (song.slides[nextIndex]) {
+        payload.nextSlideData = {
+          slide: song.slides[nextIndex],
+          title: song.title,
+          originalLanguage: song.originalLanguage || 'en'
+        };
+      }
     }
 
     // Include announcement overlay if one is active (announcements persist across slide changes)

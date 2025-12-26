@@ -38,6 +38,7 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const ViewerPage = lazy(() => import('./pages/ViewerPage'));
 const OBSOverlay = lazy(() => import('./pages/OBSOverlay'));
+const StageMonitor = lazy(() => import('./pages/StageMonitor'));
 const SongList = lazy(() => import('./pages/SongList'));
 const SongCreate = lazy(() => import('./pages/SongCreate'));
 const SongView = lazy(() => import('./pages/SongView'));
@@ -66,6 +67,7 @@ function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/viewer" element={<ViewerPage />} />
             <Route path="/obs-overlay" element={<OBSOverlay />} />
+            <Route path="/stage-monitor" element={<StageMonitor />} />
 
           {/* Private routes */}
           <Route

@@ -243,13 +243,13 @@ io.on('connection', (socket) => {
 
         room = await Room.findOne({
           where: { id: publicRoom.activeRoomId, isActive: true },
-          attributes: ['id', 'pin', 'currentSlide', 'currentImageUrl', 'currentBibleData', 'backgroundImage', 'viewerCount']
+          attributes: ['id', 'pin', 'currentSlide', 'currentImageUrl', 'currentBibleData', 'backgroundImage', 'viewerCount', 'activeThemeId']
         });
       } else {
         // Otherwise, look up by PIN
         room = await Room.findOne({
           where: { pin: pin.toUpperCase(), isActive: true },
-          attributes: ['id', 'pin', 'currentSlide', 'currentImageUrl', 'currentBibleData', 'backgroundImage', 'viewerCount']
+          attributes: ['id', 'pin', 'currentSlide', 'currentImageUrl', 'currentBibleData', 'backgroundImage', 'viewerCount', 'activeThemeId']
         });
       }
 
@@ -312,6 +312,18 @@ io.on('connection', (socket) => {
         }
       }
 
+      // Load theme from memory cache or database
+      let theme = roomActiveTheme.get(room.pin) || null;
+      if (!theme && room.activeThemeId) {
+        // Theme not in cache but room has activeThemeId - load from database
+        const dbTheme = await ViewerTheme.findByPk(room.activeThemeId);
+        if (dbTheme) {
+          theme = dbTheme.toJSON();
+          // Cache for future viewers
+          roomActiveTheme.set(room.pin, theme);
+        }
+      }
+
       // Send current slide to viewer
       const viewerJoinedData = {
         roomPin: room.pin,
@@ -321,7 +333,7 @@ io.on('connection', (socket) => {
         isBlank: room.currentSlide?.isBlank || false,
         backgroundImage: room.backgroundImage || '',
         toolsData: roomToolsData.get(room.pin) || null,
-        theme: roomActiveTheme.get(room.pin) || null
+        theme: theme
       };
 
       console.log(`📤 Sending to viewer:`, JSON.stringify(viewerJoinedData, null, 2));
@@ -340,7 +352,7 @@ io.on('connection', (socket) => {
   // Operator updates slide
   socket.on('operator:updateSlide', async (data) => {
     try {
-      const { roomId, roomPin, backgroundImage: clientBackgroundImage, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData, slideData, toolsData } = data;
+      const { roomId, roomPin, backgroundImage: clientBackgroundImage, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData, slideData, nextSlideData, toolsData } = data;
 
       // Use PIN from client if available (fast path), otherwise query DB (fallback)
       let pin = roomPin;
@@ -422,6 +434,7 @@ io.on('connection', (socket) => {
       io.to(`room:${pin}`).emit('slide:update', {
         currentSlide: currentSlideData,
         slideData: broadcastSlideData,
+        nextSlideData: nextSlideData || null,  // For stage monitors
         isBlank,
         imageUrl: imageUrl || null,
         backgroundImage: backgroundImage || '',

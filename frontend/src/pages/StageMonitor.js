@@ -374,7 +374,7 @@ function StageMonitor({ remotePin, remoteConfig }) {
             alignItems: 'center',
             padding: '0 2%',
             boxSizing: 'border-box',
-            borderBottom: `1px solid ${colors.border}`,
+            borderBottom: `${headerLayout.borderWidth || 1}px solid ${headerLayout.borderColor || colors.border}`,
             backgroundColor: headerLayout.backgroundColor || 'transparent'
           }}>
             {/* Song Title */}
@@ -413,11 +413,11 @@ function StageMonitor({ remotePin, remoteConfig }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: currentSlideLayout.padding || '2%',
+          padding: typeof currentSlideLayout.padding === 'number' ? `${currentSlideLayout.padding}%` : (currentSlideLayout.padding || '2%'),
           boxSizing: 'border-box',
           backgroundColor: currentSlideLayout.backgroundColor || 'rgba(255,255,255,0.03)',
-          borderRadius: currentSlideLayout.borderRadius || '12px',
-          border: `1px solid ${colors.border}`,
+          borderRadius: typeof currentSlideLayout.borderRadius === 'number' ? `${currentSlideLayout.borderRadius}px` : (currentSlideLayout.borderRadius || '12px'),
+          border: `${currentSlideLayout.borderWidth || 1}px solid ${currentSlideLayout.borderColor || colors.border}`,
           overflow: 'hidden'
         }}>
           {isBlank ? (
@@ -461,10 +461,10 @@ function StageMonitor({ remotePin, remoteConfig }) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '1rem',
-              backgroundColor: colors.nextBg,
-              borderRadius: nextSlideLayout.borderRadius || '8px',
-              border: `1px solid ${colors.border}`,
+              padding: typeof nextSlideLayout.padding === 'number' ? `${nextSlideLayout.padding}%` : (nextSlideLayout.padding || '1rem'),
+              backgroundColor: nextSlideLayout.backgroundColor || colors.nextBg,
+              borderRadius: typeof nextSlideLayout.borderRadius === 'number' ? `${nextSlideLayout.borderRadius}px` : (nextSlideLayout.borderRadius || '8px'),
+              border: `${nextSlideLayout.borderWidth || 1}px solid ${nextSlideLayout.borderColor || colors.border}`,
               opacity: nextSlideLayout.opacity ?? 0.8,
               overflow: 'hidden',
               position: 'relative'

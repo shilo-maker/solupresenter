@@ -425,7 +425,16 @@
     "setlist": "Setlist",
     "bible": "Bible",
     "media": "Media",
-    "addToSetlist": "Add to Setlist"
+    "addToSetlist": "Add to Setlist",
+    "youtube": "YouTube",
+    "youtubeVideo": "YouTube Video",
+    "enterYoutubeUrl": "Enter YouTube URL...",
+    "noYoutubeVideos": "No YouTube videos added",
+    "invalidYoutubeUrl": "Invalid YouTube URL",
+    "present": "Present",
+    "stop": "Stop",
+    "cloudMedia": "Cloud",
+    "localMedia": "Local Media"
   },
   "viewer": {
     "title": "Viewer",

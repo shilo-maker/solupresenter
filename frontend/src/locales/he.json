@@ -425,7 +425,16 @@
     "setlist": "רשימת שירים",
     "bible": "תנ\"ך",
     "media": "מדיה",
-    "addToSetlist": "הוסף לרשימה"
+    "addToSetlist": "הוסף לרשימה",
+    "youtube": "יוטיוב",
+    "youtubeVideo": "סרטון יוטיוב",
+    "enterYoutubeUrl": "הזן כתובת יוטיוב...",
+    "noYoutubeVideos": "לא נוספו סרטונים",
+    "invalidYoutubeUrl": "כתובת יוטיוב לא תקינה",
+    "present": "הצג",
+    "stop": "עצור",
+    "cloudMedia": "ענן",
+    "localMedia": "מדיה מקומית"
   },
   "viewer": {
     "title": "צופה",

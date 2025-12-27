@@ -277,6 +277,55 @@ class SocketService {
     }
   }
 
+
+  // YouTube methods
+  operatorYoutubeLoad(roomId, videoId, title) {
+    if (!this.socket) {
+      console.error('❌ No socket available to load YouTube video');
+      return;
+    }
+
+    console.log('▶️ Loading YouTube video:', { roomId, videoId, title });
+
+    if (this.socket.connected) {
+      this.socket.emit('operator:youtubeLoad', { roomId, videoId, title });
+    } else {
+      this.socket.once('connect', () => {
+        this.socket.emit('operator:youtubeLoad', { roomId, videoId, title });
+      });
+    }
+  }
+
+  operatorYoutubePlay(roomId, currentTime) {
+    if (this.socket?.connected) {
+      this.socket.emit('operator:youtubePlay', { roomId, currentTime });
+    }
+  }
+
+  operatorYoutubePause(roomId, currentTime) {
+    if (this.socket?.connected) {
+      this.socket.emit('operator:youtubePause', { roomId, currentTime });
+    }
+  }
+
+  operatorYoutubeSeek(roomId, currentTime) {
+    if (this.socket?.connected) {
+      this.socket.emit('operator:youtubeSeek', { roomId, currentTime });
+    }
+  }
+
+  operatorYoutubeStop(roomId) {
+    if (this.socket?.connected) {
+      this.socket.emit('operator:youtubeStop', { roomId });
+    }
+  }
+
+  operatorYoutubeSync(roomId, currentTime, isPlaying) {
+    if (this.socket?.connected) {
+      this.socket.emit('operator:youtubeSync', { roomId, currentTime, isPlaying });
+    }
+  }
+
   // Viewer methods
   viewerJoinRoom(pin) {
     if (!this.socket) {
@@ -364,6 +413,43 @@ class SocketService {
   onLocalMediaStatus(callback) {
     if (this.socket) {
       this.socket.on('localMedia:status', callback);
+    }
+  }
+
+
+  onYoutubeLoad(callback) {
+    if (this.socket) {
+      this.socket.on('youtube:load', callback);
+    }
+  }
+
+  onYoutubePlay(callback) {
+    if (this.socket) {
+      this.socket.on('youtube:play', callback);
+    }
+  }
+
+  onYoutubePause(callback) {
+    if (this.socket) {
+      this.socket.on('youtube:pause', callback);
+    }
+  }
+
+  onYoutubeSeek(callback) {
+    if (this.socket) {
+      this.socket.on('youtube:seek', callback);
+    }
+  }
+
+  onYoutubeStop(callback) {
+    if (this.socket) {
+      this.socket.on('youtube:stop', callback);
+    }
+  }
+
+  onYoutubeSync(callback) {
+    if (this.socket) {
+      this.socket.on('youtube:sync', callback);
     }
   }
 

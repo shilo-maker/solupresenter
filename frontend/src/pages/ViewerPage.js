@@ -66,7 +66,17 @@ function ViewerPage({ remotePin, remoteConfig }) {
   const stopwatchIntervalRef = useRef(null);
   // Announcement animation state
   const [announcementBanner, setAnnouncementBanner] = useState({ visible: false, text: '', animating: false });
-  const [localMediaOverlay, setLocalMediaOverlay] = useState(false); // For showing overlay when operator displays local media
+  const [localMediaOverlay, setLocalMediaOverlay] = useState(false);
+
+  // YouTube state
+  const [youtubeVideoId, setYoutubeVideoId] = useState(null);
+  const [youtubeTitle, setYoutubeTitle] = useState('');
+  const [youtubePlaying, setYoutubePlaying] = useState(false);
+  const [youtubeCurrentTime, setYoutubeCurrentTime] = useState(0);
+  const youtubePlayerRef = useRef(null);
+  const youtubeReadyRef = useRef(false);
+  const [youtubeAPIReady, setYoutubeAPIReady] = useState(false);
+  const youtubePlayingRef = useRef(false); // Ref to avoid stale closure in sync handler // For showing overlay when operator displays local media
 
   // Theme state - use initialTheme from remoteConfig if provided (for custom remote screens)
   const [viewerTheme, setViewerTheme] = useState(remoteConfig?.initialTheme || null);
@@ -85,6 +95,61 @@ function ViewerPage({ remotePin, remoteConfig }) {
   const [showOriginal, setShowOriginal] = useState(true);
   const [showTransliteration, setShowTransliteration] = useState(true);
   const [showTranslation, setShowTranslation] = useState(true);
+
+  // Load YouTube IFrame API
+  useEffect(() => {
+    if (window.YT && window.YT.Player) {
+      setYoutubeAPIReady(true);
+      return;
+    }
+
+    // Define the callback that YouTube API calls when ready
+    window.onYouTubeIframeAPIReady = () => {
+      console.log('YouTube IFrame API ready');
+      setYoutubeAPIReady(true);
+    };
+
+    // Load the script if not already present
+    if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    }
+  }, []);
+
+  // Initialize YouTube player when video loads and API is ready
+  useEffect(() => {
+    if (youtubeVideoId && youtubeAPIReady) {
+      youtubeReadyRef.current = false;
+      youtubePlayerRef.current = new window.YT.Player('youtube-player', {
+        videoId: youtubeVideoId,
+        playerVars: {
+          autoplay: 0,
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
+          modestbranding: 1,
+          rel: 0,
+          showinfo: 0,
+          iv_load_policy: 3
+        },
+        events: {
+          onReady: () => {
+            console.log('YouTube player ready');
+            youtubeReadyRef.current = true;
+          }
+        }
+      });
+    }
+
+    return () => {
+      if (youtubePlayerRef.current && youtubePlayerRef.current.destroy) {
+        youtubePlayerRef.current.destroy();
+        youtubePlayerRef.current = null;
+      }
+    };
+  }, [youtubeVideoId, youtubeAPIReady]);
 
   // Refs for click outside detection
   const controlsRef = useRef(null);
@@ -497,6 +562,78 @@ function ViewerPage({ remotePin, remoteConfig }) {
     socketService.onLocalMediaStatus((data) => {
       console.log('📺 Local media status received:', data.visible);
       setLocalMediaOverlay(data.visible);
+    });
+
+    // YouTube socket listeners
+    socketService.onYoutubeLoad((data) => {
+      console.log('▶️ YouTube load:', data.videoId);
+      setYoutubeVideoId(data.videoId);
+      setYoutubeTitle(data.title);
+      setYoutubePlaying(false);
+      setYoutubeCurrentTime(0);
+      // Clear other content
+      setCurrentSlide(null);
+      setImageUrl(null);
+      setPresentationData(null);
+      setToolsData(null);
+    });
+
+    socketService.onYoutubePlay((data) => {
+      console.log('▶️ YouTube play at', data.currentTime);
+      setYoutubePlaying(true);
+      youtubePlayingRef.current = true;
+      setYoutubeCurrentTime(data.currentTime);
+      if (youtubePlayerRef.current && youtubeReadyRef.current) {
+        youtubePlayerRef.current.seekTo(data.currentTime, true);
+        youtubePlayerRef.current.playVideo();
+      }
+    });
+
+    socketService.onYoutubePause((data) => {
+      console.log('⏸️ YouTube pause at', data.currentTime);
+      setYoutubePlaying(false);
+      youtubePlayingRef.current = false;
+      setYoutubeCurrentTime(data.currentTime);
+      if (youtubePlayerRef.current && youtubeReadyRef.current) {
+        youtubePlayerRef.current.pauseVideo();
+      }
+    });
+
+    socketService.onYoutubeSeek((data) => {
+      console.log('⏩ YouTube seek to', data.currentTime);
+      setYoutubeCurrentTime(data.currentTime);
+      if (youtubePlayerRef.current && youtubeReadyRef.current) {
+        youtubePlayerRef.current.seekTo(data.currentTime, true);
+      }
+    });
+
+    socketService.onYoutubeStop(() => {
+      console.log('🛑 YouTube stop');
+      setYoutubeVideoId(null);
+      setYoutubeTitle('');
+      setYoutubePlaying(false);
+      youtubePlayingRef.current = false;
+      setYoutubeCurrentTime(0);
+    });
+
+    socketService.onYoutubeSync((data) => {
+      if (youtubePlayerRef.current && youtubeReadyRef.current) {
+        const currentPlayerTime = youtubePlayerRef.current.getCurrentTime();
+        // Only sync if more than 2 seconds off
+        if (Math.abs(currentPlayerTime - data.currentTime) > 2) {
+          youtubePlayerRef.current.seekTo(data.currentTime, true);
+        }
+        // Use ref instead of state to avoid stale closure
+        if (data.isPlaying && !youtubePlayingRef.current) {
+          youtubePlayerRef.current.playVideo();
+          setYoutubePlaying(true);
+          youtubePlayingRef.current = true;
+        } else if (!data.isPlaying && youtubePlayingRef.current) {
+          youtubePlayerRef.current.pauseVideo();
+          setYoutubePlaying(false);
+          youtubePlayingRef.current = false;
+        }
+      }
     });
 
     // Check if PIN or room name is in URL query params and auto-join
@@ -1331,6 +1468,22 @@ function ViewerPage({ remotePin, remoteConfig }) {
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat'
           }} />
+        </div>
+      );
+    }
+
+    // Render YouTube video
+    if (youtubeVideoId) {
+      return (
+        <div style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#000'
+        }}>
+          <div id="youtube-player" style={{ width: '100%', height: '100%' }} />
         </div>
       );
     }

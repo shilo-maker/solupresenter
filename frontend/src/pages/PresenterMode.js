@@ -1785,6 +1785,7 @@ function PresenterMode() {
     setCurrentItem({ type: 'bible', data: passage });
     setCurrentSlideIndex(0);
     setIsBlankActive(false);
+    setSelectedPresentation(null); // Clear presentation when selecting Bible
     updateSlide(passage, 0, displayMode, false);
   };
 
@@ -2164,6 +2165,7 @@ function PresenterMode() {
       setCurrentSong(song);
       setCurrentItem({ type: 'song', data: song });
       setCurrentSlideIndex(0);
+      setSelectedPresentation(null); // Clear presentation when loading a song
       console.log('✅ Song loaded:', song.title);
     } catch (error) {
       console.error('Error loading song:', error);
@@ -3322,6 +3324,7 @@ function PresenterMode() {
     if (item.type === 'song' || item.type === 'bible') {
       setCurrentSong(item.data);
       setCurrentSlideIndex(null); // Don't highlight any slide until user clicks
+      setSelectedPresentation(null); // Clear presentation when selecting a song
       // Don't auto-transmit - wait for user to click on a slide
       // updateSlide will be called when user clicks selectSlide()
     } else if (item.type === 'image') {
@@ -3615,6 +3618,7 @@ function PresenterMode() {
       setCurrentItem({ type: 'song', data: quickSong });
       setCurrentSlideIndex(indexToBroadcast);
       setIsBlankActive(false);
+      setSelectedPresentation(null); // Clear presentation when broadcasting quick slide
       updateSlide(quickSong, indexToBroadcast, displayMode, false);
       setBroadcastSlideIndex(indexToBroadcast);
     }
@@ -3671,6 +3675,7 @@ function PresenterMode() {
         setCurrentSong(quickSong);
         setCurrentItem({ type: 'song', data: quickSong });
         setCurrentSlideIndex(-1); // -1 means no slide selected
+        setSelectedPresentation(null); // Clear presentation when loading quick slide
       }
     }
   };
@@ -5080,6 +5085,8 @@ function PresenterMode() {
                         onClick={() => {
                           setSelectedPresentation(presentation);
                           setSelectedPresentationSlideIndex(0);
+                          setCurrentItem(null); // Clear song/bible item when selecting a presentation
+                          setCurrentSong(null); // Clear song slides preview
                         }}
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>

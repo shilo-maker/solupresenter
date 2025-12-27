@@ -252,7 +252,7 @@ const PresentationEditor = ({
             }}
           />
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <Button
             variant="light"
             size="sm"
@@ -262,6 +262,14 @@ const PresentationEditor = ({
             + Add Text
           </Button>
           <Button
+            variant="outline-secondary"
+            size="sm"
+            onClick={handleClose}
+            style={{ color: '#ccc', borderColor: 'rgba(255,255,255,0.3)' }}
+          >
+            Cancel
+          </Button>
+          <Button
             variant="primary"
             size="sm"
             onClick={handleSave}
@@ -269,6 +277,15 @@ const PresentationEditor = ({
             style={{ color: '#fff' }}
           >
             {isSaving ? 'Saving...' : 'Save'}
+          </Button>
+          <Button
+            variant="link"
+            size="sm"
+            onClick={handleClose}
+            style={{ color: '#999', fontSize: '20px', padding: '0 8px', textDecoration: 'none' }}
+            title="Close"
+          >
+            ×
           </Button>
         </div>
       </Modal.Header>

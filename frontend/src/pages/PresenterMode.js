@@ -4250,58 +4250,78 @@ function PresenterMode() {
               flexWrap: 'wrap'
             }}
           >
-            {/* Title with collapse toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '0 0 auto', flexWrap: 'wrap' }}>
+            {/* Resource panel tabs with icons */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: '0 0 auto' }}>
               <Button
                 variant={activeResourcePanel === 'songs' ? 'primary' : 'outline-light'}
                 size="sm"
                 onClick={() => switchResourcePanel('songs')}
-                style={{ fontWeight: '500' }}
+                title={t('presenter.songs')}
+                style={{ padding: '6px 10px' }}
               >
-                {t('presenter.songs')}
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M9 13c0 1.105-1.12 2-2.5 2S4 14.105 4 13s1.12-2 2.5-2 2.5.895 2.5 2z"/>
+                  <path fillRule="evenodd" d="M9 3v10H8V3h1z"/>
+                  <path d="M8 2.82a1 1 0 0 1 .804-.98l3-.6A1 1 0 0 1 13 2.22V4L8 5V2.82z"/>
+                </svg>
               </Button>
               <Button
                 variant={activeResourcePanel === 'images' ? 'primary' : 'outline-light'}
                 size="sm"
                 onClick={() => switchResourcePanel('images')}
-                style={{ fontWeight: '500' }}
+                title={t('presenter.images')}
+                style={{ padding: '6px 10px' }}
               >
-                {t('presenter.images')}
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                  <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
+                </svg>
               </Button>
               <Button
                 variant={activeResourcePanel === 'bible' ? 'primary' : 'outline-light'}
                 size="sm"
                 onClick={() => switchResourcePanel('bible')}
-                style={{ fontWeight: '500' }}
+                title={t('presenter.bible')}
+                style={{ padding: '6px 10px' }}
               >
-                {t('presenter.bible')}
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 0 0 0 2.5v11a.5.5 0 0 0 .707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 0 0 .78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5.5 0 0 0 16 13.5v-11a.5.5 0 0 0-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.809 8.985.936 8 1.783z"/>
+                </svg>
               </Button>
               <Button
                 variant={activeResourcePanel === 'tools' ? 'primary' : 'outline-light'}
                 size="sm"
                 onClick={() => switchResourcePanel('tools')}
-                style={{ fontWeight: '500' }}
+                title={t('presenter.tools')}
+                style={{ padding: '6px 10px' }}
               >
-                {t('presenter.tools')}
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M1 0 0 1l2.2 3.081a1 1 0 0 0 .815.419h.07a1 1 0 0 1 .708.293l2.675 2.675-2.617 2.654A3.003 3.003 0 0 0 0 13a3 3 0 1 0 5.878-.851l2.654-2.617.968.968-.305.914a1 1 0 0 0 .242 1.023l3.27 3.27a.997.997 0 0 0 1.414 0l1.586-1.586a.997.997 0 0 0 0-1.414l-3.27-3.27a1 1 0 0 0-1.023-.242L10.5 9.5l-.96-.96 2.68-2.643A3.005 3.005 0 0 0 16 3q0-.405-.102-.777l-2.14 2.141L12 4l-.364-1.757L13.777.102a3 3 0 0 0-3.675 3.68L7.462 6.46 4.793 3.793a1 1 0 0 1-.293-.707v-.071a1 1 0 0 0-.419-.814z"/>
+                  <path d="M9.646 10.646a.5.5 0 0 1 .708 0l2.914 2.915a.5.5 0 0 1-.707.707l-2.915-2.914a.5.5 0 0 1 0-.708M3 11l.471.242.529.026.287.445.445.287.026.529L5 13l-.242.471-.026.529-.445.287-.287.445-.529.026L3 15l-.471-.242L2 14.732l-.287-.445L1.268 14l-.026-.529L1 13l.242-.471.026-.529.445-.287.287-.445.529-.026z"/>
+                </svg>
               </Button>
               <Button
                 variant={activeResourcePanel === 'presentations' ? 'primary' : 'outline-light'}
                 size="sm"
                 onClick={() => switchResourcePanel('presentations')}
-                style={{ fontWeight: '500' }}
+                title={t('presenter.presentations', 'Presentations')}
+                style={{ padding: '6px 10px' }}
               >
-                {t('presenter.presentations', 'Presentations')}
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 0a.5.5 0 0 1 .473.337L9.046 2H14a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-1.85l1.323 3.837a.5.5 0 1 1-.946.326L11.092 11H8.5v3a.5.5 0 0 1-1 0v-3H4.908l-1.435 4.163a.5.5 0 1 1-.946-.326L3.85 11H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h4.954L7.527.337A.5.5 0 0 1 8 0M2 3v7h12V3z"/>
+                </svg>
               </Button>
-              {/* Media tab hidden - feature in beta
               <Button
                 variant={activeResourcePanel === 'media' ? 'primary' : 'outline-light'}
                 size="sm"
                 onClick={() => switchResourcePanel('media')}
-                style={{ fontWeight: '500' }}
+                title={t('presenter.localMedia')}
+                style={{ padding: '6px 10px' }}
               >
-                {t('presenter.localMedia')}
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V1zm4 0v6h8V1H4zm8 8H4v6h8V9zM1 1v2h2V1H1zm2 3H1v2h2V4zM1 7v2h2V7H1zm2 3H1v2h2v-2zm-2 3v2h2v-2H1zM15 1h-2v2h2V1zm-2 3v2h2V4h-2zm2 3h-2v2h2V7zm-2 3v2h2v-2h-2zm2 3h-2v2h2v-2z"/>
+                </svg>
               </Button>
-              */}
             </div>
 
             {/* Search bar - Glassmorphic style (hidden when Tools/Media tabs are active) */}
@@ -5825,7 +5845,7 @@ function PresenterMode() {
                           title: (
                             <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <svg width="14" height="14" viewBox="0 0 16 16" fill="white">
-                                <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2zm2 .5a.5.5 0 0 0-.5.5v2a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V3a.5.5 0 0 0-.5-.5H4z"/>
+                                <path d="M8 0a.5.5 0 0 1 .473.337L9.046 2H14a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-1.85l1.323 3.837a.5.5 0 1 1-.946.326L11.092 11H8.5v3a.5.5 0 0 1-1 0v-3H4.908l-1.435 4.163a.5.5 0 1 1-.946-.326L3.85 11H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h4.954L7.527.337A.5.5 0 0 1 8 0M2 3v7h12V3z"/>
                               </svg>
                               {item.data?.title || t('presenter.presentation', 'Presentation')}
                             </span>

@@ -779,7 +779,12 @@
     "original": "Original",
     "bilingual": "Bilingual",
     "verse": "Verse",
-    "slide": "Slide"
+    "slide": "Slide",
+    "presentations": "Presentations",
+    "searchPresentations": "Search presentations...",
+    "noPresentations": "No presentations yet. Click \"New\" to create one.",
+    "createNewPresentation": "Create New Presentation",
+    "noPresentationsMatch": "No presentations match your search"
   },
   "remoteScreens": {
     "title": "Remote Screens",

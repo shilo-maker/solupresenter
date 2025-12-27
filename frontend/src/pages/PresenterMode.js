@@ -215,6 +215,10 @@ function PresenterMode() {
   const [youtubePlaying, setYoutubePlaying] = useState(false);
   const [youtubeCurrentTime, setYoutubeCurrentTime] = useState(0);
   const [youtubeDuration, setYoutubeDuration] = useState(0);
+  const [youtubeAPIReady, setYoutubeAPIReady] = useState(false);
+  const [youtubePlayerReady, setYoutubePlayerReady] = useState(false);
+  const [youtubeVolume, setYoutubeVolume] = useState(100);
+  const [youtubeMuted, setYoutubeMuted] = useState(false);
   const youtubePlayerRef = useRef(null);
   const youtubeSyncIntervalRef = useRef(null);
   const youtubeTimeIntervalRef = useRef(null);
@@ -1676,6 +1680,15 @@ function PresenterMode() {
         socketService.operatorUpdateLocalMediaStatus(room.id, false);
       }
     }
+    // Stop YouTube video if it's on display
+    if (youtubeOnDisplay) {
+      if (room) {
+        socketService.operatorYoutubeStop(room.id);
+      }
+      setYoutubeOnDisplay(false);
+      setYoutubePlaying(false);
+      setYoutubeCurrentTime(0);
+    }
   };
 
   // Switch resource panel and apply search
@@ -2414,27 +2427,81 @@ function PresenterMode() {
     if (!currentItem || currentItem.type !== 'youtube' || !room) return;
     socketService.operatorYoutubeLoad(room.id, currentItem.youtubeData.videoId, currentItem.youtubeData.title);
     setYoutubeOnDisplay(true);
-    setYoutubePlaying(false);
+    setYoutubePlaying(true); // Video autoplays on viewer, so show Pause button immediately
     setYoutubeCurrentTime(0);
   }, [currentItem, room]);
 
   const handleYoutubePlay = useCallback(() => {
     if (!room) return;
-    socketService.operatorYoutubePlay(room.id, youtubeCurrentTime);
+    // Get current time from operator's player for accurate sync
+    let currentTime = youtubeCurrentTime;
+    if (youtubePlayerRef.current && youtubePlayerRef.current.getCurrentTime) {
+      currentTime = youtubePlayerRef.current.getCurrentTime();
+      setYoutubeCurrentTime(currentTime);
+    }
+    // Sync both players to same time, then play
+    socketService.operatorYoutubeSeek(room.id, currentTime);
+    socketService.operatorYoutubePlay(room.id, currentTime);
     setYoutubePlaying(true);
+    // Also play local preview
+    if (youtubePlayerRef.current && youtubePlayerRef.current.playVideo) {
+      youtubePlayerRef.current.playVideo();
+    }
   }, [room, youtubeCurrentTime]);
 
   const handleYoutubePause = useCallback(() => {
     if (!room) return;
-    socketService.operatorYoutubePause(room.id, youtubeCurrentTime);
+    // Get current time from operator's player for accurate sync
+    let currentTime = youtubeCurrentTime;
+    if (youtubePlayerRef.current && youtubePlayerRef.current.getCurrentTime) {
+      currentTime = youtubePlayerRef.current.getCurrentTime();
+      setYoutubeCurrentTime(currentTime);
+    }
+    // Sync both players to same time, then pause
+    socketService.operatorYoutubeSeek(room.id, currentTime);
+    socketService.operatorYoutubePause(room.id, currentTime);
     setYoutubePlaying(false);
+    // Also pause local preview
+    if (youtubePlayerRef.current && youtubePlayerRef.current.pauseVideo) {
+      youtubePlayerRef.current.pauseVideo();
+    }
   }, [room, youtubeCurrentTime]);
 
   const handleYoutubeSeek = useCallback((time) => {
     if (!room) return;
     socketService.operatorYoutubeSeek(room.id, time);
     setYoutubeCurrentTime(time);
+    // Also seek local preview
+    if (youtubePlayerRef.current && youtubePlayerRef.current.seekTo) {
+      youtubePlayerRef.current.seekTo(time, true);
+    }
   }, [room]);
+
+  // Operator-only volume control (doesn't affect viewer)
+  const handleYoutubeVolume = useCallback((volume) => {
+    setYoutubeVolume(volume);
+    if (youtubePlayerRef.current && youtubePlayerRef.current.setVolume) {
+      youtubePlayerRef.current.setVolume(volume);
+    }
+    if (volume > 0 && youtubeMuted) {
+      setYoutubeMuted(false);
+      if (youtubePlayerRef.current && youtubePlayerRef.current.unMute) {
+        youtubePlayerRef.current.unMute();
+      }
+    }
+  }, [youtubeMuted]);
+
+  const handleYoutubeMute = useCallback(() => {
+    const newMuted = !youtubeMuted;
+    setYoutubeMuted(newMuted);
+    if (youtubePlayerRef.current) {
+      if (newMuted) {
+        youtubePlayerRef.current.mute();
+      } else {
+        youtubePlayerRef.current.unMute();
+      }
+    }
+  }, [youtubeMuted]);
 
   const handleYoutubeStop = useCallback(() => {
     if (!room) return;
@@ -2443,6 +2510,128 @@ function PresenterMode() {
     setYoutubePlaying(false);
     setYoutubeCurrentTime(0);
   }, [room]);
+
+  // Load YouTube IFrame API
+  useEffect(() => {
+    if (window.YT && window.YT.Player) {
+      setYoutubeAPIReady(true);
+      return;
+    }
+
+    // Store original callback if exists
+    const originalCallback = window.onYouTubeIframeAPIReady;
+
+    window.onYouTubeIframeAPIReady = () => {
+      console.log('YouTube IFrame API ready (presenter)');
+      setYoutubeAPIReady(true);
+      if (originalCallback) originalCallback();
+    };
+
+    // Load the script if not already present
+    if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    }
+  }, []);
+
+  // Create/destroy YouTube player when video goes on/off display
+  useEffect(() => {
+    if (youtubeOnDisplay && youtubeAPIReady && currentItem?.type === 'youtube') {
+      // Small delay to ensure the DOM element exists
+      const timer = setTimeout(() => {
+        const playerElement = document.getElementById('operator-youtube-player');
+        if (!playerElement) return;
+
+        setYoutubePlayerReady(false);
+        youtubePlayerRef.current = new window.YT.Player('operator-youtube-player', {
+          videoId: currentItem.youtubeData.videoId,
+          playerVars: {
+            autoplay: 1,
+            mute: 0, // Unmuted on operator side
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            modestbranding: 1,
+            rel: 0,
+            showinfo: 0,
+            iv_load_policy: 3,
+            playsinline: 1
+          },
+          events: {
+            onReady: (event) => {
+              console.log('Operator YouTube player ready');
+              setYoutubePlayerReady(true);
+              // Get video duration
+              const duration = event.target.getDuration();
+              if (duration) {
+                setYoutubeDuration(duration);
+              }
+              // Sync will happen when viewer signals ready (see onViewerYoutubeReady listener)
+            },
+            onStateChange: (event) => {
+              // YT.PlayerState.ENDED = 0
+              if (event.data === 0) {
+                setYoutubePlaying(false);
+              }
+            }
+          }
+        });
+      }, 100);
+
+      return () => {
+        clearTimeout(timer);
+        if (youtubePlayerRef.current && youtubePlayerRef.current.destroy) {
+          try {
+            youtubePlayerRef.current.destroy();
+          } catch (e) {
+            console.log('Error destroying operator YouTube player:', e);
+          }
+          youtubePlayerRef.current = null;
+          setYoutubePlayerReady(false);
+        }
+      };
+    } else {
+      // Clean up player when not on display
+      if (youtubePlayerRef.current && youtubePlayerRef.current.destroy) {
+        try {
+          youtubePlayerRef.current.destroy();
+        } catch (e) {
+          console.log('Error destroying operator YouTube player:', e);
+        }
+        youtubePlayerRef.current = null;
+        setYoutubePlayerReady(false);
+      }
+    }
+  }, [youtubeOnDisplay, youtubeAPIReady, currentItem]);
+
+  // Listen for viewer YouTube ready signal and sync
+  useEffect(() => {
+    if (!youtubeOnDisplay) return;
+
+    const handleViewerReady = () => {
+      console.log('Viewer YouTube player ready, syncing in 1 second...');
+      // Wait 1 second after viewer is ready, then sync both players
+      setTimeout(() => {
+        if (youtubePlayerRef.current && youtubePlayerRef.current.seekTo) {
+          youtubePlayerRef.current.seekTo(0, true);
+          setYoutubeCurrentTime(0);
+          // Also sync the viewer
+          if (room) {
+            socketService.operatorYoutubeSeek(room.id, 0);
+          }
+          console.log('Auto-synced YouTube players to start');
+        }
+      }, 1000);
+    };
+
+    socketService.onViewerYoutubeReady(handleViewerReady);
+
+    return () => {
+      socketService.removeListener('viewer:youtubeReady');
+    };
+  }, [youtubeOnDisplay, room]);
 
   // YouTube time tracking - increment time every second while playing
   useEffect(() => {
@@ -2467,15 +2656,16 @@ function PresenterMode() {
     };
   }, [youtubePlaying, youtubeOnDisplay, youtubeDuration]);
 
-  // YouTube sync interval - send current time to viewers periodically
+  // YouTube sync interval - send current time to viewers every second
   useEffect(() => {
     if (youtubePlaying && youtubeOnDisplay && room) {
       youtubeSyncIntervalRef.current = setInterval(() => {
-        setYoutubeCurrentTime(currentTime => {
-          socketService.operatorYoutubeSync(room.id, currentTime, true);
-          return currentTime; // Return unchanged to avoid state mutation
-        });
-      }, 5000);
+        // Get actual time from operator's player for accuracy
+        if (youtubePlayerRef.current && youtubePlayerRef.current.getCurrentTime) {
+          const currentTime = youtubePlayerRef.current.getCurrentTime();
+          socketService.operatorYoutubeSeek(room.id, currentTime);
+        }
+      }, 1000);
     } else {
       if (youtubeSyncIntervalRef.current) {
         clearInterval(youtubeSyncIntervalRef.current);
@@ -7080,9 +7270,24 @@ function PresenterMode() {
         {slideSectionOpen && currentItem && currentItem.type === 'youtube' && (
           <div style={{ padding: '16px' }}>
             <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', borderRadius: '12px', overflow: 'hidden', marginBottom: '16px', backgroundColor: '#000' }}>
-              <img src={currentItem.youtubeData?.thumbnail} alt={currentItem.youtubeData?.title} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: youtubeOnDisplay ? 0.7 : 1 }} />
-              {youtubeOnDisplay && (<div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'rgba(0,0,0,0.7)', padding: '8px 16px', borderRadius: '8px', color: '#FF0000', fontWeight: 'bold', fontSize: '0.9rem' }}>{youtubePlaying ? 'PLAYING' : 'ON DISPLAY'}</div>)}
-              {!youtubeOnDisplay && (<div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '60px', height: '60px', backgroundColor: 'rgba(255,0,0,0.9)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={handleYoutubePresent}><svg width="24" height="24" fill="white" viewBox="0 0 16 16"><path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg></div>)}
+              {/* Show thumbnail when not on display, show player when on display */}
+              {!youtubeOnDisplay ? (
+                <>
+                  <img src={currentItem.youtubeData?.thumbnail} alt={currentItem.youtubeData?.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '60px', height: '60px', backgroundColor: 'rgba(255,0,0,0.9)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={handleYoutubePresent}>
+                    <svg width="24" height="24" fill="white" viewBox="0 0 16 16"><path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div id="operator-youtube-player" style={{ width: '100%', height: '100%' }} />
+                  {!youtubePlayerReady && (
+                    <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white' }}>
+                      Loading...
+                    </div>
+                  )}
+                </>
+              )}
             </div>
             <div style={{ color: 'white', fontSize: '1rem', fontWeight: '500', marginBottom: '12px', textAlign: 'center' }}>{currentItem.youtubeData?.title}</div>
             {youtubeOnDisplay && (
@@ -7093,9 +7298,71 @@ function PresenterMode() {
                   <span style={{ color: 'white', fontSize: '0.8rem', minWidth: '45px', textAlign: 'right' }}>{youtubeDuration ? `${Math.floor(youtubeDuration / 60)}:${String(Math.floor(youtubeDuration % 60)).padStart(2, '0')}` : '--:--'}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
-                  <Button variant={youtubePlaying ? 'warning' : 'success'} onClick={youtubePlaying ? handleYoutubePause : handleYoutubePlay} style={{ borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
-                    {youtubePlaying ? (<svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/></svg>) : (<svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>)}
+                  <Button
+                    variant={youtubePlaying ? 'warning' : 'success'}
+                    onClick={youtubePlaying ? handleYoutubePause : handleYoutubePlay}
+                    style={{
+                      borderRadius: '8px',
+                      padding: '10px 20px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      fontWeight: '500',
+                      minWidth: '100px'
+                    }}
+                  >
+                    {youtubePlaying ? (
+                      <>
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/></svg>
+                        {t('presenter.pause', 'Pause')}
+                      </>
+                    ) : (
+                      <>
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
+                        {t('presenter.play', 'Play')}
+                      </>
+                    )}
                   </Button>
+                  <Button
+                    variant={youtubeMuted ? 'secondary' : 'outline-light'}
+                    onClick={handleYoutubeMute}
+                    style={{
+                      borderRadius: '8px',
+                      padding: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    title={youtubeMuted ? t('presenter.unmute', 'Unmute') : t('presenter.mute', 'Mute')}
+                  >
+                    {youtubeMuted ? (
+                      <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06zM6 5.04 4.312 6.39A.5.5 0 0 1 4 6.5H1.5v3H4a.5.5 0 0 1 .312.11L6 11.96V5.04zm7.854.606a.5.5 0 0 1 0 .708L12.207 8l1.647 1.646a.5.5 0 0 1-.708.708L11.5 8.707l-1.646 1.647a.5.5 0 0 1-.708-.708L10.793 8 9.146 6.354a.5.5 0 1 1 .708-.708L11.5 7.293l1.646-1.647a.5.5 0 0 1 .708 0z"/>
+                      </svg>
+                    ) : (
+                      <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M11.536 14.01A8.473 8.473 0 0 0 14.026 8a8.473 8.473 0 0 0-2.49-6.01l-.708.707A7.476 7.476 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303l.708.707z"/>
+                        <path d="M10.121 12.596A6.48 6.48 0 0 0 12.025 8a6.48 6.48 0 0 0-1.904-4.596l-.707.707A5.483 5.483 0 0 1 11.025 8a5.483 5.483 0 0 1-1.61 3.89l.706.706z"/>
+                        <path d="M8.707 11.182A4.486 4.486 0 0 0 10.025 8a4.486 4.486 0 0 0-1.318-3.182L8 5.525A3.489 3.489 0 0 1 9.025 8 3.49 3.49 0 0 1 8 10.475l.707.707zM6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06z"/>
+                      </svg>
+                    )}
+                  </Button>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={youtubeMuted ? 0 : youtubeVolume}
+                    onChange={(e) => handleYoutubeVolume(parseInt(e.target.value))}
+                    style={{
+                      width: '100px',
+                      cursor: 'pointer'
+                    }}
+                    title={`${t('presenter.volume', 'Volume')}: ${youtubeVolume}%`}
+                  />
+                  <span style={{ color: 'white', fontSize: '12px', minWidth: '35px' }}>
+                    {youtubeMuted ? '0%' : `${youtubeVolume}%`}
+                  </span>
                 </div>
               </div>
             )}

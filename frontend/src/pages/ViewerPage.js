@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Form, Button, Alert, Spinner } from 'react-bootstrap';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -77,7 +77,27 @@ function ViewerPage({ remotePin, remoteConfig }) {
   const youtubeReadyRef = useRef(false);
   const [youtubeAPIReady, setYoutubeAPIReady] = useState(false);
   const youtubePlayingRef = useRef(false); // Ref to avoid stale closure in sync handler
-  const [youtubeMuted, setYoutubeMuted] = useState(true); // Start muted for autoplay // For showing overlay when operator displays local media
+  const [youtubeMuted, setYoutubeMuted] = useState(true); // Start muted for autoplay
+  const currentPinRef = useRef(null); // Store current room pin for YouTube ready callback
+
+  // Helper function to properly clean up YouTube player before state change
+  const cleanupYoutubePlayer = useCallback(() => {
+    if (youtubePlayerRef.current) {
+      try {
+        if (youtubePlayerRef.current.destroy) {
+          youtubePlayerRef.current.destroy();
+        }
+      } catch (e) {
+        console.log('YouTube player cleanup error (safe to ignore):', e);
+      }
+      youtubePlayerRef.current = null;
+      youtubeReadyRef.current = false;
+    }
+    setYoutubeVideoId(null);
+    setYoutubeTitle('');
+    setYoutubePlaying(false);
+    youtubePlayingRef.current = false;
+  }, []);
 
   // Theme state - use initialTheme from remoteConfig if provided (for custom remote screens)
   const [viewerTheme, setViewerTheme] = useState(remoteConfig?.initialTheme || null);
@@ -142,6 +162,11 @@ function ViewerPage({ remotePin, remoteConfig }) {
           onReady: () => {
             console.log('YouTube player ready (muted autoplay)');
             youtubeReadyRef.current = true;
+            // Signal to operator that viewer's YouTube player is ready
+            if (currentPinRef.current) {
+              socketService.viewerYoutubeReady(currentPinRef.current);
+              console.log('Signaled YouTube ready to operator');
+            }
           }
         }
       });
@@ -356,6 +381,10 @@ function ViewerPage({ remotePin, remoteConfig }) {
       console.log(`📊 Room data received: ${JSON.stringify(data.currentSlide)}`);
       lastActivityRef.current = Date.now(); // Reset inactivity timer
       setJoined(true);
+      // Store room pin for YouTube ready callback
+      if (data.roomPin) {
+        currentPinRef.current = data.roomPin;
+      }
 
       // Set the room background
       setBackgroundImage(data.backgroundImage || '');
@@ -436,6 +465,9 @@ function ViewerPage({ remotePin, remoteConfig }) {
     socketService.onSlideUpdate((data) => {
       lastActivityRef.current = Date.now();
       console.log('📡 slide:update received:', { hasToolsData: !!data.toolsData, toolsType: data.toolsData?.type, isBlank: data.isBlank });
+
+      // Clear YouTube video when presenting any other content (destroy player first to avoid React DOM errors)
+      cleanupYoutubePlayer();
 
       // Handle tools data
       if (data.toolsData) {
@@ -613,10 +645,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
 
     socketService.onYoutubeStop(() => {
       console.log('🛑 YouTube stop');
-      setYoutubeVideoId(null);
-      setYoutubeTitle('');
-      setYoutubePlaying(false);
-      youtubePlayingRef.current = false;
+      cleanupYoutubePlayer();
       setYoutubeCurrentTime(0);
     });
 
@@ -796,7 +825,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
       socketService.removeAllListeners();
       socketService.disconnect();
     };
-  }, [location.search, remotePin, hasFixedTheme]);
+  }, [location.search, remotePin, hasFixedTheme, cleanupYoutubePlayer]);
 
   // Read video from IndexedDB and create a local blob URL
   const loadVideoFromIndexedDB = () => {

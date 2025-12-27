@@ -698,6 +698,18 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Viewer signals their YouTube player is ready
+  socket.on('viewer:youtubeReady', async (data) => {
+    try {
+      const { roomPin } = data;
+      console.log('Viewer YouTube ready for room:', roomPin);
+      // Notify operator that viewer's YouTube is ready
+      io.to(`room:${roomPin}`).emit('viewer:youtubeReady', { roomPin });
+    } catch (error) {
+      console.error('Error in viewer:youtubeReady:', error);
+    }
+  });
+
   // ==================== End YouTube Handlers ====================
 
   // Operator applies a viewer theme

@@ -326,6 +326,20 @@ class SocketService {
     }
   }
 
+  // Viewer signals YouTube player is ready
+  viewerYoutubeReady(roomPin) {
+    if (this.socket?.connected) {
+      this.socket.emit('viewer:youtubeReady', { roomPin });
+    }
+  }
+
+  // Operator listens for viewer YouTube ready
+  onViewerYoutubeReady(callback) {
+    if (this.socket) {
+      this.socket.on('viewer:youtubeReady', callback);
+    }
+  }
+
   // Viewer methods
   viewerJoinRoom(pin) {
     if (!this.socket) {

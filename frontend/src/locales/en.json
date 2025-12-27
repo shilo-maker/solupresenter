@@ -478,7 +478,9 @@
     "transliteration": "Transliteration",
     "translation": "Translation",
     "localMediaShowing": "Local media is being displayed",
-    "resumingSoon": "Resuming shortly..."
+    "resumingSoon": "Resuming shortly...",
+    "clickToPlay": "Click to Play",
+    "clickToUnmute": "Click to Unmute"
   },
   "bible": {
     "title": "Bible",

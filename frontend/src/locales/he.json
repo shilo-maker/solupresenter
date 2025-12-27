@@ -478,7 +478,9 @@
     "transliteration": "תעתיק",
     "translation": "תרגום",
     "localMediaShowing": "מדיה מקומית מוצגת",
-    "resumingSoon": "חוזרים בקרוב..."
+    "resumingSoon": "חוזרים בקרוב...",
+    "clickToPlay": "לחץ להפעלה",
+    "clickToUnmute": "לחץ להפעלת קול"
   },
   "bible": {
     "title": "תנ\"ך",

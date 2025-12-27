@@ -76,7 +76,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
   const youtubePlayerRef = useRef(null);
   const youtubeReadyRef = useRef(false);
   const [youtubeAPIReady, setYoutubeAPIReady] = useState(false);
-  const youtubePlayingRef = useRef(false); // Ref to avoid stale closure in sync handler // For showing overlay when operator displays local media
+  const youtubePlayingRef = useRef(false); // Ref to avoid stale closure in sync handler
+  const [youtubeMuted, setYoutubeMuted] = useState(true); // Start muted for autoplay // For showing overlay when operator displays local media
 
   // Theme state - use initialTheme from remoteConfig if provided (for custom remote screens)
   const [viewerTheme, setViewerTheme] = useState(remoteConfig?.initialTheme || null);
@@ -122,21 +123,24 @@ function ViewerPage({ remotePin, remoteConfig }) {
   useEffect(() => {
     if (youtubeVideoId && youtubeAPIReady) {
       youtubeReadyRef.current = false;
+      setYoutubeMuted(true); // Reset muted state for new video
       youtubePlayerRef.current = new window.YT.Player('youtube-player', {
         videoId: youtubeVideoId,
         playerVars: {
-          autoplay: 0,
+          autoplay: 1,  // Autoplay enabled
+          mute: 1,      // Muted to allow autoplay
           controls: 0,
           disablekb: 1,
           fs: 0,
           modestbranding: 1,
           rel: 0,
           showinfo: 0,
-          iv_load_policy: 3
+          iv_load_policy: 3,
+          playsinline: 1
         },
         events: {
           onReady: () => {
-            console.log('YouTube player ready');
+            console.log('YouTube player ready (muted autoplay)');
             youtubeReadyRef.current = true;
           }
         }

@@ -1947,6 +1947,11 @@ function PresenterMode() {
       await api.put(`/api/rooms/${room.id}/setlist`, { items });
       console.log('✅ Setlist saved to backend');
       setHasUnsavedChanges(false);
+      setToast({
+        show: true,
+        message: t('presenter.setlistSaved', 'Setlist saved'),
+        variant: 'success'
+      });
     } catch (error) {
       console.error('❌ Error saving setlist:', error);
       setError('Failed to save setlist: ' + (error.response?.data?.error || error.message));
@@ -2645,10 +2650,11 @@ function PresenterMode() {
       setTimeout(() => {
         if (youtubePlayerRef.current && youtubePlayerRef.current.seekTo) {
           youtubePlayerRef.current.seekTo(0, true);
+          youtubePlayerRef.current.playVideo();
           setYoutubeCurrentTime(0);
-          // Also sync the viewer
+          // Also sync the viewer - use play command which forces seek regardless of threshold
           if (room) {
-            socketService.operatorYoutubeSeek(room.id, 0);
+            socketService.operatorYoutubePlay(room.id, 0);
           }
           console.log('Auto-synced YouTube players to start');
         }
@@ -3318,7 +3324,11 @@ function PresenterMode() {
       setError('');
       setHasUnsavedChanges(false);
       setLinkedSetlistName(response.data.setlist.name);
-      alert(`Setlist "${response.data.setlist.name}" saved! All changes will now auto-save to this setlist.`);
+      setToast({
+        show: true,
+        message: `Setlist "${response.data.setlist.name}" saved! Changes will auto-save.`,
+        variant: 'success'
+      });
     } catch (error) {
       console.error('Error saving setlist:', error);
       setError('Failed to save setlist: ' + (error.response?.data?.error || error.message));
@@ -7314,8 +7324,28 @@ function PresenterMode() {
               ) : (
                 <>
                   <div id="operator-youtube-player" style={{ width: '100%', height: '100%' }} />
+                  {/* Transparent click overlay for synced play/pause */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      cursor: 'pointer',
+                      zIndex: 10
+                    }}
+                    onClick={() => {
+                      if (youtubePlaying) {
+                        handleYoutubePause();
+                      } else {
+                        handleYoutubePlay();
+                      }
+                    }}
+                    title={youtubePlaying ? t('presenter.clickToPause', 'Click to pause') : t('presenter.clickToPlay', 'Click to play')}
+                  />
                   {!youtubePlayerReady && (
-                    <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white' }}>
+                    <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white', zIndex: 11 }}>
                       Loading...
                     </div>
                   )}

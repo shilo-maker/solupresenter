@@ -397,7 +397,7 @@ const PresentationEditor = ({
           You have unsaved changes. Are you sure you want to close without saving?
         </Modal.Body>
         <Modal.Footer style={{ backgroundColor: '#1a1a2e', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-          <Button variant="outline-light" size="sm" onClick={() => setShowConfirmClose(false)}>
+          <Button variant="secondary" size="sm" onClick={() => setShowConfirmClose(false)}>
             Keep Editing
           </Button>
           <Button variant="danger" size="sm" onClick={handleConfirmClose}>

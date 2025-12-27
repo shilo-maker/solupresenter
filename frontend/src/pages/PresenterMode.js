@@ -200,9 +200,11 @@ function PresenterMode() {
   const [bibleLoading, setBibleLoading] = useState(false);
 
   // Collapsible sections
-  const [activeResourcePanel, setActiveResourcePanel] = useState('songs'); // 'songs', 'images', 'bible', 'tools', or 'media'
+  const [activeResourcePanel, setActiveResourcePanel] = useState('songs'); // 'songs', 'bible', 'tools', 'media', or 'presentations'
   const [setlistSectionOpen, setSetlistSectionOpen] = useState(true);
   const [slideSectionOpen, setSlideSectionOpen] = useState(true);
+  const [mediaLocalExpanded, setMediaLocalExpanded] = useState(false);
+  const [mediaCloudExpanded, setMediaCloudExpanded] = useState(false);
 
   // Chromecast state
   const [castAvailable, setCastAvailable] = useState(false);
@@ -373,6 +375,17 @@ function PresenterMode() {
       }
     };
   }, [presentationConnection]);
+
+  // Clear local media overlay when presentation connection is lost
+  useEffect(() => {
+    if (!presentationConnection && (imageOnDisplay || videoOnDisplay)) {
+      setImageOnDisplay(false);
+      setVideoOnDisplay(false);
+      if (room) {
+        socketService.operatorUpdateLocalMediaStatus(room.id, false);
+      }
+    }
+  }, [presentationConnection, imageOnDisplay, videoOnDisplay, room]);
 
   // Start presentation on external display
   const startPresentation = async () => {
@@ -555,6 +568,10 @@ function PresenterMode() {
       console.log('📺 Video sent via Presentation API');
       setVideoOnDisplay(true);
       setVideoPlaying(true);
+      // Notify online viewers that local media is being shown
+      if (room) {
+        socketService.operatorUpdateLocalMediaStatus(room.id, true);
+      }
     } catch (err) {
       console.error('📺 Failed to send video:', err);
     }
@@ -583,6 +600,10 @@ function PresenterMode() {
     setVideoPlaying(true);
     setImageOnDisplay(false);
     console.log('📺 Video hidden from display');
+    // Notify online viewers that local media is no longer showing
+    if (room) {
+      socketService.operatorUpdateLocalMediaStatus(room.id, false);
+    }
   };
 
   // Stop video on local display
@@ -649,6 +670,10 @@ function PresenterMode() {
         console.log('🖼️ Image sent via Presentation API');
         setImageOnDisplay(true);
         setVideoOnDisplay(false); // Hide any video
+        // Notify online viewers that local media is being shown
+        if (room) {
+          socketService.operatorUpdateLocalMediaStatus(room.id, true);
+        }
       };
       reader.onerror = () => {
         console.error('🖼️ Failed to read image file');
@@ -668,6 +693,10 @@ function PresenterMode() {
     }));
     setImageOnDisplay(false);
     console.log('🖼️ Image hidden from display');
+    // Notify online viewers that local media is no longer showing
+    if (room) {
+      socketService.operatorUpdateLocalMediaStatus(room.id, false);
+    }
   };
 
   // Countdown functions
@@ -1626,6 +1655,14 @@ function PresenterMode() {
       setFocusedCountdownIndex(null);
     }
     // NOTE: Announcements are overlays - they persist when switching slides
+    // Clear local media overlay for online viewers (if local media was showing on HDMI)
+    if (imageOnDisplay || videoOnDisplay) {
+      setImageOnDisplay(false);
+      setVideoOnDisplay(false);
+      if (room) {
+        socketService.operatorUpdateLocalMediaStatus(room.id, false);
+      }
+    }
   };
 
   // Switch resource panel and apply search
@@ -4266,15 +4303,14 @@ function PresenterMode() {
                 </svg>
               </Button>
               <Button
-                variant={activeResourcePanel === 'images' ? 'primary' : 'outline-light'}
+                variant={activeResourcePanel === 'media' ? 'primary' : 'outline-light'}
                 size="sm"
-                onClick={() => switchResourcePanel('images')}
-                title={t('presenter.images')}
+                onClick={() => switchResourcePanel('media')}
+                title={t('presenter.media', 'Media')}
                 style={{ padding: '6px 10px' }}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
-                  <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
+                  <path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V1zm4 0v6h8V1H4zm8 8H4v6h8V9zM1 1v2h2V1H1zm2 3H1v2h2V4zM1 7v2h2V7H1zm2 3H1v2h2v-2zm-2 3v2h2v-2H1zM15 1h-2v2h2V1zm-2 3v2h2V4h-2zm2 3h-2v2h2V7zm-2 3v2h2v-2h-2zm2 3h-2v2h2v-2z"/>
                 </svg>
               </Button>
               <Button
@@ -4289,18 +4325,6 @@ function PresenterMode() {
                 </svg>
               </Button>
               <Button
-                variant={activeResourcePanel === 'tools' ? 'primary' : 'outline-light'}
-                size="sm"
-                onClick={() => switchResourcePanel('tools')}
-                title={t('presenter.tools')}
-                style={{ padding: '6px 10px' }}
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M1 0 0 1l2.2 3.081a1 1 0 0 0 .815.419h.07a1 1 0 0 1 .708.293l2.675 2.675-2.617 2.654A3.003 3.003 0 0 0 0 13a3 3 0 1 0 5.878-.851l2.654-2.617.968.968-.305.914a1 1 0 0 0 .242 1.023l3.27 3.27a.997.997 0 0 0 1.414 0l1.586-1.586a.997.997 0 0 0 0-1.414l-3.27-3.27a1 1 0 0 0-1.023-.242L10.5 9.5l-.96-.96 2.68-2.643A3.005 3.005 0 0 0 16 3q0-.405-.102-.777l-2.14 2.141L12 4l-.364-1.757L13.777.102a3 3 0 0 0-3.675 3.68L7.462 6.46 4.793 3.793a1 1 0 0 1-.293-.707v-.071a1 1 0 0 0-.419-.814z"/>
-                  <path d="M9.646 10.646a.5.5 0 0 1 .708 0l2.914 2.915a.5.5 0 0 1-.707.707l-2.915-2.914a.5.5 0 0 1 0-.708M3 11l.471.242.529.026.287.445.445.287.026.529L5 13l-.242.471-.026.529-.445.287-.287.445-.529.026L3 15l-.471-.242L2 14.732l-.287-.445L1.268 14l-.026-.529L1 13l.242-.471.026-.529.445-.287.287-.445.529-.026z"/>
-                </svg>
-              </Button>
-              <Button
                 variant={activeResourcePanel === 'presentations' ? 'primary' : 'outline-light'}
                 size="sm"
                 onClick={() => switchResourcePanel('presentations')}
@@ -4312,20 +4336,21 @@ function PresenterMode() {
                 </svg>
               </Button>
               <Button
-                variant={activeResourcePanel === 'media' ? 'primary' : 'outline-light'}
+                variant={activeResourcePanel === 'tools' ? 'primary' : 'outline-light'}
                 size="sm"
-                onClick={() => switchResourcePanel('media')}
-                title={t('presenter.localMedia')}
+                onClick={() => switchResourcePanel('tools')}
+                title={t('presenter.tools')}
                 style={{ padding: '6px 10px' }}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V1zm4 0v6h8V1H4zm8 8H4v6h8V9zM1 1v2h2V1H1zm2 3H1v2h2V4zM1 7v2h2V7H1zm2 3H1v2h2v-2zm-2 3v2h2v-2H1zM15 1h-2v2h2V1zm-2 3v2h2V4h-2zm2 3h-2v2h2V7zm-2 3v2h2v-2h-2zm2 3h-2v2h2v-2z"/>
+                  <path d="M1 0 0 1l2.2 3.081a1 1 0 0 0 .815.419h.07a1 1 0 0 1 .708.293l2.675 2.675-2.617 2.654A3.003 3.003 0 0 0 0 13a3 3 0 1 0 5.878-.851l2.654-2.617.968.968-.305.914a1 1 0 0 0 .242 1.023l3.27 3.27a.997.997 0 0 0 1.414 0l1.586-1.586a.997.997 0 0 0 0-1.414l-3.27-3.27a1 1 0 0 0-1.023-.242L10.5 9.5l-.96-.96 2.68-2.643A3.005 3.005 0 0 0 16 3q0-.405-.102-.777l-2.14 2.141L12 4l-.364-1.757L13.777.102a3 3 0 0 0-3.675 3.68L7.462 6.46 4.793 3.793a1 1 0 0 1-.293-.707v-.071a1 1 0 0 0-.419-.814z"/>
+                  <path d="M9.646 10.646a.5.5 0 0 1 .708 0l2.914 2.915a.5.5 0 0 1-.707.707l-2.915-2.914a.5.5 0 0 1 0-.708M3 11l.471.242.529.026.287.445.445.287.026.529L5 13l-.242.471-.026.529-.445.287-.287.445-.529.026L3 15l-.471-.242L2 14.732l-.287-.445L1.268 14l-.026-.529L1 13l.242-.471.026-.529.445-.287.287-.445.529-.026z"/>
                 </svg>
               </Button>
             </div>
 
-            {/* Search bar - Glassmorphic style (hidden when Tools/Media tabs are active) */}
-            {activeResourcePanel !== 'tools' && activeResourcePanel !== 'media' && (
+            {/* Search bar - Glassmorphic style (hidden when Tools tab is active) */}
+            {activeResourcePanel !== 'tools' && (
             <div style={{ flex: '1 1 200px', minWidth: '200px', position: 'relative' }}>
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -5171,292 +5196,367 @@ function PresenterMode() {
                 )}
               </div>
             ) : activeResourcePanel === 'media' ? (
-              /* Local Media Panel */
-              <div style={{ padding: '10px', color: 'white' }}>
-                {/* File Input */}
-                <div style={{ marginBottom: '15px' }}>
-                  <input
-                    type="file"
-                    accept="image/*,video/*"
-                    id="local-media-input"
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
-                      const file = e.target.files[0];
-                      if (file) {
-                        // Check file size for images (2MB limit)
-                        if (file.type.startsWith('image/') && file.size > 2 * 1024 * 1024) {
-                          alert(t('presenter.imageTooLarge'));
-                          return;
-                        }
-                        setSelectedMediaFile(file);
-                        setMediaType(file.type.startsWith('image/') ? 'image' : 'video');
-                        // Create preview URL
-                        const url = URL.createObjectURL(file);
-                        setMediaPreviewUrl(url);
-                      }
+              /* Media Panel with Local and Cloud sections */
+              <div className="dark-scrollbar" style={{ padding: '10px', color: 'white', maxHeight: '300px', overflowY: 'auto' }}>
+                {/* Local Section - Collapsible (disabled if no presentation connection) */}
+                <div style={{ marginBottom: '10px', opacity: presentationConnection ? 1 : 0.5 }}>
+                  <div
+                    onClick={() => presentationConnection && setMediaLocalExpanded(!mediaLocalExpanded)}
+                    title={!presentationSupported
+                      ? (t('presenter.localMediaNotSupported') || 'Local media requires a browser with Presentation API support')
+                      : !presentationConnection
+                        ? (t('presenter.localMediaRequiresDisplay') || 'Click "Present to connected display" first to use local media')
+                        : ''
+                    }
+                    style={{
+                      cursor: presentationConnection ? 'pointer' : 'not-allowed',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 10px',
+                      backgroundColor: 'rgba(255,255,255,0.1)',
+                      borderRadius: '8px',
+                      marginBottom: mediaLocalExpanded && presentationConnection ? '10px' : '0'
                     }}
-                  />
-                  <Button
-                    variant="outline-light"
-                    onClick={() => document.getElementById('local-media-input').click()}
-                    style={{ width: '100%', marginBottom: '10px' }}
                   >
-                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      style={{
+                        transform: mediaLocalExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.2s ease'
+                      }}
+                    >
+                      <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                    </svg>
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                       <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
                       <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
                     </svg>
-                    {t('presenter.selectMediaFile')}
-                  </Button>
-                </div>
+                    <span style={{ fontWeight: '500' }}>{t('presenter.localMedia', 'Local Media')}</span>
+                    {!presentationConnection && (
+                      <span style={{ fontSize: '0.75rem', opacity: 0.7, marginLeft: 'auto' }}>
+                        ({t('presenter.requiresDisplay', 'requires display')})
+                      </span>
+                    )}
+                  </div>
+                  {mediaLocalExpanded && presentationConnection && (
+                    <div style={{ paddingLeft: '10px' }}>
+                      {/* File Input */}
+                      <div style={{ marginBottom: '15px' }}>
+                        <input
+                          type="file"
+                          accept="image/*,video/*"
+                          id="local-media-input"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              setSelectedMediaFile(file);
+                              setMediaType(file.type.startsWith('image/') ? 'image' : 'video');
+                              // Create preview URL
+                              const url = URL.createObjectURL(file);
+                              setMediaPreviewUrl(url);
+                            }
+                          }}
+                        />
+                        <Button
+                          variant="outline-light"
+                          onClick={() => document.getElementById('local-media-input').click()}
+                          style={{ width: '100%', marginBottom: '10px' }}
+                        >
+                          <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
+                            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                            <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+                          </svg>
+                          {t('presenter.selectMediaFile')}
+                        </Button>
+                      </div>
 
-                {/* Preview Area */}
-                <div style={{
-                  backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                  borderRadius: '10px',
-                  padding: '10px',
-                  marginBottom: '15px',
-                  minHeight: '120px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  {!mediaPreviewUrl ? (
-                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem' }}>
-                      {t('presenter.noMediaSelected')}
-                    </span>
-                  ) : mediaType === 'image' ? (
-                    <img
-                      src={mediaPreviewUrl}
-                      alt="Preview"
-                      style={{
-                        maxWidth: '100%',
-                        maxHeight: '150px',
-                        borderRadius: '8px',
-                        objectFit: 'contain'
-                      }}
-                    />
-                  ) : (
-                    <video
-                      ref={localVideoRef}
-                      src={mediaPreviewUrl}
-                      controls
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      style={{
-                        maxWidth: '100%',
-                        maxHeight: '150px',
-                        borderRadius: '8px'
-                      }}
-                      onLoadedData={() => console.log('🎬 Video loaded and ready')}
-                      onError={(e) => console.error('🎬 Video error:', e)}
-                    />
+                      {/* Preview Area */}
+                      <div style={{
+                        backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                        borderRadius: '10px',
+                        padding: '10px',
+                        marginBottom: '15px',
+                        minHeight: '100px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        {!mediaPreviewUrl ? (
+                          <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem' }}>
+                            {t('presenter.noMediaSelected')}
+                          </span>
+                        ) : mediaType === 'image' ? (
+                          <img
+                            src={mediaPreviewUrl}
+                            alt="Preview"
+                            style={{
+                              maxWidth: '100%',
+                              maxHeight: '120px',
+                              borderRadius: '8px',
+                              objectFit: 'contain'
+                            }}
+                          />
+                        ) : (
+                          <video
+                            ref={localVideoRef}
+                            src={mediaPreviewUrl}
+                            controls
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            style={{
+                              maxWidth: '100%',
+                              maxHeight: '120px',
+                              borderRadius: '8px'
+                            }}
+                            onLoadedData={() => console.log('Video loaded and ready')}
+                            onError={(e) => console.error('Video error:', e)}
+                          />
+                        )}
+                      </div>
+
+                      {/* Broadcast/Stream Buttons */}
+                      {selectedMediaFile && (
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          {mediaType === 'image' ? (
+                            imageOnDisplay ? (
+                              <Button
+                                variant="danger"
+                                onClick={hideImageFromDisplay}
+                                style={{ flex: 1 }}
+                              >
+                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
+                                  <path d="M5 3.5h6A1.5 1.5 0 0 1 12.5 5v6a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 11V5A1.5 1.5 0 0 1 5 3.5z"/>
+                                </svg>
+                                {t('presenter.hideImage') || 'Hide'}
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="info"
+                                onClick={sendImageToDisplay}
+                                style={{ flex: 1 }}
+                                disabled={!presentationConnection}
+                              >
+                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
+                                  <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                                  <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
+                                </svg>
+                                {t('presenter.showOnDisplay')}
+                              </Button>
+                            )
+                          ) : videoOnDisplay ? (
+                            <>
+                              <Button
+                                variant={videoPlaying ? "warning" : "success"}
+                                onClick={toggleVideoPlayback}
+                                style={{ flex: 1 }}
+                              >
+                                {videoPlaying ? (
+                                  <>
+                                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
+                                      <path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/>
+                                    </svg>
+                                    {t('presenter.pauseVideo') || 'Pause'}
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
+                                      <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+                                    </svg>
+                                    {t('presenter.playVideo') || 'Play'}
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                variant="danger"
+                                onClick={hideVideoFromDisplay}
+                                style={{ flex: 1 }}
+                              >
+                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
+                                  <path d="M5 3.5h6A1.5 1.5 0 0 1 12.5 5v6a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 11V5A1.5 1.5 0 0 1 5 3.5z"/>
+                                </svg>
+                                {t('presenter.hideVideo') || 'Hide'}
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              variant="info"
+                              onClick={sendVideoToDisplay}
+                              style={{ flex: 1 }}
+                              disabled={!room || !presentationConnection}
+                            >
+                              <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
+                                <path d="M0 5a2 2 0 0 1 2-2h7.5a2 2 0 0 1 1.983 1.738l3.11-1.382A1 1 0 0 1 16 4.269v7.462a1 1 0 0 1-1.406.913l-3.111-1.382A2 2 0 0 1 9.5 13H2a2 2 0 0 1-2-2V5z"/>
+                              </svg>
+                              {t('presenter.showOnDisplay')}
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
 
-                {/* Broadcast/Stream Buttons */}
-                {selectedMediaFile && (
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    {mediaType === 'image' ? (
-                      imageOnDisplay ? (
-                        <Button
-                          variant="danger"
-                          onClick={hideImageFromDisplay}
-                          style={{ flex: 1 }}
-                        >
-                          <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
-                            <path d="M5 3.5h6A1.5 1.5 0 0 1 12.5 5v6a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 11V5A1.5 1.5 0 0 1 5 3.5z"/>
-                          </svg>
-                          {t('presenter.hideImage') || 'Hide'}
-                        </Button>
+                {/* Cloud Section - Collapsible */}
+                <div>
+                  <div
+                    onClick={() => setMediaCloudExpanded(!mediaCloudExpanded)}
+                    style={{
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 10px',
+                      backgroundColor: 'rgba(255,255,255,0.1)',
+                      borderRadius: '8px',
+                      marginBottom: mediaCloudExpanded ? '10px' : '0'
+                    }}
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      style={{
+                        transform: mediaCloudExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.2s ease'
+                      }}
+                    >
+                      <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                    </svg>
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                      <path d="M4.406 3.342A5.53 5.53 0 0 1 8 2c2.69 0 4.923 2 5.166 4.579C14.758 6.804 16 8.137 16 9.773 16 11.569 14.502 13 12.687 13H3.781C1.708 13 0 11.366 0 9.318c0-1.763 1.266-3.223 2.942-3.593.143-.863.698-1.723 1.464-2.383z"/>
+                    </svg>
+                    <span style={{ fontWeight: '500' }}>{t('presenter.cloudMedia', 'Cloud')}</span>
+                  </div>
+                  {mediaCloudExpanded && (
+                    <div style={{ paddingLeft: '10px' }}>
+                      {mediaLoading ? (
+                        <div style={{ textAlign: 'center', color: 'white', padding: '20px' }}>
+                          <div className="spinner-border text-light" role="status" style={{ marginBottom: '10px' }}>
+                            <span className="visually-hidden">Loading...</span>
+                          </div>
+                          <div>{t('presenter.loadingMedia')}</div>
+                        </div>
+                      ) : imageSearchResults.length === 0 ? (
+                        <p style={{ textAlign: 'center', color: 'white', fontSize: '0.9rem' }}>
+                          {searchQuery ? t('presenter.noImagesMatch') : t('presenter.noImagesAvailable')}
+                        </p>
                       ) : (
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fill, minmax(70px, 1fr))',
+                          gap: '8px'
+                        }}>
+                          {imageSearchResults.map((image) => {
+                            const isGradient = image.url.startsWith('linear-gradient');
+                            return (
+                              <div
+                                key={image.id}
+                                style={{
+                                  position: 'relative',
+                                  aspectRatio: '1',
+                                  borderRadius: '8px',
+                                  overflow: 'hidden',
+                                  cursor: 'pointer',
+                                  border: '2px solid rgba(255,255,255,0.2)',
+                                  transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.border = '2px solid rgba(102, 126, 234, 0.8)';
+                                  e.currentTarget.style.transform = 'scale(1.05)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.border = '2px solid rgba(255,255,255,0.2)';
+                                  e.currentTarget.style.transform = 'scale(1)';
+                                }}
+                                onClick={() => selectItem({ type: 'image', data: image })}
+                              >
+                                {/* Image thumbnail */}
+                                <div
+                                  style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    background: isGradient ? image.url : `url(${getFullImageUrl(image.url)})`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center'
+                                  }}
+                                />
+                                {/* Add button overlay */}
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  style={{
+                                    position: 'absolute',
+                                    bottom: '4px',
+                                    right: '4px',
+                                    borderRadius: '50%',
+                                    width: '24px',
+                                    height: '24px',
+                                    padding: '0',
+                                    fontSize: '1rem',
+                                    fontWeight: '600',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    border: 'none',
+                                    boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                                    transition: 'all 0.2s ease'
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addImageToSetlist(image);
+                                  }}
+                                >
+                                  +
+                                </Button>
+                                {/* Image name tooltip on hover */}
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    bottom: 0,
+                                    left: 0,
+                                    right: 0,
+                                    background: 'linear-gradient(transparent, rgba(0,0,0,0.8))',
+                                    padding: '20px 4px 4px 4px',
+                                    fontSize: '0.7rem',
+                                    color: 'white',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis'
+                                  }}
+                                  title={image.name}
+                                >
+                                  {image.name}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {/* Add Blank Slide Button */}
+                      <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.2)' }}>
                         <Button
-                          variant="info"
-                          onClick={sendImageToDisplay}
-                          style={{ flex: 1 }}
-                          disabled={!presentationConnection}
-                        >
-                          <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
-                            <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
-                            <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
-                          </svg>
-                          {t('presenter.showOnDisplay')}
-                        </Button>
-                      )
-                    ) : videoOnDisplay ? (
-                      <>
-                        <Button
-                          variant={videoPlaying ? "warning" : "success"}
-                          onClick={toggleVideoPlayback}
-                          style={{ flex: 1 }}
-                        >
-                          {videoPlaying ? (
-                            <>
-                              <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
-                                <path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/>
-                              </svg>
-                              {t('presenter.pauseVideo') || 'Pause'}
-                            </>
-                          ) : (
-                            <>
-                              <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
-                                <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
-                              </svg>
-                              {t('presenter.playVideo') || 'Play'}
-                            </>
-                          )}
-                        </Button>
-                        <Button
-                          variant="danger"
-                          onClick={hideVideoFromDisplay}
-                          style={{ flex: 1 }}
-                        >
-                          <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
-                            <path d="M5 3.5h6A1.5 1.5 0 0 1 12.5 5v6a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 11V5A1.5 1.5 0 0 1 5 3.5z"/>
-                          </svg>
-                          {t('presenter.hideVideo') || 'Hide'}
-                        </Button>
-                      </>
-                    ) : (
-                      <Button
-                        variant="info"
-                        onClick={sendVideoToDisplay}
-                        style={{ flex: 1 }}
-                        disabled={!room || !presentationConnection}
-                      >
-                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
-                          <path d="M0 5a2 2 0 0 1 2-2h7.5a2 2 0 0 1 1.983 1.738l3.11-1.382A1 1 0 0 1 16 4.269v7.462a1 1 0 0 1-1.406.913l-3.111-1.382A2 2 0 0 1 9.5 13H2a2 2 0 0 1-2-2V5z"/>
-                        </svg>
-                        {t('presenter.showOnDisplay')}
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="dark-scrollbar" style={{ maxHeight: '220px', overflowY: 'auto' }}>
-                {mediaLoading ? (
-                  <div style={{ textAlign: 'center', color: 'white', padding: '40px' }}>
-                    <div className="spinner-border text-light" role="status" style={{ marginBottom: '10px' }}>
-                      <span className="visually-hidden">Loading...</span>
-                    </div>
-                    <div>{t('presenter.loadingMedia')}</div>
-                  </div>
-                ) : imageSearchResults.length === 0 ? (
-                  <p style={{ textAlign: 'center', color: 'white', fontSize: '0.9rem' }}>
-                    {searchQuery ? t('presenter.noImagesMatch') : t('presenter.noImagesAvailable')}
-                  </p>
-                ) : (
-                  imageSearchResults.map((image) => {
-                    const isGradient = image.url.startsWith('linear-gradient');
-                    return (
-                      <div
-                        key={image.id}
-                        style={{
-                          padding: '8px 10px',
-                          backgroundColor: 'transparent',
-                          display: 'flex',
-                          flexDirection: i18n.language === 'he' ? 'row-reverse' : 'row',
-                          alignItems: 'center',
-                          gap: '8px',
-                          cursor: 'pointer',
-                          borderRadius: '4px',
-                          marginBottom: '4px',
-                          border: '1px solid rgba(255,255,255,0.3)'
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: '40px',
-                            height: '40px',
-                            background: isGradient ? image.url : `url(${getFullImageUrl(image.url)})`,
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center',
-                            borderRadius: '4px',
-                            flexShrink: 0
-                          }}
-                        />
-                        <span
-                          style={{
-                            fontSize: '0.95rem',
-                            flex: 1,
-                            color: 'white',
-                            direction: 'ltr',
-                            textAlign: i18n.language === 'he' ? 'right' : 'left'
-                          }}
-                          onClick={() => selectItem({ type: 'image', data: image })}
-                        >
-                          {image.name}
-                        </span>
-                        <Button
-                          variant="primary"
+                          variant="outline-secondary"
                           size="sm"
-                          style={{
-                            borderRadius: '8px',
-                            width: '36px',
-                            height: '36px',
-                            padding: '0',
-                            fontSize: '1.3rem',
-                            fontWeight: '600',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                            border: 'none',
-                            boxShadow: '0 2px 8px rgba(102, 126, 234, 0.4)',
-                            transition: 'all 0.2s ease',
-                            cursor: 'pointer'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.transform = 'scale(1.1)';
-                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.6)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = 'scale(1)';
-                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.4)';
-                          }}
-                          onMouseDown={(e) => {
-                            e.currentTarget.style.transform = 'scale(0.9)';
-                            e.currentTarget.style.boxShadow = '0 1px 4px rgba(102, 126, 234, 0.3)';
-                          }}
-                          onMouseUp={(e) => {
-                            e.currentTarget.style.transform = 'scale(1.1)';
-                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.6)';
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            addImageToSetlist(image);
-
-                            // Pulse animation on click
-                            const button = e.currentTarget;
-                            button.style.animation = 'none';
-                            setTimeout(() => {
-                              if (button && button.style) {
-                                button.style.animation = 'pulse 0.4s ease';
-                              }
-                            }, 10);
-                          }}
+                          style={{ width: '100%' }}
+                          onClick={addBlankToSetlist}
                         >
-                          +
+                          {t('presenter.addBlankSlide')}
                         </Button>
                       </div>
-                    );
-                  })
-                )}
-                {/* Add Blank Slide Button */}
-                <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #ddd' }}>
-                  <Button
-                    variant="outline-secondary"
-                    size="sm"
-                    style={{ width: '100%' }}
-                    onClick={addBlankToSetlist}
-                  >
-                    {t('presenter.addBlankSlide')}
-                  </Button>
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -6662,6 +6762,8 @@ function PresenterMode() {
                   key={slide.id || index}
                   onClick={() => {
                     setSelectedPresentationSlideIndex(index);
+                    // Clear tools and local media overlay before broadcasting
+                    stopNonOverlayTools();
                     // Project the presentation slide to viewers
                     socketService.operatorUpdateSlide({
                       roomId: room.id,

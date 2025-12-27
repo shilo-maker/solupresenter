@@ -467,7 +467,9 @@
     "showHideLines": "הצג/הסתר שורות",
     "originalText": "טקסט מקורי",
     "transliteration": "תעתיק",
-    "translation": "תרגום"
+    "translation": "תרגום",
+    "localMediaShowing": "מדיה מקומית מוצגת",
+    "resumingSoon": "חוזרים בקרוב..."
   },
   "bible": {
     "title": "תנ\"ך",
@@ -597,8 +599,12 @@
     "images": "תמונות",
     "bible": "תנ״ך",
     "tools": "כלים",
-    "localMedia": "מדיה",
+    "localMedia": "מדיה מקומית",
+    "cloudMedia": "ענן",
     "localMediaTitle": "מדיה מקומית",
+    "requiresDisplay": "דורש מסך",
+    "localMediaNotSupported": "מדיה מקומית דורשת דפדפן עם תמיכה ב-Presentation API",
+    "localMediaRequiresDisplay": "לחץ על 'הצג על מסך מחובר' קודם כדי להשתמש במדיה מקומית",
     "selectMediaFile": "בחר קובץ",
     "broadcastImage": "שדר תמונה",
     "showOnDisplay": "הצג על המסך",

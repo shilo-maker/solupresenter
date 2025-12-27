@@ -257,6 +257,26 @@ class SocketService {
     }
   }
 
+  operatorUpdateLocalMediaStatus(roomId, visible) {
+    if (!this.socket) {
+      console.error('❌ No socket available to update local media status');
+      return;
+    }
+
+    console.log('📺 Updating local media status:', { roomId, visible });
+
+    if (this.socket.connected) {
+      this.socket.emit('operator:localMediaStatus', { roomId, visible });
+      console.log('📡 operator:localMediaStatus event emitted');
+    } else {
+      console.log('⏳ Socket not connected, waiting...');
+      this.socket.once('connect', () => {
+        console.log('✅ Socket connected, now sending local media status');
+        this.socket.emit('operator:localMediaStatus', { roomId, visible });
+      });
+    }
+  }
+
   // Viewer methods
   viewerJoinRoom(pin) {
     if (!this.socket) {
@@ -338,6 +358,12 @@ class SocketService {
   onThemeUpdate(callback) {
     if (this.socket) {
       this.socket.on('theme:update', callback);
+    }
+  }
+
+  onLocalMediaStatus(callback) {
+    if (this.socket) {
+      this.socket.on('localMedia:status', callback);
     }
   }
 

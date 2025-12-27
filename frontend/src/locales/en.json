@@ -467,7 +467,9 @@
     "showHideLines": "Show/Hide Lines",
     "originalText": "Original Text",
     "transliteration": "Transliteration",
-    "translation": "Translation"
+    "translation": "Translation",
+    "localMediaShowing": "Local media is being displayed",
+    "resumingSoon": "Resuming shortly..."
   },
   "bible": {
     "title": "Bible",
@@ -597,8 +599,12 @@
     "images": "Images",
     "bible": "Bible",
     "tools": "Tools",
-    "localMedia": "Media",
+    "localMedia": "Local Media",
+    "cloudMedia": "Cloud",
     "localMediaTitle": "Local Media",
+    "requiresDisplay": "requires display",
+    "localMediaNotSupported": "Local media requires a browser with Presentation API support",
+    "localMediaRequiresDisplay": "Click 'Present to connected display' first to use local media",
     "selectMediaFile": "Select File",
     "broadcastImage": "Broadcast Image",
     "showOnDisplay": "Show on Display",

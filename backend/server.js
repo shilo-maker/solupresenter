@@ -637,6 +637,29 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Operator updates local media status (to show overlay on online viewers)
+  socket.on('operator:localMediaStatus', async (data) => {
+    try {
+      const { roomId, visible } = data;
+
+      const room = await Room.findByPk(roomId);
+      if (!room) {
+        socket.emit('error', { message: 'Room not found' });
+        return;
+      }
+
+      // Broadcast to all viewers in the room
+      io.to(`room:${room.pin}`).emit('localMedia:status', {
+        visible
+      });
+
+      console.log(`📺 Local media status broadcast to room ${room.pin}: ${visible ? 'showing' : 'hidden'}`);
+    } catch (error) {
+      console.error('Error in operator:localMediaStatus:', error);
+      socket.emit('error', { message: 'Failed to update local media status' });
+    }
+  });
+
   // Heartbeat - ping/pong
   socket.on('ping', (timestamp) => {
     socket.emit('pong', timestamp);

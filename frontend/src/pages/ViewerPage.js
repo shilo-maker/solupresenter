@@ -66,6 +66,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
   const stopwatchIntervalRef = useRef(null);
   // Announcement animation state
   const [announcementBanner, setAnnouncementBanner] = useState({ visible: false, text: '', animating: false });
+  const [localMediaOverlay, setLocalMediaOverlay] = useState(false); // For showing overlay when operator displays local media
 
   // Theme state - use initialTheme from remoteConfig if provided (for custom remote screens)
   const [viewerTheme, setViewerTheme] = useState(remoteConfig?.initialTheme || null);
@@ -490,6 +491,12 @@ function ViewerPage({ remotePin, remoteConfig }) {
         console.log('🎨 Theme update received:', data.theme);
         setViewerTheme(data.theme);
       }
+    });
+
+    // Handle local media status (show overlay when operator displays local media on HDMI)
+    socketService.onLocalMediaStatus((data) => {
+      console.log('📺 Local media status received:', data.visible);
+      setLocalMediaOverlay(data.visible);
     });
 
     // Check if PIN or room name is in URL query params and auto-join
@@ -2566,6 +2573,36 @@ function ViewerPage({ remotePin, remoteConfig }) {
           borderTop: '1px solid rgba(255, 255, 255, 0.2)'
         }}>
           {announcementBanner.text}
+        </div>
+      )}
+
+      {/* Local Media Overlay - shown when operator displays local media on HDMI */}
+      {localMediaOverlay && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.9)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2000,
+          color: 'white',
+          textAlign: 'center',
+          padding: '20px'
+        }}>
+          <svg width="80" height="80" viewBox="0 0 16 16" fill="currentColor" style={{ marginBottom: '20px', opacity: 0.7 }}>
+            <path d="M0 5a2 2 0 0 1 2-2h7.5a2 2 0 0 1 1.983 1.738l3.11-1.382A1 1 0 0 1 16 4.269v7.462a1 1 0 0 1-1.406.913l-3.111-1.382A2 2 0 0 1 9.5 13H2a2 2 0 0 1-2-2V5z"/>
+          </svg>
+          <div style={{ fontSize: 'clamp(1.5rem, 4vw, 2.5rem)', fontWeight: '300', marginBottom: '10px' }}>
+            {t('viewer.localMediaShowing', 'Local media is being displayed')}
+          </div>
+          <div style={{ fontSize: 'clamp(1rem, 2.5vw, 1.5rem)', opacity: 0.7 }}>
+            {t('viewer.resumingSoon', 'Resuming shortly...')}
+          </div>
         </div>
       )}
       </div>

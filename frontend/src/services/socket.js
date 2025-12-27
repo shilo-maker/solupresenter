@@ -278,51 +278,51 @@ class SocketService {
   }
 
 
-  // Vimeo methods
-  operatorVimeoLoad(roomId, videoId, title) {
+  // YouTube methods
+  operatorYoutubeLoad(roomId, videoId, title) {
     if (!this.socket) {
-      console.error('❌ No socket available to load Vimeo video');
+      console.error('❌ No socket available to load YouTube video');
       return;
     }
 
-    console.log('▶️ Loading Vimeo video:', { roomId, videoId, title });
+    console.log('▶️ Loading YouTube video:', { roomId, videoId, title });
 
     if (this.socket.connected) {
-      this.socket.emit('operator:vimeoLoad', { roomId, videoId, title });
+      this.socket.emit('operator:youtubeLoad', { roomId, videoId, title });
     } else {
       this.socket.once('connect', () => {
-        this.socket.emit('operator:vimeoLoad', { roomId, videoId, title });
+        this.socket.emit('operator:youtubeLoad', { roomId, videoId, title });
       });
     }
   }
 
-  operatorVimeoPlay(roomId, currentTime) {
+  operatorYoutubePlay(roomId, currentTime) {
     if (this.socket?.connected) {
-      this.socket.emit('operator:vimeoPlay', { roomId, currentTime });
+      this.socket.emit('operator:youtubePlay', { roomId, currentTime });
     }
   }
 
-  operatorVimeoPause(roomId, currentTime) {
+  operatorYoutubePause(roomId, currentTime) {
     if (this.socket?.connected) {
-      this.socket.emit('operator:vimeoPause', { roomId, currentTime });
+      this.socket.emit('operator:youtubePause', { roomId, currentTime });
     }
   }
 
-  operatorVimeoSeek(roomId, currentTime) {
+  operatorYoutubeSeek(roomId, currentTime) {
     if (this.socket?.connected) {
-      this.socket.emit('operator:vimeoSeek', { roomId, currentTime });
+      this.socket.emit('operator:youtubeSeek', { roomId, currentTime });
     }
   }
 
-  operatorVimeoStop(roomId) {
+  operatorYoutubeStop(roomId) {
     if (this.socket?.connected) {
-      this.socket.emit('operator:vimeoStop', { roomId });
+      this.socket.emit('operator:youtubeStop', { roomId });
     }
   }
 
-  operatorVimeoSync(roomId, currentTime, isPlaying) {
+  operatorYoutubeSync(roomId, currentTime, isPlaying) {
     if (this.socket?.connected) {
-      this.socket.emit('operator:vimeoSync', { roomId, currentTime, isPlaying });
+      this.socket.emit('operator:youtubeSync', { roomId, currentTime, isPlaying });
     }
   }
 
@@ -417,39 +417,39 @@ class SocketService {
   }
 
 
-  onVimeoLoad(callback) {
+  onYoutubeLoad(callback) {
     if (this.socket) {
-      this.socket.on('vimeo:load', callback);
+      this.socket.on('youtube:load', callback);
     }
   }
 
-  onVimeoPlay(callback) {
+  onYoutubePlay(callback) {
     if (this.socket) {
-      this.socket.on('vimeo:play', callback);
+      this.socket.on('youtube:play', callback);
     }
   }
 
-  onVimeoPause(callback) {
+  onYoutubePause(callback) {
     if (this.socket) {
-      this.socket.on('vimeo:pause', callback);
+      this.socket.on('youtube:pause', callback);
     }
   }
 
-  onVimeoSeek(callback) {
+  onYoutubeSeek(callback) {
     if (this.socket) {
-      this.socket.on('vimeo:seek', callback);
+      this.socket.on('youtube:seek', callback);
     }
   }
 
-  onVimeoStop(callback) {
+  onYoutubeStop(callback) {
     if (this.socket) {
-      this.socket.on('vimeo:stop', callback);
+      this.socket.on('youtube:stop', callback);
     }
   }
 
-  onVimeoSync(callback) {
+  onYoutubeSync(callback) {
     if (this.socket) {
-      this.socket.on('vimeo:sync', callback);
+      this.socket.on('youtube:sync', callback);
     }
   }
 

@@ -588,10 +588,10 @@ io.on('connection', (socket) => {
   });
 
 
-  // ==================== Vimeo Video Handlers ====================
+  // ==================== YouTube Video Handlers ====================
 
-  // Load Vimeo video for viewers
-  socket.on('operator:vimeoLoad', async (data) => {
+  // Load YouTube video for viewers
+  socket.on('operator:youtubeLoad', async (data) => {
     try {
       const { roomId, videoId, title } = data;
       const room = await Room.findByPk(roomId);
@@ -601,16 +601,16 @@ io.on('connection', (socket) => {
         return;
       }
 
-      console.log(`▶️ Loading Vimeo video in room ${room.pin}: ${videoId} - ${title}`);
-      io.to(`room:${room.pin}`).emit('vimeo:load', { videoId, title });
+      console.log(`▶️ Loading YouTube video in room ${room.pin}: ${videoId} - ${title}`);
+      io.to(`room:${room.pin}`).emit('youtube:load', { videoId, title });
     } catch (error) {
-      console.error('Error in operator:vimeoLoad:', error);
-      socket.emit('error', { message: 'Failed to load Vimeo video' });
+      console.error('Error in operator:youtubeLoad:', error);
+      socket.emit('error', { message: 'Failed to load YouTube video' });
     }
   });
 
-  // Play Vimeo video
-  socket.on('operator:vimeoPlay', async (data) => {
+  // Play YouTube video
+  socket.on('operator:youtubePlay', async (data) => {
     try {
       const { roomId, currentTime } = data;
       const room = await Room.findByPk(roomId);
@@ -620,15 +620,15 @@ io.on('connection', (socket) => {
         return;
       }
 
-      console.log(`▶️ Playing Vimeo in room ${room.pin} at ${currentTime}s`);
-      io.to(`room:${room.pin}`).emit('vimeo:play', { currentTime });
+      console.log(`▶️ Playing YouTube in room ${room.pin} at ${currentTime}s`);
+      io.to(`room:${room.pin}`).emit('youtube:play', { currentTime });
     } catch (error) {
-      console.error('Error in operator:vimeoPlay:', error);
+      console.error('Error in operator:youtubePlay:', error);
     }
   });
 
-  // Pause Vimeo video
-  socket.on('operator:vimeoPause', async (data) => {
+  // Pause YouTube video
+  socket.on('operator:youtubePause', async (data) => {
     try {
       const { roomId, currentTime } = data;
       const room = await Room.findByPk(roomId);
@@ -638,15 +638,15 @@ io.on('connection', (socket) => {
         return;
       }
 
-      console.log(`⏸️ Pausing Vimeo in room ${room.pin} at ${currentTime}s`);
-      io.to(`room:${room.pin}`).emit('vimeo:pause', { currentTime });
+      console.log(`⏸️ Pausing YouTube in room ${room.pin} at ${currentTime}s`);
+      io.to(`room:${room.pin}`).emit('youtube:pause', { currentTime });
     } catch (error) {
-      console.error('Error in operator:vimeoPause:', error);
+      console.error('Error in operator:youtubePause:', error);
     }
   });
 
-  // Seek Vimeo video
-  socket.on('operator:vimeoSeek', async (data) => {
+  // Seek YouTube video
+  socket.on('operator:youtubeSeek', async (data) => {
     try {
       const { roomId, currentTime } = data;
       const room = await Room.findByPk(roomId);
@@ -656,15 +656,15 @@ io.on('connection', (socket) => {
         return;
       }
 
-      console.log(`⏩ Seeking Vimeo in room ${room.pin} to ${currentTime}s`);
-      io.to(`room:${room.pin}`).emit('vimeo:seek', { currentTime });
+      console.log(`⏩ Seeking YouTube in room ${room.pin} to ${currentTime}s`);
+      io.to(`room:${room.pin}`).emit('youtube:seek', { currentTime });
     } catch (error) {
-      console.error('Error in operator:vimeoSeek:', error);
+      console.error('Error in operator:youtubeSeek:', error);
     }
   });
 
-  // Stop Vimeo video (clear from display)
-  socket.on('operator:vimeoStop', async (data) => {
+  // Stop YouTube video (clear from display)
+  socket.on('operator:youtubeStop', async (data) => {
     try {
       const { roomId } = data;
       const room = await Room.findByPk(roomId);
@@ -674,15 +674,15 @@ io.on('connection', (socket) => {
         return;
       }
 
-      console.log(`🛑 Stopping Vimeo in room ${room.pin}`);
-      io.to(`room:${room.pin}`).emit('vimeo:stop');
+      console.log(`🛑 Stopping YouTube in room ${room.pin}`);
+      io.to(`room:${room.pin}`).emit('youtube:stop');
     } catch (error) {
-      console.error('Error in operator:vimeoStop:', error);
+      console.error('Error in operator:youtubeStop:', error);
     }
   });
 
-  // Sync Vimeo playback state
-  socket.on('operator:vimeoSync', async (data) => {
+  // Sync YouTube playback state
+  socket.on('operator:youtubeSync', async (data) => {
     try {
       const { roomId, currentTime, isPlaying } = data;
       const room = await Room.findByPk(roomId);
@@ -692,13 +692,13 @@ io.on('connection', (socket) => {
         return;
       }
 
-      io.to(`room:${room.pin}`).emit('vimeo:sync', { currentTime, isPlaying });
+      io.to(`room:${room.pin}`).emit('youtube:sync', { currentTime, isPlaying });
     } catch (error) {
-      console.error('Error in operator:vimeoSync:', error);
+      console.error('Error in operator:youtubeSync:', error);
     }
   });
 
-  // ==================== End Vimeo Handlers ====================
+  // ==================== End YouTube Handlers ====================
 
   // Operator applies a viewer theme
   socket.on('operator:applyTheme', async (data) => {

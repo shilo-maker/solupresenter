@@ -68,13 +68,15 @@ function ViewerPage({ remotePin, remoteConfig }) {
   const [announcementBanner, setAnnouncementBanner] = useState({ visible: false, text: '', animating: false });
   const [localMediaOverlay, setLocalMediaOverlay] = useState(false);
 
-  // Vimeo state
-  const [vimeoVideoId, setVimeoVideoId] = useState(null);
-  const [vimeoTitle, setVimeoTitle] = useState('');
-  const [vimeoPlaying, setVimeoPlaying] = useState(false);
-  const [vimeoCurrentTime, setVimeoCurrentTime] = useState(0);
-  const vimeoPlayerRef = useRef(null);
-  const vimeoContainerRef = useRef(null);
+  // YouTube state
+  const [youtubeVideoId, setYoutubeVideoId] = useState(null);
+  const [youtubeTitle, setYoutubeTitle] = useState('');
+  const [youtubePlaying, setYoutubePlaying] = useState(false);
+  const [youtubeCurrentTime, setYoutubeCurrentTime] = useState(0);
+  const youtubePlayerRef = useRef(null);
+  const youtubeReadyRef = useRef(false);
+  const [youtubeAPIReady, setYoutubeAPIReady] = useState(false);
+  const youtubePlayingRef = useRef(false); // Ref to avoid stale closure in sync handler // For showing overlay when operator displays local media
 
   // Theme state - use initialTheme from remoteConfig if provided (for custom remote screens)
   const [viewerTheme, setViewerTheme] = useState(remoteConfig?.initialTheme || null);
@@ -94,65 +96,60 @@ function ViewerPage({ remotePin, remoteConfig }) {
   const [showTransliteration, setShowTransliteration] = useState(true);
   const [showTranslation, setShowTranslation] = useState(true);
 
-  // Load Vimeo Player.js and initialize player when video loads
+  // Load YouTube IFrame API
   useEffect(() => {
-    if (vimeoVideoId && vimeoContainerRef.current) {
-      // Load Vimeo Player.js if not already loaded
-      const loadVimeoPlayer = async () => {
-        if (!window.Vimeo) {
-          const script = document.createElement('script');
-          script.src = 'https://player.vimeo.com/api/player.js';
-          script.async = true;
-          await new Promise((resolve) => {
-            script.onload = resolve;
-            document.head.appendChild(script);
-          });
-        }
-
-        // Create the player
-        if (vimeoContainerRef.current) {
-          // Clear any existing player
-          vimeoContainerRef.current.innerHTML = '';
-
-          const player = new window.Vimeo.Player(vimeoContainerRef.current, {
-            id: vimeoVideoId,
-            width: '100%',
-            height: '100%',
-            autoplay: false,
-            controls: true,
-            responsive: true
-          });
-
-          vimeoPlayerRef.current = player;
-
-          player.on('play', () => {
-            console.log('Vimeo playing');
-          });
-
-          player.on('pause', () => {
-            console.log('Vimeo paused');
-          });
-
-          player.on('timeupdate', (data) => {
-            setVimeoCurrentTime(data.seconds);
-          });
-
-          player.ready().then(() => {
-            console.log('Vimeo player ready');
-          });
-        }
-      };
-
-      loadVimeoPlayer();
-
-      return () => {
-        if (vimeoPlayerRef.current) {
-          vimeoPlayerRef.current.destroy();
-          vimeoPlayerRef.current = null;
-        }
-      };
+    if (window.YT && window.YT.Player) {
+      setYoutubeAPIReady(true);
+      return;
     }
-  }, [vimeoVideoId]);
+
+    // Define the callback that YouTube API calls when ready
+    window.onYouTubeIframeAPIReady = () => {
+      console.log('YouTube IFrame API ready');
+      setYoutubeAPIReady(true);
+    };
+
+    // Load the script if not already present
+    if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    }
+  }, []);
+
+  // Initialize YouTube player when video loads and API is ready
+  useEffect(() => {
+    if (youtubeVideoId && youtubeAPIReady) {
+      youtubeReadyRef.current = false;
+      youtubePlayerRef.current = new window.YT.Player('youtube-player', {
+        videoId: youtubeVideoId,
+        playerVars: {
+          autoplay: 0,
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
+          modestbranding: 1,
+          rel: 0,
+          showinfo: 0,
+          iv_load_policy: 3
+        },
+        events: {
+          onReady: () => {
+            console.log('YouTube player ready');
+            youtubeReadyRef.current = true;
+          }
+        }
+      });
+    }
+
+    return () => {
+      if (youtubePlayerRef.current && youtubePlayerRef.current.destroy) {
+        youtubePlayerRef.current.destroy();
+        youtubePlayerRef.current = null;
+      }
+    };
+  }, [youtubeVideoId, youtubeAPIReady]);
 
   // Refs for click outside detection
   const controlsRef = useRef(null);
@@ -568,60 +565,73 @@ function ViewerPage({ remotePin, remoteConfig }) {
     });
 
     // YouTube socket listeners
-    socketService.onVimeoLoad((data) => {
+    socketService.onYoutubeLoad((data) => {
       console.log('▶️ YouTube load:', data.videoId);
-      setVimeoVideoId(data.videoId);
-      setVimeoTitle(data.title);
-      setVimeoPlaying(false);
-      setVimeoCurrentTime(0);
-            // Clear other content
+      setYoutubeVideoId(data.videoId);
+      setYoutubeTitle(data.title);
+      setYoutubePlaying(false);
+      setYoutubeCurrentTime(0);
+      // Clear other content
       setCurrentSlide(null);
       setImageUrl(null);
       setPresentationData(null);
       setToolsData(null);
     });
 
-    socketService.onVimeoPlay((data) => {
+    socketService.onYoutubePlay((data) => {
       console.log('▶️ YouTube play at', data.currentTime);
-      setVimeoPlaying(true);
-      setVimeoCurrentTime(data.currentTime);
-          });
+      setYoutubePlaying(true);
+      youtubePlayingRef.current = true;
+      setYoutubeCurrentTime(data.currentTime);
+      if (youtubePlayerRef.current && youtubeReadyRef.current) {
+        youtubePlayerRef.current.seekTo(data.currentTime, true);
+        youtubePlayerRef.current.playVideo();
+      }
+    });
 
-    socketService.onVimeoPause((data) => {
+    socketService.onYoutubePause((data) => {
       console.log('⏸️ YouTube pause at', data.currentTime);
-      setVimeoPlaying(false);
-      setVimeoCurrentTime(data.currentTime);
-          });
+      setYoutubePlaying(false);
+      youtubePlayingRef.current = false;
+      setYoutubeCurrentTime(data.currentTime);
+      if (youtubePlayerRef.current && youtubeReadyRef.current) {
+        youtubePlayerRef.current.pauseVideo();
+      }
+    });
 
-    socketService.onVimeoSeek((data) => {
+    socketService.onYoutubeSeek((data) => {
       console.log('⏩ YouTube seek to', data.currentTime);
-      setVimeoCurrentTime(data.currentTime);
-      // Seeking will reload iframe with new start time
+      setYoutubeCurrentTime(data.currentTime);
+      if (youtubePlayerRef.current && youtubeReadyRef.current) {
+        youtubePlayerRef.current.seekTo(data.currentTime, true);
+      }
     });
 
-    socketService.onVimeoStop(() => {
+    socketService.onYoutubeStop(() => {
       console.log('🛑 YouTube stop');
-      setVimeoVideoId(null);
-      setVimeoTitle('');
-      setVimeoPlaying(false);
-            setVimeoCurrentTime(0);
+      setYoutubeVideoId(null);
+      setYoutubeTitle('');
+      setYoutubePlaying(false);
+      youtubePlayingRef.current = false;
+      setYoutubeCurrentTime(0);
     });
 
-    socketService.onVimeoSync((data) => {
-      setVimeoCurrentTime(data.currentTime);
-      if (vimeoPlayerRef.current) {
-        vimeoPlayerRef.current.getCurrentTime().then((currentTime) => {
-          // Only sync if more than 2 seconds off
-          if (Math.abs(currentTime - data.currentTime) > 2) {
-            vimeoPlayerRef.current.setCurrentTime(data.currentTime);
-          }
-        });
-        if (data.isPlaying && !vimeoPlaying) {
-          vimeoPlayerRef.current.play();
-          setVimeoPlaying(true);
-        } else if (!data.isPlaying && vimeoPlaying) {
-          vimeoPlayerRef.current.pause();
-          setVimeoPlaying(false);
+    socketService.onYoutubeSync((data) => {
+      if (youtubePlayerRef.current && youtubeReadyRef.current) {
+        const currentPlayerTime = youtubePlayerRef.current.getCurrentTime();
+        // Only sync if more than 2 seconds off
+        if (Math.abs(currentPlayerTime - data.currentTime) > 2) {
+          youtubePlayerRef.current.seekTo(data.currentTime, true);
+        }
+        // Use ref instead of state to avoid stale closure
+        if (data.isPlaying && !youtubePlayingRef.current) {
+          youtubePlayerRef.current.playVideo();
+          setYoutubePlaying(true);
+          youtubePlayingRef.current = true;
+        } else if (!data.isPlaying && youtubePlayingRef.current) {
+          youtubePlayerRef.current.pauseVideo();
+          setYoutubePlaying(false);
+          youtubePlayingRef.current = false;
         }
       }
     });
@@ -1462,6 +1472,21 @@ function ViewerPage({ remotePin, remoteConfig }) {
       );
     }
 
+    // Render YouTube video
+    if (youtubeVideoId) {
+      return (
+        <div style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#000'
+        }}>
+          <div id="youtube-player" style={{ width: '100%', height: '100%' }} />
+        </div>
+      );
+    }
 
     // Render presentation slide (bypasses theme)
     if (presentationData && presentationData.slide) {

@@ -205,19 +205,19 @@ function PresenterMode() {
   const [slideSectionOpen, setSlideSectionOpen] = useState(true);
   const [mediaLocalExpanded, setMediaLocalExpanded] = useState(false);
   const [mediaCloudExpanded, setMediaCloudExpanded] = useState(false);
-  const [mediaVimeoExpanded, setMediaVimeoExpanded] = useState(false);
+  const [mediaYouTubeExpanded, setMediaYouTubeExpanded] = useState(false);
 
   // YouTube state
-  const [vimeoVideos, setVimeoVideos] = useState([]);
-  const [vimeoUrlInput, setVimeoUrlInput] = useState('');
-  const [vimeoLoading, setVimeoLoading] = useState(false);
-  const [vimeoOnDisplay, setVimeoOnDisplay] = useState(false);
-  const [vimeoPlaying, setVimeoPlaying] = useState(false);
-  const [vimeoCurrentTime, setVimeoCurrentTime] = useState(0);
-  const [vimeoDuration, setVimeoDuration] = useState(0);
-  const vimeoPlayerRef = useRef(null);
-  const vimeoSyncIntervalRef = useRef(null);
-  const vimeoTimeIntervalRef = useRef(null);
+  const [youtubeVideos, setYoutubeVideos] = useState([]);
+  const [youtubeUrlInput, setYoutubeUrlInput] = useState('');
+  const [youtubeLoading, setYoutubeLoading] = useState(false);
+  const [youtubeOnDisplay, setYoutubeOnDisplay] = useState(false);
+  const [youtubePlaying, setYoutubePlaying] = useState(false);
+  const [youtubeCurrentTime, setYoutubeCurrentTime] = useState(0);
+  const [youtubeDuration, setYoutubeDuration] = useState(0);
+  const youtubePlayerRef = useRef(null);
+  const youtubeSyncIntervalRef = useRef(null);
+  const youtubeTimeIntervalRef = useRef(null);
 
   // Chromecast state
   const [castAvailable, setCastAvailable] = useState(false);
@@ -1912,18 +1912,18 @@ function PresenterMode() {
             type: 'blank',
             order: index
           };
-                      } else if (item.type === 'vimeo') {
+                      } else if (item.type === 'youtube') {
                         return {
                           title: (
                             <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <svg width="14" height="14" viewBox="0 0 16 16" fill="white">
                                 <path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.007 2.007 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.007 2.007 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31.4 31.4 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.007 2.007 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A99.788 99.788 0 0 1 7.858 2h.193zM6.4 5.209v4.818l4.157-2.408L6.4 5.209z"/>
                               </svg>
-                              {item.vimeoData?.title || t('presenter.vimeoVideo', 'Vimeo Video')}
+                              {item.youtubeData?.title || t('presenter.youtubeVideo', 'YouTube Video')}
                             </span>
                           ),
                           bgColor: 'transparent',
-                          borderLeft: '4px solid #1ab7ea'
+                          borderLeft: '4px solid #FF0000'
                         };
         } else if (item.type === 'section') {
           return {
@@ -2085,10 +2085,10 @@ function PresenterMode() {
               };
             } else if (item.type === 'blank') {
               return { type: 'blank', data: null };
-            } else if (item.type === 'vimeo' && item.vimeoData) {
+            } else if (item.type === 'youtube' && item.youtubeData) {
               return {
-                type: 'vimeo',
-                vimeoData: item.vimeoData
+                type: 'youtube',
+                youtubeData: item.youtubeData
               };
             } else if (item.type === 'section') {
               return { type: 'section', data: { title: item.sectionTitle } };
@@ -2360,10 +2360,10 @@ function PresenterMode() {
 
 
   // YouTube helper functions
-  const extractVimeoVideoId = useCallback((url) => {
+  const extractYouTubeVideoId = useCallback((url) => {
     if (!url) return null;
     const patterns = [
-      /(?:vimeo\.com\/)([0-9]+)/,
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([a-zA-Z0-9_-]{11})/,
       /^([a-zA-Z0-9_-]{11})$/
     ];
     for (const pattern of patterns) {
@@ -2373,15 +2373,15 @@ function PresenterMode() {
     return null;
   }, []);
 
-  const fetchVimeoMetadata = useCallback(async (videoId) => {
+  const fetchYouTubeMetadata = useCallback(async (videoId) => {
     try {
-      const response = await fetch(`https://vimeo.com/api/oembed.json?url=https://vimeo.com/${videoId}`);
+      const response = await fetch(`https://www.youtube.com/oembed?url=https://youtube.com/watch?v=${videoId}&format=json`);
       if (!response.ok) throw new Error('Video not found');
       const data = await response.json();
       return {
         videoId,
         title: data.title,
-        thumbnail: data.thumbnail_url
+        thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
       };
     } catch (error) {
       console.error('Error fetching YouTube metadata:', error);
@@ -2389,112 +2389,112 @@ function PresenterMode() {
     }
   }, []);
 
-  const handleAddVimeoVideo = useCallback(async () => {
-    const videoId = extractVimeoVideoId(vimeoUrlInput);
+  const handleAddYoutubeVideo = useCallback(async () => {
+    const videoId = extractYouTubeVideoId(youtubeUrlInput);
     if (!videoId) {
-      setError(t('invalidVimeoUrl') || 'Invalid Vimeo URL');
+      setError(t('invalidYoutubeUrl') || 'Invalid YouTube URL');
       return;
     }
-    if (vimeoVideos.some(v => v.videoId === videoId)) {
-      setVimeoUrlInput('');
+    if (youtubeVideos.some(v => v.videoId === videoId)) {
+      setYoutubeUrlInput('');
       return;
     }
-    setVimeoLoading(true);
+    setYoutubeLoading(true);
     try {
-      const metadata = await fetchVimeoMetadata(videoId);
+      const metadata = await fetchYouTubeMetadata(videoId);
       if (metadata) {
-        setVimeoVideos(prev => [...prev, metadata]);
-        setVimeoUrlInput('');
+        setYoutubeVideos(prev => [...prev, metadata]);
+        setYoutubeUrlInput('');
       } else {
-        setError(t('invalidVimeoUrl') || 'Could not load Vimeo video');
+        setError(t('invalidYoutubeUrl') || 'Could not load video');
       }
     } finally {
-      setVimeoLoading(false);
+      setYoutubeLoading(false);
     }
-  }, [vimeoUrlInput, vimeoVideos, extractVimeoVideoId, fetchVimeoMetadata, t]);
+  }, [youtubeUrlInput, youtubeVideos, extractYouTubeVideoId, fetchYouTubeMetadata, t]);
 
-  const handleRemoveVimeoVideo = useCallback((videoId) => {
-    setVimeoVideos(prev => prev.filter(v => v.videoId !== videoId));
+  const handleRemoveYoutubeVideo = useCallback((videoId) => {
+    setYoutubeVideos(prev => prev.filter(v => v.videoId !== videoId));
   }, []);
 
-  const handleVimeoPresent = useCallback(() => {
+  const handleYoutubePresent = useCallback(() => {
     if (!currentItem || currentItem.type !== 'youtube' || !room) return;
-    socketService.operatorVimeoLoad(room.id, currentItem.vimeoData.videoId, currentItem.vimeoData.title);
-    setVimeoOnDisplay(true);
-    setVimeoPlaying(false);
-    setVimeoCurrentTime(0);
+    socketService.operatorYoutubeLoad(room.id, currentItem.youtubeData.videoId, currentItem.youtubeData.title);
+    setYoutubeOnDisplay(true);
+    setYoutubePlaying(false);
+    setYoutubeCurrentTime(0);
   }, [currentItem, room]);
 
-  const handleVimeoPlay = useCallback(() => {
+  const handleYoutubePlay = useCallback(() => {
     if (!room) return;
-    socketService.operatorVimeoPlay(room.id, vimeoCurrentTime);
-    setVimeoPlaying(true);
-  }, [room, vimeoCurrentTime]);
+    socketService.operatorYoutubePlay(room.id, youtubeCurrentTime);
+    setYoutubePlaying(true);
+  }, [room, youtubeCurrentTime]);
 
-  const handleVimeoPause = useCallback(() => {
+  const handleYoutubePause = useCallback(() => {
     if (!room) return;
-    socketService.operatorVimeoPause(room.id, vimeoCurrentTime);
-    setVimeoPlaying(false);
-  }, [room, vimeoCurrentTime]);
+    socketService.operatorYoutubePause(room.id, youtubeCurrentTime);
+    setYoutubePlaying(false);
+  }, [room, youtubeCurrentTime]);
 
-  const handleVimeoSeek = useCallback((time) => {
+  const handleYoutubeSeek = useCallback((time) => {
     if (!room) return;
-    socketService.operatorVimeoSeek(room.id, time);
-    setVimeoCurrentTime(time);
+    socketService.operatorYoutubeSeek(room.id, time);
+    setYoutubeCurrentTime(time);
   }, [room]);
 
-  const handleVimeoStop = useCallback(() => {
+  const handleYoutubeStop = useCallback(() => {
     if (!room) return;
-    socketService.operatorVimeoStop(room.id);
-    setVimeoOnDisplay(false);
-    setVimeoPlaying(false);
-    setVimeoCurrentTime(0);
+    socketService.operatorYoutubeStop(room.id);
+    setYoutubeOnDisplay(false);
+    setYoutubePlaying(false);
+    setYoutubeCurrentTime(0);
   }, [room]);
 
   // YouTube time tracking - increment time every second while playing
   useEffect(() => {
-    if (vimeoPlaying && vimeoOnDisplay) {
-      vimeoTimeIntervalRef.current = setInterval(() => {
-        setVimeoCurrentTime(prev => {
+    if (youtubePlaying && youtubeOnDisplay) {
+      youtubeTimeIntervalRef.current = setInterval(() => {
+        setYoutubeCurrentTime(prev => {
           const newTime = prev + 1;
           // Cap at duration if we have it
-          return vimeoDuration > 0 ? Math.min(newTime, vimeoDuration) : newTime;
+          return youtubeDuration > 0 ? Math.min(newTime, youtubeDuration) : newTime;
         });
       }, 1000);
     } else {
-      if (vimeoTimeIntervalRef.current) {
-        clearInterval(vimeoTimeIntervalRef.current);
-        vimeoTimeIntervalRef.current = null;
+      if (youtubeTimeIntervalRef.current) {
+        clearInterval(youtubeTimeIntervalRef.current);
+        youtubeTimeIntervalRef.current = null;
       }
     }
     return () => {
-      if (vimeoTimeIntervalRef.current) {
-        clearInterval(vimeoTimeIntervalRef.current);
+      if (youtubeTimeIntervalRef.current) {
+        clearInterval(youtubeTimeIntervalRef.current);
       }
     };
-  }, [vimeoPlaying, vimeoOnDisplay, vimeoDuration]);
+  }, [youtubePlaying, youtubeOnDisplay, youtubeDuration]);
 
   // YouTube sync interval - send current time to viewers periodically
   useEffect(() => {
-    if (vimeoPlaying && vimeoOnDisplay && room) {
-      vimeoSyncIntervalRef.current = setInterval(() => {
-        setVimeoCurrentTime(currentTime => {
-          socketService.operatorVimeoSync(room.id, currentTime, true);
+    if (youtubePlaying && youtubeOnDisplay && room) {
+      youtubeSyncIntervalRef.current = setInterval(() => {
+        setYoutubeCurrentTime(currentTime => {
+          socketService.operatorYoutubeSync(room.id, currentTime, true);
           return currentTime; // Return unchanged to avoid state mutation
         });
       }, 5000);
     } else {
-      if (vimeoSyncIntervalRef.current) {
-        clearInterval(vimeoSyncIntervalRef.current);
-        vimeoSyncIntervalRef.current = null;
+      if (youtubeSyncIntervalRef.current) {
+        clearInterval(youtubeSyncIntervalRef.current);
+        youtubeSyncIntervalRef.current = null;
       }
     }
     return () => {
-      if (vimeoSyncIntervalRef.current) {
-        clearInterval(vimeoSyncIntervalRef.current);
+      if (youtubeSyncIntervalRef.current) {
+        clearInterval(youtubeSyncIntervalRef.current);
       }
     };
-  }, [vimeoPlaying, vimeoOnDisplay, room]);
+  }, [youtubePlaying, youtubeOnDisplay, room]);
 
   const handleSearch = (query) => {
     setSearchQuery(query);
@@ -3572,7 +3572,7 @@ function PresenterMode() {
         // Return early - don't change currentItem or selectedSetlistIndex
         return 'announcement';
       }
-    } else if (item.type === 'vimeo') {
+    } else if (item.type === 'youtube') {
       setCurrentSong(null);
       setSelectedPresentation(null);
       // YouTube item selected
@@ -5732,35 +5732,35 @@ function PresenterMode() {
                       backgroundColor: 'rgba(255, 0, 0, 0.1)',
                       transition: 'background-color 0.2s ease',
                       color: 'white',
-                      marginBottom: mediaVimeoExpanded ? '10px' : '0'
+                      marginBottom: mediaYouTubeExpanded ? '10px' : '0'
                     }}
-                    onClick={() => setMediaVimeoExpanded(!mediaVimeoExpanded)}
+                    onClick={() => setMediaYouTubeExpanded(!mediaYouTubeExpanded)}
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 0, 0, 0.2)'}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 0, 0, 0.1)'}
                   >
-                    <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16" style={{ transform: mediaVimeoExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
+                    <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16" style={{ transform: mediaYouTubeExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
                       <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
                     </svg>
                     <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                       <path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.007 2.007 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.007 2.007 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31.4 31.4 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.007 2.007 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A99.788 99.788 0 0 1 7.858 2h.193zM6.4 5.209v4.818l4.157-2.408L6.4 5.209z"/>
                     </svg>
-                    <span style={{ fontWeight: '500' }}>{t('presenter.vimeo', 'Vimeo')}</span>
+                    <span style={{ fontWeight: '500' }}>{t('presenter.youtube', 'YouTube')}</span>
                   </div>
-                  {mediaVimeoExpanded && (
+                  {mediaYouTubeExpanded && (
                     <div style={{ paddingLeft: '10px' }}>
                       <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                        <Form.Control type="text" placeholder={t('presenter.enterVimeoUrl', 'Enter Vimeo URL...')} value={vimeoUrlInput} onChange={(e) => setVimeoUrlInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAddVimeoVideo()} style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', borderRadius: '8px', fontSize: '0.85rem' }} />
-                        <Button variant="danger" onClick={handleAddVimeoVideo} disabled={vimeoLoading || !vimeoUrlInput.trim()} style={{ borderRadius: '8px', padding: '0 16px', fontWeight: '500' }}>{vimeoLoading ? '...' : t('add', 'Add')}</Button>
+                        <Form.Control type="text" placeholder={t('presenter.enterYoutubeUrl', 'Enter YouTube URL...')} value={youtubeUrlInput} onChange={(e) => setYoutubeUrlInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAddYoutubeVideo()} style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', borderRadius: '8px', fontSize: '0.85rem' }} />
+                        <Button variant="danger" onClick={handleAddYoutubeVideo} disabled={youtubeLoading || !youtubeUrlInput.trim()} style={{ borderRadius: '8px', padding: '0 16px', fontWeight: '500' }}>{youtubeLoading ? '...' : t('add', 'Add')}</Button>
                       </div>
-                      {vimeoVideos.length === 0 ? (
-                        <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>{t('presenter.noVimeoVideos', 'No Vimeo videos added')}</p>
+                      {youtubeVideos.length === 0 ? (
+                        <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>{t('presenter.noYoutubeVideos', 'No YouTube videos added')}</p>
                       ) : (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px' }}>
-                          {vimeoVideos.map((video) => (
-                            <div key={video.videoId} style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer', border: '2px solid rgba(255,0,0,0.3)', transition: 'all 0.2s ease', aspectRatio: '16/9' }} onClick={() => selectItem({ type: 'vimeo', vimeoData: video })}>
+                          {youtubeVideos.map((video) => (
+                            <div key={video.videoId} style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer', border: '2px solid rgba(255,0,0,0.3)', transition: 'all 0.2s ease', aspectRatio: '16/9' }} onClick={() => selectItem({ type: 'youtube', youtubeData: video })}>
                               <img src={video.thumbnail} alt={video.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              <Button variant="danger" size="sm" style={{ position: 'absolute', top: '4px', right: '4px', zIndex: 10, borderRadius: '50%', width: '24px', height: '24px', padding: '0', fontSize: '1rem', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); setSetlist(prev => [...prev, { type: 'vimeo', vimeoData: video, order: prev.length }]); }}>+</Button>
-                              <Button variant="dark" size="sm" style={{ position: 'absolute', top: '4px', left: '4px', zIndex: 10, borderRadius: '50%', width: '20px', height: '20px', padding: '0', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.8 }} onClick={(e) => { e.stopPropagation(); handleRemoveVimeoVideo(video.videoId); }}>×</Button>
+                              <Button variant="danger" size="sm" style={{ position: 'absolute', top: '4px', right: '4px', zIndex: 10, borderRadius: '50%', width: '24px', height: '24px', padding: '0', fontSize: '1rem', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); setSetlist(prev => [...prev, { type: 'youtube', youtubeData: video, order: prev.length }]); }}>+</Button>
+                              <Button variant="dark" size="sm" style={{ position: 'absolute', top: '4px', left: '4px', zIndex: 10, borderRadius: '50%', width: '20px', height: '20px', padding: '0', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.8 }} onClick={(e) => { e.stopPropagation(); handleRemoveYoutubeVideo(video.videoId); }}>×</Button>
                               <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.9))', padding: '16px 6px 6px 6px', fontSize: '0.7rem', color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={video.title}>{video.title}</div>
                             </div>
                           ))}
@@ -6173,18 +6173,18 @@ function PresenterMode() {
                           bgColor: 'transparent',
                           borderLeft: '4px solid #f093fb'
                         };
-                      } else if (item.type === 'vimeo') {
+                      } else if (item.type === 'youtube') {
                         return {
                           title: (
                             <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <svg width="14" height="14" viewBox="0 0 16 16" fill="#1ab7ea">
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="#FF0000">
                                 <path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.007 2.007 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.007 2.007 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31.4 31.4 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.007 2.007 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A99.788 99.788 0 0 1 7.858 2h.193zM6.4 5.209v4.818l4.157-2.408L6.4 5.209z"/>
                               </svg>
-                              {item.vimeoData?.title || t('presenter.vimeoVideo', 'Vimeo Video')}
+                              {item.youtubeData?.title || t('presenter.youtubeVideo', 'YouTube Video')}
                             </span>
                           ),
                           bgColor: 'transparent',
-                          borderLeft: '4px solid #1ab7ea'
+                          borderLeft: '4px solid #FF0000'
                         };
                       } else if (item.type === 'section') {
                         return {
@@ -7084,30 +7084,30 @@ function PresenterMode() {
 
 
         {/* YouTube Preview Section */}
-        {slideSectionOpen && currentItem && currentItem.type === 'vimeo' && (
+        {slideSectionOpen && currentItem && currentItem.type === 'youtube' && (
           <div style={{ padding: '16px' }}>
             <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', borderRadius: '12px', overflow: 'hidden', marginBottom: '16px', backgroundColor: '#000' }}>
-              <img src={currentItem.vimeoData?.thumbnail} alt={currentItem.vimeoData?.title} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: vimeoOnDisplay ? 0.7 : 1 }} />
-              {vimeoOnDisplay && (<div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'rgba(0,0,0,0.7)', padding: '8px 16px', borderRadius: '8px', color: '#1ab7ea', fontWeight: 'bold', fontSize: '0.9rem' }}>{vimeoPlaying ? 'PLAYING' : 'ON DISPLAY'}</div>)}
-              {!vimeoOnDisplay && (<div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '60px', height: '60px', backgroundColor: 'rgba(255,0,0,0.9)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={handleVimeoPresent}><svg width="24" height="24" fill="white" viewBox="0 0 16 16"><path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg></div>)}
+              <img src={currentItem.youtubeData?.thumbnail} alt={currentItem.youtubeData?.title} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: youtubeOnDisplay ? 0.7 : 1 }} />
+              {youtubeOnDisplay && (<div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'rgba(0,0,0,0.7)', padding: '8px 16px', borderRadius: '8px', color: '#FF0000', fontWeight: 'bold', fontSize: '0.9rem' }}>{youtubePlaying ? 'PLAYING' : 'ON DISPLAY'}</div>)}
+              {!youtubeOnDisplay && (<div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '60px', height: '60px', backgroundColor: 'rgba(255,0,0,0.9)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={handleYoutubePresent}><svg width="24" height="24" fill="white" viewBox="0 0 16 16"><path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg></div>)}
             </div>
-            <div style={{ color: 'white', fontSize: '1rem', fontWeight: '500', marginBottom: '12px', textAlign: 'center' }}>{currentItem.vimeoData?.title}</div>
-            {vimeoOnDisplay && (
+            <div style={{ color: 'white', fontSize: '1rem', fontWeight: '500', marginBottom: '12px', textAlign: 'center' }}>{currentItem.youtubeData?.title}</div>
+            {youtubeOnDisplay && (
               <div style={{ marginBottom: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-                  <span style={{ color: 'white', fontSize: '0.8rem', minWidth: '45px' }}>{Math.floor(vimeoCurrentTime / 60)}:{String(Math.floor(vimeoCurrentTime % 60)).padStart(2, '0')}</span>
-                  <input type="range" min="0" max={vimeoDuration || 100} value={vimeoCurrentTime} onChange={(e) => handleVimeoSeek(parseFloat(e.target.value))} style={{ flex: 1, height: '6px', cursor: 'pointer', accentColor: '#1ab7ea' }} />
-                  <span style={{ color: 'white', fontSize: '0.8rem', minWidth: '45px', textAlign: 'right' }}>{vimeoDuration ? `${Math.floor(vimeoDuration / 60)}:${String(Math.floor(vimeoDuration % 60)).padStart(2, '0')}` : '--:--'}</span>
+                  <span style={{ color: 'white', fontSize: '0.8rem', minWidth: '45px' }}>{Math.floor(youtubeCurrentTime / 60)}:{String(Math.floor(youtubeCurrentTime % 60)).padStart(2, '0')}</span>
+                  <input type="range" min="0" max={youtubeDuration || 100} value={youtubeCurrentTime} onChange={(e) => handleYoutubeSeek(parseFloat(e.target.value))} style={{ flex: 1, height: '6px', cursor: 'pointer', accentColor: '#FF0000' }} />
+                  <span style={{ color: 'white', fontSize: '0.8rem', minWidth: '45px', textAlign: 'right' }}>{youtubeDuration ? `${Math.floor(youtubeDuration / 60)}:${String(Math.floor(youtubeDuration % 60)).padStart(2, '0')}` : '--:--'}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
-                  <Button variant={vimeoPlaying ? 'warning' : 'success'} onClick={vimeoPlaying ? handleVimeoPause : handleVimeoPlay} style={{ borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
-                    {vimeoPlaying ? (<svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/></svg>) : (<svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>)}
+                  <Button variant={youtubePlaying ? 'warning' : 'success'} onClick={youtubePlaying ? handleYoutubePause : handleYoutubePlay} style={{ borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                    {youtubePlaying ? (<svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/></svg>) : (<svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>)}
                   </Button>
                 </div>
               </div>
             )}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-              {!vimeoOnDisplay ? (<Button variant="danger" onClick={handleVimeoPresent} style={{ padding: '10px 24px', borderRadius: '8px', fontWeight: '500' }}>{t('presenter.present', 'Present')}</Button>) : (<Button variant="secondary" onClick={handleVimeoStop} style={{ padding: '10px 24px', borderRadius: '8px', fontWeight: '500' }}>{t('presenter.stop', 'Stop')}</Button>)}
+              {!youtubeOnDisplay ? (<Button variant="danger" onClick={handleYoutubePresent} style={{ padding: '10px 24px', borderRadius: '8px', fontWeight: '500' }}>{t('presenter.present', 'Present')}</Button>) : (<Button variant="secondary" onClick={handleYoutubeStop} style={{ padding: '10px 24px', borderRadius: '8px', fontWeight: '500' }}>{t('presenter.stop', 'Stop')}</Button>)}
             </div>
           </div>
         )}

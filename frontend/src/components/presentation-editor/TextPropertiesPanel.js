@@ -136,15 +136,15 @@ const TextPropertiesPanel = ({
         <div>
           <ButtonGroup size="sm">
             <Button
-              variant={textBox.textAlign === 'left' ? 'primary' : 'outline-light'}
-              onClick={() => handleChange('textAlign', 'left')}
-              title="Left"
+              variant={textBox.textAlign === 'right' ? 'primary' : 'outline-light'}
+              onClick={() => handleChange('textAlign', 'right')}
+              title="Right"
               style={{ padding: '4px 8px' }}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <rect x="1" y="2" width="10" height="2" />
+                <rect x="5" y="2" width="10" height="2" />
                 <rect x="1" y="6" width="14" height="2" />
-                <rect x="1" y="10" width="8" height="2" />
+                <rect x="7" y="10" width="8" height="2" />
               </svg>
             </Button>
             <Button
@@ -160,15 +160,15 @@ const TextPropertiesPanel = ({
               </svg>
             </Button>
             <Button
-              variant={textBox.textAlign === 'right' ? 'primary' : 'outline-light'}
-              onClick={() => handleChange('textAlign', 'right')}
-              title="Right"
+              variant={textBox.textAlign === 'left' ? 'primary' : 'outline-light'}
+              onClick={() => handleChange('textAlign', 'left')}
+              title="Left"
               style={{ padding: '4px 8px' }}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <rect x="5" y="2" width="10" height="2" />
+                <rect x="1" y="2" width="10" height="2" />
                 <rect x="1" y="6" width="14" height="2" />
-                <rect x="7" y="10" width="8" height="2" />
+                <rect x="1" y="10" width="8" height="2" />
               </svg>
             </Button>
           </ButtonGroup>
@@ -181,15 +181,15 @@ const TextPropertiesPanel = ({
         <div>
           <ButtonGroup size="sm">
             <Button
-              variant={textBox.verticalAlign === 'top' ? 'primary' : 'outline-light'}
-              onClick={() => handleChange('verticalAlign', 'top')}
-              title="Top"
+              variant={textBox.verticalAlign === 'bottom' ? 'primary' : 'outline-light'}
+              onClick={() => handleChange('verticalAlign', 'bottom')}
+              title="Bottom"
               style={{ padding: '4px 8px' }}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                 <rect x="1" y="1" width="14" height="1" rx="0.5" opacity="0.4" />
                 <rect x="1" y="14" width="14" height="1" rx="0.5" opacity="0.4" />
-                <rect x="5" y="3" width="6" height="2" />
+                <rect x="5" y="11" width="6" height="2" />
               </svg>
             </Button>
             <Button
@@ -205,15 +205,15 @@ const TextPropertiesPanel = ({
               </svg>
             </Button>
             <Button
-              variant={textBox.verticalAlign === 'bottom' ? 'primary' : 'outline-light'}
-              onClick={() => handleChange('verticalAlign', 'bottom')}
-              title="Bottom"
+              variant={textBox.verticalAlign === 'top' ? 'primary' : 'outline-light'}
+              onClick={() => handleChange('verticalAlign', 'top')}
+              title="Top"
               style={{ padding: '4px 8px' }}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                 <rect x="1" y="1" width="14" height="1" rx="0.5" opacity="0.4" />
                 <rect x="1" y="14" width="14" height="1" rx="0.5" opacity="0.4" />
-                <rect x="5" y="11" width="6" height="2" />
+                <rect x="5" y="3" width="6" height="2" />
               </svg>
             </Button>
           </ButtonGroup>

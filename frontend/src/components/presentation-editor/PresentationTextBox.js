@@ -182,6 +182,8 @@ const PresentationTextBox = ({
             }
           }}
           onKeyDown={(e) => {
+            // Stop propagation for all keys when editing to prevent parent handlers from capturing them
+            e.stopPropagation();
             if (e.key === 'Escape') {
               e.target.innerText = textBox.text || '';
               setIsEditing(false);

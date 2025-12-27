@@ -5494,8 +5494,9 @@ function PresenterMode() {
                                   size="sm"
                                   style={{
                                     position: 'absolute',
-                                    bottom: '4px',
+                                    top: '4px',
                                     right: '4px',
+                                    zIndex: 10,
                                     borderRadius: '50%',
                                     width: '24px',
                                     height: '24px',

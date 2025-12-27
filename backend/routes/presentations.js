@@ -20,7 +20,7 @@ router.get('/', authenticateToken, async (req, res) => {
         as: 'creator',
         attributes: ['email']
       }],
-      order: [['title', 'ASC']],
+      order: [['createdAt', 'DESC']],
       raw: false
     });
 
@@ -64,9 +64,9 @@ router.get('/search', authenticateToken, async (req, res) => {
       const searchTerm = query.toLowerCase();
       presentations = allPresentations.filter(p =>
         p.title.toLowerCase().includes(searchTerm)
-      ).sort((a, b) => a.title.localeCompare(b.title));
+      ).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     } else {
-      presentations = allPresentations.sort((a, b) => a.title.localeCompare(b.title));
+      presentations = allPresentations.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }
 
     res.json({ presentations });

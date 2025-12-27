@@ -636,10 +636,14 @@ function ViewerPage({ remotePin, remoteConfig }) {
     });
 
     socketService.onYoutubeSeek((data) => {
-      console.log('⏩ YouTube seek to', data.currentTime);
       setYoutubeCurrentTime(data.currentTime);
       if (youtubePlayerRef.current && youtubeReadyRef.current) {
-        youtubePlayerRef.current.seekTo(data.currentTime, true);
+        const currentPlayerTime = youtubePlayerRef.current.getCurrentTime();
+        // Only seek if more than 1 second off to avoid stuttering
+        if (Math.abs(currentPlayerTime - data.currentTime) > 1) {
+          console.log('⏩ YouTube sync: drift', Math.abs(currentPlayerTime - data.currentTime).toFixed(2), 's, seeking to', data.currentTime);
+          youtubePlayerRef.current.seekTo(data.currentTime, true);
+        }
       }
     });
 

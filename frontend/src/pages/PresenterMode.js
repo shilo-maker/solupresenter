@@ -219,6 +219,9 @@ function PresenterMode() {
   const [youtubePlayerReady, setYoutubePlayerReady] = useState(false);
   const [youtubeVolume, setYoutubeVolume] = useState(100);
   const [youtubeMuted, setYoutubeMuted] = useState(false);
+  const [youtubeLoop, setYoutubeLoop] = useState(false);
+  const youtubeLoopRef = useRef(false); // Ref to access in callbacks
+  const roomRef = useRef(null); // Ref to access room in callbacks
   const youtubePlayerRef = useRef(null);
   const youtubeSyncIntervalRef = useRef(null);
   const youtubeTimeIntervalRef = useRef(null);
@@ -2511,6 +2514,16 @@ function PresenterMode() {
     setYoutubeCurrentTime(0);
   }, [room]);
 
+  // Keep loop ref in sync with state for use in callbacks
+  useEffect(() => {
+    youtubeLoopRef.current = youtubeLoop;
+  }, [youtubeLoop]);
+
+  // Keep room ref in sync for use in callbacks
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
+
   // Load YouTube IFrame API
   useEffect(() => {
     if (window.YT && window.YT.Player) {
@@ -2573,7 +2586,23 @@ function PresenterMode() {
             onStateChange: (event) => {
               // YT.PlayerState.ENDED = 0
               if (event.data === 0) {
-                setYoutubePlaying(false);
+                // Check if loop is enabled
+                if (youtubeLoopRef.current) {
+                  console.log('YouTube video ended, looping...');
+                  // Restart both players synced
+                  if (youtubePlayerRef.current) {
+                    youtubePlayerRef.current.seekTo(0, true);
+                    youtubePlayerRef.current.playVideo();
+                  }
+                  setYoutubeCurrentTime(0);
+                  // Also restart viewer
+                  if (roomRef.current) {
+                    socketService.operatorYoutubeSeek(roomRef.current.id, 0);
+                    socketService.operatorYoutubePlay(roomRef.current.id, 0);
+                  }
+                } else {
+                  setYoutubePlaying(false);
+                }
               }
             }
           }
@@ -2660,10 +2689,14 @@ function PresenterMode() {
   useEffect(() => {
     if (youtubePlaying && youtubeOnDisplay && room) {
       youtubeSyncIntervalRef.current = setInterval(() => {
-        // Get actual time from operator's player for accuracy
-        if (youtubePlayerRef.current && youtubePlayerRef.current.getCurrentTime) {
-          const currentTime = youtubePlayerRef.current.getCurrentTime();
-          socketService.operatorYoutubeSeek(room.id, currentTime);
+        // Only sync if operator's player is ready and actually playing
+        if (youtubePlayerRef.current && youtubePlayerRef.current.getCurrentTime && youtubePlayerRef.current.getPlayerState) {
+          const playerState = youtubePlayerRef.current.getPlayerState();
+          // Only sync if playing (state 1) - don't sync if paused/buffering/blocked
+          if (playerState === 1) {
+            const currentTime = youtubePlayerRef.current.getCurrentTime();
+            socketService.operatorYoutubeSeek(room.id, currentTime);
+          }
         }
       }, 1000);
     } else {
@@ -7363,6 +7396,23 @@ function PresenterMode() {
                   <span style={{ color: 'white', fontSize: '12px', minWidth: '35px' }}>
                     {youtubeMuted ? '0%' : `${youtubeVolume}%`}
                   </span>
+                  <Button
+                    variant={youtubeLoop ? 'info' : 'outline-light'}
+                    onClick={() => setYoutubeLoop(!youtubeLoop)}
+                    style={{
+                      borderRadius: '8px',
+                      padding: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginLeft: '8px'
+                    }}
+                    title={youtubeLoop ? t('presenter.loopOn', 'Loop: On') : t('presenter.loopOff', 'Loop: Off')}
+                  >
+                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                      <path d="M11 5.466V4H5a4 4 0 0 0-3.584 5.777.5.5 0 1 1-.896.446A5 5 0 0 1 5 3h6V1.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192Zm3.81.086a.5.5 0 0 1 .67.225A5 5 0 0 1 11 13H5v1.466a.25.25 0 0 1-.41.192l-2.36-1.966a.25.25 0 0 1 0-.384l2.36-1.966a.25.25 0 0 1 .41.192V12h6a4 4 0 0 0 3.585-5.777.5.5 0 0 1 .225-.67Z"/>
+                    </svg>
+                  </Button>
                 </div>
               </div>
             )}

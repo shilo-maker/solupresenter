@@ -117,7 +117,7 @@ function PresenterMode() {
 
   // Presentations state
   const [allPresentations, setAllPresentations] = useState([]);
-  const [presentationSearchResults, setPresentationSearchResults] = useState([]);
+  const [presentationSearchQuery, setPresentationSearchQuery] = useState('');
   const [presentationsLoading, setPresentationsLoading] = useState(true);
   const [showPresentationEditor, setShowPresentationEditor] = useState(false);
   const [editingPresentation, setEditingPresentation] = useState(null);
@@ -2210,7 +2210,6 @@ function PresenterMode() {
       const response = await presentationAPI.getAll();
       const presentations = response.data.presentations || [];
       setAllPresentations(presentations);
-      setPresentationSearchResults(presentations);
     } catch (error) {
       console.error('Error fetching presentations:', error);
     } finally {
@@ -2432,6 +2431,9 @@ function PresenterMode() {
           setSelectedBibleChapter(chapterNum);
         }
       }
+    } else if (activeResourcePanel === 'presentations') {
+      // Search presentations
+      setPresentationSearchQuery(query);
     } else {
       // Search images
       if (query.trim() === '') {
@@ -4298,7 +4300,7 @@ function PresenterMode() {
             </div>
 
             {/* Search bar - Glassmorphic style (hidden when Tools/Media tabs are active) */}
-            {activeResourcePanel !== 'tools' && activeResourcePanel !== 'media' && activeResourcePanel !== 'presentations' && (
+            {activeResourcePanel !== 'tools' && activeResourcePanel !== 'media' && (
             <div style={{ flex: '1 1 200px', minWidth: '200px', position: 'relative' }}>
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -4322,6 +4324,8 @@ function PresenterMode() {
                 placeholder={
                   activeResourcePanel === 'bible'
                     ? t('presenter.searchBiblePlaceholder')
+                    : activeResourcePanel === 'presentations'
+                    ? t('presenter.searchPresentations', 'Search presentations...')
                     : t('presenter.searchPlaceholder')
                 }
                 value={searchQuery}
@@ -5043,7 +5047,9 @@ function PresenterMode() {
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '4px' }}>
-                    {allPresentations.map((presentation) => {
+                    {allPresentations
+                      .filter(p => !presentationSearchQuery || p.title.toLowerCase().includes(presentationSearchQuery.toLowerCase()))
+                      .map((presentation) => {
                       const isSelected = selectedPresentation?.id === presentation.id;
                       return (
                       <div
@@ -5129,6 +5135,11 @@ function PresenterMode() {
                       </div>
                     );
                     })}
+                    {allPresentations.filter(p => !presentationSearchQuery || p.title.toLowerCase().includes(presentationSearchQuery.toLowerCase())).length === 0 && presentationSearchQuery && (
+                      <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
+                        {t('presenter.noPresentationsMatch', 'No presentations match your search')}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

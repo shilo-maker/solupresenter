@@ -745,7 +745,12 @@
     "original": "מקור",
     "bilingual": "דו-לשוני",
     "verse": "פסוק",
-    "slide": "שקף"
+    "slide": "שקף",
+    "presentations": "מצגות",
+    "noPresentations": "אין מצגות עדיין. לחץ על \"חדש\" כדי ליצור אחת.",
+    "createNewPresentation": "צור מצגת חדשה",
+    "searchPresentations": "חפש מצגות...",
+    "noPresentationsMatch": "לא נמצאו מצגות מתאימות"
   },
   "themes": {
     "noTheme": "קלאסי",

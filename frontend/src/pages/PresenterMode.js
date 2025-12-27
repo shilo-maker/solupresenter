@@ -2514,6 +2514,16 @@ function PresenterMode() {
   const handleYoutubeStop = useCallback(() => {
     if (!room) return;
     socketService.operatorYoutubeStop(room.id);
+    // Destroy player before React unmounts to avoid DOM errors
+    if (youtubePlayerRef.current) {
+      try {
+        youtubePlayerRef.current.destroy();
+      } catch (e) {
+        console.log('YouTube player cleanup error (safe to ignore):', e);
+      }
+      youtubePlayerRef.current = null;
+    }
+    setYoutubePlayerReady(false);
     setYoutubeOnDisplay(false);
     setYoutubePlaying(false);
     setYoutubeCurrentTime(0);

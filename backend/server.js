@@ -252,13 +252,13 @@ io.on('connection', (socket) => {
 
         room = await Room.findOne({
           where: { id: publicRoom.activeRoomId, isActive: true },
-          attributes: ['id', 'pin', 'operatorId', 'currentSlide', 'currentImageUrl', 'currentBibleData', 'backgroundImage', 'viewerCount', 'activeThemeId']
+          attributes: ['id', 'pin', 'operatorId', 'currentSlide', 'currentImageUrl', 'currentBibleData', 'currentPresentationData', 'backgroundImage', 'viewerCount', 'activeThemeId']
         });
       } else {
         // Otherwise, look up by PIN
         room = await Room.findOne({
           where: { pin: pin.toUpperCase(), isActive: true },
-          attributes: ['id', 'pin', 'operatorId', 'currentSlide', 'currentImageUrl', 'currentBibleData', 'backgroundImage', 'viewerCount', 'activeThemeId']
+          attributes: ['id', 'pin', 'operatorId', 'currentSlide', 'currentImageUrl', 'currentBibleData', 'currentPresentationData', 'backgroundImage', 'viewerCount', 'activeThemeId']
         });
       }
 
@@ -362,6 +362,7 @@ io.on('connection', (socket) => {
         isBlank: room.currentSlide?.isBlank || false,
         backgroundImage: room.backgroundImage || '',
         toolsData: roomToolsData.get(room.pin) || null,
+        presentationData: room.currentPresentationData || null,
         theme: theme,
         stageMonitorTheme: stageMonitorTheme
       };
@@ -480,6 +481,7 @@ io.on('connection', (socket) => {
             roomToUpdate.currentSlide = currentSlideData;
             roomToUpdate.currentImageUrl = imageUrl || null;
             roomToUpdate.currentBibleData = bibleData || slideData || null;
+            roomToUpdate.currentPresentationData = presentationData || null;
             await roomToUpdate.updateActivity();
           }
         } catch (err) {

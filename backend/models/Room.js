@@ -40,6 +40,10 @@ const Room = sequelize.define('Room', {
     type: DataTypes.JSONB,
     allowNull: true
   },
+  currentPresentationData: {
+    type: DataTypes.JSONB,
+    allowNull: true
+  },
   backgroundImage: {
     type: DataTypes.STRING,
     defaultValue: ''
@@ -57,6 +61,10 @@ const Room = sequelize.define('Room', {
     allowNull: true
   },
   linkedPermanentSetlistId: {
+    type: DataTypes.UUID,
+    allowNull: true
+  },
+  activeThemeId: {
     type: DataTypes.UUID,
     allowNull: true
   },

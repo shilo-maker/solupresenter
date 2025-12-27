@@ -48,6 +48,7 @@ const PresentationEditor = ({
   const [backgroundSettings, setBackgroundSettings] = useState({ type: 'color', value: '#000000' });
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [showConfirmClose, setShowConfirmClose] = useState(false);
 
   // Load existing presentation data
   useEffect(() => {
@@ -201,12 +202,16 @@ const PresentationEditor = ({
   // Handle close with unsaved changes warning
   const handleClose = () => {
     if (hasChanges) {
-      if (window.confirm('You have unsaved changes. Are you sure you want to close?')) {
-        onHide();
-      }
+      setShowConfirmClose(true);
     } else {
       onHide();
     }
+  };
+
+  // Confirm close without saving
+  const handleConfirmClose = () => {
+    setShowConfirmClose(false);
+    onHide();
   };
 
   return (
@@ -376,6 +381,30 @@ const PresentationEditor = ({
           border: 1px solid rgba(255, 255, 255, 0.1);
         }
       `}</style>
+
+      {/* Confirm close dialog */}
+      <Modal
+        show={showConfirmClose}
+        onHide={() => setShowConfirmClose(false)}
+        centered
+        size="sm"
+        style={{ zIndex: 1060 }}
+      >
+        <Modal.Header style={{ backgroundColor: '#1a1a2e', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+          <Modal.Title style={{ color: '#fff', fontSize: '16px' }}>Unsaved Changes</Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{ backgroundColor: '#1a1a2e', color: '#ccc' }}>
+          You have unsaved changes. Are you sure you want to close without saving?
+        </Modal.Body>
+        <Modal.Footer style={{ backgroundColor: '#1a1a2e', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          <Button variant="outline-light" size="sm" onClick={() => setShowConfirmClose(false)}>
+            Keep Editing
+          </Button>
+          <Button variant="danger" size="sm" onClick={handleConfirmClose}>
+            Discard Changes
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </Modal>
   );
 };

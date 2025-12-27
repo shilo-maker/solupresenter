@@ -5541,17 +5541,6 @@ function PresenterMode() {
                           })}
                         </div>
                       )}
-                      {/* Add Blank Slide Button */}
-                      <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.2)' }}>
-                        <Button
-                          variant="outline-secondary"
-                          size="sm"
-                          style={{ width: '100%' }}
-                          onClick={addBlankToSetlist}
-                        >
-                          {t('presenter.addBlankSlide')}
-                        </Button>
-                      </div>
                     </div>
                   )}
                 </div>

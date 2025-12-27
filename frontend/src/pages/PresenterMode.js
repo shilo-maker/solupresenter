@@ -6678,21 +6678,35 @@ function PresenterMode() {
                         top: `${tb.y}%`,
                         width: `${tb.width}%`,
                         height: `${tb.height}%`,
-                        fontSize: '8px',
-                        fontWeight: tb.bold ? 'bold' : 'normal',
-                        fontStyle: tb.italic ? 'italic' : 'normal',
-                        color: tb.color || '#fff',
                         backgroundColor: tb.backgroundColor || 'transparent',
-                        overflow: 'hidden',
-                        display: 'flex',
-                        alignItems: tb.textAlign === 'left' ? 'flex-start' : tb.textAlign === 'right' ? 'flex-end' : 'center',
-                        justifyContent: tb.verticalAlign === 'top' ? 'flex-start' : tb.verticalAlign === 'bottom' ? 'flex-end' : 'center',
-                        textAlign: tb.textAlign || 'center',
-                        padding: '2px',
-                        boxSizing: 'border-box'
+                        overflow: 'hidden'
                       }}
                     >
-                      {tb.text?.substring(0, 50) || ''}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          right: 0,
+                          top: tb.verticalAlign === 'top' ? 0 : 'auto',
+                          bottom: tb.verticalAlign === 'bottom' ? 0 : 'auto',
+                          ...((!tb.verticalAlign || tb.verticalAlign === 'center') && {
+                            top: '50%',
+                            transform: 'translateY(-50%)'
+                          }),
+                          fontSize: '8px',
+                          fontWeight: tb.bold ? 'bold' : 'normal',
+                          fontStyle: tb.italic ? 'italic' : 'normal',
+                          color: tb.color || '#fff',
+                          textAlign: tb.textAlign || 'center',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          padding: '2px',
+                          boxSizing: 'border-box'
+                        }}
+                      >
+                        {tb.text?.substring(0, 50) || ''}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -7457,6 +7471,10 @@ function PresenterMode() {
         onSave={(savedPresentation) => {
           // Refresh presentations list
           fetchPresentations();
+          // Update selectedPresentation if it's the same one being edited
+          if (selectedPresentation && savedPresentation && selectedPresentation.id === savedPresentation.id) {
+            setSelectedPresentation(savedPresentation);
+          }
         }}
       />
 

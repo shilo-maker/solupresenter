@@ -62,17 +62,23 @@ const SlidesThumbnailPanel = ({
               backgroundColor: textBox.backgroundColor || 'transparent',
               border: '1px solid rgba(255, 255, 255, 0.3)',
               borderRadius: '2px',
-              overflow: 'hidden',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
+              overflow: 'hidden'
             }}
           >
             <div
               style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: textBox.verticalAlign === 'top' ? 0 : 'auto',
+                bottom: textBox.verticalAlign === 'bottom' ? 0 : 'auto',
+                ...((!textBox.verticalAlign || textBox.verticalAlign === 'center') && {
+                  top: '50%',
+                  transform: 'translateY(-50%)'
+                }),
                 fontSize: '6px',
                 color: textBox.color || '#fff',
-                textAlign: 'center',
+                textAlign: textBox.textAlign || 'center',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',

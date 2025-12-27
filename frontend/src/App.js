@@ -48,6 +48,10 @@ const SetlistList = lazy(() => import('./pages/SetlistList'));
 const SetlistCreate = lazy(() => import('./pages/SetlistCreate'));
 const SetlistView = lazy(() => import('./pages/SetlistView'));
 const SetlistEdit = lazy(() => import('./pages/SetlistEdit'));
+const PresentationList = lazy(() => import('./pages/PresentationList'));
+const PresentationCreate = lazy(() => import('./pages/PresentationCreate'));
+const PresentationView = lazy(() => import('./pages/PresentationView'));
+const PresentationEdit = lazy(() => import('./pages/PresentationEdit'));
 const Admin = lazy(() => import('./pages/Admin'));
 const MediaLibrary = lazy(() => import('./pages/MediaLibrary'));
 const Settings = lazy(() => import('./pages/Settings'));
@@ -154,6 +158,40 @@ function App() {
             element={
               <PrivateRoute>
                 <SetlistEdit />
+              </PrivateRoute>
+            }
+          />
+
+          {/* Presentation Management Routes */}
+          <Route
+            path="/presentations"
+            element={
+              <PrivateRoute>
+                <PresentationList />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/presentations/new"
+            element={
+              <PrivateRoute>
+                <PresentationCreate />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/presentations/:id"
+            element={
+              <PrivateRoute>
+                <PresentationView />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/presentations/:id/edit"
+            element={
+              <PrivateRoute>
+                <PresentationEdit />
               </PrivateRoute>
             }
           />

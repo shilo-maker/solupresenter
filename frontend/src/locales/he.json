@@ -39,7 +39,10 @@
     "copiedToClipboard": "הועתק ללוח!",
     "copied": "הועתק!",
     "failedToSearch": "החיפוש נכשל",
-    "failedToCopy": "ההעתקה נכשלה. העתק ידנית."
+    "failedToCopy": "ההעתקה נכשלה. העתק ידנית.",
+    "public": "ציבורי",
+    "private": "פרטי",
+    "clear": "נקה"
   },
   "nav": {
     "dashboard": "לוח בקרה",
@@ -152,7 +155,8 @@
     "adminDesc": "סקור ואשר הגשות שירים. נהל משתמשים ומאגר השירים הציבורי.",
     "settingsDesc": "הגדר שמות חדרים ציבוריים כדי שצופים יוכלו למצוא ולהצטרף להצגות שלך.",
     "themesDesc": "התאם אישית את אופן התצוגה של שקפים על מסכי הצופים עם עיצובים מותאמים.",
-    "remoteScreensDesc": "צור כתובות קבועות למסכי קיוסק או מכשירי Raspberry Pi שמתחברים אוטומטית להצגות שלך."
+    "remoteScreensDesc": "צור כתובות קבועות למסכי קיוסק או מכשירי Raspberry Pi שמתחברים אוטומטית להצגות שלך.",
+    "presentationsDesc": "צור ונהל שקופיות מצגת מותאמות אישית עם תיבות טקסט ועיצוב."
   },
   "songs": {
     "title": "שירים",
@@ -294,6 +298,36 @@
     "editingPublicCopy": "עריכת שיר ציבורי יוצרת עותק אישי שתוכל לשנות בחופשיות.",
     "success": "הצלחה",
     "info": "מידע"
+  },
+  "presentations": {
+    "title": "מצגות",
+    "manage": "נהל מצגות",
+    "createNew": "צור חדש",
+    "createFirst": "צור את המצגת הראשונה שלך",
+    "searchPlaceholder": "חפש מצגות...",
+    "noSearchResults": "לא נמצאו מצגות התואמות לחיפוש",
+    "noPresentationsYet": "עדיין לא יצרת מצגות.",
+    "slide": "שקופית",
+    "slides": "שקופיות",
+    "uses": "שימושים",
+    "updated": "עודכן",
+    "failedToLoad": "טעינת המצגות נכשלה",
+    "failedToDelete": "מחיקת המצגת נכשלה",
+    "deleteConfirm": "האם אתה בטוח שברצונך למחוק מצגת זו?",
+    "notFound": "המצגת לא נמצאה",
+    "backToList": "חזרה למצגות",
+    "myPresentation": "המצגת שלי",
+    "details": "פרטים",
+    "resolution": "רזולוציה",
+    "slideCount": "מספר שקופיות",
+    "usageCount": "מספר שימושים",
+    "createdAt": "נוצר",
+    "updatedAt": "עודכן",
+    "actions": "פעולות",
+    "presentThis": "הצג מצגת זו",
+    "allSlides": "כל השקופיות",
+    "noSlides": "אין שקופיות במצגת זו",
+    "noEditPermission": "אין לך הרשאה לערוך מצגת זו"
   },
   "setlists": {
     "title": "רשימות שירים",

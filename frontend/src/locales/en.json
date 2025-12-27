@@ -39,7 +39,10 @@
     "copiedToClipboard": "Copied to clipboard!",
     "copied": "Copied!",
     "failedToSearch": "Failed to search",
-    "failedToCopy": "Failed to copy. Please copy manually."
+    "failedToCopy": "Failed to copy. Please copy manually.",
+    "public": "Public",
+    "private": "Private",
+    "clear": "Clear"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -152,7 +155,8 @@
     "adminDesc": "Review and approve song submissions. Manage users and the public song database.",
     "settingsDesc": "Configure public room names so viewers can find and join your presentations by name.",
     "themesDesc": "Customize how slides appear on viewer screens with custom themes.",
-    "remoteScreensDesc": "Create fixed URLs for kiosk displays or Raspberry Pi devices that auto-connect to your presentations."
+    "remoteScreensDesc": "Create fixed URLs for kiosk displays or Raspberry Pi devices that auto-connect to your presentations.",
+    "presentationsDesc": "Create and manage custom presentation slides with text boxes and formatting."
   },
   "songs": {
     "title": "Songs",
@@ -294,6 +298,36 @@
     "editingPublicCopy": "Editing a public song creates a personal copy that you can modify freely.",
     "success": "Success",
     "info": "Info"
+  },
+  "presentations": {
+    "title": "Presentations",
+    "manage": "Manage Presentations",
+    "createNew": "Create New",
+    "createFirst": "Create Your First Presentation",
+    "searchPlaceholder": "Search presentations...",
+    "noSearchResults": "No presentations match your search",
+    "noPresentationsYet": "You haven't created any presentations yet.",
+    "slide": "slide",
+    "slides": "slides",
+    "uses": "uses",
+    "updated": "Updated",
+    "failedToLoad": "Failed to load presentations",
+    "failedToDelete": "Failed to delete presentation",
+    "deleteConfirm": "Are you sure you want to delete this presentation?",
+    "notFound": "Presentation not found",
+    "backToList": "Back to Presentations",
+    "myPresentation": "My Presentation",
+    "details": "Details",
+    "resolution": "Resolution",
+    "slideCount": "Slide Count",
+    "usageCount": "Usage Count",
+    "createdAt": "Created",
+    "updatedAt": "Updated",
+    "actions": "Actions",
+    "presentThis": "Present This",
+    "allSlides": "All Slides",
+    "noSlides": "No slides in this presentation",
+    "noEditPermission": "You don't have permission to edit this presentation"
   },
   "setlists": {
     "title": "Setlists",

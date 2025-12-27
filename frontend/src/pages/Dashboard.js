@@ -69,6 +69,20 @@ function Dashboard() {
           </Col>
         )}
 
+        <Col md={6}>
+          <Card className="h-100">
+            <Card.Body>
+              <Card.Title>{t('presentations.title')}</Card.Title>
+              <Card.Text>
+                {t('dashboard.presentationsDesc')}
+              </Card.Text>
+              <Button variant="primary" onClick={() => navigate('/presentations')}>
+                {t('presentations.manage')}
+              </Button>
+            </Card.Body>
+          </Card>
+        </Col>
+
         {isAdmin && (
           <Col md={6}>
             <Card className="h-100">

@@ -246,6 +246,10 @@ function PresenterMode() {
   const [mediaType, setMediaType] = useState(null); // 'image' or 'video'
   const [videoOnDisplay, setVideoOnDisplay] = useState(false); // Is video currently showing on HDMI
   const [videoPlaying, setVideoPlaying] = useState(true); // Is the displayed video playing or paused
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [videoVolume, setVideoVolume] = useState(1);
+  const [videoMuted, setVideoMuted] = useState(false);
   const [imageOnDisplay, setImageOnDisplay] = useState(false); // Is image currently showing on HDMI
   const localVideoRef = useRef(null); // Reference to local video element for preview
 
@@ -332,7 +336,7 @@ function PresenterMode() {
   const formatTime = (totalSeconds) => {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
+    const seconds = Math.floor(totalSeconds % 60);
     if (hours > 0) {
       return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
@@ -589,7 +593,13 @@ function PresenterMode() {
 
       console.log('📺 Video sent via Presentation API');
       setVideoOnDisplay(true);
-      setVideoPlaying(true);
+      setVideoPlaying(false);  // Start paused
+      setVideoCurrentTime(0);  // Reset time display
+      // Reset local preview to start position
+      if (localVideoRef.current) {
+        localVideoRef.current.currentTime = 0;
+        localVideoRef.current.pause();
+      }
       // Notify online viewers that local media is being shown
       if (room) {
         socketService.operatorUpdateLocalMediaStatus(room.id, true);
@@ -604,11 +614,50 @@ function PresenterMode() {
     if (!presentationConnection || presentationConnection.state !== 'connected') return;
 
     const newState = !videoPlaying;
+    // Sync position before play to ensure exact sync
+    if (newState && localVideoRef.current) {
+      const currentPos = localVideoRef.current.currentTime;
+      presentationConnection.send(JSON.stringify({ type: 'videoSeek', time: currentPos }));
+    }
     presentationConnection.send(JSON.stringify({
       type: newState ? 'videoPlay' : 'videoPause'
     }));
     setVideoPlaying(newState);
+    // Sync local preview
+    if (localVideoRef.current) {
+      if (newState) {
+        localVideoRef.current.play().catch(() => {});
+      } else {
+        localVideoRef.current.pause();
+      }
+    }
     console.log(`📺 Video ${newState ? 'playing' : 'paused'}`);
+  };
+
+  // Seek video on HDMI display
+  const seekVideo = (time) => {
+    if (!presentationConnection || presentationConnection.state !== 'connected') return;
+    presentationConnection.send(JSON.stringify({ type: 'videoSeek', time: time }));
+    setVideoCurrentTime(time);
+    if (localVideoRef.current) localVideoRef.current.currentTime = time;
+  };
+
+  // Set volume on HDMI display
+  const changeVideoVolume = (volume) => {
+    if (!presentationConnection || presentationConnection.state !== 'connected') return;
+    presentationConnection.send(JSON.stringify({ type: 'videoVolume', volume: volume }));
+    setVideoVolume(volume);
+    if (volume > 0) setVideoMuted(false);
+    // Note: Local preview stays muted - audio only on connected display
+  };
+
+  // Toggle mute on HDMI display
+  const toggleVideoMute = () => {
+    if (!presentationConnection || presentationConnection.state !== 'connected') return;
+    const newMuted = !videoMuted;
+    presentationConnection.send(JSON.stringify({ type: 'videoMute', muted: newMuted }));
+    setVideoMuted(newMuted);
+    // Note: Local preview stays muted - audio only on connected display
   };
 
   // Stop/Hide video on HDMI display
@@ -625,6 +674,12 @@ function PresenterMode() {
     // Notify online viewers that local media is no longer showing
     if (room) {
       socketService.operatorUpdateLocalMediaStatus(room.id, false);
+      // Restore the current slide on the display
+      if (currentSong) {
+        updateSlide(currentSong, currentSlideIndex, displayMode, isBlankActive);
+      } else if (isBlankActive) {
+        updateSlide(null, 0, displayMode, true);
+      }
     }
   };
 
@@ -718,6 +773,12 @@ function PresenterMode() {
     // Notify online viewers that local media is no longer showing
     if (room) {
       socketService.operatorUpdateLocalMediaStatus(room.id, false);
+      // Restore the current slide on the display
+      if (currentSong) {
+        updateSlide(currentSong, currentSlideIndex, displayMode, isBlankActive);
+      } else if (isBlankActive) {
+        updateSlide(null, 0, displayMode, true);
+      }
     }
   };
 
@@ -7579,56 +7640,190 @@ function PresenterMode() {
                 />
               ) : (
                 <video
-                  ref={localVideoRef}
-                  src={mediaPreviewUrl}
-                  controls
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  style={{ maxWidth: '100%', maxHeight: '100%' }}
-                  onLoadedData={() => console.log('Video loaded and ready')}
-                  onError={(e) => console.error('Video error:', e)}
-                />
+                    ref={localVideoRef}
+                    src={mediaPreviewUrl}
+                    muted
+                    playsInline
+                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                    onLoadedMetadata={(e) => setVideoDuration(e.target.duration)}
+                    onTimeUpdate={(e) => setVideoCurrentTime(e.target.currentTime)}
+                  />
               )}
-            </div>
-            <div style={{ color: 'white', fontSize: '1rem', fontWeight: '500', marginBottom: '12px', textAlign: 'center' }}>
-              {currentItem.data?.name}
+              {/* Filename overlay */}
+              <div style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                background: 'linear-gradient(transparent, rgba(0,0,0,0.8))',
+                padding: '20px 12px 10px',
+                color: 'white',
+                fontSize: '0.9rem',
+                fontWeight: '500',
+                textAlign: 'center',
+                textShadow: '0 1px 3px rgba(0,0,0,0.5)'
+              }}>
+                {currentItem.data?.name}
+              </div>
             </div>
 
-            {/* Controls for video when on display */}
+            {/* YouTube-Style Video Control Panel */}
             {mediaType === 'video' && videoOnDisplay && (
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '16px' }}>
-                <Button
-                  variant={videoPlaying ? "warning" : "success"}
-                  onClick={toggleVideoPlayback}
+              <div style={{
+                background: 'rgba(0,0,0,0.9)',
+                borderRadius: '8px',
+                marginBottom: '16px',
+                overflow: 'hidden',
+                direction: 'ltr'
+              }}>
+                {/* Progress Bar - YouTube style */}
+                <div
                   style={{
-                    borderRadius: '8px',
-                    padding: '10px 20px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    fontWeight: '500'
+                    position: 'relative',
+                    height: '5px',
+                    background: 'rgba(255,255,255,0.2)',
+                    cursor: 'pointer'
+                  }}
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const percent = (e.clientX - rect.left) / rect.width;
+                    seekVideo(percent * videoDuration);
                   }}
                 >
-                  {videoPlaying ? (
-                    <>
-                      <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/>
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: `${videoDuration ? (videoCurrentTime / videoDuration) * 100 : 0}%`,
+                    height: '100%',
+                    background: '#f00'
+                  }} />
+                  <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: `${videoDuration ? (videoCurrentTime / videoDuration) * 100 : 0}%`,
+                    transform: 'translate(-50%, -50%)',
+                    width: '13px',
+                    height: '13px',
+                    borderRadius: '50%',
+                    background: '#f00'
+                  }} />
+                  <input
+                    type="range"
+                    min="0"
+                    max={videoDuration || 100}
+                    value={videoCurrentTime}
+                    onChange={(e) => seekVideo(parseFloat(e.target.value))}
+                    style={{
+                      position: 'absolute',
+                      top: '-8px',
+                      left: 0,
+                      width: '100%',
+                      height: '20px',
+                      opacity: 0,
+                      cursor: 'pointer',
+                      margin: 0
+                    }}
+                  />
+                </div>
+
+                {/* Controls Bar */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  gap: '8px'
+                }}>
+                  {/* Play/Pause */}
+                  <button
+                    onClick={toggleVideoPlayback}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'white',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex'
+                    }}
+                  >
+                    {videoPlaying ? (
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
                       </svg>
-                      {t('presenter.pause', 'Pause')}
-                    </>
-                  ) : (
-                    <>
-                      <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+                    ) : (
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+                        <path d="M8 5v14l11-7z"/>
                       </svg>
-                      {t('presenter.play', 'Play')}
-                    </>
-                  )}
-                </Button>
+                    )}
+                  </button>
+
+                  {/* Volume */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <button
+                      onClick={toggleVideoMute}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'white',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex'
+                      }}
+                    >
+                      {videoMuted || videoVolume === 0 ? (
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                          <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+                        </svg>
+                      ) : (
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                          <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                        </svg>
+                      )}
+                    </button>
+                    <div style={{ width: '52px', height: '3px', background: 'rgba(255,255,255,0.3)', borderRadius: '2px', position: 'relative' }}>
+                      <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: `${videoMuted ? 0 : videoVolume * 100}%`,
+                        height: '100%',
+                        background: 'white',
+                        borderRadius: '2px'
+                      }} />
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={videoMuted ? 0 : videoVolume}
+                        onChange={(e) => changeVideoVolume(parseFloat(e.target.value))}
+                        style={{
+                          position: 'absolute',
+                          top: '-8px',
+                          left: 0,
+                          width: '100%',
+                          height: '20px',
+                          opacity: 0,
+                          cursor: 'pointer',
+                          margin: 0
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Time */}
+                  <div style={{
+                    color: 'white',
+                    fontSize: '13px',
+                    fontFamily: 'Roboto, Arial, sans-serif',
+                    marginLeft: '4px'
+                  }}>
+                    {formatTime(videoCurrentTime)} / {formatTime(videoDuration)}
+                  </div>
+                </div>
               </div>
             )}
+
 
             {/* Present/Stop Buttons */}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>

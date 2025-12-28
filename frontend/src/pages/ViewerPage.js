@@ -29,6 +29,9 @@ function ViewerPage({ remotePin, remoteConfig }) {
   const { t, i18n } = useTranslation();
   const location = useLocation();
 
+  // Check if this is a local presentation window (opened via Presentation API)
+  const isLocalViewer = new URLSearchParams(location.search).get('local') === 'true';
+
   const [pin, setPin] = useState('');
   const [joined, setJoined] = useState(false);
   const [error, setError] = useState('');
@@ -459,6 +462,12 @@ function ViewerPage({ remotePin, remoteConfig }) {
         }
       }
 
+      // Handle local media active status for new viewers
+      if (data.localMediaActive) {
+        console.log('📺 Local media is active on join');
+        setLocalMediaOverlay(true);
+      }
+
       setError('');
     });
 
@@ -760,6 +769,22 @@ function ViewerPage({ remotePin, remoteConfig }) {
                   console.log('▶️ Playing video');
                   if (localVideoRef.current) {
                     localVideoRef.current.play().catch(err => console.log('Play failed:', err));
+                  }
+                } else if (data.type === 'videoSeek') {
+                  console.log('⏩ Seeking video to:', data.time);
+                  if (localVideoRef.current) {
+                    localVideoRef.current.currentTime = data.time;
+                  }
+                } else if (data.type === 'videoVolume') {
+                  console.log('🔊 Setting video volume to:', data.volume);
+                  if (localVideoRef.current) {
+                    localVideoRef.current.volume = data.volume;
+                    localVideoRef.current.muted = false;
+                  }
+                } else if (data.type === 'videoMute') {
+                  console.log('🔇 Setting video mute:', data.muted);
+                  if (localVideoRef.current) {
+                    localVideoRef.current.muted = data.muted;
                   }
                 } else if (data.type === 'showImage') {
                   console.log('🖼️ Showing image:', data.fileName);
@@ -1440,19 +1465,15 @@ function ViewerPage({ remotePin, remoteConfig }) {
           <video
             ref={localVideoRef}
             src={localVideo.data}
-            autoPlay
             loop
             playsInline
-            controls
             style={{
               maxWidth: '100%',
               maxHeight: '100%',
               objectFit: 'contain'
             }}
             onLoadedData={(e) => {
-              console.log('🎬 Local video loaded and playing');
-              // Try to unmute after user interaction
-              e.target.play().catch(err => console.log('Autoplay blocked:', err));
+              console.log('🎬 Local video loaded, waiting for play command');
             }}
             onError={(e) => console.error('🎬 Local video error:', e.target.error)}
           />
@@ -2766,8 +2787,9 @@ function ViewerPage({ remotePin, remoteConfig }) {
         </div>
       )}
 
-      {/* Local Media Overlay - shown when operator displays local media on HDMI */}
-      {localMediaOverlay && (
+      {/* Local Media Overlay - shown to remote viewers when operator displays local media on HDMI */}
+      {/* Don't show on local presentation window since it's actually displaying the media */}
+      {localMediaOverlay && !isLocalViewer && (
         <div style={{
           position: 'fixed',
           top: 0,

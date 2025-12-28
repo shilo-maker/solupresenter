@@ -240,6 +240,7 @@ function PresenterMode() {
   const localViewerWindowRef = useRef(null); // Reference to fallback window for postMessage
 
   // Local Media state (for broadcasting local files without upload)
+  const [localMediaFiles, setLocalMediaFiles] = useState([]); // Array of { id, file, url, name, type: 'image'|'video' }
   const [selectedMediaFile, setSelectedMediaFile] = useState(null);
   const [mediaPreviewUrl, setMediaPreviewUrl] = useState(null);
   const [mediaType, setMediaType] = useState(null); // 'image' or 'video'
@@ -5742,7 +5743,7 @@ function PresenterMode() {
                   {mediaLocalExpanded && presentationConnection && (
                     <div style={{ paddingLeft: '10px' }}>
                       {/* File Input */}
-                      <div style={{ marginBottom: '15px' }}>
+                      <div style={{ marginBottom: '10px' }}>
                         <input
                           type="file"
                           accept="image/*,video/*"
@@ -5751,149 +5752,150 @@ function PresenterMode() {
                           onChange={(e) => {
                             const file = e.target.files[0];
                             if (file) {
-                              setSelectedMediaFile(file);
-                              setMediaType(file.type.startsWith('image/') ? 'image' : 'video');
-                              // Create preview URL
+                              const fileType = file.type.startsWith('image/') ? 'image' : 'video';
                               const url = URL.createObjectURL(file);
+                              const newMedia = {
+                                id: Date.now().toString(),
+                                file,
+                                url,
+                                name: file.name,
+                                type: fileType
+                              };
+                              setLocalMediaFiles(prev => [...prev, newMedia]);
+                              // Also select it and load into preview
+                              setSelectedMediaFile(file);
+                              setMediaType(fileType);
                               setMediaPreviewUrl(url);
+                              selectItem({ type: 'localMedia', data: newMedia });
                             }
+                            // Reset input so same file can be added again
+                            e.target.value = '';
                           }}
                         />
                         <Button
                           variant="outline-light"
+                          size="sm"
                           onClick={() => document.getElementById('local-media-input').click()}
-                          style={{ width: '100%', marginBottom: '10px' }}
+                          style={{ width: '100%' }}
                         >
-                          <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
-                            <path d="M4.5 11a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1M3 10.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0"/>
-                            <path d="M16 11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V9.51c0-.418.105-.83.305-1.197l2.472-4.531A1.5 1.5 0 0 1 4.094 3h7.812a1.5 1.5 0 0 1 1.317.782l2.472 4.53c.2.368.305.78.305 1.198zM3.655 4.26 1.592 8.043Q1.79 8 1.592 8h12q.21 0 .408.042L12.345 4.26a.5.5 0 0 0-.439-.26H4.094a.5.5 0 0 0-.44.26zM1 10v1a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1"/>
+                          <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '6px' }}>
+                            <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
                           </svg>
-                          {t('presenter.selectMediaFile')}
+                          {t('presenter.addMedia', 'Add Media')}
                         </Button>
                       </div>
 
-                      {/* Preview Area */}
-                      <div style={{
-                        backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                        borderRadius: '10px',
-                        padding: '10px',
-                        marginBottom: '15px',
-                        minHeight: '100px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        {!mediaPreviewUrl ? (
-                          <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem' }}>
-                            {t('presenter.noMediaSelected')}
-                          </span>
-                        ) : mediaType === 'image' ? (
-                          <img
-                            src={mediaPreviewUrl}
-                            alt="Preview"
-                            style={{
-                              maxWidth: '100%',
-                              maxHeight: '120px',
-                              borderRadius: '8px',
-                              objectFit: 'contain'
-                            }}
-                          />
-                        ) : (
-                          <video
-                            ref={localVideoRef}
-                            src={mediaPreviewUrl}
-                            controls
-                            autoPlay
-                            loop
-                            muted
-                            playsInline
-                            style={{
-                              maxWidth: '100%',
-                              maxHeight: '120px',
-                              borderRadius: '8px'
-                            }}
-                            onLoadedData={() => console.log('Video loaded and ready')}
-                            onError={(e) => console.error('Video error:', e)}
-                          />
-                        )}
-                      </div>
-
-                      {/* Broadcast/Stream Buttons */}
-                      {selectedMediaFile && (
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                          {mediaType === 'image' ? (
-                            imageOnDisplay ? (
-                              <Button
-                                variant="danger"
-                                onClick={hideImageFromDisplay}
-                                style={{ flex: 1 }}
-                              >
-                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
-                                  <path d="M5 3.5h6A1.5 1.5 0 0 1 12.5 5v6a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 11V5A1.5 1.5 0 0 1 5 3.5z"/>
-                                </svg>
-                                {t('presenter.hideImage') || 'Hide'}
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="info"
-                                onClick={sendImageToDisplay}
-                                style={{ flex: 1 }}
-                                disabled={!presentationConnection}
-                              >
-                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
-                                  <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
-                                  <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
-                                </svg>
-                                {t('presenter.showOnDisplay')}
-                              </Button>
-                            )
-                          ) : videoOnDisplay ? (
-                            <>
-                              <Button
-                                variant={videoPlaying ? "warning" : "success"}
-                                onClick={toggleVideoPlayback}
-                                style={{ flex: 1 }}
-                              >
-                                {videoPlaying ? (
-                                  <>
-                                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
-                                      <path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/>
-                                    </svg>
-                                    {t('presenter.pauseVideo') || 'Pause'}
-                                  </>
-                                ) : (
-                                  <>
-                                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
+                      {/* Media Cards Grid */}
+                      {localMediaFiles.length === 0 ? (
+                        <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '10px 0' }}>
+                          {t('presenter.noLocalMedia', 'No local media added')}
+                        </p>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '8px' }}>
+                          {localMediaFiles.map((media) => (
+                            <div
+                              key={media.id}
+                              style={{
+                                position: 'relative',
+                                borderRadius: '8px',
+                                overflow: 'hidden',
+                                cursor: 'pointer',
+                                border: currentItem?.type === 'localMedia' && currentItem?.data?.id === media.id
+                                  ? '2px solid #00d4ff'
+                                  : '2px solid rgba(255,255,255,0.2)',
+                                transition: 'all 0.2s ease',
+                                aspectRatio: '16/9',
+                                backgroundColor: '#000'
+                              }}
+                              onClick={() => {
+                                setSelectedMediaFile(media.file);
+                                setMediaType(media.type);
+                                setMediaPreviewUrl(media.url);
+                                selectItem({ type: 'localMedia', data: media });
+                              }}
+                            >
+                              {media.type === 'image' ? (
+                                <img
+                                  src={media.url}
+                                  alt={media.name}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                <>
+                                  <video
+                                    src={media.url}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    muted
+                                  />
+                                  {/* Video play icon overlay */}
+                                  <div style={{
+                                    position: 'absolute',
+                                    top: '50%',
+                                    left: '50%',
+                                    transform: 'translate(-50%, -50%)',
+                                    width: '24px',
+                                    height: '24px',
+                                    backgroundColor: 'rgba(0,0,0,0.6)',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}>
+                                    <svg width="12" height="12" fill="white" viewBox="0 0 16 16">
                                       <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
                                     </svg>
-                                    {t('presenter.playVideo') || 'Play'}
-                                  </>
-                                )}
-                              </Button>
+                                  </div>
+                                </>
+                              )}
+                              {/* Remove button */}
                               <Button
-                                variant="danger"
-                                onClick={hideVideoFromDisplay}
-                                style={{ flex: 1 }}
-                              >
-                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
-                                  <path d="M5 3.5h6A1.5 1.5 0 0 1 12.5 5v6a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 11V5A1.5 1.5 0 0 1 5 3.5z"/>
-                                </svg>
-                                {t('presenter.hideVideo') || 'Hide'}
-                              </Button>
-                            </>
-                          ) : (
-                            <Button
-                              variant="info"
-                              onClick={sendVideoToDisplay}
-                              style={{ flex: 1 }}
-                              disabled={!room || !presentationConnection}
-                            >
-                              <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '8px' }}>
-                                <path d="M0 5a2 2 0 0 1 2-2h7.5a2 2 0 0 1 1.983 1.738l3.11-1.382A1 1 0 0 1 16 4.269v7.462a1 1 0 0 1-1.406.913l-3.111-1.382A2 2 0 0 1 9.5 13H2a2 2 0 0 1-2-2V5z"/>
-                              </svg>
-                              {t('presenter.showOnDisplay')}
-                            </Button>
-                          )}
+                                variant="dark"
+                                size="sm"
+                                style={{
+                                  position: 'absolute',
+                                  top: '3px',
+                                  right: '3px',
+                                  zIndex: 10,
+                                  borderRadius: '50%',
+                                  width: '18px',
+                                  height: '18px',
+                                  padding: '0',
+                                  fontSize: '0.65rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  opacity: 0.8
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  URL.revokeObjectURL(media.url);
+                                  setLocalMediaFiles(prev => prev.filter(m => m.id !== media.id));
+                                  // If this was the selected item, clear selection
+                                  if (currentItem?.type === 'localMedia' && currentItem?.data?.id === media.id) {
+                                    setSelectedMediaFile(null);
+                                    setMediaPreviewUrl(null);
+                                    setMediaType(null);
+                                  }
+                                }}
+                              >×</Button>
+                              {/* Title overlay */}
+                              <div style={{
+                                position: 'absolute',
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                background: 'linear-gradient(transparent, rgba(0,0,0,0.8))',
+                                padding: '12px 4px 4px 4px',
+                                fontSize: '0.6rem',
+                                color: 'white',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              }} title={media.name}>
+                                {media.name}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -6894,6 +6896,10 @@ function PresenterMode() {
                     ? currentItem.data?.title
                     : currentItem.type === 'image'
                     ? `${t('presenter.image')}: ${currentItem.data?.name}`
+                    : currentItem.type === 'localMedia'
+                    ? `${t('presenter.localMedia', 'Local Media')}: ${currentItem.data?.name}`
+                    : currentItem.type === 'youtube'
+                    ? currentItem.youtubeData?.title
                     : t('presenter.blankSlide')
                   : t('presenter.noItemSelected')}
             </span>
@@ -7546,6 +7552,123 @@ function PresenterMode() {
             )}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
               {!youtubeOnDisplay ? (<Button variant="danger" onClick={handleYoutubePresent} style={{ padding: '10px 24px', borderRadius: '8px', fontWeight: '500' }}>{t('presenter.present', 'Present')}</Button>) : (<Button variant="secondary" onClick={handleYoutubeStop} style={{ padding: '10px 24px', borderRadius: '8px', fontWeight: '500' }}>{t('presenter.stop', 'Stop')}</Button>)}
+            </div>
+          </div>
+        )}
+
+        {/* Local Media Preview Section */}
+        {slideSectionOpen && currentItem && currentItem.type === 'localMedia' && (
+          <div style={{ padding: '16px' }}>
+            <div style={{
+              position: 'relative',
+              width: '100%',
+              aspectRatio: '16/9',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              marginBottom: '16px',
+              backgroundColor: '#000',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              {mediaType === 'image' ? (
+                <img
+                  src={mediaPreviewUrl}
+                  alt={currentItem.data?.name}
+                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                />
+              ) : (
+                <video
+                  ref={localVideoRef}
+                  src={mediaPreviewUrl}
+                  controls
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  style={{ maxWidth: '100%', maxHeight: '100%' }}
+                  onLoadedData={() => console.log('Video loaded and ready')}
+                  onError={(e) => console.error('Video error:', e)}
+                />
+              )}
+            </div>
+            <div style={{ color: 'white', fontSize: '1rem', fontWeight: '500', marginBottom: '12px', textAlign: 'center' }}>
+              {currentItem.data?.name}
+            </div>
+
+            {/* Controls for video when on display */}
+            {mediaType === 'video' && videoOnDisplay && (
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '16px' }}>
+                <Button
+                  variant={videoPlaying ? "warning" : "success"}
+                  onClick={toggleVideoPlayback}
+                  style={{
+                    borderRadius: '8px',
+                    padding: '10px 20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontWeight: '500'
+                  }}
+                >
+                  {videoPlaying ? (
+                    <>
+                      <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/>
+                      </svg>
+                      {t('presenter.pause', 'Pause')}
+                    </>
+                  ) : (
+                    <>
+                      <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+                      </svg>
+                      {t('presenter.play', 'Play')}
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
+            {/* Present/Stop Buttons */}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              {mediaType === 'image' ? (
+                imageOnDisplay ? (
+                  <Button
+                    variant="secondary"
+                    onClick={hideImageFromDisplay}
+                    style={{ padding: '10px 24px', borderRadius: '8px', fontWeight: '500' }}
+                  >
+                    {t('presenter.stop', 'Stop')}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="info"
+                    onClick={sendImageToDisplay}
+                    style={{ padding: '10px 24px', borderRadius: '8px', fontWeight: '500' }}
+                    disabled={!presentationConnection}
+                  >
+                    {t('presenter.present', 'Present')}
+                  </Button>
+                )
+              ) : videoOnDisplay ? (
+                <Button
+                  variant="secondary"
+                  onClick={hideVideoFromDisplay}
+                  style={{ padding: '10px 24px', borderRadius: '8px', fontWeight: '500' }}
+                >
+                  {t('presenter.stop', 'Stop')}
+                </Button>
+              ) : (
+                <Button
+                  variant="info"
+                  onClick={sendVideoToDisplay}
+                  style={{ padding: '10px 24px', borderRadius: '8px', fontWeight: '500' }}
+                  disabled={!room || !presentationConnection}
+                >
+                  {t('presenter.present', 'Present')}
+                </Button>
+              )}
             </div>
           </div>
         )}

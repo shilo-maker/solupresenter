@@ -27,6 +27,7 @@ const stageMonitorThemesRoutes = require('./routes/stageMonitorThemes');
 const remoteScreensRoutes = require('./routes/remoteScreens');
 const screenAccessRoutes = require('./routes/screenAccess');
 const presentationsRoutes = require('./routes/presentations');
+const quickSlideRoutes = require('./routes/quickSlide');
 
 // Import cleanup jobs
 const cleanupTemporarySetlists = require('./jobs/cleanupTemporarySetlists');
@@ -161,6 +162,7 @@ app.use('/api/stage-monitor-themes', stageMonitorThemesRoutes);
 app.use('/api/remote-screens', remoteScreensRoutes);
 app.use('/api/screen-access', screenAccessRoutes);
 app.use('/api/presentations', presentationsRoutes);
+app.use('/api/quick-slide', quickSlideRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

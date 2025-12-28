@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { FixedSizeList } from 'react-window';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import api, { getFullImageUrl, publicRoomAPI, roomAPI, presentationAPI } from '../services/api';
+import api, { getFullImageUrl, publicRoomAPI, roomAPI, presentationAPI, quickSlideAPI } from '../services/api';
 import socketService from '../services/socket';
 import { createCombinedSlides, getCombinedSlideLabel } from '../utils/slideCombining';
 import ThemeSelector from '../components/ThemeSelector';
@@ -255,6 +255,7 @@ function PresenterMode() {
   const quickSlideTextareaRef = useRef(null); // Ref to textarea for instant typing
   const createSongTextareaRef = useRef(null); // Ref to create song textarea for tag insertion
   const [slideCount, setSlideCount] = useState(0); // Track number of slides for button rendering
+  const [isAutoGenerating, setIsAutoGenerating] = useState(false); // Auto-generation loading state
 
   // Tools state
   const [activeToolsTab, setActiveToolsTab] = useState('countdown'); // 'countdown', 'clock', 'stopwatch', 'announce', 'messages'
@@ -4091,6 +4092,93 @@ function PresenterMode() {
     return quickSlideTextareaRef.current?.value || '';
   };
 
+  // Hebrew character detection
+  const isHebrewText = (text) => /[\u0590-\u05FF]/.test(text);
+
+  // Auto-generate transliteration and translation for Hebrew lines
+  const autoGenerateQuickSlide = async () => {
+    const currentText = getCurrentQuickSlideText();
+    if (!currentText.trim()) return;
+
+    setIsAutoGenerating(true);
+
+    try {
+      // Split into blocks (slides)
+      const blocks = currentText.split(/\n\s*\n/).filter(block => block.trim());
+      const processedBlocks = [];
+
+      for (const block of blocks) {
+        const lines = block.split('\n');
+        const firstLine = lines[0] || '';
+
+        // Only process if first line is Hebrew and other lines are missing/empty
+        if (isHebrewText(firstLine)) {
+          const hasTranslit = lines[1] && lines[1].trim();
+          const hasTranslation = lines[2] && lines[2].trim();
+
+          // If transliteration or translation is missing, generate them
+          if (!hasTranslit || !hasTranslation) {
+            try {
+              const response = await quickSlideAPI.process(firstLine);
+              const data = response.data;
+
+              // Build the new block with generated content
+              const newLines = [firstLine];
+
+              // Use existing transliteration if present, otherwise use generated
+              if (hasTranslit) {
+                newLines.push(lines[1]);
+              } else {
+                newLines.push(data.transliteration || '');
+              }
+
+              // Use existing translation if present, otherwise use generated
+              if (hasTranslation) {
+                newLines.push(lines[2]);
+              } else {
+                newLines.push(data.translation || '');
+              }
+
+              // Keep translationOverflow if it exists
+              if (lines[3] && lines[3].trim()) {
+                newLines.push(lines[3]);
+              }
+
+              processedBlocks.push(newLines.join('\n'));
+            } catch (err) {
+              console.error('Auto-generate error for line:', firstLine, err);
+              // Keep original block on error
+              processedBlocks.push(block);
+            }
+          } else {
+            // Already has both, keep as-is
+            processedBlocks.push(block);
+          }
+        } else {
+          // Not Hebrew, keep as-is
+          processedBlocks.push(block);
+        }
+      }
+
+      // Update textarea with processed text
+      const newText = processedBlocks.join('\n\n');
+      if (quickSlideTextareaRef.current) {
+        quickSlideTextareaRef.current.value = newText;
+        // Trigger onChange to update slide count
+        const event = new Event('input', { bubbles: true });
+        quickSlideTextareaRef.current.dispatchEvent(event);
+      }
+
+      // Update slide count
+      setSlideCount(processedBlocks.length);
+
+    } catch (err) {
+      console.error('Auto-generate error:', err);
+    } finally {
+      setIsAutoGenerating(false);
+    }
+  };
+
   // Open Quick Slide modal and load existing slides into preview
   const openQuickSlideModal = () => {
     setShowQuickSlideModal(true);
@@ -7607,6 +7695,32 @@ function PresenterMode() {
               <Form.Text className="text-muted">
                 {t('presenter.clickSlideToBroadcast')}
               </Form.Text>
+
+              {/* Auto-generate button */}
+              <div style={{ marginTop: '10px', marginBottom: '10px' }}>
+                <Button
+                  variant="outline-primary"
+                  size="sm"
+                  onClick={autoGenerateQuickSlide}
+                  disabled={isAutoGenerating}
+                  title="Auto-generate transliteration and translation for Hebrew lines"
+                >
+                  {isAutoGenerating ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      {t('common.processing', 'Processing...')}
+                    </>
+                  ) : (
+                    <>
+                      ✨ {t('presenter.autoGenerate', 'Auto-Generate')}
+                    </>
+                  )}
+                </Button>
+                <small className="text-muted ms-2">
+                  {t('presenter.autoGenerateHint', 'Fill in transliteration & translation for Hebrew lines')}
+                </small>
+              </div>
+
               {slideCount > 0 && (
                 <div style={{ marginTop: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

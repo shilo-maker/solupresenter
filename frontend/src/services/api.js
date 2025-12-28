@@ -167,6 +167,18 @@ export const presentationAPI = {
   delete: (id) => api.delete(`/api/presentations/${id}`)
 };
 
+// Quick Slide auto-generation endpoints
+export const quickSlideAPI = {
+  // Process Hebrew text - returns transliteration + translation
+  process: (text) => api.post('/api/quick-slide/process', { text }),
+  // Transliterate only (no API call to translation service)
+  transliterate: (text) => api.post('/api/quick-slide/transliterate', { text }),
+  // Translate only
+  translate: (text) => api.post('/api/quick-slide/translate', { text }),
+  // Get dictionary stats
+  getStats: () => api.get('/api/quick-slide/stats')
+};
+
 // Helper function to get full image URL
 export const getFullImageUrl = (url) => {
   if (!url) return '';

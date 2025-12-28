@@ -122,6 +122,15 @@ function transliterateWord(hebrewWord) {
     return { text: dictionary[normalized], source: 'dictionary' };
   }
 
+  // Try removing common Hebrew prefixes and lookup again
+  // "ו" (vav) at the start usually means "and" (ve-)
+  if (normalized.startsWith('ו') && normalized.length > 1) {
+    const withoutVav = normalized.slice(1);
+    if (dictionary[withoutVav]) {
+      return { text: 've' + dictionary[withoutVav], source: 'dictionary' };
+    }
+  }
+
   // Fallback to consonant mapping
   const fallback = consonantFallback(normalized);
   return { text: fallback, source: 'fallback' };

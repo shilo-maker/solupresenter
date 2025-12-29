@@ -36,6 +36,33 @@ const upload = multer({
   }
 });
 
+// Export all public songs for desktop sync (no auth required)
+router.get('/export', async (req, res) => {
+  try {
+    const songs = await Song.findAll({
+      where: { isPublic: true },
+      attributes: ['id', 'title', 'originalLanguage', 'tags', 'slides', 'author', 'backgroundImage'],
+      order: [['title', 'ASC']]
+    });
+
+    // Map to simple format with _id for desktop compatibility
+    const exportedSongs = songs.map(song => ({
+      _id: song.id,
+      title: song.title,
+      originalLanguage: song.originalLanguage,
+      tags: song.tags || [],
+      slides: song.slides || [],
+      author: song.author,
+      backgroundImage: song.backgroundImage
+    }));
+
+    res.json(exportedSongs);
+  } catch (error) {
+    console.error('Error exporting songs:', error);
+    res.status(500).json({ error: 'Failed to export songs' });
+  }
+});
+
 // Get all songs (public + user's personal songs)
 router.get('/', authenticateToken, async (req, res) => {
   try {

@@ -717,46 +717,63 @@ io.on('connection', (socket) => {
   // Operator applies a viewer theme
   socket.on('operator:applyTheme', async (data) => {
     try {
-      const { roomId, themeId } = data;
+      const { roomId, roomPin, themeId, theme: clientTheme } = data;
 
-      const room = await Room.findByPk(roomId);
-      if (!room) {
+      // Support both roomId (web app) and roomPin (desktop app)
+      let pin = roomPin;
+      let room = null;
+
+      if (roomId) {
+        room = await Room.findByPk(roomId);
+        if (room) pin = room.pin;
+      }
+
+      if (!pin) {
         socket.emit('error', { message: 'Room not found' });
         return;
       }
 
-      let theme = null;
-      if (themeId) {
-        theme = await ViewerTheme.findByPk(themeId);
+      let themeData = null;
+
+      // Desktop app sends full theme object directly
+      if (clientTheme) {
+        themeData = clientTheme;
+      }
+      // Web app sends themeId to look up from database
+      else if (themeId) {
+        const theme = await ViewerTheme.findByPk(themeId);
         if (!theme) {
           socket.emit('error', { message: 'Theme not found' });
           return;
         }
+        themeData = theme.toJSON();
       }
 
       // Store theme in memory for new viewers
-      if (theme) {
-        roomActiveTheme.set(room.pin, theme.toJSON());
+      if (themeData) {
+        roomActiveTheme.set(pin, themeData);
       } else {
-        roomActiveTheme.delete(room.pin);
+        roomActiveTheme.delete(pin);
       }
 
       // 🚀 Broadcast immediately to all viewers
-      io.to(`room:${room.pin}`).emit('theme:update', {
-        theme: theme ? theme.toJSON() : null
+      io.to(`room:${pin}`).emit('theme:update', {
+        theme: themeData
       });
 
-      console.log(`Theme ${themeId || 'none'} applied to room ${room.pin}`);
+      console.log(`Theme ${themeData?.name || themeId || 'none'} applied to room ${pin}`);
 
-      // 💾 Save to database asynchronously
-      setImmediate(async () => {
-        try {
-          room.activeThemeId = themeId || null;
-          await room.save();
-        } catch (err) {
-          console.error('⚠️ Error saving theme to DB:', err);
-        }
-      });
+      // 💾 Save to database asynchronously (only if we have roomId)
+      if (roomId && room) {
+        setImmediate(async () => {
+          try {
+            room.activeThemeId = themeId || null;
+            await room.save();
+          } catch (err) {
+            console.error('⚠️ Error saving theme to DB:', err);
+          }
+        });
+      }
 
     } catch (error) {
       console.error('Error in operator:applyTheme:', error);

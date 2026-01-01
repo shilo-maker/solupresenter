@@ -1,0 +1,319 @@
+import { contextBridge, ipcRenderer } from 'electron';
+
+// Expose protected methods to the renderer process
+contextBridge.exposeInMainWorld('electronAPI', {
+  // ============ Display Management ============
+  getDisplays: () => ipcRenderer.invoke('displays:getAll'),
+  getExternalDisplays: () => ipcRenderer.invoke('displays:getExternal'),
+  openDisplayWindow: (displayId: number, type: 'viewer' | 'stage') =>
+    ipcRenderer.invoke('displays:open', displayId, type),
+  closeDisplayWindow: (displayId: number) => ipcRenderer.invoke('displays:close', displayId),
+  closeAllDisplays: () => ipcRenderer.invoke('displays:closeAll'),
+  captureViewer: () => ipcRenderer.invoke('displays:captureViewer'),
+  onDisplaysChanged: (callback: (displays: any[]) => void) => {
+    const handler = (_: any, displays: any[]) => callback(displays);
+    ipcRenderer.on('displays:changed', handler);
+    return () => ipcRenderer.removeListener('displays:changed', handler);
+  },
+
+  // ============ Slide Control ============
+  sendSlide: (slideData: any) => ipcRenderer.invoke('slides:send', slideData),
+  sendBlank: () => ipcRenderer.invoke('slides:blank'),
+  sendTool: (toolData: any) => ipcRenderer.invoke('tools:send', toolData),
+  applyTheme: (theme: any) => ipcRenderer.invoke('theme:apply', theme),
+  setBackground: (background: string) => ipcRenderer.invoke('background:set', background),
+
+  // ============ Fullscreen Media Display ============
+  displayMedia: (mediaData: { type: 'image' | 'video'; url: string }) => ipcRenderer.invoke('media:display', mediaData),
+  clearMedia: () => ipcRenderer.invoke('media:clear'),
+  readFileAsDataUrl: (filePath: string) => ipcRenderer.invoke('file:readAsDataUrl', filePath),
+
+  // ============ Media Management ============
+  getMediaFolders: () => ipcRenderer.invoke('media:getFolders'),
+  addMediaFolder: () => ipcRenderer.invoke('media:addFolder'),
+  removeMediaFolder: (id: string) => ipcRenderer.invoke('media:removeFolder', id),
+  getMediaFiles: (folderId?: string) => ipcRenderer.invoke('media:getFiles', folderId),
+  rescanMediaFolder: (id: string) => ipcRenderer.invoke('media:rescan', id),
+
+  // ============ Media Library (Imported Media) ============
+  importMedia: () => ipcRenderer.invoke('mediaLibrary:import'),
+  getMediaLibrary: () => ipcRenderer.invoke('mediaLibrary:getAll'),
+  getMediaLibraryItem: (id: string) => ipcRenderer.invoke('mediaLibrary:get', id),
+  deleteMediaLibraryItem: (id: string) => ipcRenderer.invoke('mediaLibrary:delete', id),
+  getMediaLibraryPath: () => ipcRenderer.invoke('mediaLibrary:getPath'),
+  moveMediaToFolder: (mediaId: string, folderId: string | null) => ipcRenderer.invoke('mediaLibrary:move', mediaId, folderId),
+  renameMediaItem: (mediaId: string, name: string) => ipcRenderer.invoke('mediaLibrary:rename', mediaId, name),
+  updateMediaTags: (mediaId: string, tags: string | null) => ipcRenderer.invoke('mediaLibrary:updateTags', mediaId, tags),
+
+  // ============ Media Folders ============
+  getMediaFoldersLib: () => ipcRenderer.invoke('mediaFolders:getAll'),
+  createMediaFolderLib: (name: string) => ipcRenderer.invoke('mediaFolders:create', name),
+  renameMediaFolderLib: (id: string, name: string) => ipcRenderer.invoke('mediaFolders:rename', id, name),
+  deleteMediaFolderLib: (id: string) => ipcRenderer.invoke('mediaFolders:delete', id),
+
+  // ============ Video Control ============
+  playVideo: (path: string) => ipcRenderer.invoke('video:play', path),
+  pauseVideo: () => ipcRenderer.invoke('video:pause'),
+  resumeVideo: () => ipcRenderer.invoke('video:resume'),
+  seekVideo: (time: number) => ipcRenderer.invoke('video:seek', time),
+  stopVideo: () => ipcRenderer.invoke('video:stop'),
+  muteVideo: (muted: boolean) => ipcRenderer.invoke('video:mute', muted),
+  setVideoVolume: (volume: number) => ipcRenderer.invoke('video:volume', volume),
+
+  // Video status listeners
+  onVideoStatus: (callback: (status: { currentTime: number; duration: number }) => void) => {
+    const handler = (_: any, status: { currentTime: number; duration: number }) => callback(status);
+    ipcRenderer.on('video:status', handler);
+    return () => ipcRenderer.removeListener('video:status', handler);
+  },
+  onVideoEnded: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('video:ended', handler);
+    return () => ipcRenderer.removeListener('video:ended', handler);
+  },
+  onVideoPlaying: (callback: (playing: boolean) => void) => {
+    const handler = (_: any, playing: boolean) => callback(playing);
+    ipcRenderer.on('video:playing', handler);
+    return () => ipcRenderer.removeListener('video:playing', handler);
+  },
+
+  // ============ Database - Songs ============
+  getSongs: (query?: string) => ipcRenderer.invoke(query ? 'db:songs:search' : 'db:songs:getAll', query),
+  getSong: (id: string) => ipcRenderer.invoke('db:songs:get', id),
+  createSong: (data: any) => ipcRenderer.invoke('db:songs:create', data),
+  updateSong: (id: string, data: any) => ipcRenderer.invoke('db:songs:update', id, data),
+  deleteSong: (id: string) => ipcRenderer.invoke('db:songs:delete', id),
+  importSongs: (backendUrl: string) => ipcRenderer.invoke('db:songs:import', backendUrl),
+
+  // ============ Database - Setlists ============
+  getSetlists: () => ipcRenderer.invoke('db:setlists:getAll'),
+  getSetlist: (id: string) => ipcRenderer.invoke('db:setlists:get', id),
+  createSetlist: (data: any) => ipcRenderer.invoke('db:setlists:create', data),
+  updateSetlist: (id: string, data: any) => ipcRenderer.invoke('db:setlists:update', id, data),
+  deleteSetlist: (id: string) => ipcRenderer.invoke('db:setlists:delete', id),
+
+  // ============ Database - Themes ============
+  getThemes: () => ipcRenderer.invoke('db:themes:getAll'),
+  getTheme: (id: string) => ipcRenderer.invoke('db:themes:get', id),
+  createTheme: (data: any) => ipcRenderer.invoke('db:themes:create', data),
+  updateTheme: (id: string, data: any) => ipcRenderer.invoke('db:themes:update', id, data),
+  deleteTheme: (id: string) => ipcRenderer.invoke('db:themes:delete', id),
+
+  // ============ Database - Stage Monitor Themes ============
+  getStageThemes: () => ipcRenderer.invoke('db:stageThemes:getAll'),
+  getStageTheme: (id: string) => ipcRenderer.invoke('db:stageThemes:get', id),
+  createStageTheme: (data: any) => ipcRenderer.invoke('db:stageThemes:create', data),
+  updateStageTheme: (id: string, data: any) => ipcRenderer.invoke('db:stageThemes:update', id, data),
+  deleteStageTheme: (id: string) => ipcRenderer.invoke('db:stageThemes:delete', id),
+  duplicateStageTheme: (id: string, newName?: string) => ipcRenderer.invoke('db:stageThemes:duplicate', id, newName),
+  setDefaultStageTheme: (id: string) => ipcRenderer.invoke('db:stageThemes:setDefault', id),
+  applyStageTheme: (theme: any) => ipcRenderer.invoke('stageTheme:apply', theme),
+
+  // ============ Database - Presentations ============
+  getPresentations: () => ipcRenderer.invoke('db:presentations:getAll'),
+  getPresentation: (id: string) => ipcRenderer.invoke('db:presentations:get', id),
+  createPresentation: (data: any) => ipcRenderer.invoke('db:presentations:create', data),
+  updatePresentation: (id: string, data: any) => ipcRenderer.invoke('db:presentations:update', id, data),
+  deletePresentation: (id: string) => ipcRenderer.invoke('db:presentations:delete', id),
+
+  // ============ Bible ============
+  getBibleBooks: () => ipcRenderer.invoke('bible:getBooks'),
+  getBibleVerses: (bookName: string, chapter: number) => ipcRenderer.invoke('bible:getVerses', bookName, chapter),
+
+  // ============ Text Processing Services ============
+  transliterate: (text: string) => ipcRenderer.invoke('service:transliterate', text),
+  translate: (text: string) => ipcRenderer.invoke('service:translate', text),
+  processQuickSlide: (text: string) => ipcRenderer.invoke('service:quickSlide', text),
+
+  // ============ Online Mode ============
+  connectOnline: (serverUrl: string, token: string) =>
+    ipcRenderer.invoke('online:connect', serverUrl, token),
+  disconnectOnline: () => ipcRenderer.invoke('online:disconnect'),
+  createOnlineRoom: () => ipcRenderer.invoke('online:createRoom'),
+  getOnlineStatus: () => ipcRenderer.invoke('online:getStatus'),
+  getViewerCount: () => ipcRenderer.invoke('online:getViewerCount'),
+  getPublicRooms: () => ipcRenderer.invoke('online:getPublicRooms'),
+  switchToPublicRoom: (publicRoomId: string | null) => ipcRenderer.invoke('online:switchToPublicRoom', publicRoomId),
+  onViewerCountChanged: (callback: (count: number) => void) => {
+    const handler = (_: any, count: number) => callback(count);
+    ipcRenderer.on('online:viewerCount', handler);
+    return () => ipcRenderer.removeListener('online:viewerCount', handler);
+  },
+  onOnlineStatusChanged: (callback: (status: any) => void) => {
+    const handler = (_: any, status: any) => callback(status);
+    ipcRenderer.on('online:status', handler);
+    return () => ipcRenderer.removeListener('online:status', handler);
+  },
+
+  // ============ App ============
+  getAppVersion: () => ipcRenderer.invoke('app:version'),
+  getAppPath: (name: string) => ipcRenderer.invoke('app:getPath', name),
+  openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
+
+  // ============ Dialogs ============
+  openFileDialog: (options: any) => ipcRenderer.invoke('dialog:openFile', options),
+  saveFileDialog: (options: any) => ipcRenderer.invoke('dialog:saveFile', options),
+
+  // ============ Authentication ============
+  login: (email: string, password: string, serverUrl?: string) =>
+    ipcRenderer.invoke('auth:login', email, password, serverUrl),
+  register: (email: string, password: string, serverUrl?: string) =>
+    ipcRenderer.invoke('auth:register', email, password, serverUrl),
+  logout: () => ipcRenderer.invoke('auth:logout'),
+  getAuthState: () => ipcRenderer.invoke('auth:getState'),
+  initializeAuth: () => ipcRenderer.invoke('auth:initialize'),
+  setServerUrl: (url: string) => ipcRenderer.invoke('auth:setServerUrl', url),
+  connectWithAuth: () => ipcRenderer.invoke('online:connectWithAuth')
+});
+
+// Type declarations for TypeScript
+declare global {
+  interface Window {
+    electronAPI: {
+      // Display Management
+      getDisplays: () => Promise<any[]>;
+      getExternalDisplays: () => Promise<any[]>;
+      openDisplayWindow: (displayId: number, type: 'viewer' | 'stage') => Promise<boolean>;
+      closeDisplayWindow: (displayId: number) => Promise<boolean>;
+      closeAllDisplays: () => Promise<boolean>;
+      captureViewer: () => Promise<string | null>;
+      onDisplaysChanged: (callback: (displays: any[]) => void) => () => void;
+
+      // Slide Control
+      sendSlide: (slideData: any) => Promise<boolean>;
+      sendBlank: () => Promise<boolean>;
+      sendTool: (toolData: any) => Promise<boolean>;
+      applyTheme: (theme: any) => Promise<boolean>;
+      setBackground: (background: string) => Promise<boolean>;
+
+      // Fullscreen Media Display
+      displayMedia: (mediaData: { type: 'image' | 'video'; url: string }) => Promise<boolean>;
+      clearMedia: () => Promise<boolean>;
+      readFileAsDataUrl: (filePath: string) => Promise<string>;
+
+      // Media Management
+      getMediaFolders: () => Promise<any[]>;
+      addMediaFolder: () => Promise<any | null>;
+      removeMediaFolder: (id: string) => Promise<boolean>;
+      getMediaFiles: (folderId?: string) => Promise<any[]>;
+      rescanMediaFolder: (id: string) => Promise<boolean>;
+
+      // Media Library (Imported Media)
+      importMedia: () => Promise<{ success: boolean; imported: any[]; errors?: string[] }>;
+      getMediaLibrary: () => Promise<any[]>;
+      getMediaLibraryItem: (id: string) => Promise<any | null>;
+      deleteMediaLibraryItem: (id: string) => Promise<boolean>;
+      getMediaLibraryPath: () => Promise<string>;
+      moveMediaToFolder: (mediaId: string, folderId: string | null) => Promise<boolean>;
+      renameMediaItem: (mediaId: string, name: string) => Promise<boolean>;
+      updateMediaTags: (mediaId: string, tags: string | null) => Promise<boolean>;
+
+      // Media Folders
+      getMediaFoldersLib: () => Promise<Array<{ id: string; name: string; createdAt: string }>>;
+      createMediaFolderLib: (name: string) => Promise<{ id: string; name: string; createdAt: string }>;
+      renameMediaFolderLib: (id: string, name: string) => Promise<boolean>;
+      deleteMediaFolderLib: (id: string) => Promise<boolean>;
+
+      // Video Control
+      playVideo: (path: string) => Promise<boolean>;
+      pauseVideo: () => Promise<boolean>;
+      resumeVideo: () => Promise<boolean>;
+      seekVideo: (time: number) => Promise<boolean>;
+      stopVideo: () => Promise<boolean>;
+      muteVideo: (muted: boolean) => Promise<boolean>;
+      setVideoVolume: (volume: number) => Promise<boolean>;
+      onVideoStatus: (callback: (status: { currentTime: number; duration: number }) => void) => () => void;
+      onVideoEnded: (callback: () => void) => () => void;
+      onVideoPlaying: (callback: (playing: boolean) => void) => () => void;
+
+      // Database - Songs
+      getSongs: (query?: string) => Promise<any[]>;
+      getSong: (id: string) => Promise<any>;
+      createSong: (data: any) => Promise<any>;
+      updateSong: (id: string, data: any) => Promise<any>;
+      deleteSong: (id: string) => Promise<boolean>;
+      importSongs: (backendUrl: string) => Promise<{ imported: number; updated: number; errors: number }>;
+
+      // Database - Setlists
+      getSetlists: () => Promise<any[]>;
+      getSetlist: (id: string) => Promise<any>;
+      createSetlist: (data: any) => Promise<any>;
+      updateSetlist: (id: string, data: any) => Promise<any>;
+      deleteSetlist: (id: string) => Promise<boolean>;
+
+      // Database - Themes
+      getThemes: () => Promise<any[]>;
+      getTheme: (id: string) => Promise<any>;
+      createTheme: (data: any) => Promise<any>;
+      updateTheme: (id: string, data: any) => Promise<any>;
+      deleteTheme: (id: string) => Promise<boolean>;
+
+      // Database - Stage Monitor Themes
+      getStageThemes: () => Promise<any[]>;
+      getStageTheme: (id: string) => Promise<any>;
+      createStageTheme: (data: any) => Promise<any>;
+      updateStageTheme: (id: string, data: any) => Promise<any>;
+      deleteStageTheme: (id: string) => Promise<boolean>;
+      duplicateStageTheme: (id: string, newName?: string) => Promise<any>;
+      setDefaultStageTheme: (id: string) => Promise<boolean>;
+      applyStageTheme: (theme: any) => Promise<boolean>;
+
+      // Database - Presentations
+      getPresentations: () => Promise<any[]>;
+      getPresentation: (id: string) => Promise<any>;
+      createPresentation: (data: any) => Promise<any>;
+      updatePresentation: (id: string, data: any) => Promise<any>;
+      deletePresentation: (id: string) => Promise<boolean>;
+
+      // Bible
+      getBibleBooks: () => Promise<Array<{ name: string; chapters: number; hebrewName?: string; testament?: string }>>;
+      getBibleVerses: (bookName: string, chapter: number) => Promise<{
+        book: string;
+        chapter: number;
+        verses: Array<{ verseNumber: number; hebrew: string; english: string; reference: string; hebrewReference: string }>;
+        slides: Array<{ originalText: string; transliteration: string; translation: string; verseType: string; reference: string; hebrewReference: string }>;
+        totalVerses: number;
+        testament: string;
+      }>;
+
+      // Text Processing Services
+      transliterate: (text: string) => Promise<string>;
+      translate: (text: string) => Promise<string>;
+      processQuickSlide: (text: string) => Promise<{ original: string; transliteration: string; translation: string }>;
+
+      // Online Mode
+      connectOnline: (serverUrl: string, token: string) => Promise<boolean>;
+      disconnectOnline: () => Promise<boolean>;
+      createOnlineRoom: () => Promise<{ roomPin: string }>;
+      getOnlineStatus: () => Promise<{ connected: boolean; roomPin?: string; roomId?: string }>;
+      getViewerCount: () => Promise<number>;
+      getPublicRooms: () => Promise<Array<{ id: string; name: string; slug: string }>>;
+      switchToPublicRoom: (publicRoomId: string | null) => Promise<boolean>;
+      onViewerCountChanged: (callback: (count: number) => void) => () => void;
+      onOnlineStatusChanged: (callback: (status: any) => void) => () => void;
+
+      // App
+      getAppVersion: () => Promise<string>;
+      getAppPath: (name: string) => Promise<string>;
+      openExternal: (url: string) => Promise<boolean>;
+
+      // Dialogs
+      openFileDialog: (options: any) => Promise<any>;
+      saveFileDialog: (options: any) => Promise<any>;
+
+      // Authentication
+      login: (email: string, password: string, serverUrl?: string) => Promise<{ success: boolean; error?: string; requiresVerification?: boolean }>;
+      register: (email: string, password: string, serverUrl?: string) => Promise<{ success: boolean; error?: string; requiresVerification?: boolean; message?: string }>;
+      logout: () => Promise<boolean>;
+      getAuthState: () => Promise<{
+        isAuthenticated: boolean;
+        user: { id: string; email: string; role: string; isEmailVerified: boolean; preferences?: { language?: string } } | null;
+        token: string | null;
+        serverUrl: string;
+      }>;
+      initializeAuth: () => Promise<any>;
+      setServerUrl: (url: string) => Promise<boolean>;
+      connectWithAuth: () => Promise<{ success: boolean; error?: string }>;
+    };
+  }
+}

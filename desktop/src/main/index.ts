@@ -35,10 +35,8 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 function createControlWindow(): void {
   const primaryDisplay = screen.getPrimaryDisplay();
 
-  // Get icon path - use .ico for Windows, .png for other platforms
-  const iconPath = process.platform === 'win32'
-    ? path.join(__dirname, '..', '..', 'resources', 'icons', 'favicon.ico')
-    : path.join(__dirname, '..', '..', 'resources', 'icons', 'logo512.png');
+  // Get icon path - use PNG for all platforms (modern Electron supports it)
+  const iconPath = path.join(__dirname, '..', '..', 'resources', 'icons', 'logo512.png');
 
   controlWindow = new BrowserWindow({
     x: primaryDisplay.bounds.x + 50,

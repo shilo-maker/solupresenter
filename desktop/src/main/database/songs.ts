@@ -1,4 +1,4 @@
-import { getDb, saveDatabase, generateId, rowsToObjects } from './index';
+import { getDb, saveDatabase, generateId, queryAll, queryOne, beginTransaction, commitTransaction, rollbackTransaction } from './index';
 import axios from 'axios';
 
 export interface SongData {
@@ -20,29 +20,21 @@ export interface SongData {
  * Get all songs, optionally filtered by search query
  */
 export async function getSongs(query?: string): Promise<any[]> {
-  const db = getDb();
-  if (!db) return [];
-
-  let sql = 'SELECT * FROM songs';
   if (query) {
-    sql += ` WHERE title LIKE '%${query.replace(/'/g, "''")}%' OR author LIKE '%${query.replace(/'/g, "''")}%'`;
+    const searchPattern = `%${query}%`;
+    return queryAll(
+      'SELECT * FROM songs WHERE title LIKE ? OR author LIKE ? ORDER BY updatedAt DESC',
+      [searchPattern, searchPattern]
+    );
   }
-  sql += ' ORDER BY updatedAt DESC';
-
-  const result = db.exec(sql);
-  return rowsToObjects(result);
+  return queryAll('SELECT * FROM songs ORDER BY updatedAt DESC');
 }
 
 /**
  * Get a single song by ID
  */
 export async function getSong(id: string): Promise<any | null> {
-  const db = getDb();
-  if (!db) return null;
-
-  const result = db.exec(`SELECT * FROM songs WHERE id = '${id}'`);
-  const songs = rowsToObjects(result);
-  return songs.length > 0 ? songs[0] : null;
+  return queryOne('SELECT * FROM songs WHERE id = ?', [id]);
 }
 
 /**
@@ -146,67 +138,73 @@ export async function importSongsFromBackend(backendUrl: string): Promise<{ impo
   let errors = 0;
 
   try {
-    const response = await axios.get(`${backendUrl}/api/songs/export`);
+    const response = await axios.get(`${backendUrl}/api/songs/export`, { timeout: 30000 });
     const remoteSongs = response.data;
 
-    for (const remoteSong of remoteSongs) {
-      try {
-        // Check if song exists by remoteId
-        const existingResult = db.exec(`SELECT id FROM songs WHERE remoteId = '${remoteSong._id}'`);
-        const existing = rowsToObjects(existingResult);
+    // Use transaction for bulk import
+    beginTransaction();
+    try {
+      for (const remoteSong of remoteSongs) {
+        try {
+          // Check if song exists by remoteId
+          const existing = queryAll('SELECT id FROM songs WHERE remoteId = ?', [remoteSong._id]);
 
-        const now = new Date().toISOString();
+          const now = new Date().toISOString();
 
-        if (existing.length > 0) {
-          // Update existing song
-          db.run(`
-            UPDATE songs SET
-              title = ?,
-              originalLanguage = ?,
-              slides = ?,
-              tags = ?,
-              author = ?,
-              backgroundImage = ?,
-              updatedAt = ?
-            WHERE remoteId = ?
-          `, [
-            remoteSong.title,
-            remoteSong.originalLanguage || 'he',
-            JSON.stringify(remoteSong.slides || []),
-            JSON.stringify(remoteSong.tags || []),
-            remoteSong.author || null,
-            remoteSong.backgroundImage || '',
-            now,
-            remoteSong._id
-          ]);
-          updated++;
-        } else {
-          // Insert new song
-          const id = generateId();
-          db.run(`
-            INSERT INTO songs (id, title, originalLanguage, slides, tags, author, backgroundImage, remoteId, createdAt, updatedAt)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `, [
-            id,
-            remoteSong.title,
-            remoteSong.originalLanguage || 'he',
-            JSON.stringify(remoteSong.slides || []),
-            JSON.stringify(remoteSong.tags || []),
-            remoteSong.author || null,
-            remoteSong.backgroundImage || '',
-            remoteSong._id,
-            now,
-            now
-          ]);
-          imported++;
+          if (existing.length > 0) {
+            // Update existing song
+            db.run(`
+              UPDATE songs SET
+                title = ?,
+                originalLanguage = ?,
+                slides = ?,
+                tags = ?,
+                author = ?,
+                backgroundImage = ?,
+                updatedAt = ?
+              WHERE remoteId = ?
+            `, [
+              remoteSong.title,
+              remoteSong.originalLanguage || 'he',
+              JSON.stringify(remoteSong.slides || []),
+              JSON.stringify(remoteSong.tags || []),
+              remoteSong.author || null,
+              remoteSong.backgroundImage || '',
+              now,
+              remoteSong._id
+            ]);
+            updated++;
+          } else {
+            // Insert new song
+            const id = generateId();
+            db.run(`
+              INSERT INTO songs (id, title, originalLanguage, slides, tags, author, backgroundImage, remoteId, createdAt, updatedAt)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+              id,
+              remoteSong.title,
+              remoteSong.originalLanguage || 'he',
+              JSON.stringify(remoteSong.slides || []),
+              JSON.stringify(remoteSong.tags || []),
+              remoteSong.author || null,
+              remoteSong.backgroundImage || '',
+              remoteSong._id,
+              now,
+              now
+            ]);
+            imported++;
+          }
+        } catch (err) {
+          console.error('Error importing song:', remoteSong.title, err);
+          errors++;
         }
-      } catch (err) {
-        console.error('Error importing song:', remoteSong.title, err);
-        errors++;
       }
+      commitTransaction();
+    } catch (transactionError) {
+      rollbackTransaction();
+      throw transactionError;
     }
 
-    saveDatabase();
     console.log(`Import complete: ${imported} imported, ${updated} updated, ${errors} errors`);
   } catch (err) {
     console.error('Failed to fetch songs from backend:', err);

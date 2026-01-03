@@ -1,4 +1,4 @@
-import { getDb, saveDatabase, generateId, rowsToObjects, CLASSIC_THEME_ID } from './index';
+import { getDb, saveDatabase, generateId, queryAll, queryOne, CLASSIC_THEME_ID } from './index';
 
 export interface ThemeData {
   name: string;
@@ -16,35 +16,22 @@ export interface ThemeData {
  * Get all themes
  */
 export async function getThemes(): Promise<any[]> {
-  const db = getDb();
-  if (!db) return [];
-
-  const result = db.exec('SELECT * FROM viewer_themes ORDER BY isBuiltIn DESC, name ASC');
-  return rowsToObjects(result);
+  return queryAll('SELECT * FROM viewer_themes ORDER BY isBuiltIn DESC, name ASC');
 }
 
 /**
  * Get a single theme by ID
  */
 export async function getTheme(id: string): Promise<any | null> {
-  const db = getDb();
-  if (!db) return null;
-
-  const result = db.exec(`SELECT * FROM viewer_themes WHERE id = '${id}'`);
-  const themes = rowsToObjects(result);
-  return themes.length > 0 ? themes[0] : null;
+  return queryOne('SELECT * FROM viewer_themes WHERE id = ?', [id]);
 }
 
 /**
  * Get the default theme
  */
 export async function getDefaultTheme(): Promise<any | null> {
-  const db = getDb();
-  if (!db) return null;
-
-  const result = db.exec('SELECT * FROM viewer_themes WHERE isDefault = 1');
-  const themes = rowsToObjects(result);
-  if (themes.length > 0) return themes[0];
+  const theme = queryOne('SELECT * FROM viewer_themes WHERE isDefault = 1');
+  if (theme) return theme;
 
   // Fall back to classic theme
   return getTheme(CLASSIC_THEME_ID);

@@ -1,10 +1,38 @@
 import React, { useState, useEffect, useRef } from 'react';
 import SlideRenderer from '../components/SlideRenderer';
 
+// YouTube IFrame API types
+declare global {
+  interface Window {
+    YT: {
+      Player: new (element: HTMLElement | string, options: any) => any;
+      PlayerState: {
+        UNSTARTED: number;
+        ENDED: number;
+        PLAYING: number;
+        PAUSED: number;
+        BUFFERING: number;
+        CUED: number;
+      };
+    };
+    onYouTubeIframeAPIReady: () => void;
+  }
+}
+
 interface SlideData {
   originalText?: string;
   transliteration?: string;
   translation?: string;
+  translationOverflow?: string;
+  reference?: string;
+  referenceTranslation?: string;
+  // Prayer/Sermon content fields
+  title?: string;
+  titleTranslation?: string;
+  subtitle?: string;
+  subtitleTranslation?: string;
+  description?: string;
+  descriptionTranslation?: string;
 }
 
 interface PresentationTextBox {
@@ -141,6 +169,13 @@ const DisplayViewer: React.FC = () => {
     running: false
   });
 
+  // YouTube state
+  const [youtubeVideoId, setYoutubeVideoId] = useState<string | null>(null);
+  const [youtubeTitle, setYoutubeTitle] = useState<string>('');
+  const youtubeContainerRef = useRef<HTMLDivElement>(null);
+  const youtubePlayerRef = useRef<any>(null);
+  const youtubeReadyRef = useRef(false);
+
   useEffect(() => {
     // Report ready
     console.log('[DisplayViewer] Component mounted, calling reportReady()');
@@ -155,6 +190,7 @@ const DisplayViewer: React.FC = () => {
         setMediaType(null);
         setCombinedSlides(null);
         setPresentationSlide(null);
+        setYoutubeVideoId(null); // Clear YouTube when going blank
       } else {
         setIsBlank(false);
         // Handle presentation slides (with textbox styling)
@@ -162,10 +198,12 @@ const DisplayViewer: React.FC = () => {
           setPresentationSlide(data.presentationSlide);
           setSlideData(null); // Clear song slide data
           setMediaType(null);
+          setYoutubeVideoId(null); // Clear YouTube when showing presentation
         } else if (data.slideData) {
           setSlideData(data.slideData);
           setPresentationSlide(null); // Clear presentation slide
           setMediaType(null);
+          setYoutubeVideoId(null); // Clear YouTube when showing slides
         }
         if (data.displayMode) {
           setDisplayMode(data.displayMode);
@@ -175,6 +213,11 @@ const DisplayViewer: React.FC = () => {
         if (data.backgroundImage !== undefined) {
           console.log('[Viewer] Setting background to:', data.backgroundImage?.substring(0, 50));
           setBackgroundImage(data.backgroundImage);
+        }
+        // Apply activeTheme if included (for content-type specific themes like bible)
+        if (data.activeTheme) {
+          console.log('[Viewer] Applying active theme from slide:', data.activeTheme?.name, 'contentType:', data.contentType);
+          setTheme(data.activeTheme);
         }
         // Handle combined slides for original-only mode
         if (data.combinedSlides && data.combinedSlides.length > 1) {
@@ -198,6 +241,7 @@ const DisplayViewer: React.FC = () => {
       // Path already includes protocol (media://...) so use it directly
       setMediaPath(data.path.startsWith('media://') ? data.path : `media://${data.path}`);
       setIsBlank(false);
+      setYoutubeVideoId(null); // Clear YouTube when showing media
     });
 
     // Listen for video commands
@@ -241,9 +285,23 @@ const DisplayViewer: React.FC = () => {
       }
     });
 
-    // Listen for theme updates
+    // Listen for theme updates (songs theme)
     const themeCleanup = window.displayAPI.onThemeUpdate((newTheme) => {
       console.log('Theme update received:', newTheme);
+      setTheme(newTheme);
+    });
+
+    // Listen for bible theme updates (also applies to current display if showing bible content)
+    const bibleThemeCleanup = window.displayAPI.onBibleThemeUpdate((newTheme) => {
+      console.log('Bible theme update received:', newTheme);
+      // Apply immediately - the viewer will use this theme when showing bible content
+      setTheme(newTheme);
+    });
+
+    // Listen for prayer theme updates (applies when showing prayer/sermon content)
+    const prayerThemeCleanup = window.displayAPI.onPrayerThemeUpdate((newTheme) => {
+      console.log('Prayer theme update received:', newTheme);
+      // Apply immediately - the viewer will use this theme when showing prayer content
       setTheme(newTheme);
     });
 
@@ -252,6 +310,69 @@ const DisplayViewer: React.FC = () => {
       console.log('Background update received:', background);
       console.log('Is gradient:', background?.startsWith('linear-gradient') || background?.startsWith('radial-gradient'));
       setBackgroundImage(background);
+    });
+
+    // Listen for YouTube commands
+    const youtubeCleanup = window.displayAPI.onYoutubeCommand((command) => {
+      console.log('YouTube command received:', command);
+
+      switch (command.type) {
+        case 'load':
+          setYoutubeVideoId(command.videoId);
+          setYoutubeTitle(command.title || 'YouTube Video');
+          // Clear other media when YouTube loads
+          setMediaType(null);
+          setMediaPath('');
+          setIsBlank(false);
+          youtubeReadyRef.current = false;
+          break;
+        case 'stop':
+          setYoutubeVideoId(null);
+          setYoutubeTitle('');
+          youtubeReadyRef.current = false;
+          if (youtubePlayerRef.current) {
+            try {
+              youtubePlayerRef.current.destroy();
+            } catch (e) {
+              // Ignore
+            }
+            youtubePlayerRef.current = null;
+          }
+          break;
+        case 'play':
+          if (youtubePlayerRef.current && youtubeReadyRef.current) {
+            youtubePlayerRef.current.seekTo(command.currentTime, true);
+            youtubePlayerRef.current.playVideo();
+          }
+          break;
+        case 'pause':
+          if (youtubePlayerRef.current && youtubeReadyRef.current) {
+            youtubePlayerRef.current.pauseVideo();
+          }
+          break;
+        case 'seek':
+          if (youtubePlayerRef.current && youtubeReadyRef.current) {
+            youtubePlayerRef.current.seekTo(command.currentTime, true);
+          }
+          break;
+        case 'sync':
+          if (youtubePlayerRef.current && youtubeReadyRef.current) {
+            const currentTime = youtubePlayerRef.current.getCurrentTime();
+            // Only seek if drift is more than 0.3 seconds for tighter sync
+            if (Math.abs(currentTime - command.currentTime) > 0.3) {
+              youtubePlayerRef.current.seekTo(command.currentTime, true);
+            }
+            // Sync play/pause state
+            const playerState = youtubePlayerRef.current.getPlayerState();
+            const isCurrentlyPlaying = playerState === window.YT?.PlayerState?.PLAYING;
+            if (command.isPlaying && !isCurrentlyPlaying) {
+              youtubePlayerRef.current.playVideo();
+            } else if (!command.isPlaying && isCurrentlyPlaying) {
+              youtubePlayerRef.current.pauseVideo();
+            }
+          }
+          break;
+      }
     });
 
     // Listen for tool updates
@@ -300,10 +421,98 @@ const DisplayViewer: React.FC = () => {
       mediaCleanup();
       videoCleanup();
       themeCleanup();
+      bibleThemeCleanup();
+      prayerThemeCleanup();
       backgroundCleanup();
+      youtubeCleanup();
       toolCleanup();
     };
   }, []);
+
+  // Load YouTube IFrame API
+  useEffect(() => {
+    if (!window.YT && !document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(tag);
+    }
+  }, []);
+
+  // Create YouTube player when video ID changes
+  useEffect(() => {
+    if (!youtubeVideoId || !youtubeContainerRef.current) {
+      return;
+    }
+
+    const createPlayer = () => {
+      if (!window.YT || !window.YT.Player || !youtubeContainerRef.current) {
+        setTimeout(createPlayer, 100);
+        return;
+      }
+
+      // Destroy existing player
+      if (youtubePlayerRef.current) {
+        try {
+          youtubePlayerRef.current.destroy();
+        } catch (e) {
+          // Ignore
+        }
+      }
+
+      // Clear container
+      youtubeContainerRef.current.innerHTML = '';
+
+      youtubePlayerRef.current = new window.YT.Player(youtubeContainerRef.current, {
+        videoId: youtubeVideoId,
+        playerVars: {
+          autoplay: 0, // Don't autoplay - wait for sync
+          mute: 1, // Muted - audio comes from preview
+          rel: 0,
+          modestbranding: 1,
+          controls: 0,
+          showinfo: 0,
+          enablejsapi: 1,
+          origin: window.location.origin,
+          widget_referrer: window.location.href
+        },
+        events: {
+          onReady: async () => {
+            console.log('[DisplayViewer] YouTube player ready, requesting position sync');
+            youtubeReadyRef.current = true;
+            // Request current position from preview and sync immediately
+            try {
+              const pos = await window.displayAPI.getYoutubePosition();
+              if (pos && youtubePlayerRef.current) {
+                console.log('[DisplayViewer] Syncing YouTube to position:', pos.time, 'playing:', pos.isPlaying);
+                youtubePlayerRef.current.seekTo(pos.time, true);
+                if (pos.isPlaying) {
+                  youtubePlayerRef.current.playVideo();
+                }
+              }
+            } catch (err) {
+              console.error('[DisplayViewer] Failed to get YouTube position:', err);
+              // Fallback: just start playing
+              youtubePlayerRef.current?.playVideo();
+            }
+          }
+        }
+      });
+    };
+
+    createPlayer();
+
+    return () => {
+      if (youtubePlayerRef.current) {
+        try {
+          youtubePlayerRef.current.destroy();
+        } catch (e) {
+          // Ignore
+        }
+        youtubePlayerRef.current = null;
+      }
+      youtubeReadyRef.current = false;
+    };
+  }, [youtubeVideoId]);
 
   // Report video time updates
   useEffect(() => {
@@ -569,6 +778,7 @@ const DisplayViewer: React.FC = () => {
         >
           <div
             style={{
+              width: '100%',
               fontSize: `${fontSize}vw`,
               fontWeight: style.fontWeight || '500',
               color: style.color || '#FFFFFF',
@@ -840,6 +1050,26 @@ const DisplayViewer: React.FC = () => {
           isBlank={true}
           fillContainer={true}
         />
+      </div>
+    );
+  }
+
+  // Render YouTube video (unless a tool is active that takes over screen)
+  if (youtubeVideoId && !countdown.active && !clock.active && !stopwatch.active) {
+    return (
+      <div className="display-window" style={{ ...backgroundStyle, background: '#000' }}>
+        <div
+          ref={youtubeContainerRef}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%'
+          }}
+        />
+        {renderRotatingMessages()}
+        {renderAnnouncement()}
       </div>
     );
   }

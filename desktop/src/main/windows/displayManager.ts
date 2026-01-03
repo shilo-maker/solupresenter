@@ -1,5 +1,11 @@
-import { BrowserWindow, screen, Display, ipcMain } from 'electron';
+import { BrowserWindow, screen, Display, ipcMain, app } from 'electron';
 import * as path from 'path';
+
+// Local server port for production (set from main index.ts)
+let localServerPort = 0;
+export function setLocalServerPort(port: number) {
+  localServerPort = port;
+}
 
 export interface DisplayInfo {
   id: number;
@@ -13,14 +19,32 @@ export interface DisplayInfo {
   isPrimary: boolean;
   scaleFactor: number;
   isAssigned: boolean;
-  assignedType?: 'viewer' | 'stage';
+  assignedType?: 'viewer' | 'stage' | 'obs';
 }
 
 export interface ManagedDisplay {
   id: number;
   electronDisplay: Display;
   window: BrowserWindow | null;
-  type: 'viewer' | 'stage';
+  type: 'viewer' | 'stage' | 'obs';
+}
+
+// OBS Overlay specific window (not tied to a display)
+export interface OBSOverlayWindow {
+  window: BrowserWindow;
+  config: OBSOverlayConfig;
+}
+
+export interface OBSOverlayConfig {
+  position: 'top' | 'center' | 'bottom';
+  fontSize: number;
+  textColor: string;
+  showOriginal: boolean;
+  showTransliteration: boolean;
+  showTranslation: boolean;
+  paddingBottom: number;
+  paddingTop: number;
+  maxWidth: number;
 }
 
 export interface SlideData {
@@ -54,9 +78,14 @@ export class DisplayManager {
   private displays: Map<number, ManagedDisplay> = new Map();
   private onDisplayChangeCallback: ((displays: DisplayInfo[]) => void) | null = null;
 
+  // OBS Overlay window (special transparent window, not tied to a display)
+  private obsOverlayWindow: OBSOverlayWindow | null = null;
+
   // Track ALL current presentation state for late-joining displays
   private currentViewerTheme: any = null;
   private currentStageTheme: any = null;
+  private currentBibleTheme: any = null;
+  private currentPrayerTheme: any = null;
   private currentSlideData: SlideData | null = null;
   private currentBackground: string | null = null;
   private currentMedia: { type: 'image' | 'video'; path: string } | null = null;
@@ -65,6 +94,16 @@ export class DisplayManager {
     currentTime: number;
     isPlaying: boolean;
     playStartedAt?: number;  // Timestamp when play started (for calculating current position)
+  } | null = null;
+
+  private currentYoutubeState: {
+    videoId: string;
+    title: string;
+  } | null = null;
+
+  private currentYoutubePosition: {
+    currentTime: number;
+    isPlaying: boolean;
   } | null = null;
 
   constructor() {
@@ -76,6 +115,13 @@ export class DisplayManager {
       const senderWindow = BrowserWindow.fromWebContents(event.sender);
       if (!senderWindow) {
         console.log('[DisplayManager] display:ready received but no matching window');
+        return;
+      }
+
+      // Check if this is the OBS overlay window
+      if (this.obsOverlayWindow?.window === senderWindow) {
+        console.log('[DisplayManager] display:ready received for OBS overlay window');
+        this.sendInitialStateToOBS();
         return;
       }
 
@@ -159,6 +205,16 @@ export class DisplayManager {
           managed.window.webContents.send('tool:update', toolData);
         }
       }
+
+      // YouTube state
+      if (this.currentYoutubeState) {
+        console.log('[DisplayManager] -> Sending YouTube:', this.currentYoutubeState.videoId);
+        managed.window.webContents.send('youtube:command', {
+          type: 'load',
+          videoId: this.currentYoutubeState.videoId,
+          title: this.currentYoutubeState.title
+        });
+      }
     } else if (managed.type === 'stage') {
       // Stage theme
       if (this.currentStageTheme) {
@@ -182,6 +238,23 @@ export class DisplayManager {
     }
 
     console.log('[DisplayManager] Initial state sent');
+  }
+
+  /**
+   * Send current state to OBS overlay window
+   */
+  private sendInitialStateToOBS(): void {
+    if (!this.obsOverlayWindow?.window || this.obsOverlayWindow.window.isDestroyed()) return;
+
+    console.log('[DisplayManager] Sending initial state to OBS overlay');
+
+    // OBS overlay just needs slide data (it doesn't show themes/backgrounds - transparent overlay)
+    if (this.currentSlideData) {
+      console.log('[DisplayManager] -> Sending slide data to OBS');
+      this.obsOverlayWindow.window.webContents.send('slide:update', this.currentSlideData);
+    }
+
+    console.log('[DisplayManager] OBS overlay initial state sent');
   }
 
   /**
@@ -264,9 +337,8 @@ export class DisplayManager {
       // Open DevTools in development mode
       window.webContents.openDevTools({ mode: 'detach' });
     } else {
-      window.loadFile(path.join(__dirname, '../renderer/index.html'), {
-        hash: `/display/${type}`
-      });
+      // In production, use local HTTP server for proper origin (needed for YouTube)
+      window.loadURL(`http://127.0.0.1:${localServerPort}/#/display/${type}`);
     }
 
     // Note: Initial state is now sent when we receive 'display:ready' IPC from the renderer
@@ -312,6 +384,131 @@ export class DisplayManager {
       }
     }
     this.displays.clear();
+    // Also close OBS overlay if open
+    this.closeOBSOverlay();
+  }
+
+  /**
+   * Open OBS Overlay window (transparent, for capture by OBS)
+   */
+  openOBSOverlay(config: Partial<OBSOverlayConfig> = {}): boolean {
+    console.log('[DisplayManager] openOBSOverlay called with config:', config);
+    // Close existing OBS overlay if any
+    this.closeOBSOverlay();
+
+    const defaultConfig: OBSOverlayConfig = {
+      position: 'bottom',
+      fontSize: 100,
+      textColor: 'white',
+      showOriginal: true,
+      showTransliteration: true,
+      showTranslation: true,
+      paddingBottom: 3,
+      paddingTop: 5,
+      maxWidth: 90
+    };
+
+    const fullConfig: OBSOverlayConfig = { ...defaultConfig, ...config };
+
+    // Create transparent window for OBS capture
+    // Size: 1920x1080 (standard HD) - user can resize as needed
+    const window = new BrowserWindow({
+      width: 1920,
+      height: 1080,
+      transparent: true,
+      frame: false,
+      alwaysOnTop: false, // Not always on top - just for OBS capture
+      skipTaskbar: false, // Show in taskbar so user can find it
+      hasShadow: false,
+      backgroundColor: '#00000000', // Fully transparent
+      webPreferences: {
+        preload: path.join(__dirname, '..', '..', 'preload', 'display.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
+        backgroundThrottling: false
+      }
+    });
+
+    // Build URL with config parameters
+    const configParams = new URLSearchParams({
+      position: fullConfig.position,
+      fontSize: fullConfig.fontSize.toString(),
+      color: fullConfig.textColor,
+      original: fullConfig.showOriginal.toString(),
+      transliteration: fullConfig.showTransliteration.toString(),
+      translation: fullConfig.showTranslation.toString(),
+      paddingBottom: fullConfig.paddingBottom.toString(),
+      paddingTop: fullConfig.paddingTop.toString(),
+      maxWidth: fullConfig.maxWidth.toString()
+    });
+
+    // Load OBS overlay page
+    const url = isDev
+      ? `http://localhost:5173/#/display/obs?${configParams}`
+      : path.join(__dirname, '../../../renderer/index.html');
+
+    console.log('[DisplayManager] OBS overlay URL:', url);
+    console.log('[DisplayManager] isDev:', isDev);
+
+    if (isDev) {
+      window.loadURL(`http://localhost:5173/#/display/obs?${configParams}`);
+      // Open DevTools in development mode
+      window.webContents.openDevTools({ mode: 'detach' });
+    } else {
+      // In production, use local HTTP server for proper origin (needed for YouTube)
+      window.loadURL(`http://127.0.0.1:${localServerPort}/#/display/obs?${configParams}`);
+    }
+
+    console.log('[DisplayManager] OBS overlay window created and loading');
+
+    // Store reference
+    this.obsOverlayWindow = {
+      window,
+      config: fullConfig
+    };
+
+    // Handle window close
+    window.on('closed', () => {
+      console.log('[DisplayManager] OBS overlay window closed');
+      this.obsOverlayWindow = null;
+    });
+
+    console.log('[DisplayManager] OBS overlay setup complete, returning true');
+    return true;
+  }
+
+  /**
+   * Close OBS Overlay window
+   */
+  closeOBSOverlay(): void {
+    if (this.obsOverlayWindow?.window && !this.obsOverlayWindow.window.isDestroyed()) {
+      this.obsOverlayWindow.window.close();
+    }
+    this.obsOverlayWindow = null;
+  }
+
+  /**
+   * Check if OBS Overlay is open
+   */
+  isOBSOverlayOpen(): boolean {
+    return this.obsOverlayWindow !== null && !this.obsOverlayWindow.window.isDestroyed();
+  }
+
+  /**
+   * Get OBS Overlay config
+   */
+  getOBSOverlayConfig(): OBSOverlayConfig | null {
+    return this.obsOverlayWindow?.config || null;
+  }
+
+  /**
+   * Update OBS Overlay config (reopens window with new config)
+   */
+  updateOBSOverlayConfig(config: Partial<OBSOverlayConfig>): boolean {
+    if (!this.obsOverlayWindow) return false;
+    const currentConfig = this.obsOverlayWindow.config;
+    return this.openOBSOverlay({ ...currentConfig, ...config });
   }
 
   /**
@@ -320,12 +517,30 @@ export class DisplayManager {
   broadcastSlide(slideData: SlideData): void {
     // Store for late-joining displays
     this.currentSlideData = slideData;
-    console.log('[DisplayManager] broadcastSlide - storing slide data, isBlank:', slideData.isBlank);
+    console.log('[DisplayManager] broadcastSlide - storing slide data, isBlank:', slideData.isBlank, 'contentType:', (slideData as any).contentType);
+
+    // Include the appropriate theme based on contentType
+    const contentType = (slideData as any).contentType || 'song';
+    let activeTheme = this.currentViewerTheme;
+    if (contentType === 'bible') {
+      activeTheme = this.currentBibleTheme;
+    } else if (contentType === 'prayer' || contentType === 'sermon') {
+      activeTheme = this.currentPrayerTheme;
+    }
+    const slideWithTheme = {
+      ...slideData,
+      activeTheme // Include theme so viewer knows which to apply
+    };
 
     for (const managed of this.displays.values()) {
       if (managed.window && !managed.window.isDestroyed()) {
-        managed.window.webContents.send('slide:update', slideData);
+        managed.window.webContents.send('slide:update', slideWithTheme);
       }
+    }
+
+    // Also send to OBS overlay
+    if (this.obsOverlayWindow?.window && !this.obsOverlayWindow.window.isDestroyed()) {
+      this.obsOverlayWindow.window.webContents.send('slide:update', slideWithTheme);
     }
   }
 
@@ -358,6 +573,24 @@ export class DisplayManager {
   broadcastStageTheme(theme: any): void {
     this.currentStageTheme = theme;
     this.broadcastToType('stage', 'stageTheme:update', theme);
+  }
+
+  /**
+   * Send bible theme update to all viewers (for bible content)
+   */
+  broadcastBibleTheme(theme: any): void {
+    // Store for late-joining displays and content-type detection
+    this.currentBibleTheme = theme;
+    this.broadcastToType('viewer', 'bibleTheme:update', theme);
+  }
+
+  /**
+   * Send prayer theme update to all viewers (for prayer/sermon content)
+   */
+  broadcastPrayerTheme(theme: any): void {
+    // Store for late-joining displays and content-type detection
+    this.currentPrayerTheme = theme;
+    this.broadcastToType('viewer', 'prayerTheme:update', theme);
   }
 
   /**
@@ -486,6 +719,63 @@ export class DisplayManager {
         managed.window.webContents.send('tool:update', toolData);
       }
     }
+  }
+
+  /**
+   * Broadcast YouTube command to all display windows
+   */
+  broadcastYoutube(command: { type: string; videoId?: string; title?: string; currentTime?: number; isPlaying?: boolean }): void {
+    console.log('[DisplayManager] broadcastYoutube:', command.type, 'displays:', this.displays.size);
+
+    // Track YouTube state for late-joining displays
+    switch (command.type) {
+      case 'load':
+        this.currentYoutubeState = { videoId: command.videoId!, title: command.title || 'YouTube Video' };
+        this.currentYoutubePosition = { currentTime: 0, isPlaying: true };
+        // Clear any other media state when YouTube starts
+        this.currentMedia = null;
+        this.currentVideoState = null;
+        break;
+      case 'stop':
+        this.currentYoutubeState = null;
+        this.currentYoutubePosition = null;
+        break;
+      case 'play':
+      case 'sync':
+        if (command.currentTime !== undefined) {
+          this.currentYoutubePosition = {
+            currentTime: command.currentTime,
+            isPlaying: command.isPlaying ?? true
+          };
+        }
+        break;
+      case 'pause':
+        if (command.currentTime !== undefined) {
+          this.currentYoutubePosition = {
+            currentTime: command.currentTime,
+            isPlaying: false
+          };
+        }
+        break;
+    }
+
+    for (const managed of this.displays.values()) {
+      if (managed.type === 'viewer' && managed.window && !managed.window.isDestroyed()) {
+        console.log('[DisplayManager] -> Sending youtube command to display:', managed.id);
+        managed.window.webContents.send('youtube:command', command);
+      }
+    }
+  }
+
+  /**
+   * Get current YouTube position for display sync
+   */
+  getYoutubePosition(): { time: number; isPlaying: boolean } | null {
+    if (!this.currentYoutubePosition) return null;
+    return {
+      time: this.currentYoutubePosition.currentTime,
+      isPlaying: this.currentYoutubePosition.isPlaying
+    };
   }
 
   /**

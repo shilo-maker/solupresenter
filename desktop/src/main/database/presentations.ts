@@ -1,4 +1,4 @@
-import { getDb, saveDatabase, generateId, rowsToObjects } from './index';
+import { getDb, saveDatabase, generateId, queryAll, queryOne } from './index';
 
 export interface TextBox {
   id: string;
@@ -27,10 +27,23 @@ export interface Slide {
   backgroundColor?: string;
 }
 
+export interface QuickModeMetadata {
+  type: 'sermon' | 'prayer' | 'announcements';
+  title: string;  // Original title (e.g., "Prayer Requests")
+  subtitles: Array<{
+    subtitle: string;
+    subtitleTranslation?: string;
+    description?: string;
+    descriptionTranslation?: string;
+    bibleRef?: { reference: string; hebrewReference?: string };
+  }>;
+}
+
 export interface PresentationData {
   title: string;
   slides?: Slide[];
   canvasDimensions?: { width: number; height: number };
+  quickModeData?: QuickModeMetadata;  // Store Quick Mode data for theme-based rendering
 }
 
 export interface Presentation extends PresentationData {
@@ -45,23 +58,14 @@ export interface Presentation extends PresentationData {
  * Get all presentations
  */
 export async function getPresentations(): Promise<Presentation[]> {
-  const db = getDb();
-  if (!db) return [];
-
-  const result = db.exec('SELECT * FROM presentations ORDER BY updatedAt DESC');
-  return rowsToObjects(result) as Presentation[];
+  return queryAll('SELECT * FROM presentations ORDER BY updatedAt DESC') as Presentation[];
 }
 
 /**
  * Get a single presentation by ID
  */
 export async function getPresentation(id: string): Promise<Presentation | null> {
-  const db = getDb();
-  if (!db) return null;
-
-  const result = db.exec(`SELECT * FROM presentations WHERE id = '${id.replace(/'/g, "''")}'`);
-  const presentations = rowsToObjects(result) as Presentation[];
-  return presentations.length > 0 ? presentations[0] : null;
+  return queryOne('SELECT * FROM presentations WHERE id = ?', [id]) as Presentation | null;
 }
 
 /**
@@ -80,15 +84,18 @@ export async function createPresentation(data: PresentationData): Promise<Presen
     textBoxes: []
   };
 
+  console.log('[createPresentation] Received data.quickModeData:', data.quickModeData);
+
   try {
     db.run(`
-      INSERT INTO presentations (id, title, slides, canvasDimensions, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO presentations (id, title, slides, canvasDimensions, quickModeData, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `, [
       id,
       data.title,
       JSON.stringify(data.slides || [defaultSlide]),
       JSON.stringify(data.canvasDimensions || { width: 1920, height: 1080 }),
+      data.quickModeData ? JSON.stringify(data.quickModeData) : null,
       now,
       now
     ]);
@@ -130,6 +137,10 @@ export async function updatePresentation(id: string, data: Partial<PresentationD
   if (data.canvasDimensions !== undefined) {
     updates.push('canvasDimensions = ?');
     values.push(JSON.stringify(data.canvasDimensions));
+  }
+  if (data.quickModeData !== undefined) {
+    updates.push('quickModeData = ?');
+    values.push(data.quickModeData ? JSON.stringify(data.quickModeData) : null);
   }
 
   updates.push('updatedAt = ?');

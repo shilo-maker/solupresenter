@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface PublicRoom {
   id: string;
@@ -12,14 +13,17 @@ interface BroadcastSelectorProps {
   onlineConnected: boolean;
   serverUrl?: string;
   onConnectClick?: () => void;
+  embedded?: boolean;
 }
 
 const BroadcastSelector: React.FC<BroadcastSelectorProps> = ({
   roomPin,
   viewerCount,
   onlineConnected,
-  onConnectClick
+  onConnectClick,
+  embedded = false
 }) => {
+  const { t } = useTranslation();
   const [showDropdown, setShowDropdown] = useState(false);
   const [publicRooms, setPublicRooms] = useState<PublicRoom[]>([]);
   const [selectedPublicRoom, setSelectedPublicRoom] = useState<PublicRoom | null>(null);
@@ -83,7 +87,212 @@ const BroadcastSelector: React.FC<BroadcastSelectorProps> = ({
     setShowDropdown(false);
   };
 
-  // Not connected - show connect button
+  const displayName = selectedPublicRoom
+    ? selectedPublicRoom.name
+    : `${t('controlPanel.privateRoom')} (${roomPin || '...'})`;
+
+  const isPublic = !!selectedPublicRoom;
+
+  // Embedded mode - panel-style layout
+  if (embedded) {
+    if (!onlineConnected) {
+      return (
+        <div style={{
+          padding: '10px',
+          background: 'rgba(255,255,255,0.05)',
+          borderRadius: '8px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                background: '#6c757d'
+              }} />
+              <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem' }}>
+                {t('controlPanel.notConnected', 'Not connected')}
+              </span>
+            </div>
+            <button
+              onClick={onConnectClick}
+              style={{
+                background: 'linear-gradient(135deg, #0d6efd, #0a58ca)',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '8px 16px',
+                color: 'white',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                fontWeight: 500
+              }}
+            >
+              {t('controlPanel.connect', 'Connect')}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Connected - embedded panel view
+    return (
+      <div data-broadcast-selector>
+        {/* Connection Status */}
+        <div style={{
+          padding: '10px',
+          background: isPublic
+            ? 'rgba(40, 167, 69, 0.2)'
+            : 'rgba(13, 110, 253, 0.2)',
+          borderRadius: '8px',
+          border: `1px solid ${isPublic ? 'rgba(40, 167, 69, 0.5)' : 'rgba(13, 110, 253, 0.5)'}`,
+          marginBottom: '10px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                background: '#28a745',
+                boxShadow: '0 0 8px #28a745'
+              }} />
+              <div>
+                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)' }}>
+                  {t('controlPanel.broadcastingTo')}
+                </div>
+                <div style={{
+                  fontWeight: 600,
+                  color: isPublic ? '#28a745' : '#0d6efd',
+                  fontSize: '0.9rem'
+                }}>
+                  {displayName}
+                </div>
+              </div>
+            </div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              color: 'rgba(255,255,255,0.7)',
+              fontSize: '0.8rem'
+            }}>
+              <span>{viewerCount} {t('controlPanel.viewers', 'viewers')}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Room Selection */}
+        <div style={{ marginBottom: '10px' }}>
+          {/* Private Room Option */}
+          <div
+            onClick={() => handleSelectRoom(null)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '10px',
+              cursor: 'pointer',
+              background: !selectedPublicRoom ? 'rgba(13, 110, 253, 0.2)' : 'rgba(255,255,255,0.05)',
+              borderRadius: '8px',
+              marginBottom: '6px',
+              border: !selectedPublicRoom ? '1px solid rgba(13, 110, 253, 0.5)' : '1px solid transparent'
+            }}
+          >
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 500, color: !selectedPublicRoom ? '#0d6efd' : 'rgba(255,255,255,0.8)', fontSize: '0.85rem' }}>
+                {t('controlPanel.privateRoom')}
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>
+                PIN: {roomPin || '...'}
+              </div>
+            </div>
+            {!selectedPublicRoom && (
+              <span style={{
+                background: '#0d6efd',
+                color: 'white',
+                padding: '2px 8px',
+                borderRadius: '10px',
+                fontSize: '0.65rem',
+                fontWeight: 600
+              }}>
+                {t('controlPanel.active')}
+              </span>
+            )}
+          </div>
+
+          {/* Public Rooms */}
+          {publicRooms.map((room) => (
+            <div
+              key={room.id}
+              onClick={() => handleSelectRoom(room)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '10px',
+                cursor: 'pointer',
+                background: selectedPublicRoom?.id === room.id ? 'rgba(40, 167, 69, 0.2)' : 'rgba(255,255,255,0.05)',
+                borderRadius: '8px',
+                marginBottom: '6px',
+                border: selectedPublicRoom?.id === room.id ? '1px solid rgba(40, 167, 69, 0.5)' : '1px solid transparent'
+              }}
+            >
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 500, color: selectedPublicRoom?.id === room.id ? '#28a745' : 'rgba(255,255,255,0.8)', fontSize: '0.85rem' }}>
+                  {room.name}
+                </div>
+                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>
+                  {t('controlPanel.publicRoom')}
+                </div>
+              </div>
+              {selectedPublicRoom?.id === room.id && (
+                <span style={{
+                  background: '#28a745',
+                  color: 'white',
+                  padding: '2px 8px',
+                  borderRadius: '10px',
+                  fontSize: '0.65rem',
+                  fontWeight: 600
+                }}>
+                  {t('controlPanel.active')}
+                </span>
+              )}
+            </div>
+          ))}
+
+          {publicRooms.length === 0 && (
+            <div style={{
+              padding: '8px',
+              color: 'rgba(255,255,255,0.4)',
+              fontSize: '0.75rem',
+              textAlign: 'center'
+            }}>
+              {t('controlPanel.noPublicRoomsYet')}
+            </div>
+          )}
+        </div>
+
+        {/* Copy Link Button */}
+        <button
+          onClick={copyLink}
+          style={{
+            width: '100%',
+            padding: '8px',
+            background: 'rgba(255,255,255,0.1)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '0.8rem',
+            color: 'white'
+          }}
+        >
+          {t('controlPanel.copyViewerLink')}
+        </button>
+      </div>
+    );
+  }
+
+  // Not connected - show connect button (standalone mode)
   if (!onlineConnected) {
     return (
       <div
@@ -106,19 +315,13 @@ const BroadcastSelector: React.FC<BroadcastSelectorProps> = ({
           background: '#6c757d'
         }} />
         <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem' }}>
-          {onConnectClick ? 'Connect Online' : 'Offline'}
+          {onConnectClick ? t('controlPanel.connectOnline', 'Connect Online') : t('controlPanel.offline', 'Offline')}
         </span>
       </div>
     );
   }
 
-  const displayName = selectedPublicRoom
-    ? selectedPublicRoom.name
-    : `Private (${roomPin || 'connecting...'})`;
-
-  const isPublic = !!selectedPublicRoom;
-
-  // Connected - show room info with dropdown
+  // Connected - show room info with dropdown (standalone mode)
   return (
     <div data-broadcast-selector style={{ position: 'relative' }}>
       {/* Main Button */}
@@ -150,7 +353,7 @@ const BroadcastSelector: React.FC<BroadcastSelectorProps> = ({
         {/* Room Info */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)' }}>
-            Broadcasting to
+            {t('controlPanel.broadcastingTo')}
           </div>
           <div style={{
             fontWeight: 600,
@@ -211,7 +414,7 @@ const BroadcastSelector: React.FC<BroadcastSelectorProps> = ({
           >
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 500, color: !selectedPublicRoom ? '#0d6efd' : '#333' }}>
-                Private Room
+                {t('controlPanel.privateRoom')}
               </div>
               <div style={{ fontSize: '0.75rem', color: '#666' }}>
                 PIN: {roomPin || '...'}
@@ -226,7 +429,7 @@ const BroadcastSelector: React.FC<BroadcastSelectorProps> = ({
                 fontSize: '0.65rem',
                 fontWeight: 600
               }}>
-                Active
+                {t('controlPanel.active')}
               </span>
             )}
           </div>
@@ -251,7 +454,7 @@ const BroadcastSelector: React.FC<BroadcastSelectorProps> = ({
                   {room.name}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#666' }}>
-                  Public room
+                  {t('controlPanel.publicRoom')}
                 </div>
               </div>
               {selectedPublicRoom?.id === room.id && (
@@ -278,7 +481,7 @@ const BroadcastSelector: React.FC<BroadcastSelectorProps> = ({
               textAlign: 'center',
               borderTop: '1px solid #eee'
             }}>
-              No public rooms created yet
+              {t('controlPanel.noPublicRoomsYet')}
             </div>
           )}
 
@@ -303,7 +506,7 @@ const BroadcastSelector: React.FC<BroadcastSelectorProps> = ({
                 color: '#333'
               }}
             >
-              Copy Viewer Link
+              {t('controlPanel.copyViewerLink')}
             </button>
           </div>
         </div>

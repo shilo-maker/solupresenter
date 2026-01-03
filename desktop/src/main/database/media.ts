@@ -1,4 +1,4 @@
-import { getDb, saveDatabase, generateId, rowsToObjects } from './index';
+import { getDb, saveDatabase, generateId, queryAll, queryOne } from './index';
 
 export interface MediaFolder {
   id: string;
@@ -92,11 +92,7 @@ export function createMediaFolder(name: string): MediaFolder {
  * Get all media folders
  */
 export function getAllMediaFolders(): MediaFolder[] {
-  const db = getDb();
-  if (!db) return [];
-
-  const result = db.exec('SELECT * FROM media_folders ORDER BY name ASC');
-  return rowsToObjects(result) as MediaFolder[];
+  return queryAll('SELECT * FROM media_folders ORDER BY name ASC') as MediaFolder[];
 }
 
 /**
@@ -165,33 +161,21 @@ export function addMediaItem(item: Omit<MediaItem, 'id' | 'createdAt'> & { folde
  * Get all media items, optionally filtered by folder
  */
 export function getAllMediaItems(folderId?: string | null): MediaItem[] {
-  const db = getDb();
-  if (!db) return [];
-
-  let query = 'SELECT * FROM media_items';
   if (folderId === null) {
     // Get items without a folder
-    query += ' WHERE folderId IS NULL';
+    return queryAll('SELECT * FROM media_items WHERE folderId IS NULL ORDER BY createdAt DESC') as MediaItem[];
   } else if (folderId) {
     // Get items in specific folder
-    query += ` WHERE folderId = '${folderId.replace(/'/g, "''")}'`;
+    return queryAll('SELECT * FROM media_items WHERE folderId = ? ORDER BY createdAt DESC', [folderId]) as MediaItem[];
   }
-  query += ' ORDER BY createdAt DESC';
-
-  const result = db.exec(query);
-  return rowsToObjects(result) as MediaItem[];
+  return queryAll('SELECT * FROM media_items ORDER BY createdAt DESC') as MediaItem[];
 }
 
 /**
  * Get media item by ID
  */
 export function getMediaItem(id: string): MediaItem | null {
-  const db = getDb();
-  if (!db) return null;
-
-  const result = db.exec(`SELECT * FROM media_items WHERE id = '${id.replace(/'/g, "''")}'`);
-  const items = rowsToObjects(result) as MediaItem[];
-  return items[0] || null;
+  return queryOne('SELECT * FROM media_items WHERE id = ?', [id]) as MediaItem | null;
 }
 
 /**
@@ -222,11 +206,8 @@ export function deleteMediaItem(id: string): boolean {
  * Check if media already imported (by original path)
  */
 export function isMediaImported(originalPath: string): boolean {
-  const db = getDb();
-  if (!db) return false;
-
-  const result = db.exec(`SELECT id FROM media_items WHERE originalPath = '${originalPath.replace(/'/g, "''")}'`);
-  return result.length > 0 && result[0].values.length > 0;
+  const result = queryOne('SELECT id FROM media_items WHERE originalPath = ?', [originalPath]);
+  return result !== null;
 }
 
 /**

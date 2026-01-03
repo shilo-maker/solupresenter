@@ -16,6 +16,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('displays:changed', handler);
   },
 
+  // ============ OBS Browser Source Server ============
+  startOBSServer: () => ipcRenderer.invoke('obs:start'),
+  stopOBSServer: () => ipcRenderer.invoke('obs:stop'),
+  getOBSServerUrl: () => ipcRenderer.invoke('obs:getUrl'),
+  isOBSServerRunning: () => ipcRenderer.invoke('obs:isRunning'),
+  // Legacy compatibility
+  openOBSOverlay: () => ipcRenderer.invoke('obs:open'),
+  closeOBSOverlay: () => ipcRenderer.invoke('obs:close'),
+  isOBSOverlayOpen: () => ipcRenderer.invoke('obs:isOpen'),
+
   // ============ Slide Control ============
   sendSlide: (slideData: any) => ipcRenderer.invoke('slides:send', slideData),
   sendBlank: () => ipcRenderer.invoke('slides:blank'),
@@ -109,6 +119,38 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setDefaultStageTheme: (id: string) => ipcRenderer.invoke('db:stageThemes:setDefault', id),
   applyStageTheme: (theme: any) => ipcRenderer.invoke('stageTheme:apply', theme),
 
+  // ============ Database - Bible Themes ============
+  getBibleThemes: () => ipcRenderer.invoke('db:bibleThemes:getAll'),
+  getBibleTheme: (id: string) => ipcRenderer.invoke('db:bibleThemes:get', id),
+  getDefaultBibleTheme: () => ipcRenderer.invoke('db:bibleThemes:getDefault'),
+  createBibleTheme: (data: any) => ipcRenderer.invoke('db:bibleThemes:create', data),
+  updateBibleTheme: (id: string, data: any) => ipcRenderer.invoke('db:bibleThemes:update', id, data),
+  deleteBibleTheme: (id: string) => ipcRenderer.invoke('db:bibleThemes:delete', id),
+  applyBibleTheme: (theme: any) => ipcRenderer.invoke('bibleTheme:apply', theme),
+
+  // ============ Database - OBS Themes ============
+  getOBSThemes: (type?: 'songs' | 'bible') => ipcRenderer.invoke('db:obsThemes:getAll', type),
+  getOBSTheme: (id: string) => ipcRenderer.invoke('db:obsThemes:get', id),
+  getDefaultOBSTheme: (type: 'songs' | 'bible') => ipcRenderer.invoke('db:obsThemes:getDefault', type),
+  createOBSTheme: (data: any) => ipcRenderer.invoke('db:obsThemes:create', data),
+  updateOBSTheme: (id: string, data: any) => ipcRenderer.invoke('db:obsThemes:update', id, data),
+  deleteOBSTheme: (id: string) => ipcRenderer.invoke('db:obsThemes:delete', id),
+  applyOBSTheme: (theme: any) => ipcRenderer.invoke('obsTheme:apply', theme),
+
+  // ============ Database - Prayer Themes ============
+  getPrayerThemes: () => ipcRenderer.invoke('db:prayerThemes:getAll'),
+  getPrayerTheme: (id: string) => ipcRenderer.invoke('db:prayerThemes:get', id),
+  getDefaultPrayerTheme: () => ipcRenderer.invoke('db:prayerThemes:getDefault'),
+  createPrayerTheme: (data: any) => ipcRenderer.invoke('db:prayerThemes:create', data),
+  updatePrayerTheme: (id: string, data: any) => ipcRenderer.invoke('db:prayerThemes:update', id, data),
+  deletePrayerTheme: (id: string) => ipcRenderer.invoke('db:prayerThemes:delete', id),
+  applyPrayerTheme: (theme: any) => ipcRenderer.invoke('prayerTheme:apply', theme),
+
+  // ============ Theme Selection Persistence ============
+  getSelectedThemeIds: () => ipcRenderer.invoke('settings:getSelectedThemeIds'),
+  saveSelectedThemeId: (themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'prayer', themeId: string | null) =>
+    ipcRenderer.invoke('settings:saveSelectedThemeId', themeType, themeId),
+
   // ============ Database - Presentations ============
   getPresentations: () => ipcRenderer.invoke('db:presentations:getAll'),
   getPresentation: (id: string) => ipcRenderer.invoke('db:presentations:get', id),
@@ -163,7 +205,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAuthState: () => ipcRenderer.invoke('auth:getState'),
   initializeAuth: () => ipcRenderer.invoke('auth:initialize'),
   setServerUrl: (url: string) => ipcRenderer.invoke('auth:setServerUrl', url),
-  connectWithAuth: () => ipcRenderer.invoke('online:connectWithAuth')
+  connectWithAuth: () => ipcRenderer.invoke('online:connectWithAuth'),
+
+  // ============ YouTube Control ============
+  youtubeLoad: (videoId: string, title: string) => ipcRenderer.invoke('youtube:load', videoId, title),
+  youtubePlay: (currentTime: number) => ipcRenderer.invoke('youtube:play', currentTime),
+  youtubePause: (currentTime: number) => ipcRenderer.invoke('youtube:pause', currentTime),
+  youtubeSeek: (currentTime: number) => ipcRenderer.invoke('youtube:seek', currentTime),
+  youtubeStop: () => ipcRenderer.invoke('youtube:stop'),
+  youtubeSync: (currentTime: number, isPlaying: boolean) => ipcRenderer.invoke('youtube:sync', currentTime, isPlaying),
+  youtubeSearch: (query: string) => ipcRenderer.invoke('youtube:search', query)
 });
 
 // Type declarations for TypeScript
@@ -178,6 +229,33 @@ declare global {
       closeAllDisplays: () => Promise<boolean>;
       captureViewer: () => Promise<string | null>;
       onDisplaysChanged: (callback: (displays: any[]) => void) => () => void;
+
+      // OBS Overlay
+      openOBSOverlay: (config?: {
+        position?: 'top' | 'center' | 'bottom';
+        fontSize?: number;
+        textColor?: string;
+        showOriginal?: boolean;
+        showTransliteration?: boolean;
+        showTranslation?: boolean;
+        paddingBottom?: number;
+        paddingTop?: number;
+        maxWidth?: number;
+      }) => Promise<boolean>;
+      closeOBSOverlay: () => Promise<boolean>;
+      isOBSOverlayOpen: () => Promise<boolean>;
+      getOBSOverlayConfig: () => Promise<{
+        position: 'top' | 'center' | 'bottom';
+        fontSize: number;
+        textColor: string;
+        showOriginal: boolean;
+        showTransliteration: boolean;
+        showTranslation: boolean;
+        paddingBottom: number;
+        paddingTop: number;
+        maxWidth: number;
+      } | null>;
+      updateOBSOverlayConfig: (config: any) => Promise<boolean>;
 
       // Slide Control
       sendSlide: (slideData: any) => Promise<boolean>;
@@ -258,6 +336,43 @@ declare global {
       setDefaultStageTheme: (id: string) => Promise<boolean>;
       applyStageTheme: (theme: any) => Promise<boolean>;
 
+      // Database - Bible Themes
+      getBibleThemes: () => Promise<any[]>;
+      getBibleTheme: (id: string) => Promise<any>;
+      getDefaultBibleTheme: () => Promise<any>;
+      createBibleTheme: (data: any) => Promise<any>;
+      updateBibleTheme: (id: string, data: any) => Promise<any>;
+      deleteBibleTheme: (id: string) => Promise<boolean>;
+      applyBibleTheme: (theme: any) => Promise<boolean>;
+
+      // Database - OBS Themes
+      getOBSThemes: (type?: 'songs' | 'bible') => Promise<any[]>;
+      getOBSTheme: (id: string) => Promise<any>;
+      getDefaultOBSTheme: (type: 'songs' | 'bible') => Promise<any>;
+      createOBSTheme: (data: any) => Promise<any>;
+      updateOBSTheme: (id: string, data: any) => Promise<any>;
+      deleteOBSTheme: (id: string) => Promise<boolean>;
+      applyOBSTheme: (theme: any) => Promise<boolean>;
+
+      // Database - Prayer Themes
+      getPrayerThemes: () => Promise<any[]>;
+      getPrayerTheme: (id: string) => Promise<any>;
+      getDefaultPrayerTheme: () => Promise<any>;
+      createPrayerTheme: (data: any) => Promise<any>;
+      updatePrayerTheme: (id: string, data: any) => Promise<any>;
+      deletePrayerTheme: (id: string) => Promise<boolean>;
+      applyPrayerTheme: (theme: any) => Promise<boolean>;
+
+      // Theme Selection Persistence
+      getSelectedThemeIds: () => Promise<{
+        viewerThemeId: string | null;
+        stageThemeId: string | null;
+        bibleThemeId: string | null;
+        obsThemeId: string | null;
+        prayerThemeId: string | null;
+      }>;
+      saveSelectedThemeId: (themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'prayer', themeId: string | null) => Promise<boolean>;
+
       // Database - Presentations
       getPresentations: () => Promise<any[]>;
       getPresentation: (id: string) => Promise<any>;
@@ -314,6 +429,15 @@ declare global {
       initializeAuth: () => Promise<any>;
       setServerUrl: (url: string) => Promise<boolean>;
       connectWithAuth: () => Promise<{ success: boolean; error?: string }>;
+
+      // YouTube Control
+      youtubeLoad: (videoId: string, title: string) => Promise<boolean>;
+      youtubePlay: (currentTime: number) => Promise<boolean>;
+      youtubePause: (currentTime: number) => Promise<boolean>;
+      youtubeSeek: (currentTime: number) => Promise<boolean>;
+      youtubeStop: () => Promise<boolean>;
+      youtubeSync: (currentTime: number, isPlaying: boolean) => Promise<boolean>;
+      youtubeSearch: (query: string) => Promise<{ success: boolean; results?: Array<{ videoId: string; title: string; thumbnail: string; channelTitle: string }>; error?: string }>;
     };
   }
 }

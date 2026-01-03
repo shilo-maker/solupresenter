@@ -19,31 +19,49 @@ export function ensureMediaLibrary(): void {
  * Try ffmpeg-static first, then system ffmpeg
  */
 function getFfmpegPath(): string | null {
-  try {
-    // Try to use ffmpeg-static if installed
-    const ffmpegStatic = require('ffmpeg-static');
-    if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
-      return ffmpegStatic;
-    }
-  } catch {
-    // ffmpeg-static not installed
-  }
-
-  // Try system ffmpeg
   const isWindows = process.platform === 'win32';
   const ffmpegName = isWindows ? 'ffmpeg.exe' : 'ffmpeg';
 
-  // Check common locations
+  // In production, ffmpeg-static is in asar.unpacked
+  if (app.isPackaged) {
+    const unpackedPath = path.join(
+      process.resourcesPath,
+      'app.asar.unpacked',
+      'node_modules',
+      'ffmpeg-static',
+      ffmpegName
+    );
+    console.log('[mediaProcessor] Checking unpacked ffmpeg at:', unpackedPath);
+    if (fs.existsSync(unpackedPath)) {
+      console.log('[mediaProcessor] Found ffmpeg in asar.unpacked');
+      return unpackedPath;
+    }
+  }
+
+  // Try to use ffmpeg-static require (works in development)
+  try {
+    const ffmpegStatic = require('ffmpeg-static');
+    if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
+      console.log('[mediaProcessor] Found ffmpeg-static at:', ffmpegStatic);
+      return ffmpegStatic;
+    }
+  } catch {
+    // ffmpeg-static not installed or not accessible
+  }
+
+  // Try system ffmpeg
   const commonPaths = isWindows
     ? ['C:\\ffmpeg\\bin\\ffmpeg.exe', 'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe']
     : ['/usr/bin/ffmpeg', '/usr/local/bin/ffmpeg'];
 
   for (const p of commonPaths) {
     if (fs.existsSync(p)) {
+      console.log('[mediaProcessor] Found system ffmpeg at:', p);
       return p;
     }
   }
 
+  console.warn('[mediaProcessor] ffmpeg not found');
   return null;
 }
 

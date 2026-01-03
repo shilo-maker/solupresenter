@@ -45,6 +45,24 @@ contextBridge.exposeInMainWorld('displayAPI', {
     return () => ipcRenderer.removeListener('stageTheme:update', handler);
   },
 
+  onBibleThemeUpdate: (callback: (theme: any) => void) => {
+    const handler = (_: any, theme: any) => callback(theme);
+    ipcRenderer.on('bibleTheme:update', handler);
+    return () => ipcRenderer.removeListener('bibleTheme:update', handler);
+  },
+
+  onPrayerThemeUpdate: (callback: (theme: any) => void) => {
+    const handler = (_: any, theme: any) => callback(theme);
+    ipcRenderer.on('prayerTheme:update', handler);
+    return () => ipcRenderer.removeListener('prayerTheme:update', handler);
+  },
+
+  onYoutubeCommand: (callback: (command: any) => void) => {
+    const handler = (_: any, command: any) => callback(command);
+    ipcRenderer.on('youtube:command', handler);
+    return () => ipcRenderer.removeListener('youtube:command', handler);
+  },
+
   // ============ Report Status Back ============
   reportReady: () => ipcRenderer.send('display:ready'),
   reportVideoTime: (time: number, duration: number) => ipcRenderer.send('video:timeUpdate', time, duration),
@@ -53,7 +71,8 @@ contextBridge.exposeInMainWorld('displayAPI', {
   reportError: (error: string) => ipcRenderer.send('display:error', error),
 
   // ============ Request Data ============
-  getVideoPosition: () => ipcRenderer.invoke('video:getPosition')
+  getVideoPosition: () => ipcRenderer.invoke('video:getPosition'),
+  getYoutubePosition: () => ipcRenderer.invoke('youtube:getPosition')
 });
 
 // Type declarations for TypeScript
@@ -68,6 +87,9 @@ declare global {
       onToolUpdate: (callback: (data: any) => void) => () => void;
       onBackgroundUpdate: (callback: (background: string) => void) => () => void;
       onStageThemeUpdate: (callback: (theme: any) => void) => () => void;
+      onBibleThemeUpdate: (callback: (theme: any) => void) => () => void;
+      onPrayerThemeUpdate: (callback: (theme: any) => void) => () => void;
+      onYoutubeCommand: (callback: (command: any) => void) => () => void;
 
       // Report Status Back
       reportReady: () => void;
@@ -78,6 +100,7 @@ declare global {
 
       // Request Data
       getVideoPosition: () => Promise<{ time: number; isPlaying: boolean } | null>;
+      getYoutubePosition: () => Promise<{ time: number; isPlaying: boolean } | null>;
     };
   }
 }

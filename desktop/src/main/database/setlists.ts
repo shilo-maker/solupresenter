@@ -1,4 +1,4 @@
-import { getDb, saveDatabase, generateId, rowsToObjects } from './index';
+import { getDb, saveDatabase, generateId, queryAll, queryOne } from './index';
 
 export interface SetlistItem {
   id: string;
@@ -73,11 +73,7 @@ function parseSetlistRow(row: any): Setlist | null {
  * Get all setlists
  */
 export async function getSetlists(): Promise<Setlist[]> {
-  const db = getDb();
-  if (!db) return [];
-
-  const result = db.exec('SELECT * FROM setlists ORDER BY updatedAt DESC');
-  const rows = rowsToObjects(result);
+  const rows = queryAll('SELECT * FROM setlists ORDER BY updatedAt DESC');
   return rows.map(row => parseSetlistRow(row)).filter(Boolean) as Setlist[];
 }
 
@@ -85,12 +81,8 @@ export async function getSetlists(): Promise<Setlist[]> {
  * Get a single setlist by ID
  */
 export async function getSetlist(id: string): Promise<Setlist | null> {
-  const db = getDb();
-  if (!db) return null;
-
-  const result = db.exec(`SELECT * FROM setlists WHERE id = '${id.replace(/'/g, "''")}'`);
-  const setlists = rowsToObjects(result);
-  return setlists.length > 0 ? parseSetlistRow(setlists[0]) : null;
+  const row = queryOne('SELECT * FROM setlists WHERE id = ?', [id]);
+  return row ? parseSetlistRow(row) : null;
 }
 
 /**

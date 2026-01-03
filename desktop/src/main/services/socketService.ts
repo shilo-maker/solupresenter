@@ -2,6 +2,9 @@ import { io, Socket } from 'socket.io-client';
 import { BrowserWindow } from 'electron';
 import axios from 'axios';
 
+// Configure axios defaults
+const AXIOS_TIMEOUT = 15000; // 15 seconds
+
 export interface OnlineStatus {
   connected: boolean;
   roomPin?: string;
@@ -19,11 +22,25 @@ export class SocketService {
   private controlWindow: BrowserWindow | null = null;
   private token: string | null = null;
   private userId: string | null = null;
+  private connectionTimeoutId: NodeJS.Timeout | null = null;
 
   /**
    * Connect to the online server
    */
   async connect(serverUrl: string, token: string, userId?: string): Promise<boolean> {
+    // Disconnect existing socket first to prevent listener stacking
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+      this.socket = null;
+    }
+
+    // Clear any existing connection timeout
+    if (this.connectionTimeoutId) {
+      clearTimeout(this.connectionTimeoutId);
+      this.connectionTimeoutId = null;
+    }
+
     this.token = token;
     this.userId = userId || null;
 
@@ -39,6 +56,11 @@ export class SocketService {
 
         this.socket.on('connect', () => {
           console.log('Connected to server');
+          // Clear timeout on successful connection
+          if (this.connectionTimeoutId) {
+            clearTimeout(this.connectionTimeoutId);
+            this.connectionTimeoutId = null;
+          }
           this.status.connected = true;
           this.status.serverUrl = serverUrl;
           this.notifyStatusChange();
@@ -56,6 +78,11 @@ export class SocketService {
 
         this.socket.on('connect_error', (error) => {
           console.error('Connection error:', error);
+          // Clear timeout on error
+          if (this.connectionTimeoutId) {
+            clearTimeout(this.connectionTimeoutId);
+            this.connectionTimeoutId = null;
+          }
           resolve(false);
         });
 
@@ -72,11 +99,12 @@ export class SocketService {
         });
 
         // Timeout after 10 seconds
-        setTimeout(() => {
+        this.connectionTimeoutId = setTimeout(() => {
           if (!this.status.connected) {
             this.disconnect();
             resolve(false);
           }
+          this.connectionTimeoutId = null;
         }, 10000);
       } catch (error) {
         console.error('Failed to connect:', error);
@@ -119,7 +147,8 @@ export class SocketService {
           headers: {
             'Authorization': `Bearer ${this.token}`,
             'Content-Type': 'application/json'
-          }
+          },
+          timeout: AXIOS_TIMEOUT
         }
       );
 
@@ -171,7 +200,8 @@ export class SocketService {
       const response = await axios.get(url, {
         headers: {
           'Authorization': `Bearer ${this.token}`
-        }
+        },
+        timeout: AXIOS_TIMEOUT
       });
 
       console.log('Public rooms response:', JSON.stringify(response.data));
@@ -200,7 +230,8 @@ export class SocketService {
             headers: {
               'Authorization': `Bearer ${this.token}`,
               'Content-Type': 'application/json'
-            }
+            },
+            timeout: AXIOS_TIMEOUT
           }
         );
       } else {
@@ -212,7 +243,8 @@ export class SocketService {
             headers: {
               'Authorization': `Bearer ${this.token}`,
               'Content-Type': 'application/json'
-            }
+            },
+            timeout: AXIOS_TIMEOUT
           }
         );
       }
@@ -327,6 +359,66 @@ export class SocketService {
       this.socket.emit('operator:localMediaStatus', {
         roomId: this.status.roomId,
         visible
+      });
+    }
+  }
+
+  /**
+   * YouTube video control methods
+   */
+  youtubeLoad(videoId: string, title: string): void {
+    if (this.socket && this.status.connected && this.status.roomId) {
+      console.log('Broadcasting YouTube load:', videoId);
+      this.socket.emit('operator:youtubeLoad', {
+        roomId: this.status.roomId,
+        videoId,
+        title
+      });
+    }
+  }
+
+  youtubePlay(currentTime: number): void {
+    if (this.socket && this.status.connected && this.status.roomId) {
+      this.socket.emit('operator:youtubePlay', {
+        roomId: this.status.roomId,
+        currentTime
+      });
+    }
+  }
+
+  youtubePause(currentTime: number): void {
+    if (this.socket && this.status.connected && this.status.roomId) {
+      this.socket.emit('operator:youtubePause', {
+        roomId: this.status.roomId,
+        currentTime
+      });
+    }
+  }
+
+  youtubeSeek(currentTime: number): void {
+    if (this.socket && this.status.connected && this.status.roomId) {
+      this.socket.emit('operator:youtubeSeek', {
+        roomId: this.status.roomId,
+        currentTime
+      });
+    }
+  }
+
+  youtubeStop(): void {
+    if (this.socket && this.status.connected && this.status.roomId) {
+      console.log('Broadcasting YouTube stop');
+      this.socket.emit('operator:youtubeStop', {
+        roomId: this.status.roomId
+      });
+    }
+  }
+
+  youtubeSync(currentTime: number, isPlaying: boolean): void {
+    if (this.socket && this.status.connected && this.status.roomId) {
+      this.socket.emit('operator:youtubeSync', {
+        roomId: this.status.roomId,
+        currentTime,
+        isPlaying
       });
     }
   }

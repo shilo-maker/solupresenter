@@ -2,7 +2,7 @@ import React from 'react';
 import { LinePosition, LineStyle } from './DraggableTextBox';
 
 interface PropertiesPanelProps {
-  lineType: 'original' | 'transliteration' | 'translation';
+  lineType: string;  // Flexible to support song, bible, and prayer line types
   position: LinePosition;
   style: LineStyle;
   onPositionChange: (position: LinePosition) => void;
@@ -173,7 +173,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       {/* Horizontal Alignment */}
       <div style={sectionStyle}>
         <label style={labelStyle}>Horizontal Alignment</label>
-        <div style={buttonGroupStyle}>
+        <div style={{ ...buttonGroupStyle, direction: 'ltr' }}>
           <button
             style={alignButtonStyle(position.alignH === 'left')}
             onClick={() => onPositionChange({ ...position, alignH: 'left' })}
@@ -198,7 +198,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       {/* Vertical Alignment */}
       <div style={sectionStyle}>
         <label style={labelStyle}>Vertical Alignment</label>
-        <div style={buttonGroupStyle}>
+        <div style={{ ...buttonGroupStyle, direction: 'ltr' }}>
           <button
             style={alignButtonStyle(position.alignV === 'top')}
             onClick={() => onPositionChange({ ...position, alignV: 'top' })}

@@ -1,11 +1,44 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
+
+// YouTube IFrame API types
+declare global {
+  interface Window {
+    YT: {
+      Player: new (element: HTMLElement | string, options: any) => any;
+      PlayerState: {
+        UNSTARTED: number;
+        ENDED: number;
+        PLAYING: number;
+        PAUSED: number;
+        BUFFERING: number;
+        CUED: number;
+      };
+    };
+    onYouTubeIframeAPIReady: () => void;
+  }
+}
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useSettings } from '../contexts/SettingsContext';
+import { useSetlist, SetlistItem as ContextSetlistItem, SavedSetlist as ContextSavedSetlist } from '../contexts/SetlistContext';
 import logoImage from '../assets/logo.png';
 import AuthModal from '../components/AuthModal';
 import BroadcastSelector from '../components/BroadcastSelector';
 import MediaGrid from '../components/MediaGrid';
 import SlidePreview from '../components/SlidePreview';
+import ThemeSelectionPanel from '../components/control-panel/ThemeSelectionPanel';
 import { gradientPresets } from '../utils/gradients';
+import {
+  colors,
+  buttonStyles,
+  inputStyles,
+  cardStyles,
+  dropdownStyles,
+  panelStyles,
+  tabStyles,
+  emptyStateStyles,
+  flexStyles,
+} from '../styles/controlPanelStyles';
 
 interface Display {
   id: number;
@@ -33,7 +66,7 @@ interface Song {
 
 interface SetlistItem {
   id: string;
-  type: 'song' | 'blank' | 'section' | 'countdown' | 'announcement' | 'messages' | 'media' | 'bible' | 'presentation';
+  type: 'song' | 'blank' | 'section' | 'countdown' | 'announcement' | 'messages' | 'media' | 'bible' | 'presentation' | 'youtube';
   song?: Song;
   title?: string;
   // Tool-specific data
@@ -56,6 +89,10 @@ interface SetlistItem {
     verses?: any[];
   };
   displayMode?: 'bilingual' | 'original';
+  // YouTube data
+  youtubeVideoId?: string;
+  youtubeTitle?: string;
+  youtubeThumbnail?: string;
 }
 
 interface SavedSetlist {
@@ -70,6 +107,18 @@ interface SavedSetlist {
 type DisplayMode = 'bilingual' | 'original' | 'translation';
 type ResourcePanel = 'songs' | 'media' | 'tools' | 'bible' | 'presentations';
 
+interface QuickModeMetadata {
+  type: 'sermon' | 'prayer' | 'announcements';
+  title: string;
+  subtitles: Array<{
+    subtitle: string;
+    subtitleTranslation?: string;
+    description?: string;
+    descriptionTranslation?: string;
+    bibleRef?: { reference: string; hebrewReference?: string };
+  }>;
+}
+
 interface Presentation {
   id: string;
   title: string;
@@ -82,6 +131,7 @@ interface Presentation {
   }>;
   createdAt: string;
   updatedAt: string;
+  quickModeData?: QuickModeMetadata;
 }
 
 interface BibleBook {
@@ -226,8 +276,50 @@ const SongItem = memo<SongItemProps>(({
   onDragStart,
   onDragEnd
 }) => {
+  const { t, i18n } = useTranslation();
+  const isRTL = i18n.language === 'he';
   const [isHovered, setIsHovered] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+
+  const containerStyle = useMemo(() => ({
+    padding: '10px 12px',
+    cursor: 'grab' as const,
+    background: isSelected ? 'rgba(255,140,66,0.2)' : 'transparent',
+    borderLeft: isSelected ? `3px solid ${colors.button.orange}` : '3px solid transparent',
+    borderBottom: `1px solid ${colors.border.light}`,
+    opacity: isDragged ? 0.5 : 1,
+    display: 'flex' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    position: 'relative' as const,
+  }), [isSelected, isDragged]);
+
+  const menuButtonStyle = useMemo(() => ({
+    background: colors.background.cardHover,
+    border: 'none',
+    borderRadius: '4px',
+    padding: '4px 6px',
+    cursor: 'pointer' as const,
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    gap: '2px',
+    alignItems: 'center' as const,
+  }), []);
+
+  const dropdownStyle = useMemo(() => ({
+    position: 'absolute' as const,
+    top: '100%',
+    right: isRTL ? 'auto' : 0,
+    left: isRTL ? 0 : 'auto',
+    marginTop: '4px',
+    background: colors.background.dropdown,
+    borderRadius: '6px',
+    border: `1px solid ${colors.border.medium}`,
+    padding: '4px',
+    minWidth: '120px',
+    zIndex: 100,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+  }), [isRTL]);
 
   return (
     <div
@@ -241,18 +333,7 @@ const SongItem = memo<SongItemProps>(({
       onDoubleClick={() => onDoubleClick(song)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => { setIsHovered(false); setShowMenu(false); }}
-      style={{
-        padding: '10px 12px',
-        cursor: 'grab',
-        background: isSelected ? 'rgba(255,140,66,0.2)' : 'transparent',
-        borderLeft: isSelected ? '3px solid #FF8C42' : '3px solid transparent',
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
-        opacity: isDragged ? 0.5 : 1,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        position: 'relative'
-      }}
+      style={containerStyle}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ color: 'white', fontWeight: 500, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{song.title}</div>
@@ -261,42 +342,20 @@ const SongItem = memo<SongItemProps>(({
         <div style={{ position: 'relative' }}>
           <button
             onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: 'none',
-              borderRadius: '4px',
-              padding: '4px 6px',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '2px',
-              alignItems: 'center'
-            }}
+            style={menuButtonStyle}
           >
-            <span style={{ width: '3px', height: '3px', background: 'rgba(255,255,255,0.7)', borderRadius: '50%' }} />
-            <span style={{ width: '3px', height: '3px', background: 'rgba(255,255,255,0.7)', borderRadius: '50%' }} />
-            <span style={{ width: '3px', height: '3px', background: 'rgba(255,255,255,0.7)', borderRadius: '50%' }} />
+            <span style={{ width: '3px', height: '3px', background: colors.text.secondary, borderRadius: '50%' }} />
+            <span style={{ width: '3px', height: '3px', background: colors.text.secondary, borderRadius: '50%' }} />
+            <span style={{ width: '3px', height: '3px', background: colors.text.secondary, borderRadius: '50%' }} />
           </button>
           {showMenu && (
             <div
               onClick={(e) => e.stopPropagation()}
-              style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: '4px',
-                background: 'rgba(30,30,50,0.98)',
-                borderRadius: '6px',
-                border: '1px solid rgba(255,255,255,0.2)',
-                padding: '4px',
-                minWidth: '120px',
-                zIndex: 100,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-              }}
+              style={dropdownStyle}
             >
               <button
                 onClick={(e) => { e.stopPropagation(); onDoubleClick(song); setShowMenu(false); }}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '4px', padding: '6px 10px', color: 'white', cursor: 'pointer', fontSize: '0.8rem', textAlign: 'left' }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '4px', padding: '6px 10px', color: 'white', cursor: 'pointer', fontSize: '0.8rem', textAlign: isRTL ? 'right' : 'left' }}
                 onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
@@ -304,11 +363,11 @@ const SongItem = memo<SongItemProps>(({
                   <line x1="12" y1="5" x2="12" y2="19" />
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
-                Add to Setlist
+                {t('controlPanel.addToSetlist')}
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(song); setShowMenu(false); }}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '4px', padding: '6px 10px', color: 'white', cursor: 'pointer', fontSize: '0.8rem', textAlign: 'left' }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '4px', padding: '6px 10px', color: 'white', cursor: 'pointer', fontSize: '0.8rem', textAlign: isRTL ? 'right' : 'left' }}
                 onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
@@ -316,12 +375,12 @@ const SongItem = memo<SongItemProps>(({
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                 </svg>
-                Edit
+                {t('controlPanel.edit')}
               </button>
               <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
               <button
                 onClick={(e) => { e.stopPropagation(); onDelete(song.id); setShowMenu(false); }}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '4px', padding: '6px 10px', color: '#dc3545', cursor: 'pointer', fontSize: '0.8rem', textAlign: 'left' }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '4px', padding: '6px 10px', color: '#dc3545', cursor: 'pointer', fontSize: '0.8rem', textAlign: isRTL ? 'right' : 'left' }}
                 onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
@@ -329,7 +388,7 @@ const SongItem = memo<SongItemProps>(({
                   <polyline points="3 6 5 6 21 6" />
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                 </svg>
-                Delete
+                {t('controlPanel.delete')}
               </button>
             </div>
           )}
@@ -359,73 +418,82 @@ const ThemeItem = memo<ThemeItemProps>(({
   onEdit,
   onDelete
 }) => {
+  const { t, i18n } = useTranslation();
+  const isRTL = i18n.language === 'he';
   const [isHovered, setIsHovered] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+
+  const containerStyle = useMemo(() => ({
+    display: 'flex' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    padding: '10px',
+    background: isSelected ? `${accentColor}30` : colors.background.card,
+    borderRadius: '8px',
+    marginBottom: '6px',
+    cursor: 'pointer' as const,
+    border: isSelected ? `1px solid ${accentColor}` : '1px solid transparent',
+    position: 'relative' as const,
+  }), [isSelected, accentColor]);
+
+  const menuButtonStyle = useMemo(() => ({
+    background: colors.background.cardHover,
+    border: 'none',
+    borderRadius: '4px',
+    padding: '4px 6px',
+    cursor: 'pointer' as const,
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    gap: '2px',
+    alignItems: 'center' as const,
+  }), []);
+
+  const dropdownStyle = useMemo(() => ({
+    position: 'absolute' as const,
+    top: '100%',
+    right: isRTL ? 'auto' : 0,
+    left: isRTL ? 0 : 'auto',
+    marginTop: '4px',
+    background: colors.background.dropdown,
+    borderRadius: '6px',
+    border: `1px solid ${colors.border.medium}`,
+    padding: '4px',
+    minWidth: '100px',
+    zIndex: 100,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+  }), [isRTL]);
 
   return (
     <div
       onClick={onSelect}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => { setIsHovered(false); setShowMenu(false); }}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '10px',
-        background: isSelected ? `${accentColor}30` : 'rgba(255,255,255,0.05)',
-        borderRadius: '8px',
-        marginBottom: '6px',
-        cursor: 'pointer',
-        border: isSelected ? `1px solid ${accentColor}` : '1px solid transparent',
-        position: 'relative'
-      }}
+      style={containerStyle}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{ color: 'white', fontSize: '0.85rem' }}>{theme.name}</span>
+        <span style={{ color: colors.text.primary, fontSize: '0.85rem' }}>{theme.name}</span>
         {theme.isBuiltIn && (
-          <span style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.15)', padding: '2px 5px', borderRadius: '3px', color: 'rgba(255,255,255,0.6)' }}>Built-in</span>
+          <span style={{ fontSize: '0.65rem', background: colors.border.medium, padding: '2px 5px', borderRadius: '3px', color: colors.text.muted }}>{t('themes.builtIn')}</span>
         )}
       </div>
       {(isHovered || showMenu) && (
         <div style={{ position: 'relative' }}>
           <button
             onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: 'none',
-              borderRadius: '4px',
-              padding: '4px 6px',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '2px',
-              alignItems: 'center'
-            }}
+            style={menuButtonStyle}
           >
-            <span style={{ width: '3px', height: '3px', background: 'rgba(255,255,255,0.7)', borderRadius: '50%' }} />
-            <span style={{ width: '3px', height: '3px', background: 'rgba(255,255,255,0.7)', borderRadius: '50%' }} />
-            <span style={{ width: '3px', height: '3px', background: 'rgba(255,255,255,0.7)', borderRadius: '50%' }} />
+            <span style={{ width: '3px', height: '3px', background: colors.text.secondary, borderRadius: '50%' }} />
+            <span style={{ width: '3px', height: '3px', background: colors.text.secondary, borderRadius: '50%' }} />
+            <span style={{ width: '3px', height: '3px', background: colors.text.secondary, borderRadius: '50%' }} />
           </button>
           {showMenu && (
             <div
               onClick={(e) => e.stopPropagation()}
-              style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: '4px',
-                background: 'rgba(30,30,50,0.98)',
-                borderRadius: '6px',
-                border: '1px solid rgba(255,255,255,0.2)',
-                padding: '4px',
-                minWidth: '100px',
-                zIndex: 100,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-              }}
+              style={dropdownStyle}
             >
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(); setShowMenu(false); }}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '4px', padding: '6px 10px', color: 'white', cursor: 'pointer', fontSize: '0.8rem', textAlign: 'left' }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '4px', padding: '6px 10px', color: 'white', cursor: 'pointer', fontSize: '0.8rem', textAlign: isRTL ? 'right' : 'left' }}
                 onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
@@ -433,14 +501,14 @@ const ThemeItem = memo<ThemeItemProps>(({
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                 </svg>
-                Edit
+                {t('controlPanel.edit')}
               </button>
               {!theme.isBuiltIn && (
                 <>
                   <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
                   <button
                     onClick={(e) => { e.stopPropagation(); onDelete(); setShowMenu(false); }}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '4px', padding: '6px 10px', color: '#dc3545', cursor: 'pointer', fontSize: '0.8rem', textAlign: 'left' }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '4px', padding: '6px 10px', color: '#dc3545', cursor: 'pointer', fontSize: '0.8rem', textAlign: isRTL ? 'right' : 'left' }}
                     onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
@@ -448,7 +516,7 @@ const ThemeItem = memo<ThemeItemProps>(({
                       <polyline points="3 6 5 6 21 6" />
                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                     </svg>
-                    Delete
+                    {t('controlPanel.delete')}
                   </button>
                 </>
               )}
@@ -465,6 +533,24 @@ ThemeItem.displayName = 'ThemeItem';
 const ControlPanel: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t, i18n } = useTranslation();
+  const { settings } = useSettings();
+  const isRTL = i18n.language === 'he';
+
+  // Setlist context (persists across navigation)
+  const {
+    setlist,
+    setSetlist,
+    currentSetlistId,
+    setCurrentSetlistId,
+    currentSetlistName,
+    setCurrentSetlistName,
+    hasUnsavedChanges,
+    setHasUnsavedChanges,
+    lastSavedSetlistRef,
+    updateSavedSnapshot,
+    clearSetlist: clearSetlistFromContext
+  } = useSetlist();
 
   // Display state
   const [displays, setDisplays] = useState<Display[]>([]);
@@ -473,11 +559,13 @@ const ControlPanel: React.FC = () => {
   const [songs, setSongs] = useState<Song[]>([]);
   const [presentations, setPresentations] = useState<Presentation[]>([]);
   const [presentationSearchQuery, setPresentationSearchQuery] = useState('');
+  const [hoveredPresentationId, setHoveredPresentationId] = useState<string | null>(null);
+  const [openPresentationMenuId, setOpenPresentationMenuId] = useState<string | null>(null);
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [selectedPresentation, setSelectedPresentation] = useState<Presentation | null>(null);
   const [currentPresentationSlideIndex, setCurrentPresentationSlideIndex] = useState(0);
-  const [setlist, setSetlist] = useState<SetlistItem[]>([]);
+  // setlist state is now from SetlistContext
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [displayMode, setDisplayMode] = useState<DisplayMode>('bilingual');
 
@@ -501,12 +589,21 @@ const ControlPanel: React.FC = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [showDisplayPanel, setShowDisplayPanel] = useState(false);
+  const [obsServerRunning, setObsServerRunning] = useState(false);
+  const [obsServerUrl, setObsServerUrl] = useState<string | null>(null);
 
   // Theme state
   const [themes, setThemes] = useState<any[]>([]);
   const [stageMonitorThemes, setStageMonitorThemes] = useState<any[]>([]);
+  const [bibleThemes, setBibleThemes] = useState<any[]>([]);
+  const [prayerThemes, setPrayerThemes] = useState<any[]>([]);
+  const [obsThemes, setObsThemes] = useState<any[]>([]);
   const [selectedTheme, setSelectedTheme] = useState<any | null>(null);
   const [selectedStageTheme, setSelectedStageTheme] = useState<any | null>(null);
+  const [selectedBibleTheme, setSelectedBibleTheme] = useState<any | null>(null);
+  const [selectedPrayerTheme, setSelectedPrayerTheme] = useState<any | null>(null);
+  const [selectedOBSTheme, setSelectedOBSTheme] = useState<any | null>(null);
+  const [currentContentType, setCurrentContentType] = useState<'song' | 'bible' | 'prayer'>('song');
   const [showThemeEditor, setShowThemeEditor] = useState(false);
   const [editingTheme, setEditingTheme] = useState<{
     id?: string;
@@ -619,6 +716,38 @@ const ControlPanel: React.FC = () => {
   const audioEndFadingRef = useRef(false); // Track if we're fading out at end
   const audioNeedsInitialPlay = useRef(false); // Track if we need to start playing on canplay
 
+  // YouTube Links state
+  interface YouTubeVideo {
+    videoId: string;
+    title: string;
+    thumbnail: string;
+  }
+  const [youtubeVideos, setYoutubeVideos] = useState<YouTubeVideo[]>([]);
+  const [youtubeUrlInput, setYoutubeUrlInput] = useState('');
+  const [youtubeLoading, setYoutubeLoading] = useState(false);
+  const [youtubeOnDisplay, setYoutubeOnDisplay] = useState(false);
+  const [activeYoutubeVideo, setActiveYoutubeVideo] = useState<YouTubeVideo | null>(null);
+  const [youtubePlayerRef, setYoutubePlayerRef] = useState<any>(null);
+  const [youtubePlaying, setYoutubePlaying] = useState(false);
+  const [youtubeCurrentTime, setYoutubeCurrentTime] = useState(0);
+  const [youtubeDuration, setYoutubeDuration] = useState(0);
+  const youtubeContainerRef = useRef<HTMLDivElement>(null);
+  const youtubeAPIReady = useRef(false);
+  const youtubeSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [activeMediaSubTab, setActiveMediaSubTab] = useState<'library' | 'links'>('library');
+  const [hoveredYoutubeId, setHoveredYoutubeId] = useState<string | null>(null);
+  // YouTube search state
+  interface YouTubeSearchResult {
+    videoId: string;
+    title: string;
+    thumbnail: string;
+    channelTitle: string;
+    duration?: string;
+  }
+  const [youtubeSearchResults, setYoutubeSearchResults] = useState<YouTubeSearchResult[]>([]);
+  const [youtubeSearchLoading, setYoutubeSearchLoading] = useState(false);
+  const [showYoutubeSearchResults, setShowYoutubeSearchResults] = useState(false);
+
   // Bible state
   const [bibleBooks, setBibleBooks] = useState<BibleBook[]>([]);
   const [selectedBibleBook, setSelectedBibleBook] = useState('');
@@ -673,18 +802,16 @@ const ControlPanel: React.FC = () => {
   const [quickModeBibleNoMatch, setQuickModeBibleNoMatch] = useState(false);
   const [quickModeBibleIsHebrew, setQuickModeBibleIsHebrew] = useState(false); // Track if search was in Hebrew
   const quickModeBibleSearchRef = useRef<string>(''); // Track latest search for race condition prevention
+  const quickModeTitleInputRef = useRef<HTMLInputElement>(null); // Ref for title input focus
   const [quickModeGenerateTranslation, setQuickModeGenerateTranslation] = useState(false); // Generate English translation for Hebrew text
   const [quickModeTranslationLoading, setQuickModeTranslationLoading] = useState(false);
-  const [currentSetlistId, setCurrentSetlistId] = useState<string | null>(null);
-  const [currentSetlistName, setCurrentSetlistName] = useState('');
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  // currentSetlistId, currentSetlistName, hasUnsavedChanges, lastSavedSetlistRef are now from SetlistContext
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
   const [pendingAction, setPendingAction] = useState<{ type: 'load' | 'clear' | 'new'; setlist?: SavedSetlist } | null>(null);
   const [showSectionModal, setShowSectionModal] = useState(false);
   const sectionTitleRef = useRef<HTMLInputElement>(null);
   const setlistNameRef = useRef<HTMLInputElement>(null);
   const setlistVenueRef = useRef<HTMLInputElement>(null);
-  const lastSavedSetlistRef = useRef<string>('[]');
 
   // Drag and drop state
   const [draggedSong, setDraggedSong] = useState<Song | null>(null);
@@ -704,6 +831,20 @@ const ControlPanel: React.FC = () => {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
+
+  // Focus Quick Mode title input when step 2 is reached
+  useEffect(() => {
+    if (quickModeStep === 2 && quickModeTitleInputRef.current) {
+      // Use requestAnimationFrame + setTimeout to ensure DOM is ready and window has focus
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          // Ensure window has focus first (Electron-specific)
+          window.focus();
+          quickModeTitleInputRef.current?.focus();
+        }, 100);
+      });
+    }
+  }, [quickModeStep]);
 
   // Load initial data
   useEffect(() => {
@@ -742,6 +883,116 @@ const ControlPanel: React.FC = () => {
       }
     };
   }, []);
+
+  // YouTube IFrame API setup and sync
+  useEffect(() => {
+    // Load YouTube IFrame API script if not already loaded
+    if (!window.YT && !document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(tag);
+    }
+
+    // Set up the callback for when API is ready
+    const originalCallback = (window as any).onYouTubeIframeAPIReady;
+    (window as any).onYouTubeIframeAPIReady = () => {
+      youtubeAPIReady.current = true;
+      if (originalCallback) originalCallback();
+    };
+
+    // If API is already loaded
+    if (window.YT && window.YT.Player) {
+      youtubeAPIReady.current = true;
+    }
+
+    return () => {
+      if (youtubeSyncIntervalRef.current) {
+        clearInterval(youtubeSyncIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Create/destroy YouTube player when video changes
+  useEffect(() => {
+    if (!youtubeOnDisplay || !activeYoutubeVideo || !youtubeContainerRef.current) {
+      // Cleanup player when not displaying
+      if (youtubePlayerRef) {
+        try {
+          youtubePlayerRef.destroy();
+        } catch (e) {
+          // Ignore errors
+        }
+        setYoutubePlayerRef(null);
+      }
+      if (youtubeSyncIntervalRef.current) {
+        clearInterval(youtubeSyncIntervalRef.current);
+        youtubeSyncIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Wait for API to be ready
+    const createPlayer = () => {
+      if (!window.YT || !window.YT.Player || !youtubeContainerRef.current) {
+        setTimeout(createPlayer, 100);
+        return;
+      }
+
+      // Clear container
+      youtubeContainerRef.current.innerHTML = '';
+
+      const player = new window.YT.Player(youtubeContainerRef.current, {
+        videoId: activeYoutubeVideo.videoId,
+        playerVars: {
+          autoplay: 1,
+          rel: 0,
+          modestbranding: 1,
+          enablejsapi: 1,
+          origin: window.location.origin,
+          widget_referrer: window.location.href
+        },
+        events: {
+          onReady: (event: any) => {
+            setYoutubeDuration(event.target.getDuration());
+            // Start sync interval - sync every 200ms for tighter sync
+            youtubeSyncIntervalRef.current = setInterval(() => {
+              if (player && player.getCurrentTime) {
+                const currentTime = player.getCurrentTime();
+                const playerState = player.getPlayerState();
+                const isPlaying = playerState === window.YT.PlayerState.PLAYING;
+                setYoutubeCurrentTime(currentTime);
+                setYoutubePlaying(isPlaying);
+                // Sync to connected display
+                window.electronAPI.youtubeSync(currentTime, isPlaying);
+              }
+            }, 200);
+          },
+          onStateChange: (event: any) => {
+            const isPlaying = event.data === window.YT.PlayerState.PLAYING;
+            setYoutubePlaying(isPlaying);
+            if (event.data === window.YT.PlayerState.PLAYING) {
+              const currentTime = player.getCurrentTime();
+              window.electronAPI.youtubePlay(currentTime);
+            } else if (event.data === window.YT.PlayerState.PAUSED) {
+              const currentTime = player.getCurrentTime();
+              window.electronAPI.youtubePause(currentTime);
+            }
+          }
+        }
+      });
+
+      setYoutubePlayerRef(player);
+    };
+
+    createPlayer();
+
+    return () => {
+      if (youtubeSyncIntervalRef.current) {
+        clearInterval(youtubeSyncIntervalRef.current);
+        youtubeSyncIntervalRef.current = null;
+      }
+    };
+  }, [youtubeOnDisplay, activeYoutubeVideo?.videoId]);
 
   // Clock interval - only update when clock or stopwatch is active to avoid unnecessary re-renders
   useEffect(() => {
@@ -888,7 +1139,7 @@ const ControlPanel: React.FC = () => {
         const newMode = displayMode === 'bilingual' ? 'original' : 'bilingual';
         setDisplayMode(newMode);
         if (selectedSong && currentSlideIndex >= 0) {
-          sendCurrentSlide(selectedSong, currentSlideIndex, newMode);
+          sendCurrentSlide(selectedSong, currentSlideIndex, newMode, undefined, currentContentType);
         }
         return;
       }
@@ -918,6 +1169,13 @@ const ControlPanel: React.FC = () => {
   const loadDisplays = async () => {
     const displayList = await window.electronAPI.getDisplays();
     setDisplays(displayList);
+    // Check OBS server state
+    const isRunning = await window.electronAPI.isOBSServerRunning();
+    setObsServerRunning(isRunning);
+    if (isRunning) {
+      const url = await window.electronAPI.getOBSServerUrl();
+      setObsServerUrl(url);
+    }
   };
 
   const loadSongs = useCallback(async () => {
@@ -942,36 +1200,96 @@ const ControlPanel: React.FC = () => {
 
   const loadThemes = async () => {
     try {
+      // Load saved theme selections
+      const savedThemeIds = await window.electronAPI.getSelectedThemeIds();
+      console.log('[loadThemes] Saved theme IDs:', savedThemeIds);
+
+      // Load songs (viewer) themes
       const themeList = await window.electronAPI.getThemes();
       setThemes(themeList);
-      // Auto-select first theme if none selected
+      // Use saved theme if available, otherwise auto-select default
       if (themeList.length > 0 && !selectedTheme) {
-        const defaultTheme = themeList.find((t: any) => t.isDefault) || themeList[0];
-        setSelectedTheme(defaultTheme);
-        applyThemeToViewer(defaultTheme);
+        let themeToSelect = savedThemeIds.viewerThemeId
+          ? themeList.find((t: any) => t.id === savedThemeIds.viewerThemeId)
+          : null;
+        if (!themeToSelect) {
+          themeToSelect = themeList.find((t: any) => t.isDefault) || themeList[0];
+        }
+        setSelectedTheme(themeToSelect);
+        applyThemeToViewer(themeToSelect);
       }
-      // Also load stage monitor themes
+
+      // Load stage monitor themes
       const stageThemeList = await window.electronAPI.getStageThemes();
       setStageMonitorThemes(stageThemeList);
-      // Auto-select default stage theme if none selected
+      // Use saved theme if available, otherwise auto-select default
       if (stageThemeList.length > 0 && !selectedStageTheme) {
-        const defaultStageTheme = stageThemeList.find((t: any) => t.isDefault) || stageThemeList[0];
-        setSelectedStageTheme(defaultStageTheme);
-        applyStageThemeToMonitor(defaultStageTheme);
+        let themeToSelect = savedThemeIds.stageThemeId
+          ? stageThemeList.find((t: any) => t.id === savedThemeIds.stageThemeId)
+          : null;
+        if (!themeToSelect) {
+          themeToSelect = stageThemeList.find((t: any) => t.isDefault) || stageThemeList[0];
+        }
+        setSelectedStageTheme(themeToSelect);
+        applyStageThemeToMonitor(themeToSelect);
+      }
+
+      // Load Bible themes
+      const bibleThemeList = await window.electronAPI.getBibleThemes();
+      console.log('[loadThemes] Bible themes loaded:', bibleThemeList?.length, bibleThemeList);
+      setBibleThemes(bibleThemeList || []);
+      if (bibleThemeList && bibleThemeList.length > 0 && !selectedBibleTheme) {
+        let themeToSelect = savedThemeIds.bibleThemeId
+          ? bibleThemeList.find((t: any) => t.id === savedThemeIds.bibleThemeId)
+          : null;
+        if (!themeToSelect) {
+          themeToSelect = bibleThemeList.find((t: any) => t.isDefault) || bibleThemeList[0];
+        }
+        setSelectedBibleTheme(themeToSelect);
+      }
+
+      // Load OBS themes
+      const obsThemeList = await window.electronAPI.getOBSThemes();
+      console.log('[loadThemes] OBS themes loaded:', obsThemeList?.length, obsThemeList);
+      setObsThemes(obsThemeList || []);
+      if (obsThemeList && obsThemeList.length > 0 && !selectedOBSTheme) {
+        let themeToSelect = savedThemeIds.obsThemeId
+          ? obsThemeList.find((t: any) => t.id === savedThemeIds.obsThemeId)
+          : null;
+        if (!themeToSelect) {
+          themeToSelect = obsThemeList.find((t: any) => t.isDefault) || obsThemeList[0];
+        }
+        setSelectedOBSTheme(themeToSelect);
+      }
+
+      // Load Prayer themes
+      const prayerThemeList = await window.electronAPI.getPrayerThemes();
+      console.log('[loadThemes] Prayer themes loaded:', prayerThemeList?.length, prayerThemeList);
+      setPrayerThemes(prayerThemeList || []);
+      if (prayerThemeList && prayerThemeList.length > 0 && !selectedPrayerTheme) {
+        let themeToSelect = savedThemeIds.prayerThemeId
+          ? prayerThemeList.find((t: any) => t.id === savedThemeIds.prayerThemeId)
+          : null;
+        if (!themeToSelect) {
+          themeToSelect = prayerThemeList.find((t: any) => t.isDefault) || prayerThemeList[0];
+        }
+        setSelectedPrayerTheme(themeToSelect);
       }
     } catch (error) {
       console.error('Failed to load themes:', error);
     }
   };
 
-  const applyThemeToViewer = (theme: any) => {
+  const applyThemeToViewer = useCallback((theme: any) => {
     if (!theme) return;
     console.log('[applyThemeToViewer] theme:', theme.name, 'linePositions:', theme.linePositions, 'type:', typeof theme.linePositions);
     window.electronAPI.applyTheme(theme);
     setSelectedTheme(theme);
-  };
+    // Persist selection
+    window.electronAPI.saveSelectedThemeId('viewer', theme.id);
+  }, []);
 
-  const applyStageThemeToMonitor = (theme: any) => {
+  const applyStageThemeToMonitor = useCallback((theme: any) => {
     if (!theme) return;
     console.log('[applyStageThemeToMonitor] theme:', theme.name);
     // Parse JSON fields if needed
@@ -980,7 +1298,39 @@ const ControlPanel: React.FC = () => {
     const currentSlideText = typeof theme.currentSlideText === 'string' ? JSON.parse(theme.currentSlideText) : theme.currentSlideText;
     window.electronAPI.applyStageTheme({ colors, elements, currentSlideText });
     setSelectedStageTheme(theme);
-  };
+    // Persist selection
+    window.electronAPI.saveSelectedThemeId('stage', theme.id);
+  }, []);
+
+  const applyBibleThemeCallback = useCallback((theme: any) => {
+    setSelectedBibleTheme(theme);
+    window.electronAPI.applyBibleTheme(theme);
+    // Persist selection
+    window.electronAPI.saveSelectedThemeId('bible', theme.id);
+  }, []);
+
+  const applyOBSThemeCallback = useCallback((theme: any) => {
+    setSelectedOBSTheme(theme);
+    window.electronAPI.applyOBSTheme(theme);
+    // Persist selection
+    window.electronAPI.saveSelectedThemeId('obs', theme.id);
+  }, []);
+
+  const applyPrayerThemeCallback = useCallback((theme: any) => {
+    setSelectedPrayerTheme(theme);
+    window.electronAPI.applyPrayerTheme(theme);
+    // Persist selection
+    window.electronAPI.saveSelectedThemeId('prayer', theme.id);
+  }, []);
+
+  const handleCreateNewTheme = useCallback(() => {
+    setShowNewThemeModal(true);
+    setShowDisplayPanel(false);
+  }, []);
+
+  const handleCloseDisplayPanel = useCallback(() => {
+    setShowDisplayPanel(false);
+  }, []);
 
   const startEditingTheme = (theme?: any) => {
     if (theme) {
@@ -1318,6 +1668,184 @@ const ControlPanel: React.FC = () => {
     }
   }, []);
 
+  // YouTube helper functions
+  const extractYouTubeVideoId = useCallback((url: string): string | null => {
+    // Handle various YouTube URL formats
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+      /^([a-zA-Z0-9_-]{11})$/ // Direct video ID
+    ];
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) return match[1];
+    }
+    return null;
+  }, []);
+
+  const fetchYouTubeMetadata = useCallback(async (videoId: string): Promise<YouTubeVideo | null> => {
+    try {
+      const response = await fetch(`https://www.youtube.com/oembed?url=https://youtube.com/watch?v=${videoId}&format=json`);
+      if (!response.ok) return null;
+      const data = await response.json();
+      return {
+        videoId,
+        title: data.title || `Video ${videoId}`,
+        thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+      };
+    } catch (error) {
+      console.error('Failed to fetch YouTube metadata:', error);
+      return {
+        videoId,
+        title: `Video ${videoId}`,
+        thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+      };
+    }
+  }, []);
+
+  const handleAddYoutubeVideo = useCallback(async () => {
+    if (!youtubeUrlInput.trim()) return;
+
+    const videoId = extractYouTubeVideoId(youtubeUrlInput.trim());
+    if (!videoId) {
+      alert('Invalid YouTube URL');
+      return;
+    }
+
+    // Check if already added
+    if (youtubeVideos.some(v => v.videoId === videoId)) {
+      setYoutubeUrlInput('');
+      return;
+    }
+
+    setYoutubeLoading(true);
+    const metadata = await fetchYouTubeMetadata(videoId);
+    if (metadata) {
+      setYoutubeVideos(prev => [...prev, metadata]);
+    }
+    setYoutubeUrlInput('');
+    setYoutubeLoading(false);
+  }, [youtubeUrlInput, youtubeVideos, extractYouTubeVideoId, fetchYouTubeMetadata]);
+
+  const handleRemoveYoutubeVideo = useCallback((videoId: string) => {
+    setYoutubeVideos(prev => prev.filter(v => v.videoId !== videoId));
+    if (activeYoutubeVideo?.videoId === videoId) {
+      setActiveYoutubeVideo(null);
+      setYoutubeOnDisplay(false);
+    }
+  }, [activeYoutubeVideo]);
+
+  const handleYoutubeDisplay = useCallback(async (video: YouTubeVideo) => {
+    setActiveYoutubeVideo(video);
+    setYoutubeOnDisplay(true);
+    // Clear any other active media
+    setActiveMedia(null);
+
+    // Broadcast to online viewers via socket
+    window.electronAPI.youtubeLoad(video.videoId, video.title);
+  }, []);
+
+  const handleYoutubeStop = useCallback(() => {
+    setActiveYoutubeVideo(null);
+    setYoutubeOnDisplay(false);
+    setYoutubePlaying(false);
+    setYoutubeCurrentTime(0);
+    setYoutubeDuration(0);
+
+    // Broadcast stop to online viewers
+    window.electronAPI.youtubeStop();
+  }, []);
+
+  // Check if input looks like a YouTube URL
+  const isYouTubeUrl = useCallback((input: string): boolean => {
+    const urlPatterns = [
+      /youtube\.com\/watch/,
+      /youtu\.be\//,
+      /youtube\.com\/embed\//,
+      /^[a-zA-Z0-9_-]{11}$/ // Direct video ID
+    ];
+    return urlPatterns.some(pattern => pattern.test(input));
+  }, []);
+
+  // Search YouTube videos via IPC (main process handles the API call)
+  const searchYouTube = useCallback(async (query: string) => {
+    if (!query.trim()) return;
+
+    setYoutubeSearchLoading(true);
+    setShowYoutubeSearchResults(true);
+
+    try {
+      const result = await window.electronAPI.youtubeSearch(query);
+
+      if (result.success && result.results) {
+        setYoutubeSearchResults(result.results);
+      } else {
+        console.error('YouTube search failed:', result.error);
+        alert(t('media.youtubeSearchFailed') || 'YouTube search failed. Please try again.');
+        setYoutubeSearchResults([]);
+      }
+    } catch (error) {
+      console.error('YouTube search error:', error);
+      alert(t('media.youtubeSearchFailed') || 'YouTube search failed. Please try again.');
+      setYoutubeSearchResults([]);
+    } finally {
+      setYoutubeSearchLoading(false);
+    }
+  }, [t]);
+
+  // Add video from search results
+  const addVideoFromSearch = useCallback((result: YouTubeSearchResult) => {
+    // Check if already added
+    if (youtubeVideos.some(v => v.videoId === result.videoId)) {
+      return;
+    }
+
+    const video: YouTubeVideo = {
+      videoId: result.videoId,
+      title: result.title,
+      thumbnail: result.thumbnail
+    };
+
+    setYoutubeVideos(prev => [...prev, video]);
+  }, [youtubeVideos]);
+
+  // Handle input submission - either add URL or search
+  const handleYoutubeInputSubmit = useCallback(async () => {
+    if (!youtubeUrlInput.trim()) return;
+
+    if (isYouTubeUrl(youtubeUrlInput.trim())) {
+      // It's a URL - add it directly
+      const videoId = extractYouTubeVideoId(youtubeUrlInput.trim());
+      if (!videoId) {
+        alert(t('media.invalidYoutubeUrl') || 'Invalid YouTube URL');
+        return;
+      }
+
+      // Check if already added
+      if (youtubeVideos.some(v => v.videoId === videoId)) {
+        setYoutubeUrlInput('');
+        return;
+      }
+
+      setYoutubeLoading(true);
+      const metadata = await fetchYouTubeMetadata(videoId);
+      if (metadata) {
+        setYoutubeVideos(prev => [...prev, metadata]);
+      }
+      setYoutubeUrlInput('');
+      setYoutubeLoading(false);
+      setShowYoutubeSearchResults(false);
+    } else {
+      // It's a search query
+      await searchYouTube(youtubeUrlInput.trim());
+    }
+  }, [youtubeUrlInput, isYouTubeUrl, extractYouTubeVideoId, fetchYouTubeMetadata, youtubeVideos, searchYouTube, t]);
+
+  // Close search results
+  const closeYoutubeSearchResults = useCallback(() => {
+    setShowYoutubeSearchResults(false);
+    setYoutubeSearchResults([]);
+  }, []);
+
   // Display fullscreen media (takes over from slides)
   const handleDisplayMedia = useCallback(async (type: 'image' | 'video', path: string) => {
     // Encode the path for media:// protocol (for display windows)
@@ -1435,7 +1963,7 @@ const ControlPanel: React.FC = () => {
     });
   }, [fadeOutAudio]);
 
-  const sendCurrentSlide = useCallback((song: Song | null, slideIndex: number, mode: DisplayMode, combinedIndices?: number[]) => {
+  const sendCurrentSlide = useCallback((song: Song | null, slideIndex: number, mode: DisplayMode, combinedIndices?: number[], contentType: 'song' | 'bible' | 'prayer' = 'song') => {
     if (!song || !song.slides[slideIndex]) {
       window.electronAPI.sendBlank();
       return;
@@ -1449,34 +1977,96 @@ const ControlPanel: React.FC = () => {
       ? combinedIndices.map(i => song.slides[i]).filter(Boolean)
       : null;
 
-    console.log('[sendCurrentSlide] selectedBackground:', selectedBackground);
+    console.log('[sendCurrentSlide] selectedBackground:', selectedBackground, 'contentType:', contentType);
     window.electronAPI.sendSlide({
       songId: song.id,
       slideIndex,
       displayMode: mode,
       isBlank: false,
       songTitle: song.title,
+      contentType, // 'song', 'bible', or 'prayer' - determines which theme to apply
       backgroundImage: selectedBackground || undefined, // Include current background (omit if empty to preserve viewer state)
       slideData: {
         originalText: slide.originalText,
         transliteration: slide.transliteration,
         translation: slide.translation,
-        verseType: slide.verseType
+        translationOverflow: slide.translationOverflow,
+        verseType: slide.verseType,
+        // Prayer/Sermon theme fields (mapped from slide structure when available)
+        title: (slide as any).title,
+        titleTranslation: (slide as any).titleTranslation,
+        subtitle: (slide as any).subtitle || slide.originalText,
+        subtitleTranslation: (slide as any).subtitleTranslation || slide.translation,
+        description: (slide as any).description,
+        descriptionTranslation: (slide as any).descriptionTranslation,
+        reference: (slide as any).reference,
+        referenceTranslation: (slide as any).referenceTranslation
       },
       nextSlideData: nextSlide ? {
         originalText: nextSlide.originalText,
         transliteration: nextSlide.transliteration,
         translation: nextSlide.translation,
+        translationOverflow: nextSlide.translationOverflow,
         verseType: nextSlide.verseType
       } : null,
       combinedSlides: combinedSlides?.map(s => ({
         originalText: s.originalText,
         transliteration: s.transliteration,
         translation: s.translation,
+        translationOverflow: s.translationOverflow,
         verseType: s.verseType
       })) || null
     });
   }, [selectedBackground]);
+
+  // Send prayer/sermon presentation slide using prayer theme instead of textbox rendering
+  const sendPrayerPresentationSlide = useCallback((
+    presentation: Presentation,
+    slideIndex: number,
+    mode: DisplayMode
+  ) => {
+    console.log('[sendPrayerPresentationSlide] Called with:', presentation.title, 'slideIndex:', slideIndex, 'quickModeData:', presentation.quickModeData);
+    if (!presentation.quickModeData) {
+      console.log('[sendPrayerPresentationSlide] No quickModeData, returning');
+      return;
+    }
+
+    const qmd = presentation.quickModeData;
+    const subtitle = qmd.subtitles[slideIndex];
+    console.log('[sendPrayerPresentationSlide] subtitle:', subtitle, 'selectedPrayerTheme:', selectedPrayerTheme?.name);
+    if (!subtitle) return;
+
+    // Debug: log bibleRef data
+    console.log('[sendPrayerPresentationSlide] bibleRef:', subtitle.bibleRef);
+    console.log('[sendPrayerPresentationSlide] hebrewReference:', subtitle.bibleRef?.hebrewReference);
+    console.log('[sendPrayerPresentationSlide] reference:', subtitle.bibleRef?.reference);
+
+    const hebrewRef = subtitle.bibleRef?.hebrewReference;
+    const englishRef = subtitle.bibleRef?.reference;
+
+    console.log('[sendPrayerPresentationSlide] Sending - reference (Hebrew):', hebrewRef || englishRef, 'referenceTranslation (English):', englishRef);
+
+    window.electronAPI.sendSlide({
+      songId: presentation.id,
+      slideIndex,
+      displayMode: mode,
+      isBlank: false,
+      songTitle: presentation.title,
+      contentType: 'prayer',
+      backgroundImage: selectedBackground || undefined,
+      activeTheme: selectedPrayerTheme,  // Include prayer theme for rendering
+      slideData: {
+        title: qmd.title,
+        titleTranslation: (qmd as any).titleTranslation,
+        subtitle: subtitle.subtitle,
+        subtitleTranslation: subtitle.subtitleTranslation,
+        description: subtitle.description,
+        descriptionTranslation: subtitle.descriptionTranslation,
+        reference: hebrewRef || englishRef,
+        referenceTranslation: englishRef
+      }
+    });
+  }, [selectedBackground, selectedPrayerTheme]);
 
   // Clear fullscreen media and restore slides
   const handleClearMedia = useCallback(async () => {
@@ -1489,12 +2079,12 @@ const ControlPanel: React.FC = () => {
 
       // Re-send the current slide to restore display
       if (selectedSong && currentSlideIndex >= 0) {
-        sendCurrentSlide(selectedSong, currentSlideIndex, displayMode);
+        sendCurrentSlide(selectedSong, currentSlideIndex, displayMode, undefined, currentContentType);
       }
     } catch (error) {
       console.error('Failed to clear media:', error);
     }
-  }, [selectedSong, currentSlideIndex, displayMode, sendCurrentSlide]);
+  }, [selectedSong, currentSlideIndex, displayMode, sendCurrentSlide, currentContentType]);
 
   // Video playback control handlers
   const handleVideoPlayPause = useCallback(async () => {
@@ -1587,20 +2177,7 @@ const ControlPanel: React.FC = () => {
     }
   };
 
-  // Track unsaved changes by comparing current setlist with last saved state
-  useEffect(() => {
-    const currentSetlistJson = JSON.stringify(setlist.map(item => ({
-      type: item.type,
-      songId: item.song?.id,
-      title: item.title,
-      countdownTime: item.countdownTime,
-      countdownMessage: item.countdownMessage,
-      announcementText: item.announcementText,
-      messages: item.messages,
-      messagesInterval: item.messagesInterval
-    })));
-    setHasUnsavedChanges(currentSetlistJson !== lastSavedSetlistRef.current);
-  }, [setlist]);
+  // Note: Unsaved changes tracking is now handled by SetlistContext
 
   // Combined slides for original-only mode (pairs consecutive same-verseType slides)
   const combinedSlidesData = useMemo(() => {
@@ -1629,13 +2206,14 @@ const ControlPanel: React.FC = () => {
   };
 
   // Memoized selectSong to prevent recreation on every render
-  const selectSong = useCallback((song: Song) => {
+  const selectSong = useCallback((song: Song, contentType: 'song' | 'bible' = 'song') => {
     setSelectedSong(song);
     setCurrentSlideIndex(0);
     setSelectedPresentation(null); // Clear presentation selection
     setCurrentPresentationSlideIndex(0);
     setIsBlank(false);
-    sendCurrentSlide(song, 0, displayMode);
+    setCurrentContentType(contentType);
+    sendCurrentSlide(song, 0, displayMode, undefined, contentType);
   }, [sendCurrentSlide, displayMode]);
 
   // Memoized goToSlide
@@ -1644,9 +2222,9 @@ const ControlPanel: React.FC = () => {
     const newIndex = Math.max(0, Math.min(index, selectedSong.slides.length - 1));
     setCurrentSlideIndex(newIndex);
     if (!isBlank) {
-      sendCurrentSlide(selectedSong, newIndex, displayMode, combinedIndices);
+      sendCurrentSlide(selectedSong, newIndex, displayMode, combinedIndices, currentContentType);
     }
-  }, [selectedSong, isBlank, sendCurrentSlide, displayMode]);
+  }, [selectedSong, isBlank, sendCurrentSlide, displayMode, currentContentType]);
 
   // Memoized selectCombinedSlide (for original-only mode)
   const selectCombinedSlide = useCallback((combinedIndex: number) => {
@@ -1662,8 +2240,8 @@ const ControlPanel: React.FC = () => {
     setCurrentSlideIndex(firstOriginalIndex);
 
     // Send slide with combined indices
-    sendCurrentSlide(selectedSong, firstOriginalIndex, displayMode, originalIndices);
-  }, [combinedSlidesData, selectedSong, sendCurrentSlide, displayMode]);
+    sendCurrentSlide(selectedSong, firstOriginalIndex, displayMode, originalIndices, currentContentType);
+  }, [combinedSlidesData, selectedSong, sendCurrentSlide, displayMode, currentContentType]);
 
   // Memoized nextSlide
   const nextSlide = useCallback(() => {
@@ -1718,7 +2296,7 @@ const ControlPanel: React.FC = () => {
     if (newBlankState) {
       window.electronAPI.sendBlank();
     } else if (selectedSong) {
-      sendCurrentSlide(selectedSong, currentSlideIndex, displayMode);
+      sendCurrentSlide(selectedSong, currentSlideIndex, displayMode, undefined, currentContentType);
     }
   };
 
@@ -1795,19 +2373,7 @@ const ControlPanel: React.FC = () => {
     setIsImporting(false);
   };
 
-  // Setlist save/load functions
-  const updateSavedSnapshot = (items: SetlistItem[]) => {
-    lastSavedSetlistRef.current = JSON.stringify(items.map(item => ({
-      type: item.type,
-      songId: item.song?.id,
-      title: item.title,
-      countdownTime: item.countdownTime,
-      countdownMessage: item.countdownMessage,
-      announcementText: item.announcementText,
-      messages: item.messages,
-      messagesInterval: item.messagesInterval
-    })));
-  };
+  // Setlist save/load functions - updateSavedSnapshot is now from SetlistContext
 
   const saveSetlist = async () => {
     const name = setlistNameRef.current?.value?.trim();
@@ -1901,10 +2467,7 @@ const ControlPanel: React.FC = () => {
   };
 
   const clearSetlistDirect = () => {
-    setSetlist([]);
-    setCurrentSetlistName('');
-    setCurrentSetlistId(null);
-    updateSavedSnapshot([]);
+    clearSetlistFromContext();
     setShowUnsavedWarning(false);
     setPendingAction(null);
   };
@@ -2240,7 +2803,8 @@ const ControlPanel: React.FC = () => {
     setCurrentSlideIndex(slideIndex);
     setIsBlank(false);
     setQuickSlideBroadcastIndex(slideIndex);
-    sendCurrentSlide(quickSong, slideIndex, displayMode);
+    setCurrentContentType('song'); // Quick slide is always song type
+    sendCurrentSlide(quickSong, slideIndex, displayMode, undefined, 'song');
   };
 
   // Bible functions
@@ -2731,6 +3295,10 @@ const ControlPanel: React.FC = () => {
     setQuickModeGenerateTranslation(false);
     setQuickModeTranslationLoading(false);
     setShowQuickModeWizard(showAfterReset);
+    // Ensure window has focus when opening the wizard (Electron fix)
+    if (showAfterReset) {
+      window.focus();
+    }
   };
 
   const filteredSongs = useMemo(() => {
@@ -2761,6 +3329,25 @@ const ControlPanel: React.FC = () => {
 
   const currentSlide = selectedSong?.slides[currentSlideIndex];
   const currentPresentationSlide = selectedPresentation?.slides[currentPresentationSlideIndex] || null;
+
+  // Compute prayer slide data for live preview
+  const currentPrayerSlideData = useMemo(() => {
+    if (!selectedPresentation?.quickModeData) return null;
+    const qmd = selectedPresentation.quickModeData;
+    if (qmd.type !== 'prayer' && qmd.type !== 'sermon') return null;
+    const subtitle = qmd.subtitles?.[currentPresentationSlideIndex];
+    if (!subtitle) return null;
+    return {
+      title: qmd.title,
+      titleTranslation: (qmd as any).titleTranslation,
+      subtitle: subtitle.subtitle,
+      subtitleTranslation: subtitle.subtitleTranslation,
+      description: subtitle.description,
+      descriptionTranslation: subtitle.descriptionTranslation,
+      reference: subtitle.bibleRef?.hebrewReference || subtitle.bibleRef?.reference,
+      referenceTranslation: subtitle.bibleRef?.reference
+    };
+  }, [selectedPresentation, currentPresentationSlideIndex]);
 
   // Format clock time
   const formatClockTime = (date: Date, format: '12h' | '24h') => {
@@ -2830,7 +3417,7 @@ const ControlPanel: React.FC = () => {
   const assignedDisplays = displays.filter(d => d.isAssigned);
 
   return (
-    <div className="control-panel" style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}>
+    <div className="control-panel" style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: colors.background.primary }}>
       {/* Header - like web app */}
       <header style={{
         padding: '12px 20px',
@@ -2839,21 +3426,23 @@ const ControlPanel: React.FC = () => {
         justifyContent: 'space-between',
         borderBottom: '1px solid rgba(255,255,255,0.1)'
       }}>
-        {/* Left - Display Button */}
+        {/* Left - Display Button with Online Status */}
         <div data-panel="display" style={{ position: 'relative' }}>
           <button
             onClick={() => setShowDisplayPanel(!showDisplayPanel)}
             style={{
-              background: assignedDisplays.length > 0 ? 'linear-gradient(135deg, #28a745, #20c997)' : 'rgba(255,255,255,0.1)',
+              background: assignedDisplays.length > 0 || onlineConnected ? colors.button.success : 'rgba(255,255,255,0.1)',
               border: 'none',
               borderRadius: '10px',
               padding: '10px 16px',
               color: 'white',
               cursor: 'pointer',
               display: 'flex',
+              flexDirection: isRTL ? 'row-reverse' : 'row',
               alignItems: 'center',
-              gap: '8px'
+              gap: '10px'
             }}
+            title={onlineConnected ? `${t('controlPanel.online', 'Online')} (${viewerCount})` : t('controlPanel.offline', 'Offline')}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
               <rect x="2" y="3" width="20" height="14" rx="2" ry="2" fill="none" stroke="white" strokeWidth="2"/>
@@ -2861,8 +3450,18 @@ const ControlPanel: React.FC = () => {
               <line x1="12" y1="17" x2="12" y2="21" stroke="white" strokeWidth="2"/>
             </svg>
             <span style={{ fontWeight: 500 }}>
-              {assignedDisplays.length > 0 ? `${assignedDisplays.length} Display${assignedDisplays.length > 1 ? 's' : ''}` : 'Displays'}
+              {assignedDisplays.length > 0 ? `${assignedDisplays.length} ${assignedDisplays.length > 1 ? t('controlPanel.displays') : t('controlPanel.display')}` : t('controlPanel.displays')}
             </span>
+            {/* Online Status Dot */}
+            <div style={{
+              width: '10px',
+              height: '10px',
+              borderRadius: '50%',
+              background: onlineConnected ? '#fff' : 'rgba(255,255,255,0.3)',
+              boxShadow: onlineConnected ? '0 0 8px rgba(255,255,255,0.9)' : 'none',
+              marginLeft: isRTL ? 0 : '4px',
+              marginRight: isRTL ? '4px' : 0
+            }} />
           </button>
 
           {/* Display Panel Dropdown */}
@@ -2870,17 +3469,20 @@ const ControlPanel: React.FC = () => {
             <div style={{
               position: 'absolute',
               top: '100%',
-              left: 0,
+              left: isRTL ? 'auto' : 0,
+              right: isRTL ? 0 : 'auto',
               marginTop: '8px',
               background: 'rgba(30, 30, 50, 0.98)',
               borderRadius: '12px',
               border: '1px solid rgba(255,255,255,0.2)',
               padding: '12px',
               minWidth: '280px',
+              maxHeight: 'calc(100vh - 120px)',
+              overflowY: 'auto',
               zIndex: 1000,
               boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
             }}>
-              <h4 style={{ margin: '0 0 12px 0', color: 'white', fontSize: '0.9rem' }}>Connected Displays</h4>
+              <h4 style={{ margin: '0 0 12px 0', color: 'white', fontSize: '0.9rem' }}>{t('controlPanel.connectedDisplays')}</h4>
               {displays.map((display) => (
                 <div key={display.id} style={{
                   display: 'flex',
@@ -2894,7 +3496,7 @@ const ControlPanel: React.FC = () => {
                   <div>
                     <div style={{ color: 'white', fontWeight: 500 }}>
                       {display.label}
-                      {display.isPrimary && <span style={{ marginLeft: '8px', fontSize: '0.7rem', background: '#0d6efd', padding: '2px 6px', borderRadius: '4px' }}>Primary</span>}
+                      {display.isPrimary && <span style={{ marginLeft: '8px', fontSize: '0.7rem', background: colors.button.info, padding: '2px 6px', borderRadius: '4px' }}>{t('controlPanel.primary')}</span>}
                       {display.isAssigned && <span style={{ marginLeft: '8px', fontSize: '0.7rem', background: '#28a745', padding: '2px 6px', borderRadius: '4px' }}>{display.assignedType}</span>}
                     </div>
                     <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>{display.bounds.width}x{display.bounds.height}</div>
@@ -2902,11 +3504,11 @@ const ControlPanel: React.FC = () => {
                   {!display.isPrimary && (
                     <div style={{ display: 'flex', gap: '4px' }}>
                       {display.isAssigned ? (
-                        <button onClick={() => closeDisplay(display.id)} style={{ background: '#dc3545', border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}>Close</button>
+                        <button onClick={() => closeDisplay(display.id)} style={{ background: colors.button.danger, border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}>{t('common.close')}</button>
                       ) : (
                         <>
-                          <button onClick={() => openDisplay(display.id, 'viewer')} style={{ background: '#0d6efd', border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}>Viewer</button>
-                          <button onClick={() => openDisplay(display.id, 'stage')} style={{ background: '#6c757d', border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}>Stage</button>
+                          <button onClick={() => openDisplay(display.id, 'viewer')} style={{ background: colors.button.info, border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}>{t('controlPanel.viewer')}</button>
+                          <button onClick={() => openDisplay(display.id, 'stage')} style={{ background: colors.button.secondary, border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}>{t('controlPanel.stage')}</button>
                         </>
                       )}
                     </div>
@@ -2914,64 +3516,145 @@ const ControlPanel: React.FC = () => {
                 </div>
               ))}
 
-              {/* Themes Section */}
-              <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <h4 style={{ margin: 0, color: 'white', fontSize: '0.9rem' }}>Themes</h4>
-                  <button
-                    onClick={() => { setShowNewThemeModal(true); setShowDisplayPanel(false); }}
-                    style={{ background: 'linear-gradient(135deg, #667eea, #764ba2)', border: 'none', borderRadius: '6px', padding: '4px 10px', color: 'white', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                  >
-                    <span>+</span> New Theme
-                  </button>
-                </div>
-                <h5 style={{ margin: '0 0 10px 0', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', fontWeight: 500 }}>Viewer Themes</h5>
-                {themes.map((theme) => (
-                  <ThemeItem
-                    key={theme.id}
-                    theme={theme}
-                    isSelected={selectedTheme?.id === theme.id}
-                    accentColor="#667eea"
-                    onSelect={() => applyThemeToViewer(theme)}
-                    onEdit={() => navigate(`/theme-editor?id=${theme.id}`)}
-                    onDelete={() => deleteThemeById(theme.id)}
-                  />
-                ))}
-                {themes.length === 0 && (
-                  <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', textAlign: 'center', padding: '12px 0' }}>No themes available</p>
-                )}
+              {/* Themes Section - Isolated component for better performance */}
+              <ThemeSelectionPanel
+                themes={themes}
+                stageMonitorThemes={stageMonitorThemes}
+                bibleThemes={bibleThemes}
+                prayerThemes={prayerThemes}
+                obsThemes={obsThemes}
+                selectedTheme={selectedTheme}
+                selectedStageTheme={selectedStageTheme}
+                selectedBibleTheme={selectedBibleTheme}
+                selectedPrayerTheme={selectedPrayerTheme}
+                selectedOBSTheme={selectedOBSTheme}
+                isRTL={isRTL}
+                onApplyViewerTheme={applyThemeToViewer}
+                onApplyStageTheme={applyStageThemeToMonitor}
+                onApplyBibleTheme={applyBibleThemeCallback}
+                onApplyPrayerTheme={applyPrayerThemeCallback}
+                onApplyOBSTheme={applyOBSThemeCallback}
+                onCreateNewTheme={handleCreateNewTheme}
+                onCloseDisplayPanel={handleCloseDisplayPanel}
+              />
 
-                {/* Stage Monitor Themes */}
-                <div style={{ marginTop: '12px' }}>
-                  <h5 style={{ margin: '0 0 10px 0', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', fontWeight: 500 }}>Stage Monitor Themes</h5>
-                  {stageMonitorThemes.map((theme) => (
-                    <ThemeItem
-                      key={theme.id}
-                      theme={theme}
-                      isSelected={selectedStageTheme?.id === theme.id}
-                      accentColor="#f093fb"
-                      onSelect={() => applyStageThemeToMonitor(theme)}
-                      onEdit={() => navigate(`/stage-monitor-editor?id=${theme.id}`)}
-                      onDelete={() => deleteStageThemeById(theme.id)}
-                    />
-                  ))}
-                  {stageMonitorThemes.length === 0 && (
-                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', textAlign: 'center', padding: '12px 0' }}>No stage monitor themes</p>
+              {/* OBS Browser Source Section */}
+              <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                <h4 style={{ margin: '0 0 12px 0', color: 'white', fontSize: '0.9rem' }}>{t('controlPanel.obsBrowserSource', 'OBS Browser Source')}</h4>
+                <div style={{
+                  padding: '10px',
+                  background: obsServerRunning ? 'rgba(23, 162, 184, 0.2)' : 'rgba(255,255,255,0.05)',
+                  borderRadius: '8px',
+                  border: obsServerRunning ? '1px solid rgba(23, 162, 184, 0.5)' : '1px solid transparent'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: obsServerRunning ? '10px' : 0 }}>
+                    <div>
+                      <div style={{ color: 'white', fontWeight: 500, fontSize: '0.85rem' }}>
+                        {t('controlPanel.browserSourceServer', 'Browser Source Server')}
+                      </div>
+                      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>
+                        {obsServerRunning
+                          ? t('controlPanel.serverRunning', 'Server running')
+                          : t('controlPanel.serverStopped', 'Click Start to enable')}
+                      </div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        try {
+                          if (obsServerRunning) {
+                            await window.electronAPI.stopOBSServer();
+                            setObsServerRunning(false);
+                            setObsServerUrl(null);
+                          } else {
+                            const result = await window.electronAPI.startOBSServer();
+                            if (result.success) {
+                              setObsServerRunning(true);
+                              setObsServerUrl(result.url);
+                            }
+                          }
+                        } catch (err) {
+                          console.error('[OBS Server] Error:', err);
+                        }
+                      }}
+                      style={{
+                        background: obsServerRunning ? '#dc3545' : 'linear-gradient(135deg, #17a2b8, #138496)',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '8px 16px',
+                        color: 'white',
+                        fontSize: '0.8rem',
+                        cursor: 'pointer',
+                        fontWeight: 500
+                      }}
+                    >
+                      {obsServerRunning ? t('common.stop', 'Stop') : t('common.start', 'Start')}
+                    </button>
+                  </div>
+
+                  {obsServerRunning && obsServerUrl && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      background: 'rgba(0,0,0,0.3)',
+                      borderRadius: '6px',
+                      padding: '8px 12px'
+                    }}>
+                      <code style={{
+                        flex: 1,
+                        color: '#4ade80',
+                        fontSize: '0.8rem',
+                        fontFamily: 'monospace',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {obsServerUrl}
+                      </code>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(obsServerUrl);
+                        }}
+                        style={{
+                          background: 'linear-gradient(135deg, #17a2b8, #138496)',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '6px 12px',
+                          color: 'white',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          fontWeight: 500
+                        }}
+                        title={t('controlPanel.copyLink', 'Copy Link')}
+                      >
+                        {t('controlPanel.copyLink', 'Copy Link')}
+                      </button>
+                    </div>
                   )}
                 </div>
+                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', margin: '8px 0 0 0' }}>
+                  {t('controlPanel.obsBrowserSourceHint', 'Add a Browser Source in OBS and paste this URL')}
+                </p>
+              </div>
+
+              {/* Online Broadcast Section */}
+              <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                <h4 style={{ margin: '0 0 12px 0', color: 'white', fontSize: '0.9rem' }}>{t('controlPanel.onlineBroadcast', 'Online Broadcast')}</h4>
+                <BroadcastSelector
+                  roomPin={roomPin}
+                  viewerCount={viewerCount}
+                  onlineConnected={onlineConnected}
+                  serverUrl={authState.serverUrl}
+                  onConnectClick={authState.isAuthenticated ? connectOnline : () => setShowAuthModal(true)}
+                  embedded={true}
+                />
               </div>
             </div>
           )}
         </div>
 
-        {/* Center - Broadcast Selector */}
-        <BroadcastSelector
-          roomPin={roomPin}
-          viewerCount={viewerCount}
-          onlineConnected={onlineConnected}
-          serverUrl={authState.serverUrl}
-          onConnectClick={authState.isAuthenticated ? connectOnline : () => setShowAuthModal(true)}
-        />
+        {/* Center spacer */}
+        <div style={{ flex: 1 }} />
 
         {/* Right - User, Help & Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -2982,7 +3665,7 @@ const ControlPanel: React.FC = () => {
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
                   style={{
-                    background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                    background: colors.button.primary,
                     border: 'none',
                     borderRadius: '8px',
                     padding: '6px 12px',
@@ -3011,7 +3694,8 @@ const ControlPanel: React.FC = () => {
                     <div style={{
                       position: 'absolute',
                       top: '100%',
-                      right: 0,
+                      right: isRTL ? 'auto' : 0,
+                      left: isRTL ? 0 : 'auto',
                       marginTop: '4px',
                       background: 'rgba(30,30,50,0.98)',
                       borderRadius: '8px',
@@ -3022,12 +3706,12 @@ const ControlPanel: React.FC = () => {
                       boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
                     }}>
                       <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '4px' }}>
-                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>Signed in as</div>
+                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>{t('settings.loggedInAs')}</div>
                         <div style={{ color: 'white', fontSize: '0.85rem', fontWeight: 500 }}>{authState.user?.email}</div>
                       </div>
                       <button
                         onClick={() => { navigate('/settings'); setShowUserMenu(false); }}
-                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: 'white', cursor: 'pointer', fontSize: '0.85rem', textAlign: 'left' }}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: 'white', cursor: 'pointer', fontSize: '0.85rem', textAlign: isRTL ? 'right' : 'left' }}
                         onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                       >
@@ -3035,12 +3719,12 @@ const ControlPanel: React.FC = () => {
                           <circle cx="12" cy="12" r="3" />
                           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
                         </svg>
-                        Settings
+                        {t('nav.settings')}
                       </button>
                       <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
                       <button
                         onClick={() => { handleLogout(); setShowUserMenu(false); }}
-                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: '#dc3545', cursor: 'pointer', fontSize: '0.85rem', textAlign: 'left' }}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: '#dc3545', cursor: 'pointer', fontSize: '0.85rem', textAlign: isRTL ? 'right' : 'left' }}
                         onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                       >
@@ -3049,7 +3733,7 @@ const ControlPanel: React.FC = () => {
                           <polyline points="16 17 21 12 16 7" />
                           <line x1="21" y1="12" x2="9" y2="12" />
                         </svg>
-                        Logout
+                        {t('nav.logout')}
                       </button>
                     </div>
                   </>
@@ -3060,7 +3744,7 @@ const ControlPanel: React.FC = () => {
             <button
               onClick={() => setShowAuthModal(true)}
               style={{
-                background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                background: colors.button.primary,
                 border: 'none',
                 borderRadius: '8px',
                 padding: '6px 14px',
@@ -3076,7 +3760,7 @@ const ControlPanel: React.FC = () => {
               <svg width="14" height="14" viewBox="0 0 16 16" fill="white">
                 <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/>
               </svg>
-              Login
+              {t('nav.login')}
             </button>
           )}
 
@@ -3116,11 +3800,11 @@ const ControlPanel: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderBottom: activeResourcePanel === 'songs' ? 'none' : '1px solid rgba(255,255,255,0.1)' }}>
               <div style={{ display: 'flex', gap: '4px' }}>
                 {[
-                  { id: 'songs', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M9 13c0 1.105-1.12 2-2.5 2S4 14.105 4 13s1.12-2 2.5-2 2.5.895 2.5 2z"/><path fillRule="evenodd" d="M9 3v10H8V3h1z"/><path d="M8 2.82a1 1 0 0 1 .804-.98l3-.6A1 1 0 0 1 13 2.22V4L8 5V2.82z"/></svg>, label: 'Songs' },
-                  { id: 'bible', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.828c.885-.37 2.154-.769 3.388-.893 1.33-.134 2.458.063 3.112.752v9.746c-.935-.53-2.12-.603-3.213-.493-1.18.12-2.37.461-3.287.811V2.828zm7.5-.141c.654-.689 1.782-.886 3.112-.752 1.234.124 2.503.523 3.388.893v9.923c-.918-.35-2.107-.692-3.287-.81-1.094-.111-2.278-.039-3.213.492V2.687zM8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 0 0 0 2.5v11a.5.5 0 0 0 .707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 0 0 .78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5.5 0 0 0 16 13.5v-11a.5.5 0 0 0-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.809 8.985.936 8 1.783z"/></svg>, label: 'Bible' },
-                  { id: 'media', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V1zm4 0v6h8V1H4zm8 8H4v6h8V9z"/></svg>, label: 'Media' },
-                  { id: 'tools', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1 0 0 1l2.2 3.081a1 1 0 0 0 .815.419h.07a1 1 0 0 1 .708.293l2.675 2.675-2.617 2.654A3.003 3.003 0 0 0 0 13a3 3 0 1 0 5.878-.851l2.654-2.617.968.968-.305.914a1 1 0 0 0 .242 1.023l3.27 3.27a.997.997 0 0 0 1.414 0l1.586-1.586a.997.997 0 0 0 0-1.414l-3.27-3.27a1 1 0 0 0-1.023-.242L10.5 9.5l-.96-.96 2.68-2.643A3.005 3.005 0 0 0 16 3q0-.405-.102-.777l-2.14 2.141L12 4l-.364-1.757L13.777.102a3 3 0 0 0-3.675 3.68L7.462 6.46 4.793 3.793a1 1 0 0 1-.293-.707v-.071a1 1 0 0 0-.419-.814z"/></svg>, label: 'Tools' },
-                  { id: 'presentations', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm5 3a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm3 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm3 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/><path d="M2 13h12v1H2v-1z"/></svg>, label: 'Presentations' }
+                  { id: 'songs', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M9 13c0 1.105-1.12 2-2.5 2S4 14.105 4 13s1.12-2 2.5-2 2.5.895 2.5 2z"/><path fillRule="evenodd" d="M9 3v10H8V3h1z"/><path d="M8 2.82a1 1 0 0 1 .804-.98l3-.6A1 1 0 0 1 13 2.22V4L8 5V2.82z"/></svg>, label: t('nav.songs') },
+                  { id: 'bible', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.828c.885-.37 2.154-.769 3.388-.893 1.33-.134 2.458.063 3.112.752v9.746c-.935-.53-2.12-.603-3.213-.493-1.18.12-2.37.461-3.287.811V2.828zm7.5-.141c.654-.689 1.782-.886 3.112-.752 1.234.124 2.503.523 3.388.893v9.923c-.918-.35-2.107-.692-3.287-.81-1.094-.111-2.278-.039-3.213.492V2.687zM8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 0 0 0 2.5v11a.5.5 0 0 0 .707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 0 0 .78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5.5 0 0 0 16 13.5v-11a.5.5 0 0 0-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.809 8.985.936 8 1.783z"/></svg>, label: t('nav.bible') },
+                  { id: 'media', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V1zm4 0v6h8V1H4zm8 8H4v6h8V9z"/></svg>, label: t('nav.media') },
+                  { id: 'tools', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1 0 0 1l2.2 3.081a1 1 0 0 0 .815.419h.07a1 1 0 0 1 .708.293l2.675 2.675-2.617 2.654A3.003 3.003 0 0 0 0 13a3 3 0 1 0 5.878-.851l2.654-2.617.968.968-.305.914a1 1 0 0 0 .242 1.023l3.27 3.27a.997.997 0 0 0 1.414 0l1.586-1.586a.997.997 0 0 0 0-1.414l-3.27-3.27a1 1 0 0 0-1.023-.242L10.5 9.5l-.96-.96 2.68-2.643A3.005 3.005 0 0 0 16 3q0-.405-.102-.777l-2.14 2.141L12 4l-.364-1.757L13.777.102a3 3 0 0 0-3.675 3.68L7.462 6.46 4.793 3.793a1 1 0 0 1-.293-.707v-.071a1 1 0 0 0-.419-.814z"/></svg>, label: t('nav.tools') },
+                  { id: 'presentations', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm5 3a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm3 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm3 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/><path d="M2 13h12v1H2v-1z"/></svg>, label: t('nav.presentations') }
                 ].map((tab) => (
                   <button
                     key={tab.id}
@@ -3148,12 +3832,12 @@ const ControlPanel: React.FC = () => {
             {activeResourcePanel === 'songs' && (
               <div style={{ padding: '0 12px 8px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <div style={{ position: 'relative', flex: 1 }}>
-                  <svg width="14" height="14" fill="rgba(255,255,255,0.5)" viewBox="0 0 16 16" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }}>
+                  <svg width="14" height="14" fill="rgba(255,255,255,0.5)" viewBox="0 0 16 16" style={{ position: 'absolute', left: isRTL ? 'auto' : '10px', right: isRTL ? '10px' : 'auto', top: '50%', transform: 'translateY(-50%)' }}>
                     <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
                   </svg>
                   <input
                     type="text"
-                    placeholder="Search songs..."
+                    placeholder={t('controlPanel.searchSongs')}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     style={{
@@ -3161,7 +3845,7 @@ const ControlPanel: React.FC = () => {
                       background: 'rgba(255,255,255,0.08)',
                       border: '2px solid rgba(255,255,255,0.15)',
                       borderRadius: '8px',
-                      padding: '8px 12px 8px 32px',
+                      padding: isRTL ? '8px 32px 8px 12px' : '8px 12px 8px 32px',
                       color: 'white',
                       fontSize: '0.85rem',
                       outline: 'none'
@@ -3221,24 +3905,290 @@ const ControlPanel: React.FC = () => {
               )}
 
               {activeResourcePanel === 'media' && (
-                <div style={{ padding: '12px', overflowY: 'auto', flex: 1 }}>
-                  <MediaGrid
-                    onSelectImage={(path) => handleDisplayMedia('image', path)}
-                    onSelectVideo={(path) => handleDisplayMedia('video', path)}
-                    onSelectAudio={(path, name) => handlePlayAudio(path, name)}
-                    onAddToSetlist={(media) => {
-                      const newItem: SetlistItem = {
-                        id: crypto.randomUUID(),
-                        type: 'media',
-                        mediaType: media.type,
-                        mediaPath: media.path,
-                        mediaName: media.name,
-                        mediaDuration: media.duration,
-                        title: media.name
-                      };
-                      setSetlist(prev => [...prev, newItem]);
-                    }}
-                  />
+                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                  {/* Media Sub-tabs */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '2px',
+                    padding: '8px 12px',
+                    background: 'rgba(0,0,0,0.2)',
+                    borderBottom: '1px solid rgba(255,255,255,0.05)'
+                  }}>
+                    <button
+                      onClick={() => setActiveMediaSubTab('library')}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        background: activeMediaSubTab === 'library' ? 'rgba(255, 140, 66, 0.2)' : 'transparent',
+                        border: activeMediaSubTab === 'library' ? '1px solid rgba(255, 140, 66, 0.4)' : '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '6px',
+                        color: activeMediaSubTab === 'library' ? '#FF8C42' : 'rgba(255,255,255,0.6)',
+                        fontSize: '0.8rem',
+                        fontWeight: activeMediaSubTab === 'library' ? 600 : 400,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                      </svg>
+                      {t('media.library')}
+                    </button>
+                    <button
+                      onClick={() => setActiveMediaSubTab('links')}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        background: activeMediaSubTab === 'links' ? 'rgba(255, 0, 0, 0.15)' : 'transparent',
+                        border: activeMediaSubTab === 'links' ? '1px solid rgba(255, 0, 0, 0.4)' : '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '6px',
+                        color: activeMediaSubTab === 'links' ? '#ff4444' : 'rgba(255,255,255,0.6)',
+                        fontSize: '0.8rem',
+                        fontWeight: activeMediaSubTab === 'links' ? 600 : 400,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"/>
+                        <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/>
+                      </svg>
+                      {t('media.youtube')}
+                    </button>
+                  </div>
+
+                  {/* Library Content */}
+                  {activeMediaSubTab === 'library' && (
+                    <div style={{ padding: '12px', overflowY: 'auto', flex: 1 }}>
+                      <MediaGrid
+                        onSelectImage={(path) => handleDisplayMedia('image', path)}
+                        onSelectVideo={(path) => handleDisplayMedia('video', path)}
+                        onSelectAudio={(path, name) => handlePlayAudio(path, name)}
+                        onAddToSetlist={(media) => {
+                          const newItem: SetlistItem = {
+                            id: crypto.randomUUID(),
+                            type: 'media',
+                            mediaType: media.type,
+                            mediaPath: media.path,
+                            mediaName: media.name,
+                            mediaDuration: media.duration,
+                            title: media.name
+                          };
+                          setSetlist(prev => [...prev, newItem]);
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {/* YouTube Links Content */}
+                  {activeMediaSubTab === 'links' && (
+                    <div style={{ padding: '12px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {/* URL/Search Input */}
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          type="text"
+                          placeholder={t('media.youtubeSearchPlaceholder') || "Search YouTube or paste URL..."}
+                          value={youtubeUrlInput}
+                          onChange={(e) => setYoutubeUrlInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleYoutubeInputSubmit();
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: '10px 12px',
+                            background: 'rgba(0,0,0,0.3)',
+                            border: '1px solid rgba(255, 0, 0, 0.3)',
+                            borderRadius: '8px',
+                            color: 'white',
+                            fontSize: '0.85rem',
+                            outline: 'none'
+                          }}
+                        />
+                        <button
+                          onClick={handleYoutubeInputSubmit}
+                          disabled={youtubeLoading || youtubeSearchLoading || !youtubeUrlInput.trim()}
+                          style={{
+                            padding: '10px 16px',
+                            background: (youtubeLoading || youtubeSearchLoading) ? 'rgba(255,0,0,0.1)' : 'rgba(255, 0, 0, 0.2)',
+                            border: '1px solid rgba(255, 0, 0, 0.4)',
+                            borderRadius: '8px',
+                            color: '#ff4444',
+                            fontWeight: 600,
+                            cursor: (youtubeLoading || youtubeSearchLoading) ? 'wait' : 'pointer',
+                            fontSize: '0.85rem'
+                          }}
+                        >
+                          {youtubeLoading || youtubeSearchLoading ? '...' : (isYouTubeUrl(youtubeUrlInput.trim()) ? (t('common.add') || 'Add') : (t('common.search') || 'Search'))}
+                        </button>
+                      </div>
+
+                      {/* YouTube Search Results */}
+                      {showYoutubeSearchResults && (
+                        <div style={{
+                          background: 'rgba(255, 0, 0, 0.05)',
+                          border: '1px solid rgba(255, 0, 0, 0.2)',
+                          borderRadius: '8px',
+                          padding: '12px'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                            <span style={{ color: '#ff4444', fontWeight: 600, fontSize: '0.85rem' }}>
+                              {t('media.searchResults') || 'Search Results'}
+                            </span>
+                            <button
+                              onClick={closeYoutubeSearchResults}
+                              style={{
+                                padding: '4px 8px',
+                                background: 'transparent',
+                                border: '1px solid rgba(255, 0, 0, 0.3)',
+                                borderRadius: '4px',
+                                color: '#ff4444',
+                                fontSize: '0.75rem',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {t('common.close') || 'Close'}
+                            </button>
+                          </div>
+
+                          {youtubeSearchLoading ? (
+                            <div style={{ textAlign: 'center', padding: '20px', color: 'rgba(255,255,255,0.6)' }}>
+                              {t('common.loading') || 'Loading...'}
+                            </div>
+                          ) : youtubeSearchResults.length > 0 ? (
+                            <div style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+                              gap: '10px',
+                              maxHeight: '300px',
+                              overflowY: 'auto'
+                            }}>
+                              {youtubeSearchResults.map((result) => (
+                                <div
+                                  key={result.videoId}
+                                  style={{
+                                    position: 'relative',
+                                    borderRadius: '8px',
+                                    overflow: 'hidden',
+                                    border: hoveredYoutubeId === result.videoId ? '2px solid rgba(255, 0, 0, 0.8)' : '2px solid rgba(255, 0, 0, 0.3)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    transform: hoveredYoutubeId === result.videoId ? 'scale(1.02)' : 'scale(1)'
+                                  }}
+                                  onMouseEnter={() => setHoveredYoutubeId(result.videoId)}
+                                  onMouseLeave={() => setHoveredYoutubeId(null)}
+                                  onClick={() => {
+                                    // Add directly to setlist
+                                    const newItem: SetlistItem = {
+                                      id: crypto.randomUUID(),
+                                      type: 'youtube',
+                                      youtubeVideoId: result.videoId,
+                                      youtubeTitle: result.title,
+                                      youtubeThumbnail: result.thumbnail,
+                                      title: result.title
+                                    };
+                                    setSetlist(prev => [...prev, newItem]);
+                                    closeYoutubeSearchResults();
+                                  }}
+                                >
+                                  <img
+                                    src={result.thumbnail}
+                                    alt={result.title}
+                                    style={{
+                                      width: '100%',
+                                      aspectRatio: '16/9',
+                                      objectFit: 'cover',
+                                      display: 'block'
+                                    }}
+                                  />
+                                  {/* Add to setlist overlay - only on hover */}
+                                  {hoveredYoutubeId === result.videoId && (
+                                    <div style={{
+                                      position: 'absolute',
+                                      top: '50%',
+                                      left: '50%',
+                                      transform: 'translate(-50%, -50%)',
+                                      width: '32px',
+                                      height: '32px',
+                                      background: 'rgba(255, 0, 0, 0.9)',
+                                      borderRadius: '50%',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+                                    }}>
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                                        <line x1="12" y1="5" x2="12" y2="19" />
+                                        <line x1="5" y1="12" x2="19" y2="12" />
+                                      </svg>
+                                    </div>
+                                  )}
+                                  {/* Title and channel overlay */}
+                                  <div style={{
+                                    position: 'absolute',
+                                    bottom: 0,
+                                    left: 0,
+                                    right: 0,
+                                    padding: '6px 8px',
+                                    background: 'linear-gradient(transparent, rgba(0,0,0,0.95))',
+                                    color: 'white'
+                                  }}>
+                                    <div style={{
+                                      fontSize: '0.7rem',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      marginBottom: '2px'
+                                    }}>
+                                      {result.title}
+                                    </div>
+                                    <div style={{
+                                      fontSize: '0.6rem',
+                                      color: 'rgba(255,255,255,0.6)',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap'
+                                    }}>
+                                      {result.channelTitle}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div style={{ textAlign: 'center', padding: '20px', color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>
+                              {t('media.noSearchResults') || 'No results found'}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Empty state when no search */}
+                      {!showYoutubeSearchResults && (
+                        <div style={{
+                          textAlign: 'center',
+                          padding: '40px 20px',
+                          color: 'rgba(255,255,255,0.4)'
+                        }}>
+                          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" style={{ marginBottom: '12px', opacity: 0.5 }}>
+                            <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"/>
+                            <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/>
+                          </svg>
+                          <div style={{ fontSize: '0.85rem', marginBottom: '4px' }}>{t('media.searchYoutube') || 'Search YouTube'}</div>
+                          <div style={{ fontSize: '0.75rem' }}>{t('media.searchYoutubeHint') || 'Type a search query above to find videos'}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -3247,11 +4197,11 @@ const ControlPanel: React.FC = () => {
                   {/* Tools Tab Selector */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px' }}>
                     {[
-                      { key: 'countdown', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3L2 6"/><path d="M22 6l-3-3"/></svg>, label: 'Timer' },
-                      { key: 'clock', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>, label: 'Clock' },
-                      { key: 'stopwatch', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4"/><path d="M10 2h4"/><path d="M12 2v2"/></svg>, label: 'Stopwatch' },
-                      { key: 'announce', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>, label: 'Announce' },
-                      { key: 'messages', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, label: 'Messages' }
+                      { key: 'countdown', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3L2 6"/><path d="M22 6l-3-3"/></svg>, label: t('tools.timer') },
+                      { key: 'clock', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>, label: t('tools.clock') },
+                      { key: 'stopwatch', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4"/><path d="M10 2h4"/><path d="M12 2v2"/></svg>, label: t('tools.stopwatch') },
+                      { key: 'announce', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>, label: t('tools.announce') },
+                      { key: 'messages', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, label: t('tools.messages') }
                     ].map((tab) => (
                       <div
                         key={tab.key}
@@ -3286,7 +4236,7 @@ const ControlPanel: React.FC = () => {
                         <div style={{ textAlign: 'center' }}>
                           <div style={{ fontSize: '2rem', fontWeight: 700, color: '#FF8C42', marginBottom: '8px' }}>{countdownRemaining}</div>
                           <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', marginBottom: '12px' }}>{countdownMessage}</div>
-                          <button onClick={stopCountdown} style={{ background: '#dc3545', border: 'none', borderRadius: '8px', padding: '10px 20px', color: 'white', cursor: 'pointer', width: '100%', fontSize: '0.9rem' }}>Stop Countdown</button>
+                          <button onClick={stopCountdown} style={{ background: colors.button.danger, border: 'none', borderRadius: '8px', padding: '10px 20px', color: 'white', cursor: 'pointer', width: '100%', fontSize: '0.9rem' }}>{t('controlPanel.stopCountdown')}</button>
                         </div>
                       ) : (
                         <>
@@ -3299,7 +4249,7 @@ const ControlPanel: React.FC = () => {
                             />
                             <input
                               type="text"
-                              placeholder="Message (optional)"
+                              placeholder={t('tools.countdownMessage')}
                               value={countdownMessage}
                               onChange={(e) => setCountdownMessage(e.target.value)}
                               style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '8px', color: 'white', fontSize: '0.85rem' }}
@@ -3319,7 +4269,7 @@ const ControlPanel: React.FC = () => {
                               fontSize: '0.9rem'
                             }}
                           >
-                            + Add to Setlist
+                            {t('tools.addToSetlist')}
                           </button>
                         </>
                       )}
@@ -3358,7 +4308,7 @@ const ControlPanel: React.FC = () => {
 
                       <input
                         type="text"
-                        placeholder="Enter announcement..."
+                        placeholder={t('tools.announcementPlaceholder')}
                         value={announcementText}
                         onChange={(e) => setAnnouncementText(e.target.value)}
                         style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '10px', color: 'white', fontSize: '0.85rem', marginBottom: '12px' }}
@@ -3378,7 +4328,7 @@ const ControlPanel: React.FC = () => {
                           fontSize: '0.9rem'
                         }}
                       >
-                        + Add to Setlist
+                        {t('tools.addToSetlist')}
                       </button>
                     </div>
                   )}
@@ -3428,7 +4378,7 @@ const ControlPanel: React.FC = () => {
                       <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
                         <input
                           type="text"
-                          placeholder="Add custom message..."
+                          placeholder={t('tools.addCustomMessage')}
                           value={customMessageInput}
                           onChange={(e) => setCustomMessageInput(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && addCustomMessage()}
@@ -3445,7 +4395,7 @@ const ControlPanel: React.FC = () => {
 
                       {/* Interval toggle */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                        <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)' }}>Rotation interval:</span>
+                        <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)' }}>{t('tools.rotationIntervalLabel')}</span>
                         <button
                           onClick={() => setRotatingInterval(rotatingInterval === 5 ? 10 : 5)}
                           style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '4px 12px', color: 'white', cursor: 'pointer', fontSize: '0.8rem' }}
@@ -3469,7 +4419,7 @@ const ControlPanel: React.FC = () => {
                           fontSize: '0.9rem'
                         }}
                       >
-                        + Add to Setlist
+                        {t('tools.addToSetlist')}
                       </button>
                     </div>
                   )}
@@ -3507,7 +4457,7 @@ const ControlPanel: React.FC = () => {
                             fontSize: '0.8rem'
                           }}
                         >
-                          12h
+                          {t('tools.format12h')}
                         </button>
                         <button
                           onClick={() => setClockFormat('24h')}
@@ -3521,7 +4471,7 @@ const ControlPanel: React.FC = () => {
                             fontSize: '0.8rem'
                           }}
                         >
-                          24h
+                          {t('tools.format24h')}
                         </button>
                         <button
                           onClick={() => setClockShowDate(!clockShowDate)}
@@ -3535,7 +4485,7 @@ const ControlPanel: React.FC = () => {
                             fontSize: '0.8rem'
                           }}
                         >
-                          Date
+                          {t('tools.showDate')}
                         </button>
                       </div>
 
@@ -3545,7 +4495,7 @@ const ControlPanel: React.FC = () => {
                           onClick={stopClock}
                           style={{
                             width: '100%',
-                            background: '#dc3545',
+                            background: colors.button.danger,
                             border: 'none',
                             borderRadius: '8px',
                             padding: '10px 20px',
@@ -3554,7 +4504,7 @@ const ControlPanel: React.FC = () => {
                             fontSize: '0.9rem'
                           }}
                         >
-                          Stop Broadcasting
+                          {t('controlPanel.stopBroadcasting')}
                         </button>
                       ) : (
                         <button
@@ -3570,7 +4520,7 @@ const ControlPanel: React.FC = () => {
                             fontSize: '0.9rem'
                           }}
                         >
-                          Broadcast Clock
+                          {t('tools.broadcastClock')}
                         </button>
                       )}
                     </div>
@@ -3607,7 +4557,7 @@ const ControlPanel: React.FC = () => {
                               fontWeight: 600
                             }}
                           >
-                            {stopwatchTime > 0 ? 'Resume' : 'Start'}
+                            {stopwatchTime > 0 ? t('tools.resume') : t('tools.start')}
                           </button>
                         ) : (
                           <button
@@ -3624,7 +4574,7 @@ const ControlPanel: React.FC = () => {
                               fontWeight: 600
                             }}
                           >
-                            Pause
+                            {t('tools.pause')}
                           </button>
                         )}
                         <button
@@ -3641,7 +4591,7 @@ const ControlPanel: React.FC = () => {
                             fontSize: '0.9rem'
                           }}
                         >
-                          Reset
+                          {t('tools.reset')}
                         </button>
                       </div>
 
@@ -3651,7 +4601,7 @@ const ControlPanel: React.FC = () => {
                           onClick={stopStopwatchBroadcast}
                           style={{
                             width: '100%',
-                            background: '#dc3545',
+                            background: colors.button.danger,
                             border: 'none',
                             borderRadius: '8px',
                             padding: '10px 20px',
@@ -3660,7 +4610,7 @@ const ControlPanel: React.FC = () => {
                             fontSize: '0.9rem'
                           }}
                         >
-                          Stop Broadcasting
+                          {t('controlPanel.stopBroadcasting')}
                         </button>
                       ) : (
                         <button
@@ -3676,7 +4626,7 @@ const ControlPanel: React.FC = () => {
                             fontSize: '0.9rem'
                           }}
                         >
-                          Broadcast Stopwatch
+                          {t('tools.broadcastStopwatch')}
                         </button>
                       )}
                     </div>
@@ -3688,7 +4638,7 @@ const ControlPanel: React.FC = () => {
                 <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {/* Search Input */}
                   <div style={{ position: 'relative' }}>
-                    <svg width="14" height="14" fill="rgba(255,255,255,0.5)" viewBox="0 0 16 16" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }}>
+                    <svg width="14" height="14" fill="rgba(255,255,255,0.5)" viewBox="0 0 16 16" style={{ position: 'absolute', left: isRTL ? 'auto' : '10px', right: isRTL ? '10px' : 'auto', top: '50%', transform: 'translateY(-50%)' }}>
                       <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
                     </svg>
                     <input
@@ -3701,7 +4651,7 @@ const ControlPanel: React.FC = () => {
                         background: 'rgba(255,255,255,0.08)',
                         border: '2px solid rgba(255,255,255,0.15)',
                         borderRadius: '8px',
-                        padding: '10px 12px 10px 32px',
+                        padding: isRTL ? '10px 32px 10px 12px' : '10px 12px 10px 32px',
                         color: 'white',
                         fontSize: '0.85rem',
                         outline: 'none'
@@ -3711,7 +4661,7 @@ const ControlPanel: React.FC = () => {
 
                   {/* Book Selector */}
                   <div>
-                    <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginBottom: '6px', textTransform: 'uppercase' }}>Book</div>
+                    <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginBottom: '6px', textTransform: 'uppercase' }}>{t('controlPanel.book')}</div>
                     <select
                       value={selectedBibleBook}
                       onChange={(e) => {
@@ -3729,7 +4679,7 @@ const ControlPanel: React.FC = () => {
                         fontSize: '0.85rem'
                       }}
                     >
-                      <option value="" style={{ background: '#2a2a4a', color: 'white' }}>Select a book...</option>
+                      <option value="" style={{ background: '#2a2a4a', color: 'white' }}>{t('controlPanel.selectABook')}</option>
                       <optgroup label="תנ״ך (Old Testament)" style={{ background: '#1a1a3a', color: '#aaa' }}>
                         {oldTestamentBooks.map(book => (
                           <option key={book.name} value={book.name} style={{ background: '#2a2a4a', color: 'white' }}>
@@ -3750,7 +4700,7 @@ const ControlPanel: React.FC = () => {
                   {/* Chapter Selector */}
                   {selectedBibleBook && (
                     <div>
-                      <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginBottom: '6px', textTransform: 'uppercase' }}>Chapter</div>
+                      <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginBottom: '6px', textTransform: 'uppercase' }}>{t('controlPanel.chapter')}</div>
                       <select
                         value={selectedBibleChapter}
                         onChange={(e) => setSelectedBibleChapter(e.target.value ? parseInt(e.target.value) : '')}
@@ -3764,7 +4714,7 @@ const ControlPanel: React.FC = () => {
                           fontSize: '0.85rem'
                         }}
                       >
-                        <option value="" style={{ background: '#2a2a4a', color: 'white' }}>Select chapter...</option>
+                        <option value="" style={{ background: '#2a2a4a', color: 'white' }}>{t('controlPanel.selectChapter')}</option>
                         {getChapterOptions().map(ch => (
                           <option key={ch} value={ch} style={{ background: '#2a2a4a', color: 'white' }}>{ch}</option>
                         ))}
@@ -3775,7 +4725,7 @@ const ControlPanel: React.FC = () => {
                   {/* Loading indicator */}
                   {bibleLoading && (
                     <div style={{ textAlign: 'center', padding: '20px', color: 'rgba(255,255,255,0.5)' }}>
-                      Loading verses...
+                      {t('controlPanel.loadingVerses')}
                     </div>
                   )}
 
@@ -3799,7 +4749,7 @@ const ControlPanel: React.FC = () => {
                           fontWeight: 600
                         }}
                       >
-                        + Add to Setlist
+                        {t('tools.addToSetlist')}
                       </button>
                     </div>
                   )}
@@ -3811,12 +4761,12 @@ const ControlPanel: React.FC = () => {
                   {/* Search and New Button Row */}
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <div style={{ position: 'relative', flex: 1 }}>
-                      <svg width="14" height="14" fill="rgba(255,255,255,0.5)" viewBox="0 0 16 16" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }}>
+                      <svg width="14" height="14" fill="rgba(255,255,255,0.5)" viewBox="0 0 16 16" style={{ position: 'absolute', left: isRTL ? 'auto' : '10px', right: isRTL ? '10px' : 'auto', top: '50%', transform: 'translateY(-50%)' }}>
                         <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
                       </svg>
                       <input
                         type="text"
-                        placeholder="Search presentations..."
+                        placeholder={t('controlPanel.searchPresentations')}
                         value={presentationSearchQuery}
                         onChange={(e) => setPresentationSearchQuery(e.target.value)}
                         style={{
@@ -3824,7 +4774,7 @@ const ControlPanel: React.FC = () => {
                           background: 'rgba(255,255,255,0.08)',
                           border: '2px solid rgba(255,255,255,0.15)',
                           borderRadius: '8px',
-                          padding: '8px 12px 8px 32px',
+                          padding: isRTL ? '8px 32px 8px 12px' : '8px 12px 8px 32px',
                           color: 'white',
                           fontSize: '0.85rem',
                           outline: 'none'
@@ -3866,8 +4816,8 @@ const ControlPanel: React.FC = () => {
                       fontSize: '0.9rem'
                     }}>
                       <div style={{ fontSize: '32px', marginBottom: '12px' }}>📊</div>
-                      <div>No presentations yet</div>
-                      <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>Create your first presentation</div>
+                      <div>{t('controlPanel.noPresentationsYet')}</div>
+                      <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>{t('controlPanel.createFirstPresentation')}</div>
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -3890,8 +4840,15 @@ const ControlPanel: React.FC = () => {
                             setSelectedPresentation(pres);
                             setCurrentPresentationSlideIndex(0);
                             setIsBlank(false);
+                            // Debug: check quickModeData
+                            console.log('[ControlPanel] Presentation clicked:', pres.title, 'quickModeData:', pres.quickModeData);
                             // Send the first slide to the display
-                            if (pres.slides.length > 0) {
+                            if (pres.quickModeData?.type === 'prayer' || pres.quickModeData?.type === 'sermon') {
+                              // Use prayer theme rendering - set content type so live preview uses correct theme
+                              setCurrentContentType('prayer');
+                              console.log('[ControlPanel] Using prayer theme for presentation');
+                              sendPrayerPresentationSlide(pres, 0, 'bilingual');
+                            } else if (pres.slides.length > 0) {
                               const slide = pres.slides[0];
                               window.electronAPI.sendSlide({
                                 songId: pres.id,
@@ -3915,11 +4872,14 @@ const ControlPanel: React.FC = () => {
                             transition: 'background 0.15s'
                           }}
                           onMouseEnter={(e) => {
+                            setHoveredPresentationId(pres.id);
                             if (selectedPresentation?.id !== pres.id) {
                               e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
                             }
                           }}
                           onMouseLeave={(e) => {
+                            setHoveredPresentationId(null);
+                            setOpenPresentationMenuId(null);
                             if (selectedPresentation?.id !== pres.id) {
                               e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
                             }
@@ -3938,87 +4898,106 @@ const ControlPanel: React.FC = () => {
                               {pres.slides.length} slide{pres.slides.length !== 1 ? 's' : ''}
                             </div>
                           </div>
-                          <div
-                            style={{ position: 'relative' }}
-                            className="presentation-menu-container"
-                          >
-                            <button
-                              onClick={(e) => e.stopPropagation()}
-                              style={{
-                                padding: '4px 8px',
-                                borderRadius: '4px',
-                                border: 'none',
-                                background: 'transparent',
-                                color: 'rgba(255,255,255,0.5)',
-                                cursor: 'pointer',
-                                fontSize: '1rem'
-                              }}
-                            >
-                              ⋮
-                            </button>
-                            <div
-                              className="presentation-menu-dropdown"
-                              style={{
-                                position: 'absolute',
-                                right: 0,
-                                top: '100%',
-                                background: '#2a2a3e',
-                                borderRadius: '6px',
-                                border: '1px solid rgba(255,255,255,0.15)',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                                zIndex: 100,
-                                display: 'none',
-                                flexDirection: 'column',
-                                minWidth: '100px',
-                                overflow: 'hidden'
-                              }}
-                            >
+                          {(hoveredPresentationId === pres.id || openPresentationMenuId === pres.id) && (
+                            <div style={{ position: 'relative' }}>
                               <button
-                                onClick={(e) => { e.stopPropagation(); navigate(`/presentation-editor?id=${pres.id}`); }}
-                                style={{
-                                  padding: '8px 12px',
-                                  border: 'none',
-                                  background: 'transparent',
-                                  color: 'white',
-                                  cursor: 'pointer',
-                                  fontSize: '0.8rem',
-                                  textAlign: 'left',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                              >
-                                ✏️ Edit
-                              </button>
-                              <button
-                                onClick={async (e) => {
+                                onClick={(e) => {
                                   e.stopPropagation();
-                                  if (confirm(`Delete "${pres.title}"?`)) {
-                                    await window.electronAPI.deletePresentation(pres.id);
-                                    loadPresentations();
-                                  }
+                                  setOpenPresentationMenuId(openPresentationMenuId === pres.id ? null : pres.id);
                                 }}
                                 style={{
-                                  padding: '8px 12px',
+                                  padding: '4px 6px',
+                                  borderRadius: '4px',
                                   border: 'none',
                                   background: 'transparent',
-                                  color: '#ff6b6b',
                                   cursor: 'pointer',
-                                  fontSize: '0.8rem',
-                                  textAlign: 'left',
                                   display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px'
+                                  flexDirection: 'column',
+                                  gap: '2px',
+                                  alignItems: 'center'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,100,100,0.1)'}
-                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                               >
-                                🗑️ Delete
+                                <span style={{ width: '3px', height: '3px', background: 'rgba(255,255,255,0.5)', borderRadius: '50%' }} />
+                                <span style={{ width: '3px', height: '3px', background: 'rgba(255,255,255,0.5)', borderRadius: '50%' }} />
+                                <span style={{ width: '3px', height: '3px', background: 'rgba(255,255,255,0.5)', borderRadius: '50%' }} />
                               </button>
+                              {openPresentationMenuId === pres.id && (
+                                <div
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{
+                                    position: 'absolute',
+                                    right: isRTL ? 'auto' : 0,
+                                    left: isRTL ? 0 : 'auto',
+                                    top: '100%',
+                                    marginTop: '4px',
+                                    background: '#2a2a3e',
+                                    borderRadius: '6px',
+                                    border: '1px solid rgba(255,255,255,0.15)',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                                    zIndex: 100,
+                                    padding: '4px',
+                                    minWidth: '100px',
+                                    overflow: 'hidden'
+                                  }}
+                                >
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenPresentationMenuId(null);
+                                      navigate(`/presentation-editor?id=${pres.id}`);
+                                    }}
+                                    style={{
+                                      width: '100%',
+                                      padding: '6px 10px',
+                                      border: 'none',
+                                      background: 'transparent',
+                                      color: 'white',
+                                      cursor: 'pointer',
+                                      fontSize: '0.8rem',
+                                      textAlign: isRTL ? 'right' : 'left',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '8px',
+                                      borderRadius: '4px'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                  >
+                                    <span>✏️</span> {t('controlPanel.edit')}
+                                  </button>
+                                  <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      setOpenPresentationMenuId(null);
+                                      if (confirm(`Delete "${pres.title}"?`)) {
+                                        await window.electronAPI.deletePresentation(pres.id);
+                                        loadPresentations();
+                                      }
+                                    }}
+                                    style={{
+                                      width: '100%',
+                                      padding: '6px 10px',
+                                      border: 'none',
+                                      background: 'transparent',
+                                      color: '#ff6b6b',
+                                      cursor: 'pointer',
+                                      fontSize: '0.8rem',
+                                      textAlign: isRTL ? 'right' : 'left',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '8px',
+                                      borderRadius: '4px'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,100,100,0.1)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                  >
+                                    <span>🗑️</span> {t('controlPanel.delete')}
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                          </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -4032,11 +5011,11 @@ const ControlPanel: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ color: 'white', fontWeight: 600 }}>{currentSetlistId ? currentSetlistName : 'Setlist'}</span>
+                <span style={{ color: 'white', fontWeight: 600 }}>{currentSetlistId ? currentSetlistName : t('controlPanel.setlist')}</span>
                 {hasUnsavedChanges && setlist.length > 0 && (
                   <span style={{ color: '#ffc107', fontSize: '0.7rem', fontWeight: 600 }}>*</span>
                 )}
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginLeft: '2px' }}>{setlist.length} items</span>
+                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginLeft: '2px' }}>{setlist.length} {t('controlPanel.items')}</span>
               </div>
               <div style={{ position: 'relative' }}>
                 <button
@@ -4084,7 +5063,7 @@ const ControlPanel: React.FC = () => {
                         onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                       >
-                        <span>✨</span> New Setlist
+                        <span>✨</span> {t('controlPanel.newSetlist')}
                       </button>
                       <button
                         onClick={() => { setShowLoadModal(true); setShowSetlistMenu(false); }}
@@ -4092,7 +5071,7 @@ const ControlPanel: React.FC = () => {
                         onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                       >
-                        <span>📂</span> Load Setlist
+                        <span>📂</span> {t('controlPanel.loadSetlist')}
                       </button>
                       <button
                         onClick={() => { setShowSaveModal(true); setShowSetlistMenu(false); }}
@@ -4100,7 +5079,7 @@ const ControlPanel: React.FC = () => {
                         onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                       >
-                        <span>💾</span> Save Setlist
+                        <span>💾</span> {t('controlPanel.saveSetlist')}
                       </button>
                       <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
                       <button
@@ -4216,7 +5195,7 @@ const ControlPanel: React.FC = () => {
             >
               {setlist.length === 0 ? (
                 <div style={{ padding: '40px 20px', textAlign: 'center', color: 'rgba(255,255,255,0.4)' }}>
-                  Drag items here
+                  {t('controlPanel.dragItemsHere')}
                 </div>
               ) : (
                 (() => {
@@ -4272,10 +5251,10 @@ const ControlPanel: React.FC = () => {
                           return next;
                         });
                       } else if (item.type === 'song' && item.song) {
-                        selectSong(item.song);
+                        selectSong(item.song, 'song');
                       } else if (item.type === 'bible' && item.song) {
                         // Bible passages use the same song structure
-                        selectSong(item.song);
+                        selectSong(item.song, 'bible');
                       } else if (item.type === 'countdown' || item.type === 'announcement' || item.type === 'messages') {
                         broadcastToolFromSetlist(item);
                       } else if (item.type === 'media' && item.mediaPath && item.mediaType) {
@@ -4292,7 +5271,10 @@ const ControlPanel: React.FC = () => {
                         setCurrentPresentationSlideIndex(0);
                         setIsBlank(false);
                         // Send the first slide to the display
-                        if (item.presentation.slides.length > 0) {
+                        if (item.presentation.quickModeData?.type === 'prayer' || item.presentation.quickModeData?.type === 'sermon') {
+                          // Use prayer theme rendering
+                          sendPrayerPresentationSlide(item.presentation, 0, 'bilingual');
+                        } else if (item.presentation.slides.length > 0) {
                           const slide = item.presentation.slides[0];
                           window.electronAPI.sendSlide({
                             songId: item.presentation.id,
@@ -4303,6 +5285,13 @@ const ControlPanel: React.FC = () => {
                             presentationSlide: slide
                           });
                         }
+                      } else if (item.type === 'youtube' && item.youtubeVideoId) {
+                        // Display YouTube video
+                        handleYoutubeDisplay({
+                          videoId: item.youtubeVideoId,
+                          title: item.youtubeTitle || 'YouTube Video',
+                          thumbnail: item.youtubeThumbnail || `https://img.youtube.com/vi/${item.youtubeVideoId}/mqdefault.jpg`
+                        });
                       }
                     }}
                     onDoubleClick={() => removeFromSetlist(item.id)}
@@ -4329,6 +5318,10 @@ const ControlPanel: React.FC = () => {
                         ? 'rgba(50, 200, 100, 0.1)'
                         : item.type === 'presentation'
                         ? 'rgba(156, 39, 176, 0.1)'
+                        : item.type === 'youtube' && youtubeOnDisplay && activeYoutubeVideo?.videoId === item.youtubeVideoId
+                        ? 'rgba(255, 0, 0, 0.3)'
+                        : item.type === 'youtube'
+                        ? 'rgba(255, 0, 0, 0.1)'
                         : 'transparent',
                       borderLeft: item.type === 'section'
                         ? '3px solid #FF8C42'
@@ -4346,6 +5339,10 @@ const ControlPanel: React.FC = () => {
                         ? '3px solid transparent'
                         : item.type === 'presentation'
                         ? '3px solid #9C27B0'
+                        : item.type === 'youtube' && youtubeOnDisplay && activeYoutubeVideo?.videoId === item.youtubeVideoId
+                        ? '3px solid #FF0000'
+                        : item.type === 'youtube'
+                        ? '3px solid transparent'
                         : '3px solid transparent',
                       borderBottom: '1px solid rgba(255,255,255,0.05)',
                       borderTop: dropTargetIndex === index ? '2px solid #00d4ff' : '2px solid transparent',
@@ -4435,6 +5432,11 @@ const ControlPanel: React.FC = () => {
                           <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
                         </svg>
                       )}
+                      {item.type === 'youtube' && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#FF0000">
+                          <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                        </svg>
+                      )}
                     </span>
                     <span style={{
                       flex: 1,
@@ -4450,6 +5452,7 @@ const ControlPanel: React.FC = () => {
                        item.type === 'bible' ? item.song?.title || item.title :
                        item.type === 'media' ? (item.mediaName || item.title || 'Media') :
                        item.type === 'presentation' ? (item.presentation?.title || item.title || 'Presentation') :
+                       item.type === 'youtube' ? (item.youtubeTitle || item.title || 'YouTube Video') :
                        item.title}
                     </span>
                     {/* Section item count badge */}
@@ -4523,7 +5526,7 @@ const ControlPanel: React.FC = () => {
           {/* Live Preview Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ color: 'white', fontWeight: 600 }}>Live Preview</span>
+              <span style={{ color: 'white', fontWeight: 600 }}>{t('controlPanel.livePreview')}</span>
               {selectedSong && (
                 <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
                   — {selectedSong.title}
@@ -4573,8 +5576,70 @@ const ControlPanel: React.FC = () => {
                 {activeMedia ? 'MEDIA' : (currentSlide || isBlank ? 'PREVIEW' : (onlineConnected ? 'ONLINE' : 'NO CONTENT'))}
               </div>
 
-              {/* Fullscreen media display */}
-              {activeMedia ? (
+              {/* YouTube display */}
+              {youtubeOnDisplay && activeYoutubeVideo ? (
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: '#000'
+                }}>
+                  {/* Embedded YouTube Player - using IFrame API for sync control */}
+                  <div
+                    ref={youtubeContainerRef}
+                    style={{
+                      width: '100%',
+                      height: '100%'
+                    }}
+                  />
+                  {/* Status indicator */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '8px',
+                    left: '10px',
+                    background: '#FF0000',
+                    color: 'white',
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    letterSpacing: '1px',
+                    zIndex: 10
+                  }}>
+                    YOUTUBE
+                  </div>
+
+                  {/* Stop YouTube button */}
+                  <button
+                    onClick={handleYoutubeStop}
+                    style={{
+                      position: 'absolute',
+                      top: '8px',
+                      right: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 10px',
+                      background: 'rgba(220, 53, 69, 0.9)',
+                      border: 'none',
+                      borderRadius: '4px',
+                      color: 'white',
+                      fontSize: '10px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      zIndex: 10
+                    }}
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                    Stop
+                  </button>
+                </div>
+              ) : activeMedia ? (
+                /* Fullscreen media display */
                 <div style={{
                   position: 'absolute',
                   top: 0,
@@ -4665,11 +5730,17 @@ const ControlPanel: React.FC = () => {
               ) : (
                 /* Local slide preview - renders slide content directly without screen capture */
                 <SlidePreview
-                  slideData={currentSlide || null}
+                  slideData={
+                    currentContentType === 'prayer' ? currentPrayerSlideData :
+                    currentSlide ? {
+                      ...currentSlide,
+                      reference: currentContentType === 'bible' ? selectedSong?.title : undefined
+                    } : null
+                  }
                   displayMode={displayMode}
                   isBlank={isBlank}
                   backgroundImage={selectedBackground}
-                  theme={selectedTheme}
+                  theme={currentContentType === 'bible' ? selectedBibleTheme : currentContentType === 'prayer' ? selectedPrayerTheme : selectedTheme}
                   tools={{
                     countdown: isCountdownActive ? { active: true, remaining: countdownRemaining, message: countdownMessage } : undefined,
                     announcement: isAnnouncementActive ? { active: true, text: announcementText } : undefined,
@@ -4678,7 +5749,7 @@ const ControlPanel: React.FC = () => {
                   }}
                   activeMedia={null}
                   showBadge={false}
-                  presentationSlide={currentPresentationSlide}
+                  presentationSlide={currentContentType === 'prayer' ? null : currentPresentationSlide}
                 />
               )}
             </div>
@@ -4710,7 +5781,7 @@ const ControlPanel: React.FC = () => {
           }}>
             {/* Title Section */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden', minWidth: 0, flexShrink: 1 }}>
-              <span style={{ color: 'white', fontWeight: 600, fontSize: '0.9rem', flexShrink: 0 }}>Slide Preview</span>
+              <span style={{ color: 'white', fontWeight: 600, fontSize: '0.9rem', flexShrink: 0 }}>{t('controlPanel.slidePreview')}</span>
               {selectedSong && (
                 <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {selectedSong.title} — {selectedSong.slides.length} slides
@@ -4792,7 +5863,7 @@ const ControlPanel: React.FC = () => {
                   fontSize: '0.75rem'
                 }}
               >
-                {isBlank ? 'BLANK ON' : 'Blank'}
+                {isBlank ? t('controlPanel.blankOn') : t('display.blank')}
               </button>
               <button
                 onClick={() => {
@@ -4811,7 +5882,7 @@ const ControlPanel: React.FC = () => {
                   fontSize: '0.75rem'
                 }}
               >
-                ⚡ Quick
+                ⚡ {t('controlPanel.quickMode')}
               </button>
               <button
                 onClick={() => {
@@ -4824,17 +5895,17 @@ const ControlPanel: React.FC = () => {
                       const combinedIdx = tempCombined.originalToCombined.get(currentSlideIndex);
                       if (combinedIdx !== undefined) {
                         const indices = tempCombined.combinedToOriginal.get(combinedIdx);
-                        sendCurrentSlide(selectedSong, currentSlideIndex, newMode, indices);
+                        sendCurrentSlide(selectedSong, currentSlideIndex, newMode, indices, currentContentType);
                       } else {
-                        sendCurrentSlide(selectedSong, currentSlideIndex, newMode);
+                        sendCurrentSlide(selectedSong, currentSlideIndex, newMode, undefined, currentContentType);
                       }
                     } else {
-                      sendCurrentSlide(selectedSong, currentSlideIndex, newMode);
+                      sendCurrentSlide(selectedSong, currentSlideIndex, newMode, undefined, currentContentType);
                     }
                   }
                 }}
                 style={{
-                  background: '#0d6efd',
+                  background: colors.button.info,
                   border: 'none',
                   borderRadius: '6px',
                   padding: '5px 10px',
@@ -4844,7 +5915,7 @@ const ControlPanel: React.FC = () => {
                   fontSize: '0.75rem'
                 }}
               >
-                {displayMode === 'original' ? 'Original' : 'Bilingual'}
+                {displayMode === 'original' ? t('controlPanel.original') : t('controlPanel.bilingual')}
               </button>
 
               {/* Background Button with Dropdown */}
@@ -4862,14 +5933,15 @@ const ControlPanel: React.FC = () => {
                     fontSize: '0.75rem'
                   }}
                 >
-                  🖼️ BG
+                  🖼️ {t('controlPanel.bg')}
                 </button>
 
                 {showBackgroundDropdown && (
                   <div style={{
                     position: 'absolute',
                     top: '100%',
-                    right: 0,
+                    right: isRTL ? 'auto' : 0,
+                    left: isRTL ? 0 : 'auto',
                     marginTop: '8px',
                     background: 'rgba(30, 30, 50, 0.98)',
                     borderRadius: '12px',
@@ -4882,7 +5954,7 @@ const ControlPanel: React.FC = () => {
                     boxShadow: '0 10px 40px rgba(0,0,0,0.5)'
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                      <h4 style={{ margin: 0, color: 'white', fontSize: '0.9rem' }}>Backgrounds</h4>
+                      <h4 style={{ margin: 0, color: 'white', fontSize: '0.9rem' }}>{t('controlPanel.backgrounds')}</h4>
                       {selectedBackground && (
                         <button
                           onClick={() => {
@@ -4899,7 +5971,7 @@ const ControlPanel: React.FC = () => {
                             cursor: 'pointer'
                           }}
                         >
-                          Clear
+                          {t('common.clear')}
                         </button>
                       )}
                     </div>
@@ -4961,14 +6033,19 @@ const ControlPanel: React.FC = () => {
                       setCurrentPresentationSlideIndex(idx);
                       setIsBlank(false);
                       // Send the slide to the display
-                      window.electronAPI.sendSlide({
-                        songId: selectedPresentation.id,
-                        slideIndex: idx,
-                        displayMode: 'bilingual',
-                        isBlank: false,
-                        songTitle: selectedPresentation.title,
-                        presentationSlide: slide
-                      });
+                      if (selectedPresentation.quickModeData?.type === 'prayer' || selectedPresentation.quickModeData?.type === 'sermon') {
+                        // Use prayer theme rendering
+                        sendPrayerPresentationSlide(selectedPresentation, idx, 'bilingual');
+                      } else {
+                        window.electronAPI.sendSlide({
+                          songId: selectedPresentation.id,
+                          slideIndex: idx,
+                          displayMode: 'bilingual',
+                          isBlank: false,
+                          songTitle: selectedPresentation.title,
+                          presentationSlide: slide
+                        });
+                      }
                     }}
                     style={{
                       position: 'relative',
@@ -5216,7 +6293,7 @@ const ControlPanel: React.FC = () => {
               color: 'rgba(255,255,255,0.3)',
               fontSize: '0.9rem'
             }}>
-              Select a song or presentation to see slides
+              {t('controlPanel.selectSongOrPresentation')}
             </div>
           )}
         </div>
@@ -5227,7 +6304,7 @@ const ControlPanel: React.FC = () => {
       {showSectionModal && (
         <div onClick={() => setShowSectionModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2100 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: 'rgba(30,30,50,0.98)', borderRadius: '16px', padding: '24px', minWidth: '350px', border: '1px solid rgba(255,255,255,0.2)' }}>
-            <h3 style={{ color: 'white', marginBottom: '16px' }}>Add Section</h3>
+            <h3 style={{ color: 'white', marginBottom: '16px' }}>{t('controlPanel.addSection')}</h3>
             {/* Quick section buttons */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
               {['Worship', 'Sermon', 'Prayer', 'Announcements', 'Reading', 'Offering', 'Closing'].map((section) => (
@@ -5256,7 +6333,7 @@ const ControlPanel: React.FC = () => {
             <input
               ref={sectionTitleRef}
               type="text"
-              placeholder="Or type a custom section title..."
+              placeholder={t('controlPanel.orTypeCustomSection')}
               defaultValue=""
               onKeyDown={(e) => {
                 if (e.key === 'Enter') confirmAddSection();
@@ -5266,8 +6343,8 @@ const ControlPanel: React.FC = () => {
               style={{ width: '100%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '12px', color: 'white', marginBottom: '16px' }}
             />
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowSectionModal(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', padding: '10px 20px', color: 'white', cursor: 'pointer' }}>Cancel</button>
-              <button onClick={confirmAddSection} style={{ background: '#FF8C42', border: 'none', borderRadius: '8px', padding: '10px 20px', color: 'white', cursor: 'pointer' }}>Add</button>
+              <button onClick={() => setShowSectionModal(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', padding: '10px 20px', color: 'white', cursor: 'pointer' }}>{t('common.cancel')}</button>
+              <button onClick={confirmAddSection} style={{ background: '#FF8C42', border: 'none', borderRadius: '8px', padding: '10px 20px', color: 'white', cursor: 'pointer' }}>{t('common.add')}</button>
             </div>
           </div>
         </div>
@@ -5276,11 +6353,11 @@ const ControlPanel: React.FC = () => {
       {showSaveModal && (
         <div onClick={() => setShowSaveModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2100 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: 'rgba(30,30,50,0.98)', borderRadius: '16px', padding: '24px', minWidth: '400px', border: '1px solid rgba(255,255,255,0.2)' }}>
-            <h3 style={{ color: 'white', marginBottom: '16px' }}>Save Setlist</h3>
+            <h3 style={{ color: 'white', marginBottom: '16px' }}>{t('controlPanel.saveSetlist')}</h3>
             <input
               ref={setlistNameRef}
               type="text"
-              placeholder="Setlist name"
+              placeholder={t('controlPanel.setlistName')}
               defaultValue={currentSetlistName}
               onKeyDown={(e) => { if (e.key === 'Enter') saveSetlist(); }}
               autoFocus
@@ -5289,14 +6366,14 @@ const ControlPanel: React.FC = () => {
             <input
               ref={setlistVenueRef}
               type="text"
-              placeholder="Venue (optional)"
+              placeholder={t('controlPanel.venueOptional')}
               defaultValue=""
               onKeyDown={(e) => { if (e.key === 'Enter') saveSetlist(); }}
               style={{ width: '100%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '12px', color: 'white', marginBottom: '16px' }}
             />
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowSaveModal(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', padding: '10px 20px', color: 'white', cursor: 'pointer' }}>Cancel</button>
-              <button onClick={saveSetlist} style={{ background: '#0d6efd', border: 'none', borderRadius: '8px', padding: '10px 20px', color: 'white', cursor: 'pointer' }}>Save</button>
+              <button onClick={() => setShowSaveModal(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', padding: '10px 20px', color: 'white', cursor: 'pointer' }}>{t('common.cancel')}</button>
+              <button onClick={saveSetlist} style={{ background: colors.button.info, border: 'none', borderRadius: '8px', padding: '10px 20px', color: 'white', cursor: 'pointer' }}>{t('common.save')}</button>
             </div>
           </div>
         </div>
@@ -5306,9 +6383,9 @@ const ControlPanel: React.FC = () => {
       {showLoadModal && (
         <div onClick={() => setShowLoadModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2100 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: 'rgba(30,30,50,0.98)', borderRadius: '16px', padding: '24px', minWidth: '400px', maxHeight: '80vh', overflow: 'auto', border: '1px solid rgba(255,255,255,0.2)' }}>
-            <h3 style={{ color: 'white', marginBottom: '16px' }}>Load Setlist</h3>
+            <h3 style={{ color: 'white', marginBottom: '16px' }}>{t('controlPanel.loadSetlist')}</h3>
             {savedSetlists.length === 0 ? (
-              <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>No saved setlists</p>
+              <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>{t('controlPanel.noSavedSetlists')}</p>
             ) : (
               savedSetlists.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map((saved) => {
                 const dateStr = saved.createdAt
@@ -5323,12 +6400,12 @@ const ControlPanel: React.FC = () => {
                     <div style={{ color: 'white', fontWeight: 600 }}>{saved.name}</div>
                     <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>{validDate}{saved.venue && ` • ${saved.venue}`} • {saved.items?.length || 0} items</div>
                   </div>
-                  <button onClick={(e) => { e.stopPropagation(); deleteSetlistById(saved.id); }} style={{ background: '#dc3545', border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', cursor: 'pointer', fontSize: '0.75rem' }}>Delete</button>
+                  <button onClick={(e) => { e.stopPropagation(); deleteSetlistById(saved.id); }} style={{ background: colors.button.danger, border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', cursor: 'pointer', fontSize: '0.75rem' }}>{t('common.delete')}</button>
                 </div>
               )})
             )}
             <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowLoadModal(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', padding: '10px 20px', color: 'white', cursor: 'pointer' }}>Close</button>
+              <button onClick={() => setShowLoadModal(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', padding: '10px 20px', color: 'white', cursor: 'pointer' }}>{t('common.close')}</button>
             </div>
           </div>
         </div>
@@ -5343,14 +6420,14 @@ const ControlPanel: React.FC = () => {
         }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2100 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: 'rgba(30,30,50,0.98)', borderRadius: '16px', padding: '24px', width: '600px', maxHeight: '80vh', overflow: 'auto', border: '1px solid rgba(255,255,255,0.2)' }}>
             <h3 style={{ color: 'white', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              ⚡ Quick Slide
+              ⚡ {t('quickSlide.title')}
             </h3>
 
             {/* Instructions */}
             <div style={{ marginBottom: '16px', padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.7)' }}>
               <strong style={{ color: 'white' }}>How to use:</strong>
               <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px' }}>
-                <li>Each slide is separated by a blank line</li>
+                <li>{t('controlPanel.slidesSeparatedByBlankLine')}</li>
                 <li>Line 1: Original text (Hebrew)</li>
                 <li>Line 2: Transliteration</li>
                 <li>Line 3: Translation</li>
@@ -5460,40 +6537,41 @@ const ControlPanel: React.FC = () => {
       {/* New Theme Type Selection Modal */}
       {showNewThemeModal && (
         <div onClick={() => setShowNewThemeModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2100 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: 'rgba(30,30,50,0.98)', borderRadius: '16px', padding: '24px', minWidth: '400px', border: '1px solid rgba(255,255,255,0.2)' }}>
-            <h3 style={{ color: 'white', marginBottom: '20px', textAlign: 'center' }}>Create New Theme</h3>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: 'rgba(30,30,50,0.98)', borderRadius: '16px', padding: '24px', minWidth: '500px', maxWidth: '700px', border: '1px solid rgba(255,255,255,0.2)' }}>
+            <h3 style={{ color: 'white', marginBottom: '20px', textAlign: 'center' }}>{t('controlPanel.createNewTheme')}</h3>
             <p style={{ color: 'rgba(255,255,255,0.6)', textAlign: 'center', marginBottom: '24px', fontSize: '0.9rem' }}>
-              What type of theme would you like to create?
+              {t('controlPanel.whatTypeOfTheme', 'What type of theme would you like to create?')}
             </p>
-            <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+            {/* Main Themes Row */}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
               <button
                 onClick={() => {
                   setShowNewThemeModal(false);
                   navigate('/theme-editor');
                 }}
                 style={{
-                  background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                  background: colors.button.primary,
                   border: 'none',
                   borderRadius: '12px',
-                  padding: '20px 24px',
+                  padding: '16px 20px',
                   color: 'white',
                   cursor: 'pointer',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  gap: '8px',
-                  minWidth: '140px',
+                  gap: '6px',
+                  minWidth: '120px',
                   transition: 'transform 0.2s, box-shadow 0.2s'
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(102, 126, 234, 0.4)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
               >
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="2" y="3" width="20" height="14" rx="2" />
                   <path d="M8 21h8M12 17v4" />
                 </svg>
-                <span style={{ fontWeight: 600 }}>Viewer Theme</span>
-                <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>For audience display</span>
+                <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{t('controlPanel.songsTheme', 'Songs')}</span>
+                <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>{t('controlPanel.forSongLyrics', 'Song lyrics')}</span>
               </button>
               <button
                 onClick={() => {
@@ -5504,30 +6582,152 @@ const ControlPanel: React.FC = () => {
                   background: 'linear-gradient(135deg, #f093fb, #f5576c)',
                   border: 'none',
                   borderRadius: '12px',
-                  padding: '20px 24px',
+                  padding: '16px 20px',
                   color: 'white',
                   cursor: 'pointer',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  gap: '8px',
-                  minWidth: '140px',
+                  gap: '6px',
+                  minWidth: '120px',
                   transition: 'transform 0.2s, box-shadow 0.2s'
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(245, 87, 108, 0.4)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
               >
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="2" y="3" width="20" height="14" rx="2" />
                   <circle cx="12" cy="10" r="3" />
                   <path d="M12 17v4M8 21h8" />
                 </svg>
-                <span style={{ fontWeight: 600 }}>Stage Monitor</span>
-                <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>For performers on stage</span>
+                <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{t('controlPanel.stageMonitor')}</span>
+                <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>{t('controlPanel.forPerformersOnStage', 'Stage view')}</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowNewThemeModal(false);
+                  navigate('/bible-theme-editor');
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, #4CAF50, #2E7D32)',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '16px 20px',
+                  color: 'white',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  minWidth: '120px',
+                  transition: 'transform 0.2s, box-shadow 0.2s'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(76, 175, 80, 0.4)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+              >
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                </svg>
+                <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{t('controlPanel.bibleTheme', 'Bible')}</span>
+                <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>{t('controlPanel.forBibleVerses', 'Bible verses')}</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowNewThemeModal(false);
+                  navigate('/prayer-theme-editor');
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, #FF8C42, #E65100)',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '16px 20px',
+                  color: 'white',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  minWidth: '120px',
+                  transition: 'transform 0.2s, box-shadow 0.2s'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(255, 140, 66, 0.4)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+              >
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 2L12 6M12 18L12 22M4.93 4.93L7.76 7.76M16.24 16.24L19.07 19.07M2 12L6 12M18 12L22 12M4.93 19.07L7.76 16.24M16.24 7.76L19.07 4.93" />
+                  <circle cx="12" cy="12" r="4" />
+                </svg>
+                <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{t('controlPanel.prayerTheme', 'Prayer')}</span>
+                <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>{t('controlPanel.forPrayerPoints', 'Prayer points')}</span>
               </button>
             </div>
+            {/* OBS Themes Row */}
+            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: '12px', fontSize: '0.8rem' }}>
+                {t('controlPanel.obsOverlayThemes', 'OBS Overlay Themes')}
+              </p>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                <button
+                  onClick={() => {
+                    setShowNewThemeModal(false);
+                    navigate('/obs-songs-theme-editor');
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, #17a2b8, #138496)',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '14px 18px',
+                    color: 'white',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    minWidth: '110px',
+                    transition: 'transform 0.2s, box-shadow 0.2s'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(23, 162, 184, 0.4)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polygon points="10 8 16 12 10 16 10 8" />
+                  </svg>
+                  <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>{t('controlPanel.obsSongs', 'OBS Songs')}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowNewThemeModal(false);
+                    navigate('/obs-bible-theme-editor');
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, #17a2b8, #138496)',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '14px 18px',
+                    color: 'white',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    minWidth: '110px',
+                    transition: 'transform 0.2s, box-shadow 0.2s'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(23, 162, 184, 0.4)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M8 12h8M12 8v8" />
+                  </svg>
+                  <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>{t('controlPanel.obsBible', 'OBS Bible')}</span>
+                </button>
+              </div>
+            </div>
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
-              <button onClick={() => setShowNewThemeModal(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', padding: '10px 24px', color: 'white', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => setShowNewThemeModal(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', padding: '10px 24px', color: 'white', cursor: 'pointer' }}>{t('common.cancel')}</button>
             </div>
           </div>
         </div>
@@ -5541,9 +6741,6 @@ const ControlPanel: React.FC = () => {
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
-        }
-        .presentation-menu-container:hover .presentation-menu-dropdown {
-          display: flex !important;
         }
       `}</style>
 
@@ -5607,15 +6804,20 @@ const ControlPanel: React.FC = () => {
                 }}
               >
                 <div style={{ fontSize: '32px', marginBottom: '12px' }}>📄</div>
-                <div style={{ color: 'white', fontWeight: 600, marginBottom: '4px' }}>Blank</div>
-                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Start from scratch</div>
+                <div style={{ color: 'white', fontWeight: 600, marginBottom: '4px' }}>{t('controlPanel.blank')}</div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>{t('controlPanel.startFromScratch')}</div>
               </div>
 
-              {/* Sermon Points Template */}
+              {/* Sermon Points - launches quick wizard */}
               <div
                 onClick={() => {
                   setShowTemplateModal(false);
-                  navigate('/presentation-editor', { state: { template: 'sermon' } });
+                  setTimeout(() => {
+                    resetQuickModeWizard(false);
+                    setQuickModeType('sermon');
+                    setQuickModeStep(2);
+                    setShowQuickModeWizard(true);
+                  }, 50);
                 }}
                 style={{
                   background: 'rgba(255,255,255,0.05)',
@@ -5635,15 +6837,20 @@ const ControlPanel: React.FC = () => {
                 }}
               >
                 <div style={{ fontSize: '32px', marginBottom: '12px' }}>📋</div>
-                <div style={{ color: 'white', fontWeight: 600, marginBottom: '4px' }}>Sermon Points</div>
-                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Title with numbered points</div>
+                <div style={{ color: 'white', fontWeight: 600, marginBottom: '4px' }}>{t('controlPanel.sermonPoints')}</div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>{t('controlPanel.titleWithNumberedPoints')}</div>
               </div>
 
-              {/* Prayer Points Template */}
+              {/* Prayer Points - launches quick wizard */}
               <div
                 onClick={() => {
                   setShowTemplateModal(false);
-                  navigate('/presentation-editor', { state: { template: 'prayer' } });
+                  setTimeout(() => {
+                    resetQuickModeWizard(false);
+                    setQuickModeType('prayer');
+                    setQuickModeStep(2);
+                    setShowQuickModeWizard(true);
+                  }, 50);
                 }}
                 style={{
                   background: 'rgba(255,255,255,0.05)',
@@ -5663,15 +6870,20 @@ const ControlPanel: React.FC = () => {
                 }}
               >
                 <div style={{ fontSize: '32px', marginBottom: '12px' }}>🙏</div>
-                <div style={{ color: 'white', fontWeight: 600, marginBottom: '4px' }}>Prayer Points</div>
-                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Bullet points for prayer</div>
+                <div style={{ color: 'white', fontWeight: 600, marginBottom: '4px' }}>{t('controlPanel.prayerPoints')}</div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>{t('controlPanel.bulletPointsForPrayer')}</div>
               </div>
 
-              {/* Announcements Template */}
+              {/* Announcements - launches quick wizard */}
               <div
                 onClick={() => {
                   setShowTemplateModal(false);
-                  navigate('/presentation-editor', { state: { template: 'announcements' } });
+                  setTimeout(() => {
+                    resetQuickModeWizard(false);
+                    setQuickModeType('announcements');
+                    setQuickModeStep(2);
+                    setShowQuickModeWizard(true);
+                  }, 50);
                 }}
                 style={{
                   background: 'rgba(255,255,255,0.05)',
@@ -5691,37 +6903,8 @@ const ControlPanel: React.FC = () => {
                 }}
               >
                 <div style={{ fontSize: '32px', marginBottom: '12px' }}>📢</div>
-                <div style={{ color: 'white', fontWeight: 600, marginBottom: '4px' }}>Announcements</div>
-                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Title with details</div>
-              </div>
-
-              {/* Quick Mode */}
-              <div
-                onClick={() => {
-                  setShowTemplateModal(false);
-                  resetQuickModeWizard(true);
-                }}
-                style={{
-                  background: 'linear-gradient(135deg, rgba(0,212,255,0.15) 0%, rgba(255,140,66,0.15) 100%)',
-                  border: '2px solid rgba(0,212,255,0.3)',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  gridColumn: 'span 2'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(0,212,255,0.25) 0%, rgba(255,140,66,0.25) 100%)';
-                  e.currentTarget.style.borderColor = 'rgba(0,212,255,0.6)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(0,212,255,0.15) 0%, rgba(255,140,66,0.15) 100%)';
-                  e.currentTarget.style.borderColor = 'rgba(0,212,255,0.3)';
-                }}
-              >
-                <div style={{ fontSize: '32px', marginBottom: '12px' }}>⚡</div>
-                <div style={{ color: 'white', fontWeight: 600, marginBottom: '4px' }}>Quick Mode</div>
-                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Wizard-guided multi-slide presentation</div>
+                <div style={{ color: 'white', fontWeight: 600, marginBottom: '4px' }}>{t('controlPanel.announcements')}</div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>{t('controlPanel.titleWithDetails')}</div>
               </div>
             </div>
 
@@ -5739,7 +6922,7 @@ const ControlPanel: React.FC = () => {
                 fontSize: '0.9rem'
               }}
             >
-              Cancel
+              {t('common.cancel')}
             </button>
           </div>
         </div>
@@ -5761,6 +6944,7 @@ const ControlPanel: React.FC = () => {
         >
           <div
             onClick={(e) => e.stopPropagation()}
+            onMouseDown={() => window.focus()}
             style={{
               background: '#1a1a2e',
               borderRadius: '16px',
@@ -5806,6 +6990,8 @@ const ControlPanel: React.FC = () => {
                       onClick={() => {
                         setQuickModeType(item.type);
                         setQuickModeStep(2);
+                        // Ensure window has focus for input (Electron fix)
+                        window.focus();
                       }}
                       style={{
                         display: 'flex',
@@ -5848,11 +7034,12 @@ const ControlPanel: React.FC = () => {
                   This title will appear on all slides
                 </p>
                 <input
+                  ref={quickModeTitleInputRef}
                   type="text"
+                  autoFocus
                   value={quickModeTitle}
                   onChange={(e) => setQuickModeTitle(e.target.value)}
                   placeholder={quickModeType === 'sermon' ? 'e.g., Faith in Action' : quickModeType === 'prayer' ? 'e.g., Prayer Requests' : 'e.g., Church Updates'}
-                  autoFocus
                   style={{
                     width: '100%',
                     padding: '14px',
@@ -5861,7 +7048,15 @@ const ControlPanel: React.FC = () => {
                     borderRadius: '8px',
                     color: 'white',
                     fontSize: '1rem',
-                    marginBottom: '20px'
+                    marginBottom: '20px',
+                    // @ts-ignore - Electron-specific CSS
+                    WebkitAppRegion: 'no-drag',
+                    cursor: 'text'
+                  }}
+                  onClick={(e) => {
+                    // Ensure focus on click (Electron focus fix)
+                    e.currentTarget.focus();
+                    window.focus();
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && quickModeTitle.trim()) {
@@ -6159,7 +7354,7 @@ const ControlPanel: React.FC = () => {
                                       fontSize: '0.8rem'
                                     }}
                                   >
-                                    <option value="">Select</option>
+                                    <option value="">{t('controlPanel.selectVerse')}</option>
                                     {quickModeBibleVerses.map(v => (
                                       <option key={v.verseNumber} value={v.verseNumber}>{v.verseNumber}</option>
                                     ))}
@@ -6179,7 +7374,7 @@ const ControlPanel: React.FC = () => {
                                       fontSize: '0.8rem'
                                     }}
                                   >
-                                    <option value="">Single verse</option>
+                                    <option value="">{t('controlPanel.singleVerse')}</option>
                                     {quickModeBibleVerses
                                       .filter(v => !quickModeVerseStart || v.verseNumber > quickModeVerseStart)
                                       .map(v => (
@@ -6487,7 +7682,7 @@ const ControlPanel: React.FC = () => {
 
             {/* Theme Name */}
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '6px' }}>Theme Name</label>
+              <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '6px' }}>{t('controlPanel.themeName')}</label>
               <input
                 type="text"
                 value={editingTheme.name}
@@ -6506,7 +7701,7 @@ const ControlPanel: React.FC = () => {
 
             {/* Background Color */}
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '6px' }}>Background Color</label>
+              <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '6px' }}>{t('controlPanel.backgroundColor')}</label>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                 <input
                   type="color"
@@ -6540,13 +7735,13 @@ const ControlPanel: React.FC = () => {
 
             {/* Line Styles */}
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '10px' }}>Line Styles</label>
+              <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '10px' }}>{t('controlPanel.lineStyles')}</label>
               {(['original', 'transliteration', 'translation'] as const).map((lineType) => (
                 <div key={lineType} style={{ marginBottom: '12px', padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
                   <div style={{ color: 'white', fontSize: '0.85rem', marginBottom: '8px', textTransform: 'capitalize' }}>{lineType}</div>
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: '100px' }}>
-                      <label style={{ display: 'block', color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '4px' }}>Font Size</label>
+                      <label style={{ display: 'block', color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '4px' }}>{t('controlPanel.fontSize')}</label>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <input
                           type="range"
@@ -6566,7 +7761,7 @@ const ControlPanel: React.FC = () => {
                       </div>
                     </div>
                     <div>
-                      <label style={{ display: 'block', color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '4px' }}>Color</label>
+                      <label style={{ display: 'block', color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '4px' }}>{t('controlPanel.color')}</label>
                       <input
                         type="color"
                         value={editingTheme.lineStyles[lineType].color}
@@ -6581,7 +7776,7 @@ const ControlPanel: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label style={{ display: 'block', color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '4px' }}>Weight</label>
+                      <label style={{ display: 'block', color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '4px' }}>{t('controlPanel.weight')}</label>
                       <select
                         value={editingTheme.lineStyles[lineType].fontWeight}
                         onChange={(e) => setEditingTheme({
@@ -6600,11 +7795,11 @@ const ControlPanel: React.FC = () => {
                           fontSize: '0.75rem'
                         }}
                       >
-                        <option value="300">Light</option>
-                        <option value="400">Normal</option>
-                        <option value="500">Medium</option>
-                        <option value="600">Semi-Bold</option>
-                        <option value="700">Bold</option>
+                        <option value="300">{t('controlPanel.light')}</option>
+                        <option value="400">{t('controlPanel.normal')}</option>
+                        <option value="500">{t('controlPanel.medium')}</option>
+                        <option value="600">{t('controlPanel.semiBold')}</option>
+                        <option value="700">{t('controlPanel.bold')}</option>
                       </select>
                     </div>
                   </div>
@@ -6614,7 +7809,7 @@ const ControlPanel: React.FC = () => {
 
             {/* Preview */}
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '6px' }}>Preview</label>
+              <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '6px' }}>{t('controlPanel.preview')}</label>
               <div style={{
                 background: editingTheme.viewerBackground.color,
                 borderRadius: '8px',
@@ -6623,8 +7818,8 @@ const ControlPanel: React.FC = () => {
                 border: '1px solid rgba(255,255,255,0.2)'
               }}>
                 <div style={{ fontSize: `${editingTheme.lineStyles.original.fontSize * 0.12}px`, color: editingTheme.lineStyles.original.color, fontWeight: editingTheme.lineStyles.original.fontWeight as any, marginBottom: '4px' }}>שלום עולם</div>
-                <div style={{ fontSize: `${editingTheme.lineStyles.transliteration.fontSize * 0.12}px`, color: editingTheme.lineStyles.transliteration.color, fontWeight: editingTheme.lineStyles.transliteration.fontWeight as any, marginBottom: '4px' }}>Shalom Olam</div>
-                <div style={{ fontSize: `${editingTheme.lineStyles.translation.fontSize * 0.12}px`, color: editingTheme.lineStyles.translation.color, fontWeight: editingTheme.lineStyles.translation.fontWeight as any }}>Hello World</div>
+                <div style={{ fontSize: `${editingTheme.lineStyles.transliteration.fontSize * 0.12}px`, color: editingTheme.lineStyles.transliteration.color, fontWeight: editingTheme.lineStyles.transliteration.fontWeight as any, marginBottom: '4px' }}>{t('controlPanel.shalomOlam')}</div>
+                <div style={{ fontSize: `${editingTheme.lineStyles.translation.fontSize * 0.12}px`, color: editingTheme.lineStyles.translation.color, fontWeight: editingTheme.lineStyles.translation.fontWeight as any }}>{t('controlPanel.helloWorld')}</div>
               </div>
             </div>
 
@@ -6742,7 +7937,7 @@ const ControlPanel: React.FC = () => {
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', marginBottom: '4px' }}>Author</label>
+                <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', marginBottom: '4px' }}>{t('controlPanel.author')}</label>
                 <input
                   type="text"
                   value={editingSong.author}
@@ -6759,7 +7954,7 @@ const ControlPanel: React.FC = () => {
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', marginBottom: '4px' }}>Language</label>
+                <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', marginBottom: '4px' }}>{t('controlPanel.language')}</label>
                 <select
                   value={editingSong.originalLanguage}
                   onChange={(e) => setEditingSong({ ...editingSong, originalLanguage: e.target.value })}
@@ -6789,7 +7984,7 @@ const ControlPanel: React.FC = () => {
                     key={tag}
                     onClick={() => removeSongTag(tag)}
                     style={{
-                      background: '#0d6efd',
+                      background: colors.button.info,
                       padding: '2px 8px',
                       borderRadius: '12px',
                       color: 'white',
@@ -6833,7 +8028,7 @@ const ControlPanel: React.FC = () => {
                   marginBottom: '12px',
                   border: '1px solid rgba(23, 162, 184, 0.3)'
                 }}>
-                  <div style={{ color: '#17a2b8', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>Express Mode Instructions</div>
+                  <div style={{ color: '#17a2b8', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>{t('controlPanel.expressModeInstructions')}</div>
                   <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', lineHeight: 1.5 }}>
                     • Separate slides with a blank line<br/>
                     • Use [VerseType] markers: [Verse1], [Chorus], [Bridge], [Intro], etc.<br/>
@@ -6923,7 +8118,7 @@ const ControlPanel: React.FC = () => {
                   {/* Verse Type */}
                   <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
                     <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', marginBottom: '4px' }}>Verse Type</label>
+                      <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', marginBottom: '4px' }}>{t('controlPanel.verseType')}</label>
                       <select
                         value={editingSong.slides[editingSlideIndex]?.verseType || 'Verse'}
                         onChange={(e) => updateEditingSlide('verseType', e.target.value)}
@@ -7131,7 +8326,7 @@ const ControlPanel: React.FC = () => {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
               <span style={{ fontSize: '2rem' }}>⚠️</span>
-              <h3 style={{ color: 'white', margin: 0, fontSize: '1.1rem' }}>Unsaved Changes</h3>
+              <h3 style={{ color: 'white', margin: 0, fontSize: '1.1rem' }}>{t('controlPanel.unsavedChanges')}</h3>
             </div>
             <p style={{ color: 'rgba(255,255,255,0.8)', marginBottom: '20px', lineHeight: 1.5 }}>
               You have unsaved changes to your setlist. Are you sure you want to {pendingAction?.type === 'load' ? 'load a different setlist' : 'clear the setlist'}? Your changes will be lost.
@@ -7154,7 +8349,7 @@ const ControlPanel: React.FC = () => {
               <button
                 onClick={() => setShowSaveModal(true)}
                 style={{
-                  background: '#0d6efd',
+                  background: colors.button.info,
                   border: 'none',
                   borderRadius: '8px',
                   padding: '10px 20px',
@@ -7169,7 +8364,7 @@ const ControlPanel: React.FC = () => {
               <button
                 onClick={confirmUnsavedAction}
                 style={{
-                  background: '#dc3545',
+                  background: colors.button.danger,
                   border: 'none',
                   borderRadius: '8px',
                   padding: '10px 20px',
@@ -7213,7 +8408,7 @@ const ControlPanel: React.FC = () => {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ color: 'white', margin: 0, fontSize: '1.2rem' }}>Keyboard Shortcuts</h3>
+              <h3 style={{ color: 'white', margin: 0, fontSize: '1.2rem' }}>{t('controlPanel.keyboardShortcuts')}</h3>
               <button
                 onClick={() => setShowKeyboardHelp(false)}
                 style={{

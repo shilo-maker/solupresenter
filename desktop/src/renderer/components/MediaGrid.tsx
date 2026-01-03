@@ -270,6 +270,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({ onSelectImage, onSelectVideo, onS
   const [renameValue, setRenameValue] = useState('');
   const [draggedMediaId, setDraggedMediaId] = useState<string | null>(null);
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
+  const [hoveredMediaId, setHoveredMediaId] = useState<string | null>(null);
   const [dropTargetFolderId, setDropTargetFolderId] = useState<string | null | 'all'>(null);
   const [showFolderDropdown, setShowFolderDropdown] = useState(false);
   const folderButtonRef = useRef<HTMLButtonElement>(null);
@@ -1255,28 +1256,24 @@ const MediaGrid: React.FC<MediaGridProps> = ({ onSelectImage, onSelectVideo, onS
                 .join('/');
               const mediaUrl = `media://file/${encodedPath}`;
 
-              const isSelected = selectedMediaId === item.id;
-
               return (
                 <div
                   key={item.id}
                   draggable
                   onDragStart={(e) => handleDragStart(e, item)}
                   onDragEnd={handleDragEnd}
-                  onClick={() => setSelectedMediaId(isSelected ? null : item.id)}
+                  onClick={() => handleSelectImported(item)}
                   onContextMenu={(e) => handleContextMenu(e, item.id)}
-                  title={`${item.name}\nClick to select • Drag to setlist • Right-click for options`}
+                  title={`${item.name}\nClick to display • Drag to setlist • Right-click for options`}
                   style={{
                     aspectRatio: '16/9',
                     borderRadius: '8px',
                     cursor: draggedMediaId === item.id ? 'grabbing' : 'pointer',
-                    border: isSelected
-                      ? '2px solid rgba(0, 200, 255, 1)'
-                      : draggedMediaId === item.id
-                        ? '2px solid rgba(0, 200, 255, 0.8)'
-                        : isAudio
-                          ? '2px solid rgba(156, 39, 176, 0.3)'
-                          : '2px solid rgba(255, 140, 66, 0.3)',
+                    border: draggedMediaId === item.id
+                      ? '2px solid rgba(0, 200, 255, 0.8)'
+                      : isAudio
+                        ? '2px solid rgba(156, 39, 176, 0.3)'
+                        : '2px solid rgba(255, 140, 66, 0.3)',
                     transition: 'all 0.15s ease',
                     display: 'flex',
                     alignItems: 'center',
@@ -1284,11 +1281,11 @@ const MediaGrid: React.FC<MediaGridProps> = ({ onSelectImage, onSelectVideo, onS
                     backgroundColor: isAudio ? 'rgba(156, 39, 176, 0.2)' : 'rgba(0,0,0,0.4)',
                     overflow: 'hidden',
                     position: 'relative',
-                    opacity: draggedMediaId === item.id ? 0.6 : 1,
-                    transform: isSelected ? 'scale(1.02)' : 'scale(1)'
+                    opacity: draggedMediaId === item.id ? 0.6 : 1
                   }}
                   onMouseEnter={(e) => {
-                    if (!draggedMediaId && !isSelected) {
+                    if (!draggedMediaId) {
+                      setHoveredMediaId(item.id);
                       e.currentTarget.style.border = isAudio
                         ? '2px solid rgba(156, 39, 176, 0.8)'
                         : '2px solid rgba(255, 140, 66, 0.8)';
@@ -1296,7 +1293,8 @@ const MediaGrid: React.FC<MediaGridProps> = ({ onSelectImage, onSelectVideo, onS
                     }
                   }}
                   onMouseLeave={(e) => {
-                    if (!draggedMediaId && !isSelected) {
+                    if (!draggedMediaId) {
+                      setHoveredMediaId(null);
                       e.currentTarget.style.border = isAudio
                         ? '2px solid rgba(156, 39, 176, 0.3)'
                         : '2px solid rgba(255, 140, 66, 0.3)';
@@ -1343,82 +1341,46 @@ const MediaGrid: React.FC<MediaGridProps> = ({ onSelectImage, onSelectVideo, onS
                     </div>
                   ) : null}
 
-                  {/* Selection overlay with Show button */}
-                  {isSelected && (
-                    <div style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      background: 'rgba(0,0,0,0.6)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px'
-                    }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectImported(item);
-                          setSelectedMediaId(null);
-                        }}
-                        style={{
-                          padding: '8px 16px',
-                          background: 'rgba(0, 200, 255, 0.9)',
-                          border: 'none',
-                          borderRadius: '6px',
-                          color: 'white',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-                        }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                          <circle cx="12" cy="12" r="3" />
-                        </svg>
-                        Show
-                      </button>
-                      {onAddToSetlist && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onAddToSetlist({
-                              type: item.type,
-                              path: item.processedPath,
-                              name: item.name,
-                              duration: item.duration
-                            });
-                            setSelectedMediaId(null);
-                          }}
-                          title="Add to Setlist"
-                          style={{
-                            padding: '8px',
-                            background: 'rgba(255, 140, 66, 0.9)',
-                            border: 'none',
-                            borderRadius: '6px',
-                            color: 'white',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-                          }}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M12 5v14M5 12h14" />
-                          </svg>
-                        </button>
-                      )}
+                  {/* Add to Setlist overlay - single + button like YouTube, only on hover */}
+                  {onAddToSetlist && hoveredMediaId === item.id && (
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddToSetlist({
+                          type: item.type,
+                          path: item.processedPath,
+                          name: item.name,
+                          duration: item.duration
+                        });
+                      }}
+                      style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        width: '32px',
+                        height: '32px',
+                        background: 'rgba(255, 140, 66, 0.9)',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                        transition: 'transform 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.1)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)'; }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
                     </div>
                   )}
 
                   {/* Duration badge for videos */}
-                  {isVideo && item.duration && !isSelected && (
+                  {isVideo && item.duration && (
                     <div style={{
                       position: 'absolute',
                       bottom: '2px',
@@ -1434,47 +1396,43 @@ const MediaGrid: React.FC<MediaGridProps> = ({ onSelectImage, onSelectVideo, onS
                     </div>
                   )}
                   {/* Delete button */}
-                  {!isSelected && (
-                    <button
-                      onClick={(e) => handleDeleteImported(item.id, e)}
-                      title="Remove from library"
-                      style={{
-                        position: 'absolute',
-                        top: '2px',
-                        right: '2px',
-                        padding: '2px',
-                        background: 'rgba(0,0,0,0.7)',
-                        border: 'none',
-                        borderRadius: '3px',
-                        cursor: 'pointer',
-                        opacity: 0.7,
-                        transition: 'opacity 0.15s'
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7'; }}
-                    >
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,100,100,0.9)" strokeWidth="2">
-                        <path d="M18 6L6 18M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                  {/* Instant badge */}
-                  {!isSelected && (
-                    <div style={{
+                  <button
+                    onClick={(e) => handleDeleteImported(item.id, e)}
+                    title="Remove from library"
+                    style={{
                       position: 'absolute',
                       top: '2px',
-                      left: '2px',
-                      background: 'rgba(50, 200, 100, 0.9)',
-                      borderRadius: '2px',
-                      padding: '1px 3px',
-                      fontSize: '7px',
-                      color: 'white',
-                      fontWeight: 600,
-                      textTransform: 'uppercase'
-                    }}>
-                      Instant
-                    </div>
-                  )}
+                      right: '2px',
+                      padding: '2px',
+                      background: 'rgba(0,0,0,0.7)',
+                      border: 'none',
+                      borderRadius: '3px',
+                      cursor: 'pointer',
+                      opacity: 0.7,
+                      transition: 'opacity 0.15s'
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7'; }}
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,100,100,0.9)" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                  {/* Instant badge */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '2px',
+                    left: '2px',
+                    background: 'rgba(50, 200, 100, 0.9)',
+                    borderRadius: '2px',
+                    padding: '1px 3px',
+                    fontSize: '7px',
+                    color: 'white',
+                    fontWeight: 600,
+                    textTransform: 'uppercase'
+                  }}>
+                    Instant
+                  </div>
                 </div>
               );
             })}

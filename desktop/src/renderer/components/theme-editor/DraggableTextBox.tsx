@@ -21,7 +21,7 @@ export interface LineStyle {
 }
 
 interface DraggableTextBoxProps {
-  lineType: 'original' | 'transliteration' | 'translation';
+  lineType: string;  // Flexible to support song, bible, and prayer line types
   position: LinePosition;
   style: LineStyle;
   canvasWidth: number;
@@ -245,7 +245,7 @@ const DraggableTextBox: React.FC<DraggableTextBoxProps> = ({
               color: style.color,
               opacity: style.opacity,
               textAlign: position.alignH,
-              direction: lineType === 'original' ? 'rtl' : 'ltr',
+              direction: ['original', 'hebrew', 'subtitle', 'description', 'title'].includes(lineType) ? 'rtl' : 'ltr',
               background: 'transparent',
               border: 'none',
               outline: 'none',
@@ -266,7 +266,7 @@ const DraggableTextBox: React.FC<DraggableTextBoxProps> = ({
               color: style.color,
               opacity: style.opacity,
               textAlign: position.alignH,
-              direction: lineType === 'original' ? 'rtl' : 'ltr',
+              direction: ['original', 'hebrew', 'subtitle', 'description', 'title'].includes(lineType) ? 'rtl' : 'ltr',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
               overflow: 'hidden',

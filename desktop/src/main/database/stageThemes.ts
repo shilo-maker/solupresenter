@@ -1,4 +1,4 @@
-import { getDb, saveDatabase, generateId, rowsToObjects, CLASSIC_STAGE_THEME_ID } from './index';
+import { getDb, saveDatabase, generateId, queryAll, queryOne, CLASSIC_STAGE_THEME_ID, beginTransaction, commitTransaction, rollbackTransaction } from './index';
 
 export interface StageMonitorTheme {
   id: string;
@@ -57,42 +57,26 @@ export interface TextStyle {
  * Get all stage monitor themes
  */
 export function getStageThemes(): StageMonitorTheme[] {
-  const db = getDb();
-  if (!db) return [];
-
-  const result = db.exec('SELECT * FROM stage_monitor_themes ORDER BY isBuiltIn DESC, name ASC');
-  return rowsToObjects(result) as StageMonitorTheme[];
+  return queryAll('SELECT * FROM stage_monitor_themes ORDER BY isBuiltIn DESC, name ASC') as StageMonitorTheme[];
 }
 
 /**
  * Get a single stage monitor theme by ID
  */
 export function getStageTheme(id: string): StageMonitorTheme | null {
-  const db = getDb();
-  if (!db) return null;
-
-  const result = db.exec(`SELECT * FROM stage_monitor_themes WHERE id = '${id.replace(/'/g, "''")}'`);
-  const themes = rowsToObjects(result) as StageMonitorTheme[];
-  return themes[0] || null;
+  return queryOne('SELECT * FROM stage_monitor_themes WHERE id = ?', [id]) as StageMonitorTheme | null;
 }
 
 /**
  * Get the default stage monitor theme
  */
 export function getDefaultStageTheme(): StageMonitorTheme | null {
-  const db = getDb();
-  if (!db) return null;
-
   // Try to find default theme
-  let result = db.exec('SELECT * FROM stage_monitor_themes WHERE isDefault = 1 LIMIT 1');
-  let themes = rowsToObjects(result) as StageMonitorTheme[];
-
-  if (themes.length > 0) return themes[0];
+  const theme = queryOne('SELECT * FROM stage_monitor_themes WHERE isDefault = 1 LIMIT 1') as StageMonitorTheme | null;
+  if (theme) return theme;
 
   // Fall back to classic stage theme
-  result = db.exec(`SELECT * FROM stage_monitor_themes WHERE id = '${CLASSIC_STAGE_THEME_ID}'`);
-  themes = rowsToObjects(result) as StageMonitorTheme[];
-  return themes[0] || null;
+  return queryOne('SELECT * FROM stage_monitor_themes WHERE id = ?', [CLASSIC_STAGE_THEME_ID]) as StageMonitorTheme | null;
 }
 
 /**
@@ -195,10 +179,6 @@ export function updateStageTheme(id: string, data: Partial<StageMonitorTheme>): 
     values.push(JSON.stringify(data.currentSlideText));
   }
   if (data.isDefault !== undefined) {
-    // If setting as default, clear other defaults first
-    if (data.isDefault) {
-      db.run('UPDATE stage_monitor_themes SET isDefault = 0');
-    }
     updates.push('isDefault = ?');
     values.push(data.isDefault ? 1 : 0);
   }
@@ -207,8 +187,21 @@ export function updateStageTheme(id: string, data: Partial<StageMonitorTheme>): 
   values.push(updatedAt);
   values.push(id);
 
-  db.run(`UPDATE stage_monitor_themes SET ${updates.join(', ')} WHERE id = ?`, values);
-  saveDatabase();
+  // Use transaction if setting as default (multiple statements)
+  if (data.isDefault) {
+    beginTransaction();
+    try {
+      db.run('UPDATE stage_monitor_themes SET isDefault = 0');
+      db.run(`UPDATE stage_monitor_themes SET ${updates.join(', ')} WHERE id = ?`, values);
+      commitTransaction();
+    } catch (error) {
+      rollbackTransaction();
+      throw error;
+    }
+  } else {
+    db.run(`UPDATE stage_monitor_themes SET ${updates.join(', ')} WHERE id = ?`, values);
+    saveDatabase();
+  }
 
   return getStageTheme(id);
 }
@@ -255,10 +248,18 @@ export function setDefaultStageTheme(id: string): boolean {
   const db = getDb();
   if (!db) return false;
 
-  // Clear existing default
-  db.run('UPDATE stage_monitor_themes SET isDefault = 0');
-  // Set new default
-  db.run('UPDATE stage_monitor_themes SET isDefault = 1 WHERE id = ?', [id]);
-  saveDatabase();
-  return true;
+  // Use transaction for atomic default change
+  beginTransaction();
+  try {
+    // Clear existing default
+    db.run('UPDATE stage_monitor_themes SET isDefault = 0');
+    // Set new default
+    db.run('UPDATE stage_monitor_themes SET isDefault = 1 WHERE id = ?', [id]);
+    commitTransaction();
+    return true;
+  } catch (error) {
+    rollbackTransaction();
+    console.error('setDefaultStageTheme error:', error);
+    return false;
+  }
 }

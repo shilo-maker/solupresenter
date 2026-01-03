@@ -15,12 +15,12 @@ export interface ViewerBackground {
 interface ThemeCanvasProps {
   canvasDimensions: CanvasDimensions;
   viewerBackground: ViewerBackground;
-  lineOrder: ('original' | 'transliteration' | 'translation')[];
+  lineOrder: string[];  // Flexible to support song, bible, and prayer line types
   linePositions: Record<string, LinePosition>;
   lineStyles: Record<string, LineStyle>;
   backgroundBoxes: BackgroundBox[];
-  selectedElement: { type: 'line' | 'box'; id: string } | null;
-  onSelectElement: (element: { type: 'line' | 'box'; id: string } | null) => void;
+  selectedElement: { type: 'line' | 'box' | 'reference'; id: string } | null;
+  onSelectElement: (element: { type: 'line' | 'box' | 'reference'; id: string } | null) => void;
   onLinePositionChange: (lineType: string, position: LinePosition) => void;
   onBoxUpdate: (box: BackgroundBox) => void;
   onBoxDelete: (boxId: string) => void;

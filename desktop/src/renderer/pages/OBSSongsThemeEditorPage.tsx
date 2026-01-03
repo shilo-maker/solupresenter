@@ -12,9 +12,10 @@ import {
   BackgroundBox
 } from '../components/theme-editor';
 
-interface Theme {
+interface OBSTheme {
   id: string;
   name: string;
+  type: 'songs';
   isBuiltIn: boolean;
   viewerBackground: ViewerBackground;
   canvasDimensions: CanvasDimensions;
@@ -26,49 +27,50 @@ interface Theme {
 
 const DEFAULT_LINE_POSITIONS: Record<string, LinePosition> = {
   original: {
-    x: 0, y: 27.897104546981193, width: 100, height: 11.379800853485063,
-    paddingTop: 2, paddingBottom: 2,
+    x: 0, y: 70, width: 100, height: 10,
+    paddingTop: 1, paddingBottom: 1,
     alignH: 'center', alignV: 'center'
   },
   transliteration: {
-    x: 0, y: 38.96539940433855, width: 100, height: 12.138454243717401,
+    x: 0, y: 80, width: 100, height: 8,
     paddingTop: 1, paddingBottom: 1,
     alignH: 'center', alignV: 'center'
   },
   translation: {
-    x: 0, y: 50.838474679449185, width: 100, height: 27.311522048364157,
+    x: 0, y: 88, width: 100, height: 10,
     paddingTop: 1, paddingBottom: 1,
-    alignH: 'center', alignV: 'top'
+    alignH: 'center', alignV: 'center'
   }
 };
 
 const DEFAULT_LINE_STYLES: Record<string, LineStyle> = {
   original: {
-    fontSize: 187, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true
+    fontSize: 120, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true
   },
   transliteration: {
-    fontSize: 136, fontWeight: '400', color: '#e0e0e0', opacity: 0.9, visible: true
+    fontSize: 90, fontWeight: '400', color: '#e0e0e0', opacity: 0.9, visible: true
   },
   translation: {
-    fontSize: 146, fontWeight: '400', color: '#b0b0b0', opacity: 0.85, visible: true
+    fontSize: 100, fontWeight: '400', color: '#b0b0b0', opacity: 0.85, visible: true
   }
 };
 
-const ThemeEditorPage: React.FC = () => {
+const OBSSongsThemeEditorPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const themeId = searchParams.get('id');
 
-  const [theme, setTheme] = useState<Theme>({
+  const [theme, setTheme] = useState<OBSTheme>({
     id: '',
-    name: 'New Theme',
+    name: 'New OBS Songs Theme',
+    type: 'songs',
     isBuiltIn: false,
-    viewerBackground: { type: 'color', color: '#000000' },
+    viewerBackground: { type: 'transparent', color: null },
     canvasDimensions: { width: 1920, height: 1080 },
     lineOrder: ['original', 'transliteration', 'translation'],
     linePositions: DEFAULT_LINE_POSITIONS,
     lineStyles: DEFAULT_LINE_STYLES,
-    backgroundBoxes: []
+    backgroundBoxes: [{ id: 'default-box', x: 0, y: 68, width: 100, height: 32, color: '#000000', opacity: 0.7, borderRadius: 0 }]
   });
 
   const [selectedElement, setSelectedElement] = useState<{ type: 'line' | 'box' | 'reference'; id: string } | null>(null);
@@ -76,23 +78,22 @@ const ThemeEditorPage: React.FC = () => {
   const [hasChanges, setHasChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<'layout' | 'background' | 'resolution'>('layout');
 
-  // Preview text for testing (not saved with theme)
   const [previewTexts, setPreviewTexts] = useState<Record<string, string>>({});
 
   const handlePreviewTextChange = useCallback((lineType: string, text: string) => {
     setPreviewTexts(prev => ({ ...prev, [lineType]: text }));
   }, []);
 
-  // Load theme if editing existing
   useEffect(() => {
     if (themeId) {
-      window.electronAPI.getTheme(themeId).then((loadedTheme: any) => {
+      window.electronAPI.getOBSTheme(themeId).then((loadedTheme: any) => {
         if (loadedTheme) {
           setTheme({
             id: loadedTheme.id,
             name: loadedTheme.name,
+            type: 'songs',
             isBuiltIn: loadedTheme.isBuiltIn,
-            viewerBackground: loadedTheme.viewerBackground || { type: 'color', color: '#000000' },
+            viewerBackground: loadedTheme.viewerBackground || { type: 'transparent', color: null },
             canvasDimensions: loadedTheme.canvasDimensions || { width: 1920, height: 1080 },
             lineOrder: loadedTheme.lineOrder || ['original', 'transliteration', 'translation'],
             linePositions: loadedTheme.linePositions || DEFAULT_LINE_POSITIONS,
@@ -147,8 +148,8 @@ const ThemeEditorPage: React.FC = () => {
     const newBox: BackgroundBox = {
       id: `box-${Date.now()}`,
       x: 10 + theme.backgroundBoxes.length * 5,
-      y: 10 + theme.backgroundBoxes.length * 5,
-      width: 30,
+      y: 60,
+      width: 80,
       height: 30,
       color: '#1a1a2e',
       opacity: 0.8,
@@ -167,6 +168,7 @@ const ThemeEditorPage: React.FC = () => {
     try {
       const themeData = {
         name: theme.name,
+        type: 'songs' as const,
         viewerBackground: theme.viewerBackground,
         canvasDimensions: theme.canvasDimensions,
         lineOrder: theme.lineOrder,
@@ -176,20 +178,18 @@ const ThemeEditorPage: React.FC = () => {
       };
 
       if (theme.id) {
-        await window.electronAPI.updateTheme(theme.id, themeData);
+        await window.electronAPI.updateOBSTheme(theme.id, themeData);
       } else {
-        const created = await window.electronAPI.createTheme(themeData);
+        const created = await window.electronAPI.createOBSTheme(themeData);
         setTheme(prev => ({ ...prev, id: created.id }));
       }
       setHasChanges(false);
 
-      // Apply theme to active viewer
-      await window.electronAPI.applyTheme({
+      await window.electronAPI.applyOBSTheme({
         ...themeData,
         id: theme.id
       });
 
-      // Show saved state briefly
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (error) {
@@ -245,6 +245,16 @@ const ThemeEditorPage: React.FC = () => {
           >
             ← Back
           </button>
+          <div style={{
+            padding: '4px 10px',
+            borderRadius: '4px',
+            background: 'rgba(23, 162, 184, 0.3)',
+            color: '#5bc0de',
+            fontSize: '12px',
+            fontWeight: 600
+          }}>
+            OBS Songs Theme
+          </div>
           <input
             type="text"
             value={theme.name}
@@ -277,8 +287,8 @@ const ThemeEditorPage: React.FC = () => {
                 padding: '10px 24px',
                 borderRadius: '6px',
                 border: 'none',
-                background: saveStatus === 'saved' ? '#28a745' : '#00d4ff',
-                color: saveStatus === 'saved' ? 'white' : 'black',
+                background: saveStatus === 'saved' ? '#28a745' : '#17a2b8',
+                color: 'white',
                 cursor: saveStatus !== 'idle' ? 'not-allowed' : 'pointer',
                 fontWeight: 600,
                 transition: 'background 0.2s, color 0.2s'
@@ -287,7 +297,7 @@ const ThemeEditorPage: React.FC = () => {
               {saveStatus === 'saving'
                 ? 'Saving...'
                 : saveStatus === 'saved'
-                  ? 'Saved \u2713'
+                  ? 'Saved ✓'
                   : 'Save Theme'}
             </button>
           )}
@@ -347,11 +357,11 @@ const ThemeEditorPage: React.FC = () => {
                   flex: 1,
                   padding: '12px',
                   border: 'none',
-                  background: activeTab === tab.id ? 'rgba(0,212,255,0.15)' : 'transparent',
-                  color: activeTab === tab.id ? '#00d4ff' : 'rgba(255,255,255,0.6)',
+                  background: activeTab === tab.id ? 'rgba(23,162,184,0.15)' : 'transparent',
+                  color: activeTab === tab.id ? '#17a2b8' : 'rgba(255,255,255,0.6)',
                   cursor: 'pointer',
                   fontWeight: activeTab === tab.id ? 600 : 400,
-                  borderBottom: activeTab === tab.id ? '2px solid #00d4ff' : '2px solid transparent'
+                  borderBottom: activeTab === tab.id ? '2px solid #17a2b8' : '2px solid transparent'
                 }}
               >
                 {tab.label}
@@ -405,13 +415,12 @@ const ThemeEditorPage: React.FC = () => {
                             padding: '8px 10px',
                             marginBottom: '4px',
                             borderRadius: '4px',
-                            background: isSelected ? 'rgba(0,212,255,0.2)' : 'rgba(255,255,255,0.05)',
-                            border: isSelected ? '1px solid rgba(0,212,255,0.5)' : '1px solid transparent',
+                            background: isSelected ? 'rgba(23,162,184,0.2)' : 'rgba(255,255,255,0.05)',
+                            border: isSelected ? '1px solid rgba(23,162,184,0.5)' : '1px solid transparent',
                             cursor: 'pointer',
                             opacity: isVisible ? 1 : 0.5
                           }}
                         >
-                          {/* Visibility Toggle */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -433,8 +442,6 @@ const ThemeEditorPage: React.FC = () => {
                           >
                             {isVisible ? '👁️' : '👁️‍🗨️'}
                           </button>
-
-                          {/* Layer Name */}
                           <span style={{
                             flex: 1,
                             fontSize: '12px',
@@ -472,15 +479,12 @@ const ThemeEditorPage: React.FC = () => {
                               padding: '8px 10px',
                               marginBottom: '4px',
                               borderRadius: '4px',
-                              background: isSelected ? 'rgba(0,212,255,0.2)' : 'rgba(255,255,255,0.05)',
-                              border: isSelected ? '1px solid rgba(0,212,255,0.5)' : '1px solid transparent',
+                              background: isSelected ? 'rgba(23,162,184,0.2)' : 'rgba(255,255,255,0.05)',
+                              border: isSelected ? '1px solid rgba(23,162,184,0.5)' : '1px solid transparent',
                               cursor: 'pointer'
                             }}
                           >
-                            {/* Box Icon */}
                             <span style={{ fontSize: '14px' }}>◻️</span>
-
-                            {/* Box Name */}
                             <span style={{
                               flex: 1,
                               fontSize: '12px',
@@ -494,31 +498,26 @@ const ThemeEditorPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Add Background Box Button */}
+                  {/* Add Box Button */}
                   <button
                     onClick={handleAddBox}
-                    disabled={theme.backgroundBoxes.length >= 3}
                     style={{
                       width: '100%',
                       padding: '8px',
-                      marginTop: '8px',
+                      marginTop: '12px',
+                      border: '1px dashed rgba(255,255,255,0.3)',
                       borderRadius: '4px',
-                      border: '1px dashed rgba(255,255,255,0.2)',
                       background: 'transparent',
-                      color: theme.backgroundBoxes.length >= 3 ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.6)',
-                      cursor: theme.backgroundBoxes.length >= 3 ? 'not-allowed' : 'pointer',
-                      fontSize: '11px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px'
+                      color: 'rgba(255,255,255,0.6)',
+                      cursor: 'pointer',
+                      fontSize: '12px'
                     }}
                   >
-                    + Add Box ({theme.backgroundBoxes.length}/3)
+                    + Add Background Box
                   </button>
                 </div>
 
-                {/* Selected Element Properties */}
+                {/* Properties Panel */}
                 {selectedLineType && (
                   <PropertiesPanel
                     lineType={selectedLineType}
@@ -536,194 +535,56 @@ const ThemeEditorPage: React.FC = () => {
                     onDelete={() => handleBoxDelete(selectedBox.id)}
                   />
                 )}
-
-                {!selectedElement && (
-                  <div style={{
-                    textAlign: 'center',
-                    padding: '40px 20px',
-                    color: 'rgba(255,255,255,0.4)'
-                  }}>
-                    <div style={{ fontSize: '40px', marginBottom: '12px' }}>👆</div>
-                    <div>Click on a text box or background box to edit its properties</div>
-                  </div>
-                )}
               </div>
             )}
 
             {activeTab === 'background' && (
               <div>
-                <h3 style={{ margin: '0 0 16px 0', fontSize: '14px', color: 'rgba(255,255,255,0.9)' }}>
-                  Viewer Background
-                </h3>
-
-                {/* Background Type */}
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{
-                    display: 'block',
-                    fontSize: '11px',
-                    color: 'rgba(255,255,255,0.6)',
-                    marginBottom: '8px',
-                    textTransform: 'uppercase'
-                  }}>
-                    Type
+                <h4 style={{ margin: '0 0 16px 0', fontSize: '14px' }}>Background</h4>
+                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginBottom: '16px' }}>
+                  OBS overlays typically use transparent backgrounds. Use background boxes for text backing.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      checked={theme.viewerBackground.type === 'transparent'}
+                      onChange={() => {
+                        setTheme(prev => ({
+                          ...prev,
+                          viewerBackground: { type: 'transparent', color: null }
+                        }));
+                        setHasChanges(true);
+                      }}
+                    />
+                    <span style={{ fontSize: '13px' }}>Transparent</span>
                   </label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    {[
-                      { value: 'inherit', label: 'Inherit' },
-                      { value: 'color', label: 'Color' },
-                      { value: 'transparent', label: 'Transparent' }
-                    ].map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => {
-                          setTheme(prev => ({
-                            ...prev,
-                            viewerBackground: { ...prev.viewerBackground, type: opt.value as any }
-                          }));
-                          setHasChanges(true);
-                        }}
-                        style={{
-                          flex: 1,
-                          padding: '8px',
-                          borderRadius: '4px',
-                          border: theme.viewerBackground.type === opt.value
-                            ? '2px solid #00d4ff'
-                            : '1px solid rgba(255,255,255,0.2)',
-                          background: theme.viewerBackground.type === opt.value
-                            ? 'rgba(0,212,255,0.15)'
-                            : 'rgba(0,0,0,0.3)',
-                          color: theme.viewerBackground.type === opt.value
-                            ? '#00d4ff'
-                            : 'rgba(255,255,255,0.7)',
-                          cursor: 'pointer',
-                          fontSize: '12px'
-                        }}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      checked={theme.viewerBackground.type === 'color'}
+                      onChange={() => setTheme(prev => ({
+                        ...prev,
+                        viewerBackground: { type: 'color', color: prev.viewerBackground.color || '#000000' }
+                      }))}
+                    />
+                    <span style={{ fontSize: '13px' }}>Solid Color</span>
+                  </label>
+                  {theme.viewerBackground.type === 'color' && (
+                    <input
+                      type="color"
+                      value={theme.viewerBackground.color || '#000000'}
+                      onChange={(e) => {
+                        setTheme(prev => ({
+                          ...prev,
+                          viewerBackground: { type: 'color', color: e.target.value }
+                        }));
+                        setHasChanges(true);
+                      }}
+                      style={{ width: '100%', height: '40px', cursor: 'pointer' }}
+                    />
+                  )}
                 </div>
-
-                {/* Color Picker (only for color type) */}
-                {theme.viewerBackground.type === 'color' && (
-                  <div style={{ marginBottom: '16px' }}>
-                    <label style={{
-                      display: 'block',
-                      fontSize: '11px',
-                      color: 'rgba(255,255,255,0.6)',
-                      marginBottom: '8px',
-                      textTransform: 'uppercase'
-                    }}>
-                      Background Color
-                    </label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <input
-                        type="color"
-                        value={theme.viewerBackground.color || '#000000'}
-                        onChange={(e) => {
-                          setTheme(prev => ({
-                            ...prev,
-                            viewerBackground: { ...prev.viewerBackground, color: e.target.value }
-                          }));
-                          setHasChanges(true);
-                        }}
-                        style={{
-                          width: '50px',
-                          height: '36px',
-                          padding: '2px',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer'
-                        }}
-                      />
-                      <input
-                        type="text"
-                        value={theme.viewerBackground.color || '#000000'}
-                        onChange={(e) => {
-                          setTheme(prev => ({
-                            ...prev,
-                            viewerBackground: { ...prev.viewerBackground, color: e.target.value }
-                          }));
-                          setHasChanges(true);
-                        }}
-                        style={{
-                          flex: 1,
-                          padding: '8px',
-                          borderRadius: '4px',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          background: 'rgba(0,0,0,0.3)',
-                          color: 'white'
-                        }}
-                      />
-                    </div>
-
-                    {/* Color Presets */}
-                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '12px' }}>
-                      {[
-                        '#000000', '#1a1a2e', '#16213e', '#0f0f23',
-                        '#1e3a5f', '#0a3d62', '#2c3e50', '#1b4f72'
-                      ].map(color => (
-                        <button
-                          key={color}
-                          onClick={() => {
-                            setTheme(prev => ({
-                              ...prev,
-                              viewerBackground: { ...prev.viewerBackground, color }
-                            }));
-                            setHasChanges(true);
-                          }}
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '4px',
-                            border: theme.viewerBackground.color === color
-                              ? '2px solid #00d4ff'
-                              : '1px solid rgba(255,255,255,0.2)',
-                            background: color,
-                            cursor: 'pointer'
-                          }}
-                        />
-                      ))}
-                    </div>
-
-                    {/* Gradient Option */}
-                    <div style={{ marginTop: '16px' }}>
-                      <label style={{
-                        display: 'block',
-                        fontSize: '11px',
-                        color: 'rgba(255,255,255,0.6)',
-                        marginBottom: '8px',
-                        textTransform: 'uppercase'
-                      }}>
-                        Or enter gradient
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="linear-gradient(135deg, #1a1a2e, #16213e)"
-                        value={theme.viewerBackground.color?.startsWith('linear-gradient') || theme.viewerBackground.color?.startsWith('radial-gradient')
-                          ? theme.viewerBackground.color
-                          : ''}
-                        onChange={(e) => {
-                          setTheme(prev => ({
-                            ...prev,
-                            viewerBackground: { ...prev.viewerBackground, color: e.target.value }
-                          }));
-                          setHasChanges(true);
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          borderRadius: '4px',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          background: 'rgba(0,0,0,0.3)',
-                          color: 'white',
-                          fontSize: '12px'
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
@@ -743,4 +604,4 @@ const ThemeEditorPage: React.FC = () => {
   );
 };
 
-export default ThemeEditorPage;
+export default OBSSongsThemeEditorPage;

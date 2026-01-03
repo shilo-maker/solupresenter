@@ -6,7 +6,11 @@ import { getSongs, getSong, createSong, updateSong, deleteSong, importSongsFromB
 import { getSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist } from '../database/setlists';
 import { getThemes, getTheme, createTheme, updateTheme, deleteTheme } from '../database/themes';
 import { getStageThemes, getStageTheme, createStageTheme, updateStageTheme, deleteStageTheme, duplicateStageTheme, setDefaultStageTheme } from '../database/stageThemes';
+import { getBibleThemes, getBibleTheme, createBibleTheme, updateBibleTheme, deleteBibleTheme, getDefaultBibleTheme } from '../database/bibleThemes';
+import { getOBSThemes, getOBSTheme, createOBSTheme, updateOBSTheme, deleteOBSTheme, getDefaultOBSTheme, OBSThemeType } from '../database/obsThemes';
+import { getPrayerThemes, getPrayerTheme, createPrayerTheme, updatePrayerTheme, deletePrayerTheme, getDefaultPrayerTheme } from '../database/prayerThemes';
 import { getPresentations, getPresentation, createPresentation, updatePresentation, deletePresentation } from '../database/presentations';
+import { getSelectedThemeIds, saveSelectedThemeId } from '../database/index';
 import {
   addMediaItem, getAllMediaItems, getMediaItem, deleteMediaItem, isMediaImported, moveMediaToFolder,
   createMediaFolder, getAllMediaFolders, renameMediaFolder, deleteMediaFolder,
@@ -19,6 +23,7 @@ import { SocketService } from '../services/socketService';
 import { getBibleBooks, getBibleVerses, versesToSlides } from '../services/bibleService';
 import { authService } from '../services/authService';
 import { processVideo, processImage, processAudio, deleteProcessedMedia, getMediaLibraryPath } from '../services/mediaProcessor';
+import { obsServer } from '../services/obsServer';
 
 let mediaManager: MediaManager;
 let socketService: SocketService;
@@ -66,18 +71,65 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     return displayManager.captureViewerThumbnail();
   });
 
+  // ============ OBS Browser Source Server ============
+
+  ipcMain.handle('obs:start', async () => {
+    console.log('[IPC obs:start] Starting OBS server...');
+    try {
+      const port = await obsServer.start();
+      console.log('[IPC obs:start] Server started on port:', port);
+      return { success: true, url: obsServer.getUrl(), port };
+    } catch (err) {
+      console.error('[IPC obs:start] Error:', err);
+      return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle('obs:stop', () => {
+    console.log('[IPC obs:stop] Stopping OBS server...');
+    obsServer.stop();
+    return true;
+  });
+
+  ipcMain.handle('obs:getUrl', () => {
+    return obsServer.getUrl();
+  });
+
+  ipcMain.handle('obs:isRunning', () => {
+    return obsServer.isRunning();
+  });
+
+  // Legacy handlers for backwards compatibility
+  ipcMain.handle('obs:open', async () => {
+    const port = await obsServer.start();
+    return { success: true, url: obsServer.getUrl(), port };
+  });
+
+  ipcMain.handle('obs:close', () => {
+    obsServer.stop();
+    return true;
+  });
+
+  ipcMain.handle('obs:isOpen', () => {
+    return obsServer.isRunning();
+  });
+
   // ============ Slide Control ============
 
   ipcMain.handle('slides:send', (event, slideData) => {
     console.log('[IPC slides:send] backgroundImage:', slideData.backgroundImage);
     displayManager.broadcastSlide(slideData);
     socketService.broadcastSlide(slideData);
+    // Also send to OBS Browser Source server
+    obsServer.updateSlide(slideData);
     return true;
   });
 
   ipcMain.handle('slides:blank', () => {
     displayManager.broadcastSlide({ isBlank: true });
     socketService.broadcastSlide({ isBlank: true });
+    // Also send to OBS Browser Source server
+    obsServer.updateSlide({ isBlank: true });
     return true;
   });
 
@@ -126,21 +178,63 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   });
 
   // Read file as base64 data URL for blob creation (enables video seeking)
+  // Security: Validate file path to prevent arbitrary file reading
   ipcMain.handle('file:readAsDataUrl', async (event, filePath: string) => {
     try {
-      const data = await fs.promises.readFile(filePath);
-      const ext = path.extname(filePath).toLowerCase();
+      // Normalize and validate path
+      const normalizedPath = path.normalize(filePath);
+
+      // Allowed file extensions (media files only)
+      const allowedExtensions = [
+        '.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v',
+        '.jpg', '.jpeg', '.png', '.gif', '.webp',
+        '.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac'
+      ];
+      const ext = path.extname(normalizedPath).toLowerCase();
+
+      if (!allowedExtensions.includes(ext)) {
+        throw new Error(`File type not allowed: ${ext}`);
+      }
+
+      // Allowed directories
+      const userDataPath = app.getPath('userData');
+      const mediaLibraryPath = getMediaLibraryPath();
+      const homePath = app.getPath('home');
+
+      // Check if path is within allowed directories
+      const isInUserData = normalizedPath.startsWith(userDataPath);
+      const isInMediaLibrary = normalizedPath.startsWith(mediaLibraryPath);
+      const isInUserHome = normalizedPath.startsWith(homePath);
+
+      // Must be in allowed directory (home covers user-selected files)
+      if (!isInUserData && !isInMediaLibrary && !isInUserHome) {
+        throw new Error('Access denied: File path not in allowed directory');
+      }
+
+      // Prevent directory traversal attacks
+      if (normalizedPath.includes('..')) {
+        throw new Error('Access denied: Directory traversal not allowed');
+      }
+
+      const data = await fs.promises.readFile(normalizedPath);
       const mimeTypes: Record<string, string> = {
         '.mp4': 'video/mp4',
         '.webm': 'video/webm',
         '.mov': 'video/quicktime',
         '.avi': 'video/x-msvideo',
         '.mkv': 'video/x-matroska',
+        '.m4v': 'video/x-m4v',
         '.jpg': 'image/jpeg',
         '.jpeg': 'image/jpeg',
         '.png': 'image/png',
         '.gif': 'image/gif',
         '.webp': 'image/webp',
+        '.mp3': 'audio/mpeg',
+        '.wav': 'audio/wav',
+        '.ogg': 'audio/ogg',
+        '.m4a': 'audio/mp4',
+        '.flac': 'audio/flac',
+        '.aac': 'audio/aac',
       };
       const mimeType = mimeTypes[ext] || 'application/octet-stream';
       const base64 = data.toString('base64');
@@ -382,6 +476,11 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     return displayManager.getVideoPosition();
   });
 
+  // Get current YouTube position for display sync
+  ipcMain.handle('youtube:getPosition', () => {
+    return displayManager.getYoutubePosition();
+  });
+
   // Forward video time updates from display windows to control panel
   ipcMain.on('video:timeUpdate', (event, time: number, duration: number) => {
     if (controlWindowRef && !controlWindowRef.isDestroyed()) {
@@ -404,114 +503,431 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   // ============ Database - Songs ============
 
   ipcMain.handle('db:songs:getAll', async () => {
-    return getSongs();
+    try {
+      return await getSongs();
+    } catch (error) {
+      console.error('IPC db:songs:getAll error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:songs:get', async (event, id: string) => {
-    return getSong(id);
+    try {
+      return await getSong(id);
+    } catch (error) {
+      console.error('IPC db:songs:get error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:songs:create', async (event, data) => {
-    return createSong(data);
+    try {
+      return await createSong(data);
+    } catch (error) {
+      console.error('IPC db:songs:create error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:songs:update', async (event, id: string, data) => {
-    return updateSong(id, data);
+    try {
+      return await updateSong(id, data);
+    } catch (error) {
+      console.error('IPC db:songs:update error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:songs:delete', async (event, id: string) => {
-    return deleteSong(id);
+    try {
+      return await deleteSong(id);
+    } catch (error) {
+      console.error('IPC db:songs:delete error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:songs:search', async (event, query: string) => {
-    return getSongs(query);
+    try {
+      return await getSongs(query);
+    } catch (error) {
+      console.error('IPC db:songs:search error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:songs:import', async (event, backendUrl: string) => {
-    return importSongsFromBackend(backendUrl);
+    try {
+      return await importSongsFromBackend(backendUrl);
+    } catch (error) {
+      console.error('IPC db:songs:import error:', error);
+      throw error;
+    }
   });
 
   // ============ Database - Setlists ============
 
   ipcMain.handle('db:setlists:getAll', async () => {
-    return getSetlists();
+    try {
+      return await getSetlists();
+    } catch (error) {
+      console.error('IPC db:setlists:getAll error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:setlists:get', async (event, id: string) => {
-    return getSetlist(id);
+    try {
+      return await getSetlist(id);
+    } catch (error) {
+      console.error('IPC db:setlists:get error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:setlists:create', async (event, data) => {
-    return createSetlist(data);
+    try {
+      return await createSetlist(data);
+    } catch (error) {
+      console.error('IPC db:setlists:create error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:setlists:update', async (event, id: string, data) => {
-    return updateSetlist(id, data);
+    try {
+      return await updateSetlist(id, data);
+    } catch (error) {
+      console.error('IPC db:setlists:update error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:setlists:delete', async (event, id: string) => {
-    return deleteSetlist(id);
+    try {
+      return await deleteSetlist(id);
+    } catch (error) {
+      console.error('IPC db:setlists:delete error:', error);
+      throw error;
+    }
   });
 
   // ============ Database - Themes ============
 
   ipcMain.handle('db:themes:getAll', async () => {
-    const themes = await getThemes();
-    console.log('db:themes:getAll - loaded', themes.length, 'themes');
-    themes.forEach((t: any) => {
-      console.log(`  - ${t.name}: linePositions=${!!t.linePositions}, backgroundBoxes=${!!t.backgroundBoxes}`);
-    });
-    return themes;
+    try {
+      const themes = await getThemes();
+      console.log('db:themes:getAll - loaded', themes.length, 'themes');
+      return themes;
+    } catch (error) {
+      console.error('IPC db:themes:getAll error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:themes:get', async (event, id: string) => {
-    return getTheme(id);
+    try {
+      return await getTheme(id);
+    } catch (error) {
+      console.error('IPC db:themes:get error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:themes:create', async (event, data) => {
-    return createTheme(data);
+    try {
+      return await createTheme(data);
+    } catch (error) {
+      console.error('IPC db:themes:create error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:themes:update', async (event, id: string, data) => {
-    return updateTheme(id, data);
+    try {
+      return await updateTheme(id, data);
+    } catch (error) {
+      console.error('IPC db:themes:update error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:themes:delete', async (event, id: string) => {
-    return deleteTheme(id);
+    try {
+      return await deleteTheme(id);
+    } catch (error) {
+      console.error('IPC db:themes:delete error:', error);
+      throw error;
+    }
   });
 
   // ============ Database - Stage Monitor Themes ============
 
   ipcMain.handle('db:stageThemes:getAll', async () => {
-    return getStageThemes();
+    try {
+      return getStageThemes();
+    } catch (error) {
+      console.error('IPC db:stageThemes:getAll error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:stageThemes:get', async (event, id: string) => {
-    return getStageTheme(id);
+    try {
+      return getStageTheme(id);
+    } catch (error) {
+      console.error('IPC db:stageThemes:get error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:stageThemes:create', async (event, data) => {
-    return createStageTheme(data);
+    try {
+      return createStageTheme(data);
+    } catch (error) {
+      console.error('IPC db:stageThemes:create error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:stageThemes:update', async (event, id: string, data) => {
-    return updateStageTheme(id, data);
+    try {
+      return updateStageTheme(id, data);
+    } catch (error) {
+      console.error('IPC db:stageThemes:update error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:stageThemes:delete', async (event, id: string) => {
-    return deleteStageTheme(id);
+    try {
+      return deleteStageTheme(id);
+    } catch (error) {
+      console.error('IPC db:stageThemes:delete error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:stageThemes:duplicate', async (event, id: string, newName?: string) => {
-    return duplicateStageTheme(id, newName);
+    try {
+      return duplicateStageTheme(id, newName);
+    } catch (error) {
+      console.error('IPC db:stageThemes:duplicate error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:stageThemes:setDefault', async (event, id: string) => {
-    return setDefaultStageTheme(id);
+    try {
+      return setDefaultStageTheme(id);
+    } catch (error) {
+      console.error('IPC db:stageThemes:setDefault error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('stageTheme:apply', (event, theme) => {
     displayManager.broadcastStageTheme(theme);
+    return true;
+  });
+
+  // ============ Database - Bible Themes ============
+
+  ipcMain.handle('db:bibleThemes:getAll', async () => {
+    try {
+      const themes = await getBibleThemes();
+      console.log('[IPC] db:bibleThemes:getAll returned:', themes?.length, 'themes');
+      return themes;
+    } catch (error) {
+      console.error('IPC db:bibleThemes:getAll error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:bibleThemes:get', async (event, id: string) => {
+    try {
+      return await getBibleTheme(id);
+    } catch (error) {
+      console.error('IPC db:bibleThemes:get error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:bibleThemes:getDefault', async () => {
+    try {
+      return await getDefaultBibleTheme();
+    } catch (error) {
+      console.error('IPC db:bibleThemes:getDefault error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:bibleThemes:create', async (event, data) => {
+    try {
+      return await createBibleTheme(data);
+    } catch (error) {
+      console.error('IPC db:bibleThemes:create error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:bibleThemes:update', async (event, id: string, data) => {
+    try {
+      return await updateBibleTheme(id, data);
+    } catch (error) {
+      console.error('IPC db:bibleThemes:update error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:bibleThemes:delete', async (event, id: string) => {
+    try {
+      return await deleteBibleTheme(id);
+    } catch (error) {
+      console.error('IPC db:bibleThemes:delete error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('bibleTheme:apply', (event, theme) => {
+    displayManager.broadcastBibleTheme(theme);
+    return true;
+  });
+
+  // ============ Database - OBS Themes ============
+
+  ipcMain.handle('db:obsThemes:getAll', async (event, type?: OBSThemeType) => {
+    try {
+      const themes = await getOBSThemes(type);
+      console.log('[IPC] db:obsThemes:getAll returned:', themes?.length, 'themes (type filter:', type, ')');
+      return themes;
+    } catch (error) {
+      console.error('IPC db:obsThemes:getAll error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:obsThemes:get', async (event, id: string) => {
+    try {
+      return await getOBSTheme(id);
+    } catch (error) {
+      console.error('IPC db:obsThemes:get error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:obsThemes:getDefault', async (event, type: OBSThemeType) => {
+    try {
+      return await getDefaultOBSTheme(type);
+    } catch (error) {
+      console.error('IPC db:obsThemes:getDefault error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:obsThemes:create', async (event, data) => {
+    try {
+      return await createOBSTheme(data);
+    } catch (error) {
+      console.error('IPC db:obsThemes:create error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:obsThemes:update', async (event, id: string, data) => {
+    try {
+      return await updateOBSTheme(id, data);
+    } catch (error) {
+      console.error('IPC db:obsThemes:update error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:obsThemes:delete', async (event, id: string) => {
+    try {
+      return await deleteOBSTheme(id);
+    } catch (error) {
+      console.error('IPC db:obsThemes:delete error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('obsTheme:apply', (event, theme) => {
+    obsServer.updateTheme(theme);
+    return true;
+  });
+
+  // ============ Database - Prayer Themes ============
+
+  ipcMain.handle('db:prayerThemes:getAll', async () => {
+    try {
+      const themes = await getPrayerThemes();
+      console.log('[IPC] db:prayerThemes:getAll returned:', themes?.length, 'themes');
+      return themes;
+    } catch (error) {
+      console.error('IPC db:prayerThemes:getAll error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:prayerThemes:get', async (event, id: string) => {
+    try {
+      return await getPrayerTheme(id);
+    } catch (error) {
+      console.error('IPC db:prayerThemes:get error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:prayerThemes:getDefault', async () => {
+    try {
+      return await getDefaultPrayerTheme();
+    } catch (error) {
+      console.error('IPC db:prayerThemes:getDefault error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:prayerThemes:create', async (event, data) => {
+    try {
+      return await createPrayerTheme(data);
+    } catch (error) {
+      console.error('IPC db:prayerThemes:create error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:prayerThemes:update', async (event, id: string, data) => {
+    try {
+      return await updatePrayerTheme(id, data);
+    } catch (error) {
+      console.error('IPC db:prayerThemes:update error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:prayerThemes:delete', async (event, id: string) => {
+    try {
+      return await deletePrayerTheme(id);
+    } catch (error) {
+      console.error('IPC db:prayerThemes:delete error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('prayerTheme:apply', (event, theme) => {
+    displayManager.broadcastPrayerTheme(theme);
+    return true;
+  });
+
+  // ============ Theme Selection Persistence ============
+
+  ipcMain.handle('settings:getSelectedThemeIds', () => {
+    return getSelectedThemeIds();
+  });
+
+  ipcMain.handle('settings:saveSelectedThemeId', (event, themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'prayer', themeId: string | null) => {
+    saveSelectedThemeId(themeType, themeId);
     return true;
   });
 
@@ -538,8 +954,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   ipcMain.handle('db:presentations:create', async (event, data) => {
     try {
       console.log('Creating presentation with data:', JSON.stringify(data).substring(0, 200));
+      console.log('  quickModeData present:', !!data.quickModeData, data.quickModeData ? JSON.stringify(data.quickModeData).substring(0, 100) : 'null');
       const result = await createPresentation(data);
-      console.log('Presentation created:', result?.id);
+      console.log('Presentation created:', result?.id, 'quickModeData in result:', !!result?.quickModeData);
       return result;
     } catch (error) {
       console.error('IPC db:presentations:create error:', error);
@@ -596,7 +1013,12 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   // ============ Online Mode (Socket.IO) ============
 
   ipcMain.handle('online:connect', async (event, serverUrl: string, token: string) => {
-    return socketService.connect(serverUrl, token);
+    try {
+      return await socketService.connect(serverUrl, token);
+    } catch (error) {
+      console.error('IPC online:connect error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('online:disconnect', () => {
@@ -605,7 +1027,12 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   });
 
   ipcMain.handle('online:createRoom', async () => {
-    return socketService.createRoom();
+    try {
+      return await socketService.createRoom();
+    } catch (error) {
+      console.error('IPC online:createRoom error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('online:getStatus', () => {
@@ -617,11 +1044,21 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   });
 
   ipcMain.handle('online:getPublicRooms', async () => {
-    return socketService.getPublicRooms();
+    try {
+      return await socketService.getPublicRooms();
+    } catch (error) {
+      console.error('IPC online:getPublicRooms error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('online:switchToPublicRoom', async (event, publicRoomId: string | null) => {
-    return socketService.switchToPublicRoom(publicRoomId);
+    try {
+      return await socketService.switchToPublicRoom(publicRoomId);
+    } catch (error) {
+      console.error('IPC online:switchToPublicRoom error:', error);
+      throw error;
+    }
   });
 
   // ============ App ============
@@ -652,25 +1089,50 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   // ============ Authentication ============
 
   ipcMain.handle('auth:login', async (event, email: string, password: string, serverUrl?: string) => {
-    return authService.login(email, password, serverUrl);
+    try {
+      return await authService.login(email, password, serverUrl);
+    } catch (error) {
+      console.error('IPC auth:login error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('auth:register', async (event, email: string, password: string, serverUrl?: string) => {
-    return authService.register(email, password, serverUrl);
+    try {
+      return await authService.register(email, password, serverUrl);
+    } catch (error) {
+      console.error('IPC auth:register error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('auth:logout', () => {
-    authService.logout();
-    socketService.disconnect();
-    return true;
+    try {
+      authService.logout();
+      socketService.disconnect();
+      return true;
+    } catch (error) {
+      console.error('IPC auth:logout error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('auth:getState', async () => {
-    return authService.getState();
+    try {
+      return await authService.getState();
+    } catch (error) {
+      console.error('IPC auth:getState error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('auth:initialize', async () => {
-    return authService.initialize();
+    try {
+      return await authService.initialize();
+    } catch (error) {
+      console.error('IPC auth:initialize error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('auth:setServerUrl', (event, url: string) => {
@@ -691,5 +1153,92 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
     const connected = await socketService.connect(serverUrl, token, userId || undefined);
     return { success: connected };
+  });
+
+  // ============ YouTube Control ============
+
+  ipcMain.handle('youtube:load', (event, videoId: string, title: string) => {
+    // Broadcast to online viewers
+    socketService.youtubeLoad(videoId, title);
+    // Broadcast to local display windows
+    displayManager.broadcastYoutube({ type: 'load', videoId, title });
+    return true;
+  });
+
+  ipcMain.handle('youtube:play', (event, currentTime: number) => {
+    socketService.youtubePlay(currentTime);
+    displayManager.broadcastYoutube({ type: 'play', currentTime });
+    return true;
+  });
+
+  ipcMain.handle('youtube:pause', (event, currentTime: number) => {
+    socketService.youtubePause(currentTime);
+    displayManager.broadcastYoutube({ type: 'pause', currentTime });
+    return true;
+  });
+
+  ipcMain.handle('youtube:seek', (event, currentTime: number) => {
+    socketService.youtubeSeek(currentTime);
+    displayManager.broadcastYoutube({ type: 'seek', currentTime });
+    return true;
+  });
+
+  ipcMain.handle('youtube:stop', () => {
+    socketService.youtubeStop();
+    displayManager.broadcastYoutube({ type: 'stop' });
+    return true;
+  });
+
+  ipcMain.handle('youtube:sync', (event, currentTime: number, isPlaying: boolean) => {
+    socketService.youtubeSync(currentTime, isPlaying);
+    displayManager.broadcastYoutube({ type: 'sync', currentTime, isPlaying });
+    return true;
+  });
+
+  // YouTube search using Piped API (no API key required)
+  ipcMain.handle('youtube:search', async (event, query: string) => {
+    const instances = [
+      'https://api.piped.private.coffee',
+      'https://pipedapi.kavin.rocks',
+      'https://pipedapi.r4fo.com'
+    ];
+
+    for (const instance of instances) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+
+        const response = await fetch(
+          `${instance}/search?q=${encodeURIComponent(query)}&filter=videos`,
+          { signal: controller.signal }
+        );
+        clearTimeout(timeout);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const results = (data.items || [])
+          .filter((item: any) => item.type === 'stream')
+          .slice(0, 12)
+          .map((item: any) => {
+            const videoId = item.url?.replace('/watch?v=', '') || '';
+            return {
+              videoId,
+              title: item.title || '',
+              thumbnail: item.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+              channelTitle: item.uploaderName || ''
+            };
+          })
+          .filter((item: any) => item.videoId);
+
+        return { success: true, results };
+      } catch (error) {
+        console.warn(`Piped instance ${instance} failed:`, error);
+      }
+    }
+
+    return { success: false, error: 'All instances failed' };
   });
 }

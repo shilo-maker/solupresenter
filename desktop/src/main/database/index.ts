@@ -6,7 +6,91 @@ import initSqlJs, { Database } from 'sql.js';
 // Database path
 const dbPath = path.join(app.getPath('userData'), 'solupresenter.sqlite');
 
+// Get the path to sql.js WASM file
+function getSqlJsWasmPath(): string {
+  // In development, use node_modules path
+  // In production, the WASM file should be in resources/sql-wasm.wasm
+  const isDev = !app.isPackaged;
+
+  if (isDev) {
+    // Development - use node_modules
+    return path.join(__dirname, '..', '..', '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
+  } else {
+    // Production - check multiple possible locations
+    const possiblePaths = [
+      path.join(process.resourcesPath, 'sql-wasm.wasm'),
+      path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
+      path.join(app.getAppPath(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
+    ];
+
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        console.log('[Database] Found sql-wasm.wasm at:', p);
+        return p;
+      }
+    }
+
+    // Fallback - let sql.js try to find it
+    console.warn('[Database] Could not find sql-wasm.wasm, letting sql.js locate it');
+    return '';
+  }
+}
+
+// Current schema version - increment when adding migrations
+const CURRENT_SCHEMA_VERSION = 1;
+
 let db: Database | null = null;
+
+/**
+ * Get current schema version from database
+ */
+function getSchemaVersion(): number {
+  if (!db) return 0;
+  try {
+    const result = db.exec('SELECT version FROM schema_version LIMIT 1');
+    if (result.length > 0 && result[0].values.length > 0) {
+      return result[0].values[0][0] as number;
+    }
+  } catch {
+    // Table doesn't exist yet
+  }
+  return 0;
+}
+
+/**
+ * Set schema version in database
+ */
+function setSchemaVersion(version: number): void {
+  if (!db) return;
+  const existing = getSchemaVersion();
+  if (existing === 0) {
+    db.run('INSERT INTO schema_version (version, updatedAt) VALUES (?, ?)', [version, new Date().toISOString()]);
+  } else {
+    db.run('UPDATE schema_version SET version = ?, updatedAt = ?', [version, new Date().toISOString()]);
+  }
+}
+
+/**
+ * Run database migrations
+ */
+function runMigrations(fromVersion: number): void {
+  if (!db) return;
+  console.log(`Running migrations from version ${fromVersion} to ${CURRENT_SCHEMA_VERSION}`);
+
+  // Add new migrations here as the schema evolves
+  // Example:
+  // if (fromVersion < 2) {
+  //   console.log('Running migration to version 2...');
+  //   db.run('ALTER TABLE songs ADD COLUMN newField TEXT');
+  // }
+  // if (fromVersion < 3) {
+  //   console.log('Running migration to version 3...');
+  //   db.run('CREATE TABLE new_table (...)');
+  // }
+
+  setSchemaVersion(CURRENT_SCHEMA_VERSION);
+  console.log(`Migrations complete. Schema is now at version ${CURRENT_SCHEMA_VERSION}`);
+}
 
 /**
  * Initialize database
@@ -15,7 +99,18 @@ export async function initDatabase(): Promise<void> {
   console.log('initDatabase: starting...');
   try {
     console.log('initDatabase: loading sql.js...');
-    const SQL = await initSqlJs();
+    const wasmPath = getSqlJsWasmPath();
+    console.log('initDatabase: WASM path:', wasmPath);
+
+    const sqlConfig: any = {};
+    if (wasmPath && fs.existsSync(wasmPath)) {
+      // Load WASM file directly as a buffer for more reliable loading
+      const wasmBinary = fs.readFileSync(wasmPath);
+      sqlConfig.wasmBinary = wasmBinary;
+      console.log('initDatabase: Loaded WASM binary, size:', wasmBinary.length);
+    }
+
+    const SQL = await initSqlJs(sqlConfig);
     console.log('initDatabase: sql.js loaded');
 
     // Ensure directory exists
@@ -30,6 +125,20 @@ export async function initDatabase(): Promise<void> {
       db = new SQL.Database(fileBuffer);
     } else {
       db = new SQL.Database();
+    }
+
+    // Create schema_version table first
+    db.run(`
+      CREATE TABLE IF NOT EXISTS schema_version (
+        version INTEGER NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    `);
+
+    // Check and run migrations if needed
+    const currentVersion = getSchemaVersion();
+    if (currentVersion < CURRENT_SCHEMA_VERSION) {
+      runMigrations(currentVersion);
     }
 
     // Create tables
@@ -86,9 +195,33 @@ export async function initDatabase(): Promise<void> {
         onlineServerUrl TEXT DEFAULT 'https://solupresenter-backend-4rn5.onrender.com',
         onlineToken TEXT,
         language TEXT DEFAULT 'he',
-        autoConnectOnline INTEGER DEFAULT 0
+        autoConnectOnline INTEGER DEFAULT 0,
+        selectedViewerThemeId TEXT,
+        selectedStageThemeId TEXT,
+        selectedBibleThemeId TEXT,
+        selectedOBSThemeId TEXT,
+        selectedPrayerThemeId TEXT
       )
     `);
+
+    // Migration: Add new theme columns if they don't exist (for existing databases)
+    const tableInfo = db.exec("PRAGMA table_info(settings)");
+    const columnNames = tableInfo[0]?.values?.map((row: any) => row[1]) || [];
+    if (!columnNames.includes('selectedViewerThemeId')) {
+      db.run('ALTER TABLE settings ADD COLUMN selectedViewerThemeId TEXT');
+    }
+    if (!columnNames.includes('selectedStageThemeId')) {
+      db.run('ALTER TABLE settings ADD COLUMN selectedStageThemeId TEXT');
+    }
+    if (!columnNames.includes('selectedBibleThemeId')) {
+      db.run('ALTER TABLE settings ADD COLUMN selectedBibleThemeId TEXT');
+    }
+    if (!columnNames.includes('selectedOBSThemeId')) {
+      db.run('ALTER TABLE settings ADD COLUMN selectedOBSThemeId TEXT');
+    }
+    if (!columnNames.includes('selectedPrayerThemeId')) {
+      db.run('ALTER TABLE settings ADD COLUMN selectedPrayerThemeId TEXT');
+    }
 
     // Save after creating tables
     saveDatabase();
@@ -238,10 +371,267 @@ export async function initDatabase(): Promise<void> {
         title TEXT NOT NULL,
         slides TEXT DEFAULT '[]',
         canvasDimensions TEXT DEFAULT '{"width":1920,"height":1080}',
+        quickModeData TEXT,
         createdAt TEXT,
         updatedAt TEXT
       )
     `);
+
+    // Migration: Add quickModeData column to presentations (for prayer/sermon theme support)
+    try {
+      const presentationsInfo = db.exec("PRAGMA table_info(presentations)");
+      const columns = presentationsInfo[0]?.values?.map((row: any) => row[1]) || [];
+      console.log('[DB Migration] presentations table columns:', columns);
+      if (!columns.includes('quickModeData')) {
+        db.run('ALTER TABLE presentations ADD COLUMN quickModeData TEXT');
+        console.log('[DB Migration] Added quickModeData column to presentations table');
+        saveDatabase();
+      } else {
+        console.log('[DB Migration] quickModeData column already exists');
+      }
+    } catch (e) {
+      console.error('[DB Migration] Error checking/adding quickModeData column:', e);
+    }
+
+    // Create bible_themes table
+    db.run(`
+      CREATE TABLE IF NOT EXISTS bible_themes (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        isBuiltIn INTEGER DEFAULT 0,
+        isDefault INTEGER DEFAULT 0,
+        lineOrder TEXT DEFAULT '["hebrew","english"]',
+        lineStyles TEXT,
+        linePositions TEXT,
+        referenceStyle TEXT,
+        referencePosition TEXT,
+        container TEXT,
+        viewerBackground TEXT,
+        canvasDimensions TEXT DEFAULT '{"width":1920,"height":1080}',
+        backgroundBoxes TEXT,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create obs_themes table
+    db.run(`
+      CREATE TABLE IF NOT EXISTS obs_themes (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        isBuiltIn INTEGER DEFAULT 0,
+        isDefault INTEGER DEFAULT 0,
+        lineOrder TEXT,
+        lineStyles TEXT,
+        linePositions TEXT,
+        referenceStyle TEXT,
+        referencePosition TEXT,
+        viewerBackground TEXT,
+        canvasDimensions TEXT DEFAULT '{"width":1920,"height":1080}',
+        backgroundBoxes TEXT,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create prayer_themes table
+    db.run(`
+      CREATE TABLE IF NOT EXISTS prayer_themes (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        isBuiltIn INTEGER DEFAULT 0,
+        isDefault INTEGER DEFAULT 0,
+        lineOrder TEXT DEFAULT '["title","titleTranslation","subtitle","subtitleTranslation","description","descriptionTranslation","reference","referenceTranslation"]',
+        lineStyles TEXT,
+        linePositions TEXT,
+        referenceStyle TEXT,
+        referencePosition TEXT,
+        referenceTranslationStyle TEXT,
+        referenceTranslationPosition TEXT,
+        container TEXT,
+        viewerBackground TEXT,
+        canvasDimensions TEXT DEFAULT '{"width":1920,"height":1080}',
+        backgroundBoxes TEXT,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Add referenceTranslationStyle and referenceTranslationPosition columns if they don't exist (migration)
+    const prayerThemeColumns = db.exec("PRAGMA table_info(prayer_themes)");
+    const existingColumns = prayerThemeColumns.length > 0
+      ? prayerThemeColumns[0].values.map((row: any) => row[1])
+      : [];
+    console.log('[DB Init] Existing prayer_themes columns:', existingColumns);
+
+    if (!existingColumns.includes('referenceTranslationStyle')) {
+      console.log('[DB Init] Adding referenceTranslationStyle column to prayer_themes');
+      db.run(`ALTER TABLE prayer_themes ADD COLUMN referenceTranslationStyle TEXT`);
+      saveDatabase();
+    }
+    if (!existingColumns.includes('referenceTranslationPosition')) {
+      console.log('[DB Init] Adding referenceTranslationPosition column to prayer_themes');
+      db.run(`ALTER TABLE prayer_themes ADD COLUMN referenceTranslationPosition TEXT`);
+      saveDatabase();
+    }
+
+    // Seed default Bible theme if it doesn't exist
+    const CLASSIC_BIBLE_THEME_ID = '00000000-0000-0000-0000-000000000003';
+    console.log('[DB Init] Checking for classic Bible theme...');
+    const existingBibleTheme = db.exec(`SELECT id FROM bible_themes WHERE id = '${CLASSIC_BIBLE_THEME_ID}'`);
+    console.log('[DB Init] Existing Bible theme check result:', existingBibleTheme.length, existingBibleTheme[0]?.values?.length);
+
+    if (existingBibleTheme.length === 0 || existingBibleTheme[0].values.length === 0) {
+      const defaultBibleStyles = {
+        hebrew: { fontSize: 160, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true },
+        english: { fontSize: 120, fontWeight: '400', color: '#e0e0e0', opacity: 0.9, visible: true }
+      };
+      const defaultBiblePositions = {
+        hebrew: { x: 0, y: 25, width: 100, height: 20, paddingTop: 2, paddingBottom: 2, alignH: 'center', alignV: 'center' },
+        english: { x: 0, y: 45, width: 100, height: 20, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' }
+      };
+      const defaultReferenceStyle = { fontSize: 80, fontWeight: '500', color: '#FF8C42', opacity: 0.9 };
+      const defaultReferencePosition = { x: 0, y: 70, width: 100, height: 10, alignH: 'center', alignV: 'center' };
+
+      db.run(`
+        INSERT INTO bible_themes (id, name, isBuiltIn, isDefault, lineOrder, lineStyles, linePositions, referenceStyle, referencePosition, viewerBackground, canvasDimensions, backgroundBoxes)
+        VALUES (?, ?, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        CLASSIC_BIBLE_THEME_ID,
+        'Classic Bible',
+        JSON.stringify(['hebrew', 'english']),
+        JSON.stringify(defaultBibleStyles),
+        JSON.stringify(defaultBiblePositions),
+        JSON.stringify(defaultReferenceStyle),
+        JSON.stringify(defaultReferencePosition),
+        JSON.stringify({ type: 'color', color: '#000000' }),
+        JSON.stringify({ width: 1920, height: 1080 }),
+        JSON.stringify([])
+      ]);
+      console.log('Created Classic Bible theme');
+      saveDatabase();
+    }
+
+    // Seed default OBS Songs theme if it doesn't exist
+    const CLASSIC_OBS_SONGS_THEME_ID = '00000000-0000-0000-0000-000000000004';
+    const existingOBSSongsTheme = db.exec(`SELECT id FROM obs_themes WHERE id = '${CLASSIC_OBS_SONGS_THEME_ID}'`);
+
+    if (existingOBSSongsTheme.length === 0 || existingOBSSongsTheme[0].values.length === 0) {
+      const defaultOBSStyles = {
+        original: { fontSize: 120, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true },
+        transliteration: { fontSize: 90, fontWeight: '400', color: '#e0e0e0', opacity: 0.9, visible: true },
+        translation: { fontSize: 100, fontWeight: '400', color: '#b0b0b0', opacity: 0.85, visible: true }
+      };
+      const defaultOBSPositions = {
+        original: { x: 0, y: 70, width: 100, height: 10, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' },
+        transliteration: { x: 0, y: 80, width: 100, height: 8, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' },
+        translation: { x: 0, y: 88, width: 100, height: 10, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' }
+      };
+
+      db.run(`
+        INSERT INTO obs_themes (id, name, type, isBuiltIn, isDefault, lineOrder, lineStyles, linePositions, viewerBackground, canvasDimensions, backgroundBoxes)
+        VALUES (?, ?, ?, 1, 1, ?, ?, ?, ?, ?, ?)
+      `, [
+        CLASSIC_OBS_SONGS_THEME_ID,
+        'Classic OBS Songs',
+        'songs',
+        JSON.stringify(['original', 'transliteration', 'translation']),
+        JSON.stringify(defaultOBSStyles),
+        JSON.stringify(defaultOBSPositions),
+        JSON.stringify({ type: 'transparent', color: null }),
+        JSON.stringify({ width: 1920, height: 1080 }),
+        JSON.stringify([{ x: 0, y: 68, width: 100, height: 32, color: '#000000', opacity: 0.7, borderRadius: 0 }])
+      ]);
+      console.log('Created Classic OBS Songs theme');
+      saveDatabase();
+    }
+
+    // Seed default OBS Bible theme if it doesn't exist
+    const CLASSIC_OBS_BIBLE_THEME_ID = '00000000-0000-0000-0000-000000000005';
+    const existingOBSBibleTheme = db.exec(`SELECT id FROM obs_themes WHERE id = '${CLASSIC_OBS_BIBLE_THEME_ID}'`);
+
+    if (existingOBSBibleTheme.length === 0 || existingOBSBibleTheme[0].values.length === 0) {
+      const defaultOBSBibleStyles = {
+        hebrew: { fontSize: 100, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true },
+        english: { fontSize: 80, fontWeight: '400', color: '#e0e0e0', opacity: 0.9, visible: true }
+      };
+      const defaultOBSBiblePositions = {
+        hebrew: { x: 0, y: 72, width: 100, height: 10, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' },
+        english: { x: 0, y: 82, width: 100, height: 10, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' }
+      };
+      const defaultOBSReferenceStyle = { fontSize: 60, fontWeight: '500', color: '#FF8C42', opacity: 0.9 };
+      const defaultOBSReferencePosition = { x: 0, y: 92, width: 100, height: 6, alignH: 'center', alignV: 'center' };
+
+      db.run(`
+        INSERT INTO obs_themes (id, name, type, isBuiltIn, isDefault, lineOrder, lineStyles, linePositions, referenceStyle, referencePosition, viewerBackground, canvasDimensions, backgroundBoxes)
+        VALUES (?, ?, ?, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        CLASSIC_OBS_BIBLE_THEME_ID,
+        'Classic OBS Bible',
+        'bible',
+        JSON.stringify(['hebrew', 'english']),
+        JSON.stringify(defaultOBSBibleStyles),
+        JSON.stringify(defaultOBSBiblePositions),
+        JSON.stringify(defaultOBSReferenceStyle),
+        JSON.stringify(defaultOBSReferencePosition),
+        JSON.stringify({ type: 'transparent', color: null }),
+        JSON.stringify({ width: 1920, height: 1080 }),
+        JSON.stringify([{ x: 0, y: 70, width: 100, height: 30, color: '#000000', opacity: 0.7, borderRadius: 0 }])
+      ]);
+      console.log('Created Classic OBS Bible theme');
+      saveDatabase();
+    }
+
+    // Seed default Prayer theme if it doesn't exist
+    const CLASSIC_PRAYER_THEME_ID = '00000000-0000-0000-0000-000000000006';
+    const existingPrayerTheme = db.exec(`SELECT id FROM prayer_themes WHERE id = '${CLASSIC_PRAYER_THEME_ID}'`);
+
+    if (existingPrayerTheme.length === 0 || existingPrayerTheme[0].values.length === 0) {
+      // Classic Prayer theme based on NewClassicPrayer layout
+      // Hebrew text aligned right, English text aligned left
+      const defaultPrayerStyles = {
+        title: { fontSize: 130, fontWeight: '700', color: '#FF8C42', opacity: 1, visible: true },
+        titleTranslation: { fontSize: 129, fontWeight: '700', color: '#FF8C42', opacity: 0.9, visible: true },
+        subtitle: { fontSize: 94, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true },
+        subtitleTranslation: { fontSize: 94, fontWeight: '700', color: '#e0e0e0', opacity: 0.9, visible: true },
+        description: { fontSize: 90, fontWeight: '400', color: '#e0e0e0', opacity: 0.9, visible: true },
+        descriptionTranslation: { fontSize: 90, fontWeight: '400', color: '#b0b0b0', opacity: 0.85, visible: true }
+      };
+      const defaultPrayerPositions = {
+        title: { x: 0, y: 3, width: 100, height: 8, paddingTop: 1, paddingBottom: 1, alignH: 'right', alignV: 'center' },
+        titleTranslation: { x: 0, y: 40.97, width: 100, height: 8.85, paddingTop: 0, paddingBottom: 1, alignH: 'left', alignV: 'center' },
+        subtitle: { x: 0, y: 11.15, width: 100, height: 10.87, paddingTop: 2, paddingBottom: 2, alignH: 'right', alignV: 'top' },
+        subtitleTranslation: { x: 0, y: 50.90, width: 100, height: 9.61, paddingTop: 1, paddingBottom: 1, alignH: 'left', alignV: 'top' },
+        description: { x: 0, y: 21.65, width: 100, height: 10.12, paddingTop: 1, paddingBottom: 1, alignH: 'right', alignV: 'top' },
+        descriptionTranslation: { x: 0, y: 60.18, width: 100, height: 10, paddingTop: 1, paddingBottom: 1, alignH: 'left', alignV: 'center' }
+      };
+      const defaultPrayerReferenceStyle = { fontSize: 56, fontWeight: '500', color: '#ffffff', opacity: 0.8, visible: true };
+      const defaultPrayerReferencePosition = { x: 0, y: 31.78, width: 100, height: 5.11, paddingTop: 0, paddingBottom: 0, alignH: 'right', alignV: 'center' };
+      const defaultPrayerRefTransStyle = { fontSize: 60, fontWeight: '400', color: '#ffffff', opacity: 0.7, visible: true };
+      const defaultPrayerRefTransPosition = { x: 0, y: 70.32, width: 100, height: 8, paddingTop: 0, paddingBottom: 0, alignH: 'left', alignV: 'center' };
+
+      db.run(`
+        INSERT INTO prayer_themes (id, name, isBuiltIn, isDefault, lineOrder, lineStyles, linePositions, referenceStyle, referencePosition, referenceTranslationStyle, referenceTranslationPosition, container, viewerBackground, canvasDimensions, backgroundBoxes)
+        VALUES (?, ?, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        CLASSIC_PRAYER_THEME_ID,
+        'Classic Prayer',
+        JSON.stringify(['title', 'titleTranslation', 'subtitle', 'subtitleTranslation', 'description', 'descriptionTranslation', 'reference', 'referenceTranslation']),
+        JSON.stringify(defaultPrayerStyles),
+        JSON.stringify(defaultPrayerPositions),
+        JSON.stringify(defaultPrayerReferenceStyle),
+        JSON.stringify(defaultPrayerReferencePosition),
+        JSON.stringify(defaultPrayerRefTransStyle),
+        JSON.stringify(defaultPrayerRefTransPosition),
+        JSON.stringify({ maxWidth: '100%', padding: '2vh 6vw', backgroundColor: 'transparent', borderRadius: '0px' }),
+        JSON.stringify({ type: 'transparent', color: null }),
+        JSON.stringify({ width: 1920, height: 1080 }),
+        JSON.stringify([])
+      ]);
+      console.log('Created Classic Prayer theme');
+      saveDatabase();
+    }
 
     saveDatabase();
 
@@ -301,5 +691,152 @@ export function rowsToObjects(result: any[]): any[] {
   });
 }
 
+// Get selected theme IDs from settings
+export function getSelectedThemeIds(): {
+  viewerThemeId: string | null;
+  stageThemeId: string | null;
+  bibleThemeId: string | null;
+  obsThemeId: string | null;
+  prayerThemeId: string | null;
+} {
+  if (!db) return { viewerThemeId: null, stageThemeId: null, bibleThemeId: null, obsThemeId: null, prayerThemeId: null };
+
+  const result = db.exec(`
+    SELECT selectedViewerThemeId, selectedStageThemeId, selectedBibleThemeId, selectedOBSThemeId, selectedPrayerThemeId
+    FROM settings WHERE id = 1
+  `);
+
+  if (result.length === 0 || result[0].values.length === 0) {
+    return { viewerThemeId: null, stageThemeId: null, bibleThemeId: null, obsThemeId: null, prayerThemeId: null };
+  }
+
+  const row = result[0].values[0];
+  return {
+    viewerThemeId: row[0] as string | null,
+    stageThemeId: row[1] as string | null,
+    bibleThemeId: row[2] as string | null,
+    obsThemeId: row[3] as string | null,
+    prayerThemeId: row[4] as string | null
+  };
+}
+
+// Save selected theme ID
+export function saveSelectedThemeId(
+  themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'prayer',
+  themeId: string | null
+): void {
+  if (!db) return;
+
+  const columnMap: Record<string, string> = {
+    viewer: 'selectedViewerThemeId',
+    stage: 'selectedStageThemeId',
+    bible: 'selectedBibleThemeId',
+    obs: 'selectedOBSThemeId',
+    prayer: 'selectedPrayerThemeId'
+  };
+
+  const column = columnMap[themeType];
+  db.run(`UPDATE settings SET ${column} = ? WHERE id = 1`, [themeId]);
+  saveDatabase();
+}
+
+/**
+ * Helper function for parameterized SELECT queries - returns all matching rows
+ * This prevents SQL injection by using prepared statements
+ */
+export function queryAll(sql: string, params: any[] = []): any[] {
+  if (!db) return [];
+  try {
+    const stmt = db.prepare(sql);
+    stmt.bind(params);
+    const results: any[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      // Parse JSON fields
+      for (const key in row) {
+        const value = row[key];
+        if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+          try {
+            row[key] = JSON.parse(value);
+          } catch {}
+        }
+      }
+      results.push(row);
+    }
+    stmt.free();
+    return results;
+  } catch (error) {
+    console.error('queryAll error:', error);
+    return [];
+  }
+}
+
+/**
+ * Helper function for parameterized SELECT queries - returns single row or null
+ * This prevents SQL injection by using prepared statements
+ */
+export function queryOne(sql: string, params: any[] = []): any | null {
+  const results = queryAll(sql, params);
+  return results.length > 0 ? results[0] : null;
+}
+
+/**
+ * Begin a database transaction
+ */
+export function beginTransaction(): void {
+  if (!db) return;
+  try {
+    db.run('BEGIN TRANSACTION');
+  } catch (error) {
+    console.error('beginTransaction error:', error);
+  }
+}
+
+/**
+ * Commit a database transaction
+ */
+export function commitTransaction(): void {
+  if (!db) return;
+  try {
+    db.run('COMMIT');
+    saveDatabase();
+  } catch (error) {
+    console.error('commitTransaction error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Rollback a database transaction
+ */
+export function rollbackTransaction(): void {
+  if (!db) return;
+  try {
+    db.run('ROLLBACK');
+  } catch (error) {
+    console.error('rollbackTransaction error:', error);
+  }
+}
+
+/**
+ * Execute a function within a transaction
+ * Automatically commits on success or rolls back on error
+ */
+export async function withTransaction<T>(fn: () => T | Promise<T>): Promise<T> {
+  beginTransaction();
+  try {
+    const result = await fn();
+    commitTransaction();
+    return result;
+  } catch (error) {
+    rollbackTransaction();
+    throw error;
+  }
+}
+
 export const CLASSIC_THEME_ID = '00000000-0000-0000-0000-000000000001';
 export const CLASSIC_STAGE_THEME_ID = '00000000-0000-0000-0000-000000000002';
+export const CLASSIC_BIBLE_THEME_ID = '00000000-0000-0000-0000-000000000003';
+export const CLASSIC_OBS_SONGS_THEME_ID = '00000000-0000-0000-0000-000000000004';
+export const CLASSIC_OBS_BIBLE_THEME_ID = '00000000-0000-0000-0000-000000000005';
+export const CLASSIC_PRAYER_THEME_ID = '00000000-0000-0000-0000-000000000006';

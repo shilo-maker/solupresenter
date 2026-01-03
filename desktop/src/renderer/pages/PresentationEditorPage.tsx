@@ -52,6 +52,18 @@ interface Slide {
   backgroundColor?: string;
 }
 
+interface QuickModeMetadata {
+  type: 'sermon' | 'prayer' | 'announcements';
+  title: string;
+  subtitles: Array<{
+    subtitle: string;
+    subtitleTranslation?: string;
+    description?: string;
+    descriptionTranslation?: string;
+    bibleRef?: { reference: string; hebrewReference?: string };
+  }>;
+}
+
 interface Presentation {
   id: string;
   title: string;
@@ -59,6 +71,7 @@ interface Presentation {
   canvasDimensions: { width: number; height: number };
   createdAt: string;
   updatedAt: string;
+  quickModeData?: QuickModeMetadata;
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
@@ -136,7 +149,7 @@ const createPrayerSlide = (): Slide => ({
     { id: generateId(), text: '• Prayer item 3', x: 10, y: 60, width: 80, height: 10, fontSize: 90, color: '#ffffff', backgroundColor: 'transparent', textAlign: 'left', verticalAlign: 'center', bold: false, italic: false, underline: false, opacity: 1, zIndex: 1, textDirection: 'ltr' }
   ],
   imageBoxes: [],
-  backgroundColor: '#1e3a5f'
+  backgroundColor: '#000000'
 });
 
 const createAnnouncementSlide = (): Slide => ({
@@ -193,7 +206,7 @@ const containsHebrew = (text: string): boolean => /[\u0590-\u05FF]/.test(text);
 // Generate slides from Quick Mode data with bilingual template support
 const createQuickModeSlides = (data: QuickModeData): Slide[] => {
   const backgroundColor = data.type === 'sermon' ? '#1a1a2e' :
-                          data.type === 'prayer' ? '#1e3a5f' : '#2d1f3d';
+                          data.type === 'prayer' ? '#000000' : '#2d1f3d';
 
   // Check if we need bilingual layout (generateTranslation is true)
   const isBilingual = data.generateTranslation || false;
@@ -563,7 +576,20 @@ const PresentationEditorPage: React.FC = () => {
         slides: createQuickModeSlides(quickModeData),
         canvasDimensions: { width: 1920, height: 1080 },
         createdAt: '',
-        updatedAt: ''
+        updatedAt: '',
+        // Store Quick Mode metadata for prayer theme rendering
+        quickModeData: {
+          type: quickModeData.type,
+          title: quickModeData.title,
+          titleTranslation: quickModeData.titleTranslation,
+          subtitles: quickModeData.subtitles.map(s => ({
+            subtitle: s.subtitle,
+            subtitleTranslation: s.subtitleTranslation,
+            description: s.description,
+            descriptionTranslation: s.descriptionTranslation,
+            bibleRef: s.bibleRef
+          }))
+        }
       };
     }
 
@@ -588,9 +614,12 @@ const PresentationEditorPage: React.FC = () => {
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [dropPosition, setDropPosition] = useState<'before' | 'after' | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
+  // Track if translations are complete (or not needed)
+  const [translationsReady, setTranslationsReady] = useState(!quickModeData?.generateTranslation);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const [canvasDims, setCanvasDims] = useState({ width: 800, height: 450 });
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const hasAutoSavedRef = useRef(false); // Prevent duplicate auto-saves in StrictMode
 
   const currentSlide = presentation.slides[currentSlideIndex];
   const selectedTextBox = currentSlide?.textBoxes.find(tb => tb.id === selectedTextBoxId);
@@ -694,10 +723,22 @@ const PresentationEditorPage: React.FC = () => {
 
         const newSlides = createQuickModeSlides(updatedData);
 
-        // Update presentation with translated slides
+        // Update presentation with translated slides AND quickModeData
         setPresentation(prev => ({
           ...prev,
-          slides: newSlides
+          slides: newSlides,
+          quickModeData: {
+            type: updatedData.type,
+            title: updatedData.title,
+            titleTranslation: updatedData.titleTranslation,
+            subtitles: translatedSubtitles.map(s => ({
+              subtitle: s.subtitle,
+              subtitleTranslation: s.subtitleTranslation,
+              description: s.description,
+              descriptionTranslation: s.descriptionTranslation,
+              bibleRef: s.bibleRef
+            }))
+          }
         }));
 
         console.log('Translations generated successfully');
@@ -705,6 +746,7 @@ const PresentationEditorPage: React.FC = () => {
         console.error('Failed to generate translations:', error);
       } finally {
         setIsTranslating(false);
+        setTranslationsReady(true);
       }
     };
 
@@ -712,17 +754,28 @@ const PresentationEditorPage: React.FC = () => {
   }, []); // Run once on mount
 
   // Auto-save new presentations from templates (including Quick Mode)
+  // Wait for translations to complete before saving
   useEffect(() => {
     const autoSaveNewPresentation = async () => {
+      // Prevent duplicate saves in React StrictMode (which runs effects twice)
+      if (hasAutoSavedRef.current) return;
+
+      // Wait for translations to be ready before saving
+      if (!translationsReady) return;
+
       // Only auto-save if this is a new presentation from a template
       if (!presentationId && templateId && presentation.slides.length > 0) {
+        hasAutoSavedRef.current = true; // Mark as saving immediately
         try {
           const data = {
             title: presentation.title,
             slides: presentation.slides,
-            canvasDimensions: presentation.canvasDimensions
+            canvasDimensions: presentation.canvasDimensions,
+            quickModeData: presentation.quickModeData
           };
+          console.log('[Auto-save] Saving presentation with quickModeData:', !!data.quickModeData, data.quickModeData);
           const created = await window.electronAPI.createPresentation(data);
+          console.log('[Auto-save] Created presentation:', created?.id, 'has quickModeData:', !!created?.quickModeData);
           if (created) {
             setPresentation(prev => ({
               ...prev,
@@ -735,12 +788,13 @@ const PresentationEditorPage: React.FC = () => {
           }
         } catch (error) {
           console.error('Auto-save failed:', error);
+          hasAutoSavedRef.current = false; // Reset on error so it can retry
         }
       }
     };
 
     autoSaveNewPresentation();
-  }, []); // Run once on mount
+  }, [translationsReady, presentation.slides, presentation.quickModeData]); // Re-run when translations complete
 
   // Update a text box
   const updateTextBox = useCallback((textBoxId: string, updates: Partial<TextBox>) => {
@@ -1151,7 +1205,8 @@ const PresentationEditorPage: React.FC = () => {
       const data = {
         title: presentation.title,
         slides: presentation.slides,
-        canvasDimensions: presentation.canvasDimensions
+        canvasDimensions: presentation.canvasDimensions,
+        quickModeData: presentation.quickModeData
       };
 
       console.log('Saving presentation:', presentation.id ? 'update' : 'create', data);

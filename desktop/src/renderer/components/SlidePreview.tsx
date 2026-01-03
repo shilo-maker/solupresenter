@@ -14,6 +14,15 @@ interface SlideData {
   originalText?: string;
   transliteration?: string;
   translation?: string;
+  reference?: string;  // Bible verse reference or Hebrew reference for prayer
+  referenceTranslation?: string;  // English reference for prayer
+  // Prayer/Sermon content fields
+  title?: string;
+  titleTranslation?: string;
+  subtitle?: string;
+  subtitleTranslation?: string;
+  description?: string;
+  descriptionTranslation?: string;
 }
 
 interface PresentationTextBox {
@@ -88,6 +97,11 @@ interface Theme {
   linePositions?: Record<string, LinePosition> | null;
   backgroundBoxes?: BackgroundBox[] | null;
   canvasDimensions?: { width: number; height: number };
+  // Bible/Prayer reference lines
+  referenceStyle?: any;
+  referencePosition?: LinePosition;
+  referenceTranslationStyle?: any;
+  referenceTranslationPosition?: LinePosition;
 }
 
 interface ToolsState {

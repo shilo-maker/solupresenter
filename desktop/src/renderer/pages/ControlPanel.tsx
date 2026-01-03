@@ -1813,23 +1813,26 @@ const ControlPanel: React.FC = () => {
     if (!youtubeUrlInput.trim()) return;
 
     if (isYouTubeUrl(youtubeUrlInput.trim())) {
-      // It's a URL - add it directly
+      // It's a URL - add it directly to setlist
       const videoId = extractYouTubeVideoId(youtubeUrlInput.trim());
       if (!videoId) {
         alert(t('media.invalidYoutubeUrl') || 'Invalid YouTube URL');
         return;
       }
 
-      // Check if already added
-      if (youtubeVideos.some(v => v.videoId === videoId)) {
-        setYoutubeUrlInput('');
-        return;
-      }
-
       setYoutubeLoading(true);
       const metadata = await fetchYouTubeMetadata(videoId);
       if (metadata) {
-        setYoutubeVideos(prev => [...prev, metadata]);
+        // Add directly to setlist (like search results do)
+        const newItem: SetlistItem = {
+          id: crypto.randomUUID(),
+          type: 'youtube',
+          youtubeVideoId: metadata.videoId,
+          youtubeTitle: metadata.title,
+          youtubeThumbnail: metadata.thumbnail,
+          title: metadata.title
+        };
+        setSetlist(prev => [...prev, newItem]);
       }
       setYoutubeUrlInput('');
       setYoutubeLoading(false);
@@ -1838,7 +1841,7 @@ const ControlPanel: React.FC = () => {
       // It's a search query
       await searchYouTube(youtubeUrlInput.trim());
     }
-  }, [youtubeUrlInput, isYouTubeUrl, extractYouTubeVideoId, fetchYouTubeMetadata, youtubeVideos, searchYouTube, t]);
+  }, [youtubeUrlInput, isYouTubeUrl, extractYouTubeVideoId, fetchYouTubeMetadata, searchYouTube, t]);
 
   // Close search results
   const closeYoutubeSearchResults = useCallback(() => {

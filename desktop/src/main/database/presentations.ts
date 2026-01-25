@@ -1,4 +1,4 @@
-import { getDb, saveDatabase, generateId, queryAll, queryOne } from './index';
+import { getDb, saveDatabase, generateId, queryAll, queryOne, createBackup } from './index';
 
 export interface TextBox {
   id: string;
@@ -18,13 +18,81 @@ export interface TextBox {
   opacity: number;  // 0-1
   zIndex?: number;  // Layer order (higher = front)
   textDirection?: 'ltr' | 'rtl';  // Text direction for Hebrew/Arabic support
+
+  // Enhanced properties (all optional for backward compatibility)
+  fontWeight?: string;              // '300'-'800' (overrides bold when set)
+  backgroundOpacity?: number;       // 0-1 (separate from text opacity)
+  visible?: boolean;                // default true
+
+  // Per-side borders
+  borderTop?: number;
+  borderRight?: number;
+  borderBottom?: number;
+  borderLeft?: number;
+  borderColor?: string;
+
+  // Per-corner radius
+  borderRadiusTopLeft?: number;
+  borderRadiusTopRight?: number;
+  borderRadiusBottomRight?: number;
+  borderRadiusBottomLeft?: number;
+
+  // Per-side padding
+  paddingTop?: number;
+  paddingBottom?: number;
+  paddingLeft?: number;
+  paddingRight?: number;
+
+  // Flow positioning
+  positionMode?: 'absolute' | 'flow';
+  flowAnchor?: string;              // ID of element to position relative to
+  flowGap?: number;                 // Gap in percentage
+  autoHeight?: boolean;             // Auto-expand based on content
+  growDirection?: 'up' | 'down';    // Direction to grow when auto-height
+}
+
+export interface ImageBox {
+  id: string;
+  src: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  opacity: number;
+  objectFit: 'contain' | 'cover' | 'fill';
+  borderRadius: number;
+  zIndex?: number;
+  visible?: boolean;                // default true
+}
+
+// Texture types for background boxes
+export type TextureType = 'none' | 'paper' | 'parchment' | 'linen' | 'canvas' | 'noise';
+
+// Background box interface for decorative rectangles
+export interface PresentationBackgroundBox {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+  opacity: number;
+  borderRadius: number;
+  texture?: TextureType;
+  textureOpacity?: number;
+  zIndex?: number;
+  visible?: boolean;
 }
 
 export interface Slide {
   id: string;
   order: number;
   textBoxes: TextBox[];
+  imageBoxes?: ImageBox[];
+  backgroundBoxes?: PresentationBackgroundBox[];
   backgroundColor?: string;
+  backgroundGradient?: string;      // CSS gradient value
+  backgroundType?: 'color' | 'gradient' | 'transparent';
 }
 
 export interface QuickModeMetadata {
@@ -65,6 +133,11 @@ export async function getPresentations(): Promise<Presentation[]> {
  * Get a single presentation by ID
  */
 export async function getPresentation(id: string): Promise<Presentation | null> {
+  // Validate input
+  if (!id || typeof id !== 'string') {
+    console.warn('[presentations] getPresentation: invalid id');
+    return null;
+  }
   return queryOne('SELECT * FROM presentations WHERE id = ?', [id]) as Presentation | null;
 }
 
@@ -75,6 +148,19 @@ export async function createPresentation(data: PresentationData): Promise<Presen
   const db = getDb();
   if (!db) throw new Error('Database not initialized');
 
+  // Validate input
+  if (!data || typeof data !== 'object') {
+    throw new Error('Invalid presentation data');
+  }
+  if (!data.title || typeof data.title !== 'string') {
+    throw new Error('Presentation title is required');
+  }
+  // Sanitize title
+  const sanitizedTitle = data.title.trim().substring(0, 500);
+  if (sanitizedTitle.length === 0) {
+    throw new Error('Presentation title cannot be empty');
+  }
+
   const id = generateId();
   const now = new Date().toISOString();
 
@@ -84,7 +170,9 @@ export async function createPresentation(data: PresentationData): Promise<Presen
     textBoxes: []
   };
 
-  console.log('[createPresentation] Received data.quickModeData:', data.quickModeData);
+  // Prepare values for return
+  const slides = data.slides || [defaultSlide];
+  const canvasDimensions = data.canvasDimensions || { width: 1920, height: 1080 };
 
   try {
     db.run(`
@@ -92,9 +180,9 @@ export async function createPresentation(data: PresentationData): Promise<Presen
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `, [
       id,
-      data.title,
-      JSON.stringify(data.slides || [defaultSlide]),
-      JSON.stringify(data.canvasDimensions || { width: 1920, height: 1080 }),
+      sanitizedTitle,
+      JSON.stringify(slides),
+      JSON.stringify(canvasDimensions),
       data.quickModeData ? JSON.stringify(data.quickModeData) : null,
       now,
       now
@@ -102,11 +190,16 @@ export async function createPresentation(data: PresentationData): Promise<Presen
 
     saveDatabase();
 
-    const created = await getPresentation(id);
-    if (!created) {
-      throw new Error('Failed to retrieve created presentation');
-    }
-    return created;
+    // Return the created object directly instead of re-querying
+    return {
+      id,
+      title: sanitizedTitle,
+      slides,
+      canvasDimensions,
+      quickModeData: data.quickModeData,
+      createdAt: now,
+      updatedAt: now
+    };
   } catch (error) {
     console.error('Error creating presentation:', error);
     throw error;
@@ -120,37 +213,57 @@ export async function updatePresentation(id: string, data: Partial<PresentationD
   const db = getDb();
   if (!db) return null;
 
+  // Validate inputs
+  if (!id || typeof id !== 'string') {
+    console.warn('[presentations] updatePresentation: invalid id');
+    return null;
+  }
+  if (!data || typeof data !== 'object') {
+    console.warn('[presentations] updatePresentation: invalid data');
+    return null;
+  }
+
   const existing = await getPresentation(id);
   if (!existing) return null;
 
   const updates: string[] = [];
   const values: any[] = [];
+  const now = new Date().toISOString();
+
+  // Track updated values for return object
+  const updatedPresentation = { ...existing };
 
   if (data.title !== undefined) {
     updates.push('title = ?');
     values.push(data.title);
+    updatedPresentation.title = data.title;
   }
   if (data.slides !== undefined) {
     updates.push('slides = ?');
     values.push(JSON.stringify(data.slides));
+    updatedPresentation.slides = data.slides;
   }
   if (data.canvasDimensions !== undefined) {
     updates.push('canvasDimensions = ?');
     values.push(JSON.stringify(data.canvasDimensions));
+    updatedPresentation.canvasDimensions = data.canvasDimensions;
   }
   if (data.quickModeData !== undefined) {
     updates.push('quickModeData = ?');
     values.push(data.quickModeData ? JSON.stringify(data.quickModeData) : null);
+    updatedPresentation.quickModeData = data.quickModeData;
   }
 
   updates.push('updatedAt = ?');
-  values.push(new Date().toISOString());
+  values.push(now);
   values.push(id);
+  updatedPresentation.updatedAt = now;
 
   db.run(`UPDATE presentations SET ${updates.join(', ')} WHERE id = ?`, values);
   saveDatabase();
 
-  return getPresentation(id);
+  // Return the updated object directly instead of re-querying
+  return updatedPresentation;
 }
 
 /**
@@ -159,6 +272,15 @@ export async function updatePresentation(id: string, data: Partial<PresentationD
 export async function deletePresentation(id: string): Promise<boolean> {
   const db = getDb();
   if (!db) return false;
+
+  // Validate input
+  if (!id || typeof id !== 'string') {
+    console.warn('[presentations] deletePresentation: invalid id');
+    return false;
+  }
+
+  // Create backup before destructive operation
+  createBackup('delete_presentation');
 
   db.run(`DELETE FROM presentations WHERE id = ?`, [id]);
   saveDatabase();

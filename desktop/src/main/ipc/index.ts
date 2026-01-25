@@ -2,6 +2,63 @@ import { ipcMain, dialog, app, shell, BrowserWindow } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DisplayManager } from '../windows/displayManager';
+import { getLocalServerPort } from '../index';
+
+// ============ Constants ============
+const RATE_LIMIT_WINDOW_MS = 1000; // Rate limit window in milliseconds
+const VIDEO_TIME_UPDATE_INTERVAL_MS = 100; // Throttle interval for video time updates (10 updates/sec)
+const YOUTUBE_SYNC_INTERVAL_MS = 200; // Throttle interval for YouTube sync (5 syncs/sec)
+const YOUTUBE_SEARCH_TIMEOUT_MS = 15000; // Timeout for YouTube search API calls
+const MAX_TAG_LENGTH = 1000; // Maximum length for media tags
+const MAX_NAME_LENGTH = 255; // Maximum length for file/folder names
+const MAX_YOUTUBE_VIDEO_ID_LENGTH = 20; // Maximum YouTube video ID length
+const MAX_YOUTUBE_TITLE_LENGTH = 500; // Maximum YouTube title length
+const MAX_YOUTUBE_SEARCH_RESULTS = 12; // Maximum number of YouTube search results to return
+const MAX_IMPORT_FILE_SIZE_MB = 500; // Maximum file size for media import in MB
+const MAX_IMPORT_FILE_SIZE_BYTES = MAX_IMPORT_FILE_SIZE_MB * 1024 * 1024; // Convert to bytes
+const MAX_TOTAL_IMPORT_SIZE_MB = 2000; // Maximum total size for batch import in MB
+const MAX_TOTAL_IMPORT_SIZE_BYTES = MAX_TOTAL_IMPORT_SIZE_MB * 1024 * 1024;
+
+// Rate limiting utility - throttles calls to once per interval
+function createThrottle<T extends (...args: any[]) => any>(
+  fn: T,
+  intervalMs: number
+): (...args: Parameters<T>) => ReturnType<T> | undefined {
+  let lastCallTime = 0;
+  let lastResult: ReturnType<T> | undefined;
+
+  return (...args: Parameters<T>): ReturnType<T> | undefined => {
+    const now = Date.now();
+    if (now - lastCallTime >= intervalMs) {
+      lastCallTime = now;
+      lastResult = fn(...args);
+      return lastResult;
+    }
+    return lastResult;
+  };
+}
+
+// Rate limit tracking for specific callers
+const rateLimiters = new Map<string, { lastCall: number; count: number }>();
+
+function checkRateLimit(key: string, maxCallsPerSecond: number): boolean {
+  const now = Date.now();
+  const limiter = rateLimiters.get(key);
+
+  if (!limiter || now - limiter.lastCall > RATE_LIMIT_WINDOW_MS) {
+    // Reset counter if more than 1 second has passed
+    rateLimiters.set(key, { lastCall: now, count: 1 });
+    return true;
+  }
+
+  if (limiter.count >= maxCallsPerSecond) {
+    return false; // Rate limited
+  }
+
+  limiter.count++;
+  limiter.lastCall = now;
+  return true;
+}
 import { getSongs, getSong, createSong, updateSong, deleteSong, importSongsFromBackend } from '../database/songs';
 import { getSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist } from '../database/setlists';
 import { getThemes, getTheme, createTheme, updateTheme, deleteTheme } from '../database/themes';
@@ -10,6 +67,7 @@ import { getBibleThemes, getBibleTheme, createBibleTheme, updateBibleTheme, dele
 import { getOBSThemes, getOBSTheme, createOBSTheme, updateOBSTheme, deleteOBSTheme, getDefaultOBSTheme, OBSThemeType } from '../database/obsThemes';
 import { getPrayerThemes, getPrayerTheme, createPrayerTheme, updatePrayerTheme, deletePrayerTheme, getDefaultPrayerTheme } from '../database/prayerThemes';
 import { getPresentations, getPresentation, createPresentation, updatePresentation, deletePresentation } from '../database/presentations';
+import { getAudioPlaylists, getAudioPlaylist, createAudioPlaylist, updateAudioPlaylist, deleteAudioPlaylist } from '../database/audioPlaylists';
 import { getSelectedThemeIds, saveSelectedThemeId } from '../database/index';
 import {
   addMediaItem, getAllMediaItems, getMediaItem, deleteMediaItem, isMediaImported, moveMediaToFolder,
@@ -24,6 +82,8 @@ import { getBibleBooks, getBibleVerses, versesToSlides } from '../services/bible
 import { authService } from '../services/authService';
 import { processVideo, processImage, processAudio, deleteProcessedMedia, getMediaLibraryPath } from '../services/mediaProcessor';
 import { obsServer } from '../services/obsServer';
+import { remoteControlServer, RemoteControlState } from '../services/remoteControlServer';
+import QRCode from 'qrcode';
 
 let mediaManager: MediaManager;
 let socketService: SocketService;
@@ -34,6 +94,8 @@ export function setSocketControlWindow(window: import('electron').BrowserWindow)
   if (socketService) {
     socketService.setControlWindow(window);
   }
+  // Also set control window for remote control server
+  remoteControlServer.setControlWindow(window);
 }
 
 export function registerIpcHandlers(displayManager: DisplayManager): void {
@@ -46,38 +108,114 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   // ============ Display Management ============
 
   ipcMain.handle('displays:getAll', () => {
-    return displayManager.getAllDisplays();
+    try {
+      return displayManager.getAllDisplays();
+    } catch (error) {
+      console.error('[IPC displays:getAll] Error:', error);
+      return [];
+    }
   });
 
   ipcMain.handle('displays:getExternal', () => {
-    return displayManager.getExternalDisplays();
+    try {
+      return displayManager.getExternalDisplays();
+    } catch (error) {
+      console.error('[IPC displays:getExternal] Error:', error);
+      return [];
+    }
   });
 
   ipcMain.handle('displays:open', (event, displayId: number, type: 'viewer' | 'stage') => {
-    return displayManager.openDisplayWindow(displayId, type);
+    try {
+      return displayManager.openDisplayWindow(displayId, type);
+    } catch (error) {
+      console.error('[IPC displays:open] Error:', error);
+      return false;
+    }
   });
 
   ipcMain.handle('displays:close', (event, displayId: number) => {
-    displayManager.closeDisplayWindow(displayId);
-    return true;
+    try {
+      displayManager.closeDisplayWindow(displayId);
+      return true;
+    } catch (error) {
+      console.error('[IPC displays:close] Error:', error);
+      return false;
+    }
   });
 
   ipcMain.handle('displays:closeAll', () => {
-    displayManager.closeAllDisplays();
-    return true;
+    try {
+      displayManager.closeAllDisplays();
+      return true;
+    } catch (error) {
+      console.error('[IPC displays:closeAll] Error:', error);
+      return false;
+    }
   });
 
   ipcMain.handle('displays:captureViewer', async () => {
-    return displayManager.captureViewerThumbnail();
+    try {
+      return await displayManager.captureViewerThumbnail();
+    } catch (error) {
+      console.error('[IPC displays:captureViewer] Error:', error);
+      return null;
+    }
+  });
+
+  ipcMain.handle('displays:identify', (event, displayId?: number) => {
+    try {
+      displayManager.identifyDisplays(displayId);
+      return true;
+    } catch (error) {
+      console.error('[IPC displays:identify] Error:', error);
+      return false;
+    }
+  });
+
+  ipcMain.handle('displays:moveControlWindow', (event, targetDisplayId: number) => {
+    try {
+      return displayManager.moveControlWindow(targetDisplayId);
+    } catch (error) {
+      console.error('[IPC displays:moveControlWindow] Error:', error);
+      return false;
+    }
+  });
+
+  ipcMain.handle('displays:getControlWindowDisplay', () => {
+    try {
+      return displayManager.getControlWindowDisplay();
+    } catch (error) {
+      console.error('[IPC displays:getControlWindowDisplay] Error:', error);
+      return null;
+    }
+  });
+
+  // Close the display window that sent this message (used when display is on same screen as control)
+  ipcMain.handle('display:closeSelf', (event) => {
+    try {
+      const senderWindow = BrowserWindow.fromWebContents(event.sender);
+      if (senderWindow && !senderWindow.isDestroyed()) {
+        senderWindow.close();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('[IPC display:closeSelf] Error:', error);
+      return false;
+    }
+  });
+
+  // Get local media server port for display windows
+  ipcMain.handle('media:getServerPort', () => {
+    return getLocalServerPort();
   });
 
   // ============ OBS Browser Source Server ============
 
   ipcMain.handle('obs:start', async () => {
-    console.log('[IPC obs:start] Starting OBS server...');
     try {
       const port = await obsServer.start();
-      console.log('[IPC obs:start] Server started on port:', port);
       return { success: true, url: obsServer.getUrl(), port };
     } catch (err) {
       console.error('[IPC obs:start] Error:', err);
@@ -86,7 +224,6 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   });
 
   ipcMain.handle('obs:stop', () => {
-    console.log('[IPC obs:stop] Stopping OBS server...');
     obsServer.stop();
     return true;
   });
@@ -101,8 +238,13 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   // Legacy handlers for backwards compatibility
   ipcMain.handle('obs:open', async () => {
-    const port = await obsServer.start();
-    return { success: true, url: obsServer.getUrl(), port };
+    try {
+      const port = await obsServer.start();
+      return { success: true, url: obsServer.getUrl(), port };
+    } catch (error) {
+      console.error('[IPC obs:open] Failed to start OBS server:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to start OBS server' };
+    }
   });
 
   ipcMain.handle('obs:close', () => {
@@ -115,66 +257,104 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   });
 
   // ============ Slide Control ============
+  // Use 'on' (fire-and-forget) instead of 'handle' for instant slide updates
 
-  ipcMain.handle('slides:send', (event, slideData) => {
-    console.log('[IPC slides:send] backgroundImage:', slideData.backgroundImage);
-    displayManager.broadcastSlide(slideData);
-    socketService.broadcastSlide(slideData);
-    // Also send to OBS Browser Source server
-    obsServer.updateSlide(slideData);
-    return true;
-  });
-
-  ipcMain.handle('slides:blank', () => {
-    displayManager.broadcastSlide({ isBlank: true });
-    socketService.broadcastSlide({ isBlank: true });
-    // Also send to OBS Browser Source server
-    obsServer.updateSlide({ isBlank: true });
-    return true;
-  });
-
-  ipcMain.handle('theme:apply', (event, theme) => {
-    console.log('theme:apply IPC called');
-    console.log('  - name:', theme?.name);
-    console.log('  - has linePositions:', !!theme?.linePositions);
-    console.log('  - has backgroundBoxes:', !!theme?.backgroundBoxes);
-    console.log('  - linePositions keys:', theme?.linePositions ? Object.keys(theme.linePositions) : 'none');
-    displayManager.broadcastTheme(theme);
-    socketService.broadcastTheme(theme);
-    return true;
-  });
-
-  ipcMain.handle('background:set', (event, background: string) => {
-    console.log('background:set IPC called with:', background.substring(0, 50));
-    displayManager.broadcastBackground(background);
-
-    // Check if this is local media (media:// protocol)
-    const isLocalMedia = background.startsWith('media://');
-
-    if (isLocalMedia) {
-      // For local media, don't send the URL to online viewers (they can't access it)
-      // Instead, broadcast that local media is being displayed
-      socketService.broadcastLocalMediaStatus(true);
-    } else {
-      // For gradients, http URLs, or empty - hide the local media overlay
-      socketService.broadcastLocalMediaStatus(false);
-      // Send the background to online viewers
-      socketService.broadcastBackground(background);
+  ipcMain.on('slides:send', (event, slideData) => {
+    // Validate slideData
+    if (!slideData || typeof slideData !== 'object') {
+      console.error('[IPC] slides:send: invalid slideData');
+      return;
     }
-    return true;
+    try {
+      displayManager.broadcastSlide(slideData);
+      socketService.broadcastSlide(slideData);
+      obsServer.updateSlide(slideData);
+    } catch (error) {
+      console.error('[IPC slides:send] Broadcast error:', error);
+    }
+  });
+
+  ipcMain.on('slides:blank', () => {
+    try {
+      displayManager.broadcastSlide({ isBlank: true });
+      socketService.broadcastSlide({ isBlank: true });
+      obsServer.updateSlide({ isBlank: true });
+    } catch (error) {
+      console.error('[IPC slides:blank] Broadcast error:', error);
+    }
+  });
+
+  ipcMain.on('theme:apply', (event, theme) => {
+    // Validate theme
+    if (!theme || typeof theme !== 'object') {
+      console.error('[IPC] theme:apply: invalid theme data');
+      return;
+    }
+    try {
+      displayManager.broadcastTheme(theme);
+      socketService.broadcastTheme(theme);
+    } catch (error) {
+      console.error('[IPC theme:apply] Broadcast error:', error);
+    }
+  });
+
+  ipcMain.on('background:set', (event, background: string) => {
+    try {
+      displayManager.broadcastBackground(background);
+
+      // Check if this is local media (media:// protocol)
+      const isLocalMedia = background.startsWith('media://');
+
+      if (isLocalMedia) {
+        // For local media, don't send the URL to online viewers (they can't access it)
+        // Instead, broadcast that local media is being displayed
+        socketService.broadcastLocalMediaStatus(true);
+      } else {
+        // For gradients, http URLs, or empty - hide the local media overlay
+        socketService.broadcastLocalMediaStatus(false);
+        // Send the background to online viewers
+        socketService.broadcastBackground(background);
+      }
+    } catch (error) {
+      console.error('[IPC background:set] Broadcast error:', error);
+    }
+  });
+
+  ipcMain.on('tools:send', (event, toolData) => {
+    try {
+      displayManager.broadcastTool(toolData);
+      socketService.broadcastTool(toolData);
+      // Also broadcast to OBS server if running
+      if (obsServer.isRunning()) {
+        obsServer.broadcastTool(toolData);
+      }
+    } catch (error) {
+      console.error('[IPC tools:send] Broadcast error:', error);
+    }
+  });
+
+  ipcMain.on('obsTheme:apply', (event, theme) => {
+    try {
+      obsServer.updateTheme(theme);
+    } catch (error) {
+      console.error('[IPC obsTheme:apply] Error:', error);
+    }
   });
 
   // Display fullscreen media (images/videos) - uses proper media broadcast
   ipcMain.handle('media:display', (event, mediaData: { type: 'image' | 'video'; url: string }) => {
-    console.log('media:display IPC called:', mediaData.type, mediaData.url.substring(0, 50));
+    try {
+      // Broadcast to local display windows with proper type info
+      displayManager.broadcastMedia({ type: mediaData.type, path: mediaData.url });
 
-    // Broadcast to local display windows with proper type info
-    displayManager.broadcastMedia({ type: mediaData.type, path: mediaData.url });
+      // For online viewers, show local media overlay (they can't access local files)
+      socketService.broadcastLocalMediaStatus(true);
 
-    // For online viewers, show local media overlay (they can't access local files)
-    socketService.broadcastLocalMediaStatus(true);
-
-    return true;
+      return true;
+    } catch (error) {
+      console.error('[IPC media:display] Error:', error);
+      return false;
+    }
   });
 
   // Read file as base64 data URL for blob creation (enables video seeking)
@@ -247,22 +427,12 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   // Clear fullscreen media
   ipcMain.handle('media:clear', () => {
-    console.log('media:clear IPC called');
-
     // Clear media on local displays
     displayManager.broadcastMedia({ type: 'image', path: '' });
 
     // Hide local media overlay for online viewers
     socketService.broadcastLocalMediaStatus(false);
 
-    return true;
-  });
-
-  // ============ Tools (Countdown, Announcements) ============
-
-  ipcMain.handle('tools:send', (event, toolData) => {
-    displayManager.broadcastTool(toolData);
-    socketService.broadcastTool(toolData);
     return true;
   });
 
@@ -295,13 +465,19 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   });
 
   ipcMain.handle('media:rescan', async (event, folderId: string) => {
-    await mediaManager.rescanFolder(folderId);
-    return true;
+    try {
+      await mediaManager.rescanFolder(folderId);
+      return { success: true };
+    } catch (error) {
+      console.error('[IPC media:rescan] Failed to rescan folder:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to rescan folder' };
+    }
   });
 
   // ============ Media Library (Imported Media) ============
 
   ipcMain.handle('mediaLibrary:import', async () => {
+    console.log('[mediaLibrary:import] Starting import dialog...');
     // Open file dialog to select media files
     const result = await dialog.showOpenDialog({
       title: 'Import Media',
@@ -314,7 +490,10 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
       ]
     });
 
+    console.log('[mediaLibrary:import] Dialog result:', { canceled: result.canceled, fileCount: result.filePaths.length, paths: result.filePaths });
+
     if (result.canceled || result.filePaths.length === 0) {
+      console.log('[mediaLibrary:import] Dialog canceled or no files selected');
       return { success: false, imported: [] };
     }
 
@@ -323,54 +502,138 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
     const videoExtensions = ['.mp4', '.mov', '.m4v', '.webm', '.mkv', '.avi'];
     const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac'];
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+    const allowedExtensions = [...videoExtensions, ...audioExtensions, ...imageExtensions];
+
+    // Pre-validate all files for size limits
+    let totalSize = 0;
+    for (const filePath of result.filePaths) {
+      try {
+        const stat = await fs.promises.stat(filePath);
+
+        // Validate file extension
+        const ext = path.extname(filePath).toLowerCase();
+        if (!allowedExtensions.includes(ext)) {
+          errors.push(`Invalid file type: ${path.basename(filePath)} (${ext})`);
+          continue;
+        }
+
+        // Check individual file size
+        if (stat.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+          errors.push(`File too large (>${MAX_IMPORT_FILE_SIZE_MB}MB): ${path.basename(filePath)}`);
+          continue;
+        }
+        totalSize += stat.size;
+      } catch (err) {
+        errors.push(`Cannot access file: ${path.basename(filePath)}`);
+      }
+    }
+
+    // Check total batch size
+    if (totalSize > MAX_TOTAL_IMPORT_SIZE_BYTES) {
+      return {
+        success: false,
+        imported: [],
+        errors: [`Total import size exceeds ${MAX_TOTAL_IMPORT_SIZE_MB}MB limit. Please import fewer files.`]
+      };
+    }
 
     for (const filePath of result.filePaths) {
       try {
+        console.log('[mediaLibrary:import] Processing file:', filePath);
+        // Validate file extension again (in case it was skipped above)
+        const ext = path.extname(filePath).toLowerCase();
+        if (!allowedExtensions.includes(ext)) {
+          console.log('[mediaLibrary:import] Skipping - invalid extension:', ext);
+          continue; // Already added to errors above
+        }
+
         // Check if already imported
         if (isMediaImported(filePath)) {
-          console.log(`[mediaLibrary] Already imported: ${filePath}`);
+          console.log('[mediaLibrary:import] Skipping - already imported');
           continue;
         }
 
         const fileName = path.basename(filePath);
-        const ext = path.extname(filePath).toLowerCase();
         const stat = await fs.promises.stat(filePath);
+        console.log('[mediaLibrary:import] File stats:', { fileName, size: stat.size });
+
+        // Skip oversized files (already in errors)
+        if (stat.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+          console.log('[mediaLibrary:import] Skipping - file too large');
+          continue;
+        }
+
         const isVideo = videoExtensions.includes(ext);
         const isAudio = audioExtensions.includes(ext);
         const mediaType = isVideo ? 'video' : isAudio ? 'audio' : 'image';
 
-        console.log(`[mediaLibrary] Importing ${mediaType}: ${fileName}`);
-
-        // Process the file
+        // Process the file with timeout protection
         let processResult;
-        if (isVideo) {
-          processResult = await processVideo(filePath, fileName);
-        } else if (isAudio) {
-          processResult = await processAudio(filePath, fileName);
-        } else {
-          processResult = await processImage(filePath, fileName);
+        const processTimeout = 60000; // 60 second timeout for processing
+        const processPromise = (async () => {
+          if (isVideo) {
+            return await processVideo(filePath, fileName);
+          } else if (isAudio) {
+            return await processAudio(filePath, fileName);
+          } else {
+            return await processImage(filePath, fileName);
+          }
+        })();
+
+        const timeoutPromise = new Promise<{ success: false; processedPath: string; duration: null; error: string }>((resolve) => {
+          setTimeout(() => resolve({
+            success: false,
+            processedPath: '',
+            duration: null,
+            error: `Processing timed out after ${processTimeout / 1000}s`
+          }), processTimeout);
+        });
+
+        try {
+          processResult = await Promise.race([processPromise, timeoutPromise]);
+        } catch (processError) {
+          // Catch any unhandled errors during processing
+          console.error(`[mediaLibrary] Unexpected error processing ${fileName}:`, processError);
+          errors.push(`Unexpected error processing ${fileName}: ${processError instanceof Error ? processError.message : String(processError)}`);
+          continue;
         }
 
         if (!processResult.success) {
+          console.error(`[mediaLibrary] Processing failed for ${fileName}:`, processResult.error);
           errors.push(`Failed to process ${fileName}: ${processResult.error}`);
           continue;
         }
 
-        // Add to database
-        const mediaItem = addMediaItem({
-          name: fileName,
-          type: mediaType,
-          originalPath: filePath,
-          processedPath: processResult.processedPath,
-          duration: processResult.duration,
-          thumbnailPath: null,
-          fileSize: stat.size,
-          folderId: null,
-          tags: null
-        });
+        // Add to database with error handling
+        let mediaItem;
+        try {
+          mediaItem = addMediaItem({
+            name: fileName,
+            type: mediaType,
+            originalPath: filePath,
+            processedPath: processResult.processedPath,
+            duration: processResult.duration,
+            thumbnailPath: processResult.thumbnailPath,
+            fileSize: stat.size,
+            folderId: null,
+            tags: null,
+            width: processResult.width,
+            height: processResult.height
+          });
+        } catch (dbError) {
+          // If database insert fails, clean up the processed file
+          console.error(`[mediaLibrary] Database error for ${fileName}:`, dbError);
+          try {
+            await deleteProcessedMedia(processResult.processedPath);
+          } catch {
+            // Ignore cleanup errors
+          }
+          errors.push(`Database error for ${fileName}: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
+          continue;
+        }
 
         imported.push(mediaItem);
-        console.log(`[mediaLibrary] Imported: ${fileName}`);
       } catch (error) {
         console.error(`[mediaLibrary] Error importing ${filePath}:`, error);
         errors.push(`Error importing ${path.basename(filePath)}: ${error}`);
@@ -385,18 +648,47 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   });
 
   ipcMain.handle('mediaLibrary:get', (event, id: string) => {
+    // Validate ID
+    if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+      console.error('[IPC] mediaLibrary:get: invalid id');
+      return null;
+    }
     return getMediaItem(id);
   });
 
   ipcMain.handle('mediaLibrary:delete', async (event, id: string) => {
-    const item = getMediaItem(id);
-    if (item) {
+    // Validate ID
+    if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+      console.error('[IPC] mediaLibrary:delete: invalid id');
+      return { success: false, error: 'Invalid ID' };
+    }
+
+    try {
+      const item = getMediaItem(id);
+      if (!item) {
+        console.warn('[IPC] mediaLibrary:delete: item not found:', id);
+        return { success: false, error: 'Item not found' };
+      }
+
       // Delete processed file
       await deleteProcessedMedia(item.processedPath);
+      // Delete thumbnail if exists
+      if (item.thumbnailPath) {
+        await deleteProcessedMedia(item.thumbnailPath);
+      }
       // Delete from database
-      deleteMediaItem(id);
+      const deleted = deleteMediaItem(id);
+
+      if (!deleted) {
+        console.error('[IPC] mediaLibrary:delete: database delete failed');
+        return { success: false, error: 'Database delete failed' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('[IPC] mediaLibrary:delete: error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
-    return true;
   });
 
   ipcMain.handle('mediaLibrary:getPath', () => {
@@ -404,15 +696,42 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   });
 
   ipcMain.handle('mediaLibrary:move', (event, mediaId: string, folderId: string | null) => {
+    if (!mediaId || typeof mediaId !== 'string') {
+      console.error('[IPC] mediaLibrary:move: invalid mediaId');
+      return false;
+    }
+    if (folderId !== null && typeof folderId !== 'string') {
+      console.error('[IPC] mediaLibrary:move: invalid folderId');
+      return false;
+    }
     return moveMediaToFolder(mediaId, folderId);
   });
 
   ipcMain.handle('mediaLibrary:rename', (event, mediaId: string, name: string) => {
-    return renameMediaItem(mediaId, name);
+    if (!mediaId || typeof mediaId !== 'string') {
+      console.error('[IPC] mediaLibrary:rename: invalid mediaId');
+      return false;
+    }
+    if (!name || typeof name !== 'string') {
+      console.error('[IPC] mediaLibrary:rename: invalid name');
+      return false;
+    }
+    // Sanitize name - remove path separators and limit length
+    const sanitizedName = name.replace(/[\/\\:*?"<>|]/g, '').trim().substring(0, MAX_NAME_LENGTH);
+    if (sanitizedName.length === 0) {
+      return false;
+    }
+    return renameMediaItem(mediaId, sanitizedName);
   });
 
   ipcMain.handle('mediaLibrary:updateTags', (event, mediaId: string, tags: string | null) => {
-    return updateMediaTags(mediaId, tags);
+    if (!mediaId || typeof mediaId !== 'string') {
+      console.error('[IPC] mediaLibrary:updateTags: invalid mediaId');
+      return false;
+    }
+    // Sanitize tags if provided - limit length
+    const sanitizedTags = tags !== null ? String(tags).substring(0, MAX_TAG_LENGTH) : null;
+    return updateMediaTags(mediaId, sanitizedTags);
   });
 
   // ============ Media Folders ============
@@ -422,20 +741,52 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   });
 
   ipcMain.handle('mediaFolders:create', (event, name: string) => {
-    return createMediaFolder(name);
+    // Validate folder name
+    if (!name || typeof name !== 'string') {
+      console.error('[IPC] mediaFolders:create: invalid name');
+      throw new Error('Invalid folder name');
+    }
+    // Sanitize name - remove path separators and limit length
+    const sanitizedName = name.replace(/[\/\\:*?"<>|]/g, '').trim().substring(0, MAX_NAME_LENGTH);
+    if (sanitizedName.length === 0) {
+      throw new Error('Folder name cannot be empty');
+    }
+    return createMediaFolder(sanitizedName);
   });
 
   ipcMain.handle('mediaFolders:rename', (event, id: string, name: string) => {
-    return renameMediaFolder(id, name);
+    // Validate inputs
+    if (!id || typeof id !== 'string') {
+      console.error('[IPC] mediaFolders:rename: invalid id');
+      return false;
+    }
+    if (!name || typeof name !== 'string') {
+      console.error('[IPC] mediaFolders:rename: invalid name');
+      return false;
+    }
+    // Sanitize name
+    const sanitizedName = name.replace(/[\/\\:*?"<>|]/g, '').trim().substring(0, MAX_NAME_LENGTH);
+    if (sanitizedName.length === 0) {
+      return false;
+    }
+    return renameMediaFolder(id, sanitizedName);
   });
 
   ipcMain.handle('mediaFolders:delete', (event, id: string) => {
+    if (!id || typeof id !== 'string') {
+      console.error('[IPC] mediaFolders:delete: invalid id');
+      return false;
+    }
     return deleteMediaFolder(id);
   });
 
   // ============ Video Control ============
 
   ipcMain.handle('video:play', (event, filePath: string) => {
+    if (!filePath || typeof filePath !== 'string') {
+      console.error('[IPC] video:play: invalid filePath');
+      return false;
+    }
     displayManager.broadcastMedia({ type: 'video', path: filePath });
     displayManager.broadcastVideoCommand({ type: 'play', path: filePath });
     return true;
@@ -452,6 +803,10 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   });
 
   ipcMain.handle('video:seek', (event, time: number) => {
+    if (typeof time !== 'number' || isNaN(time) || time < 0) {
+      console.error('[IPC] video:seek: invalid time', time);
+      return false;
+    }
     displayManager.broadcastVideoCommand({ type: 'seek', time });
     return true;
   });
@@ -462,11 +817,19 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   });
 
   ipcMain.handle('video:mute', (event, muted: boolean) => {
+    if (typeof muted !== 'boolean') {
+      console.error('[IPC] video:mute: invalid muted value', muted);
+      return false;
+    }
     displayManager.broadcastVideoCommand({ type: 'mute', muted });
     return true;
   });
 
   ipcMain.handle('video:volume', (event, volume: number) => {
+    if (typeof volume !== 'number' || isNaN(volume) || volume < 0 || volume > 1) {
+      console.error('[IPC] video:volume: invalid volume', volume);
+      return false;
+    }
     displayManager.broadcastVideoCommand({ type: 'volume', volume });
     return true;
   });
@@ -476,16 +839,31 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     return displayManager.getVideoPosition();
   });
 
+  // Display signals it's ready to play video - start synchronized playback
+  ipcMain.handle('video:displayReady', () => {
+    const started = displayManager.startVideoPlayback();
+    if (started && controlWindowRef && !controlWindowRef.isDestroyed()) {
+      // Tell control panel to start playing from 0
+      controlWindowRef.webContents.send('video:syncStart');
+    }
+    return started;
+  });
+
   // Get current YouTube position for display sync
   ipcMain.handle('youtube:getPosition', () => {
     return displayManager.getYoutubePosition();
   });
 
   // Forward video time updates from display windows to control panel
-  ipcMain.on('video:timeUpdate', (event, time: number, duration: number) => {
+  // Throttled to max 10 calls per second to prevent performance issues
+  const throttledVideoTimeUpdate = createThrottle((time: number, duration: number) => {
     if (controlWindowRef && !controlWindowRef.isDestroyed()) {
       controlWindowRef.webContents.send('video:status', { currentTime: time, duration });
     }
+  }, VIDEO_TIME_UPDATE_INTERVAL_MS);
+
+  ipcMain.on('video:timeUpdate', (event, time: number, duration: number) => {
+    throttledVideoTimeUpdate(time, duration);
   });
 
   ipcMain.on('video:ended', () => {
@@ -513,6 +891,10 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:songs:get', async (event, id: string) => {
     try {
+      // Validate ID
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid song ID');
+      }
       return await getSong(id);
     } catch (error) {
       console.error('IPC db:songs:get error:', error);
@@ -531,6 +913,14 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:songs:update', async (event, id: string, data) => {
     try {
+      // Validate ID
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid song ID');
+      }
+      // Validate data object exists
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid song data');
+      }
       return await updateSong(id, data);
     } catch (error) {
       console.error('IPC db:songs:update error:', error);
@@ -540,6 +930,10 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:songs:delete', async (event, id: string) => {
     try {
+      // Validate ID
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid song ID');
+      }
       return await deleteSong(id);
     } catch (error) {
       console.error('IPC db:songs:delete error:', error);
@@ -578,6 +972,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:setlists:get', async (event, id: string) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid setlist ID');
+      }
       return await getSetlist(id);
     } catch (error) {
       console.error('IPC db:setlists:get error:', error);
@@ -587,6 +984,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:setlists:create', async (event, data) => {
     try {
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid setlist data');
+      }
       return await createSetlist(data);
     } catch (error) {
       console.error('IPC db:setlists:create error:', error);
@@ -596,6 +996,12 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:setlists:update', async (event, id: string, data) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid setlist ID');
+      }
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid setlist data');
+      }
       return await updateSetlist(id, data);
     } catch (error) {
       console.error('IPC db:setlists:update error:', error);
@@ -605,6 +1011,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:setlists:delete', async (event, id: string) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid setlist ID');
+      }
       return await deleteSetlist(id);
     } catch (error) {
       console.error('IPC db:setlists:delete error:', error);
@@ -616,9 +1025,7 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:themes:getAll', async () => {
     try {
-      const themes = await getThemes();
-      console.log('db:themes:getAll - loaded', themes.length, 'themes');
-      return themes;
+      return await getThemes();
     } catch (error) {
       console.error('IPC db:themes:getAll error:', error);
       throw error;
@@ -627,6 +1034,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:themes:get', async (event, id: string) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid theme ID');
+      }
       return await getTheme(id);
     } catch (error) {
       console.error('IPC db:themes:get error:', error);
@@ -636,6 +1046,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:themes:create', async (event, data) => {
     try {
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid theme data');
+      }
       return await createTheme(data);
     } catch (error) {
       console.error('IPC db:themes:create error:', error);
@@ -645,6 +1058,12 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:themes:update', async (event, id: string, data) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid theme ID');
+      }
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid theme data');
+      }
       return await updateTheme(id, data);
     } catch (error) {
       console.error('IPC db:themes:update error:', error);
@@ -654,6 +1073,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:themes:delete', async (event, id: string) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid theme ID');
+      }
       return await deleteTheme(id);
     } catch (error) {
       console.error('IPC db:themes:delete error:', error);
@@ -674,6 +1096,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:stageThemes:get', async (event, id: string) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid stage theme ID');
+      }
       return getStageTheme(id);
     } catch (error) {
       console.error('IPC db:stageThemes:get error:', error);
@@ -683,6 +1108,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:stageThemes:create', async (event, data) => {
     try {
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid stage theme data');
+      }
       return createStageTheme(data);
     } catch (error) {
       console.error('IPC db:stageThemes:create error:', error);
@@ -692,6 +1120,12 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:stageThemes:update', async (event, id: string, data) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid stage theme ID');
+      }
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid stage theme data');
+      }
       return updateStageTheme(id, data);
     } catch (error) {
       console.error('IPC db:stageThemes:update error:', error);
@@ -701,6 +1135,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:stageThemes:delete', async (event, id: string) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid stage theme ID');
+      }
       return deleteStageTheme(id);
     } catch (error) {
       console.error('IPC db:stageThemes:delete error:', error);
@@ -710,6 +1147,12 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:stageThemes:duplicate', async (event, id: string, newName?: string) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid stage theme ID');
+      }
+      if (newName !== undefined && (typeof newName !== 'string' || newName.length > MAX_NAME_LENGTH)) {
+        throw new Error('Invalid new name');
+      }
       return duplicateStageTheme(id, newName);
     } catch (error) {
       console.error('IPC db:stageThemes:duplicate error:', error);
@@ -719,6 +1162,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:stageThemes:setDefault', async (event, id: string) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid stage theme ID');
+      }
       return setDefaultStageTheme(id);
     } catch (error) {
       console.error('IPC db:stageThemes:setDefault error:', error);
@@ -727,6 +1173,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   });
 
   ipcMain.handle('stageTheme:apply', (event, theme) => {
+    if (!theme || typeof theme !== 'object') {
+      throw new Error('Invalid stage theme data');
+    }
     displayManager.broadcastStageTheme(theme);
     return true;
   });
@@ -735,9 +1184,7 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:bibleThemes:getAll', async () => {
     try {
-      const themes = await getBibleThemes();
-      console.log('[IPC] db:bibleThemes:getAll returned:', themes?.length, 'themes');
-      return themes;
+      return await getBibleThemes();
     } catch (error) {
       console.error('IPC db:bibleThemes:getAll error:', error);
       throw error;
@@ -746,6 +1193,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:bibleThemes:get', async (event, id: string) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid bible theme ID');
+      }
       return await getBibleTheme(id);
     } catch (error) {
       console.error('IPC db:bibleThemes:get error:', error);
@@ -764,6 +1214,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:bibleThemes:create', async (event, data) => {
     try {
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid bible theme data');
+      }
       return await createBibleTheme(data);
     } catch (error) {
       console.error('IPC db:bibleThemes:create error:', error);
@@ -773,6 +1226,12 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:bibleThemes:update', async (event, id: string, data) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid bible theme ID');
+      }
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid bible theme data');
+      }
       return await updateBibleTheme(id, data);
     } catch (error) {
       console.error('IPC db:bibleThemes:update error:', error);
@@ -782,6 +1241,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:bibleThemes:delete', async (event, id: string) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid bible theme ID');
+      }
       return await deleteBibleTheme(id);
     } catch (error) {
       console.error('IPC db:bibleThemes:delete error:', error);
@@ -790,6 +1252,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   });
 
   ipcMain.handle('bibleTheme:apply', (event, theme) => {
+    if (!theme || typeof theme !== 'object') {
+      throw new Error('Invalid bible theme data');
+    }
     displayManager.broadcastBibleTheme(theme);
     return true;
   });
@@ -798,9 +1263,7 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:obsThemes:getAll', async (event, type?: OBSThemeType) => {
     try {
-      const themes = await getOBSThemes(type);
-      console.log('[IPC] db:obsThemes:getAll returned:', themes?.length, 'themes (type filter:', type, ')');
-      return themes;
+      return await getOBSThemes(type);
     } catch (error) {
       console.error('IPC db:obsThemes:getAll error:', error);
       throw error;
@@ -809,6 +1272,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:obsThemes:get', async (event, id: string) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid OBS theme ID');
+      }
       return await getOBSTheme(id);
     } catch (error) {
       console.error('IPC db:obsThemes:get error:', error);
@@ -818,6 +1284,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:obsThemes:getDefault', async (event, type: OBSThemeType) => {
     try {
+      if (type && !['songs', 'bible', 'prayer'].includes(type)) {
+        throw new Error('Invalid OBS theme type');
+      }
       return await getDefaultOBSTheme(type);
     } catch (error) {
       console.error('IPC db:obsThemes:getDefault error:', error);
@@ -827,7 +1296,15 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:obsThemes:create', async (event, data) => {
     try {
-      return await createOBSTheme(data);
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid OBS theme data');
+      }
+      const theme = await createOBSTheme(data);
+      // Broadcast new theme to OBS overlay if server is running
+      if (theme && obsServer.isRunning()) {
+        obsServer.updateTheme(theme);
+      }
+      return theme;
     } catch (error) {
       console.error('IPC db:obsThemes:create error:', error);
       throw error;
@@ -836,7 +1313,18 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:obsThemes:update', async (event, id: string, data) => {
     try {
-      return await updateOBSTheme(id, data);
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid OBS theme ID');
+      }
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid OBS theme data');
+      }
+      const theme = await updateOBSTheme(id, data);
+      // Broadcast updated theme to OBS overlay if server is running
+      if (theme && obsServer.isRunning()) {
+        obsServer.updateTheme(theme);
+      }
+      return theme;
     } catch (error) {
       console.error('IPC db:obsThemes:update error:', error);
       throw error;
@@ -845,6 +1333,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:obsThemes:delete', async (event, id: string) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid OBS theme ID');
+      }
       return await deleteOBSTheme(id);
     } catch (error) {
       console.error('IPC db:obsThemes:delete error:', error);
@@ -852,18 +1343,11 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     }
   });
 
-  ipcMain.handle('obsTheme:apply', (event, theme) => {
-    obsServer.updateTheme(theme);
-    return true;
-  });
-
   // ============ Database - Prayer Themes ============
 
   ipcMain.handle('db:prayerThemes:getAll', async () => {
     try {
-      const themes = await getPrayerThemes();
-      console.log('[IPC] db:prayerThemes:getAll returned:', themes?.length, 'themes');
-      return themes;
+      return await getPrayerThemes();
     } catch (error) {
       console.error('IPC db:prayerThemes:getAll error:', error);
       throw error;
@@ -872,6 +1356,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:prayerThemes:get', async (event, id: string) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid prayer theme ID');
+      }
       return await getPrayerTheme(id);
     } catch (error) {
       console.error('IPC db:prayerThemes:get error:', error);
@@ -890,6 +1377,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:prayerThemes:create', async (event, data) => {
     try {
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid prayer theme data');
+      }
       return await createPrayerTheme(data);
     } catch (error) {
       console.error('IPC db:prayerThemes:create error:', error);
@@ -899,6 +1389,12 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:prayerThemes:update', async (event, id: string, data) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid prayer theme ID');
+      }
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid prayer theme data');
+      }
       return await updatePrayerTheme(id, data);
     } catch (error) {
       console.error('IPC db:prayerThemes:update error:', error);
@@ -908,6 +1404,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:prayerThemes:delete', async (event, id: string) => {
     try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid prayer theme ID');
+      }
       return await deletePrayerTheme(id);
     } catch (error) {
       console.error('IPC db:prayerThemes:delete error:', error);
@@ -916,6 +1415,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   });
 
   ipcMain.handle('prayerTheme:apply', (event, theme) => {
+    if (!theme || typeof theme !== 'object') {
+      throw new Error('Invalid prayer theme data');
+    }
     displayManager.broadcastPrayerTheme(theme);
     return true;
   });
@@ -926,7 +1428,16 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     return getSelectedThemeIds();
   });
 
-  ipcMain.handle('settings:saveSelectedThemeId', (event, themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'prayer', themeId: string | null) => {
+  ipcMain.handle('settings:saveSelectedThemeId', (event, themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'obsBible' | 'prayer' | 'obsPrayer', themeId: string | null) => {
+    // Validate themeType
+    const validTypes = ['viewer', 'stage', 'bible', 'obs', 'obsBible', 'prayer', 'obsPrayer'];
+    if (!themeType || !validTypes.includes(themeType)) {
+      throw new Error('Invalid theme type');
+    }
+    // Validate themeId (if not null)
+    if (themeId !== null && (typeof themeId !== 'string' || themeId.length > MAX_NAME_LENGTH)) {
+      throw new Error('Invalid theme ID');
+    }
     saveSelectedThemeId(themeType, themeId);
     return true;
   });
@@ -953,11 +1464,7 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.handle('db:presentations:create', async (event, data) => {
     try {
-      console.log('Creating presentation with data:', JSON.stringify(data).substring(0, 200));
-      console.log('  quickModeData present:', !!data.quickModeData, data.quickModeData ? JSON.stringify(data.quickModeData).substring(0, 100) : 'null');
-      const result = await createPresentation(data);
-      console.log('Presentation created:', result?.id, 'quickModeData in result:', !!result?.quickModeData);
-      return result;
+      return await createPresentation(data);
     } catch (error) {
       console.error('IPC db:presentations:create error:', error);
       throw error;
@@ -982,31 +1489,112 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     }
   });
 
+  // ============ Database - Audio Playlists ============
+
+  ipcMain.handle('db:audioPlaylists:getAll', async () => {
+    try {
+      return await getAudioPlaylists();
+    } catch (error) {
+      console.error('IPC db:audioPlaylists:getAll error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:audioPlaylists:get', async (event, id: string) => {
+    try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid audio playlist ID');
+      }
+      return await getAudioPlaylist(id);
+    } catch (error) {
+      console.error('IPC db:audioPlaylists:get error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:audioPlaylists:create', async (event, data) => {
+    try {
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid audio playlist data');
+      }
+      return await createAudioPlaylist(data);
+    } catch (error) {
+      console.error('IPC db:audioPlaylists:create error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:audioPlaylists:update', async (event, id: string, data) => {
+    try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid audio playlist ID');
+      }
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid audio playlist data');
+      }
+      return await updateAudioPlaylist(id, data);
+    } catch (error) {
+      console.error('IPC db:audioPlaylists:update error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:audioPlaylists:delete', async (event, id: string) => {
+    try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid audio playlist ID');
+      }
+      return await deleteAudioPlaylist(id);
+    } catch (error) {
+      console.error('IPC db:audioPlaylists:delete error:', error);
+      throw error;
+    }
+  });
+
   // ============ Bible ============
 
   ipcMain.handle('bible:getBooks', async () => {
-    return getBibleBooks();
+    try {
+      return getBibleBooks();
+    } catch (error) {
+      console.error('[IPC bible:getBooks] Failed to get Bible books:', error);
+      return [];
+    }
   });
 
   ipcMain.handle('bible:getVerses', async (event, bookName: string, chapter: number) => {
-    const response = await getBibleVerses(bookName, chapter);
-    return {
-      ...response,
-      slides: versesToSlides(response.verses, bookName, chapter)
-    };
+    try {
+      const response = await getBibleVerses(bookName, chapter);
+      return {
+        ...response,
+        slides: versesToSlides(response.verses, bookName, chapter)
+      };
+    } catch (error) {
+      console.error('[IPC bible:getVerses] Failed to get verses:', error);
+      return { verses: [], slides: [], error: error instanceof Error ? error.message : 'Failed to load verses' };
+    }
   });
 
   // ============ Text Processing Services ============
 
   ipcMain.handle('service:transliterate', async (event, text: string) => {
+    if (!text || typeof text !== 'string') {
+      return '';
+    }
     return transliterate(text);
   });
 
   ipcMain.handle('service:translate', async (event, text: string) => {
+    if (!text || typeof text !== 'string') {
+      return '';
+    }
     return translate(text);
   });
 
   ipcMain.handle('service:quickSlide', async (event, text: string) => {
+    if (!text || typeof text !== 'string') {
+      return { original: '', transliteration: '', translation: '' };
+    }
     return processQuickSlide(text);
   });
 
@@ -1072,8 +1660,27 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   });
 
   ipcMain.handle('app:openExternal', (event, url: string) => {
-    shell.openExternal(url);
-    return true;
+    // Validate URL scheme for security - only allow http/https
+    if (!url || typeof url !== 'string') {
+      console.error('[IPC app:openExternal] Invalid URL provided');
+      return false;
+    }
+
+    try {
+      const parsedUrl = new URL(url);
+      const allowedProtocols = ['http:', 'https:'];
+
+      if (!allowedProtocols.includes(parsedUrl.protocol)) {
+        console.error('[IPC app:openExternal] Blocked unsafe protocol:', parsedUrl.protocol);
+        return false;
+      }
+
+      shell.openExternal(url);
+      return true;
+    } catch (error) {
+      console.error('[IPC app:openExternal] Invalid URL:', error);
+      return false;
+    }
   });
 
   // ============ File Dialogs ============
@@ -1158,26 +1765,51 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   // ============ YouTube Control ============
 
   ipcMain.handle('youtube:load', (event, videoId: string, title: string) => {
+    // Validate inputs
+    if (!videoId || typeof videoId !== 'string') {
+      console.error('[IPC] youtube:load: invalid videoId');
+      return false;
+    }
+    // Sanitize videoId - YouTube IDs are alphanumeric with - and _
+    const sanitizedVideoId = videoId.replace(/[^a-zA-Z0-9_-]/g, '').substring(0, MAX_YOUTUBE_VIDEO_ID_LENGTH);
+    if (sanitizedVideoId !== videoId || sanitizedVideoId.length === 0) {
+      console.error('[IPC] youtube:load: invalid videoId format');
+      return false;
+    }
+    const sanitizedTitle = typeof title === 'string' ? title.substring(0, MAX_YOUTUBE_TITLE_LENGTH) : '';
+
     // Broadcast to online viewers
-    socketService.youtubeLoad(videoId, title);
+    socketService.youtubeLoad(sanitizedVideoId, sanitizedTitle);
     // Broadcast to local display windows
-    displayManager.broadcastYoutube({ type: 'load', videoId, title });
+    displayManager.broadcastYoutube({ type: 'load', videoId: sanitizedVideoId, title: sanitizedTitle });
     return true;
   });
 
   ipcMain.handle('youtube:play', (event, currentTime: number) => {
+    if (typeof currentTime !== 'number' || isNaN(currentTime) || currentTime < 0) {
+      console.error('[IPC] youtube:play: invalid currentTime', currentTime);
+      return false;
+    }
     socketService.youtubePlay(currentTime);
     displayManager.broadcastYoutube({ type: 'play', currentTime });
     return true;
   });
 
   ipcMain.handle('youtube:pause', (event, currentTime: number) => {
+    if (typeof currentTime !== 'number' || isNaN(currentTime) || currentTime < 0) {
+      console.error('[IPC] youtube:pause: invalid currentTime', currentTime);
+      return false;
+    }
     socketService.youtubePause(currentTime);
     displayManager.broadcastYoutube({ type: 'pause', currentTime });
     return true;
   });
 
   ipcMain.handle('youtube:seek', (event, currentTime: number) => {
+    if (typeof currentTime !== 'number' || isNaN(currentTime) || currentTime < 0) {
+      console.error('[IPC] youtube:seek: invalid currentTime', currentTime);
+      return false;
+    }
     socketService.youtubeSeek(currentTime);
     displayManager.broadcastYoutube({ type: 'seek', currentTime });
     return true;
@@ -1189,14 +1821,30 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     return true;
   });
 
-  ipcMain.handle('youtube:sync', (event, currentTime: number, isPlaying: boolean) => {
+  // Throttled YouTube sync - limits to 5 syncs per second to prevent flooding
+  const throttledYoutubeSync = createThrottle((currentTime: number, isPlaying: boolean) => {
     socketService.youtubeSync(currentTime, isPlaying);
     displayManager.broadcastYoutube({ type: 'sync', currentTime, isPlaying });
+  }, YOUTUBE_SYNC_INTERVAL_MS);
+
+  ipcMain.handle('youtube:sync', (event, currentTime: number, isPlaying: boolean) => {
+    if (typeof currentTime !== 'number' || isNaN(currentTime) || currentTime < 0) {
+      console.error('[IPC] youtube:sync: invalid currentTime', currentTime);
+      return false;
+    }
+    if (typeof isPlaying !== 'boolean') {
+      console.error('[IPC] youtube:sync: invalid isPlaying', isPlaying);
+      return false;
+    }
+    throttledYoutubeSync(currentTime, isPlaying);
     return true;
   });
 
   // YouTube search using Piped API (no API key required)
-  ipcMain.handle('youtube:search', async (event, query: string) => {
+  ipcMain.handle('youtube:search', async (event, query: string, timeoutMs?: number) => {
+    // Use provided timeout or fall back to default
+    const searchTimeout = (typeof timeoutMs === 'number' && timeoutMs > 0) ? timeoutMs : YOUTUBE_SEARCH_TIMEOUT_MS;
+
     const instances = [
       'https://api.piped.private.coffee',
       'https://pipedapi.kavin.rocks',
@@ -1204,24 +1852,29 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     ];
 
     for (const instance of instances) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), searchTimeout);
 
+      try {
         const response = await fetch(
           `${instance}/search?q=${encodeURIComponent(query)}&filter=videos`,
           { signal: controller.signal }
         );
-        clearTimeout(timeout);
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
 
-        const data = await response.json();
+        let data: any;
+        try {
+          data = await response.json();
+        } catch (parseError) {
+          throw new Error(`Failed to parse response as JSON: ${parseError}`);
+        }
+
         const results = (data.items || [])
           .filter((item: any) => item.type === 'stream')
-          .slice(0, 12)
+          .slice(0, MAX_YOUTUBE_SEARCH_RESULTS)
           .map((item: any) => {
             const videoId = item.url?.replace('/watch?v=', '') || '';
             return {
@@ -1236,9 +1889,65 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
         return { success: true, results };
       } catch (error) {
         console.warn(`Piped instance ${instance} failed:`, error);
+      } finally {
+        // Always clear the timeout to prevent memory leaks
+        clearTimeout(timeout);
       }
     }
 
     return { success: false, error: 'All instances failed' };
   });
+
+  // ============ Remote Control ============
+
+  ipcMain.handle('remoteControl:start', async () => {
+    try {
+      const result = await remoteControlServer.start();
+      return { success: true, ...result };
+    } catch (err) {
+      console.error('[IPC remoteControl:start] Error:', err);
+      return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle('remoteControl:stop', () => {
+    remoteControlServer.stop();
+    return true;
+  });
+
+  ipcMain.handle('remoteControl:getStatus', () => {
+    return remoteControlServer.getStatus();
+  });
+
+  ipcMain.handle('remoteControl:getQRCode', async () => {
+    const status = remoteControlServer.getStatus();
+    if (!status.running || !status.url) {
+      return null;
+    }
+    // Create URL with PIN for auto-authentication
+    const urlWithPin = `${status.url}?pin=${status.pin}`;
+    try {
+      const qrDataUrl = await QRCode.toDataURL(urlWithPin, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      });
+      return qrDataUrl;
+    } catch (err) {
+      console.error('[IPC remoteControl:getQRCode] Error:', err);
+      return null;
+    }
+  });
+
+  ipcMain.on('remoteControl:updateState', (event, state: Partial<RemoteControlState>) => {
+    remoteControlServer.updateState(state);
+  });
+
+  // Set control window reference for remote control
+  if (controlWindowRef) {
+    remoteControlServer.setControlWindow(controlWindowRef);
+  }
 }

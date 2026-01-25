@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, memo } from 'react';
 import SlideRenderer from './SlideRenderer';
 
 /**
@@ -14,7 +14,9 @@ interface SlideData {
   originalText?: string;
   transliteration?: string;
   translation?: string;
+  translationOverflow?: string;  // Overflow text for long translations
   reference?: string;  // Bible verse reference or Hebrew reference for prayer
+  referenceEnglish?: string;  // English Bible reference
   referenceTranslation?: string;  // English reference for prayer
   // Prayer/Sermon content fields
   title?: string;
@@ -73,8 +75,15 @@ interface LinePosition {
   height: number;
   paddingTop: number;
   paddingBottom: number;
+  paddingLeft?: number;
+  paddingRight?: number;
   alignH: 'left' | 'center' | 'right';
   alignV: 'top' | 'center' | 'bottom';
+  // Flow positioning properties
+  positionMode?: 'absolute' | 'flow';
+  flowGap?: number;
+  flowAnchor?: string;
+  autoHeight?: boolean;
 }
 
 interface BackgroundBox {
@@ -102,10 +111,13 @@ interface Theme {
   referencePosition?: LinePosition;
   referenceTranslationStyle?: any;
   referenceTranslationPosition?: LinePosition;
+  // Bible theme English reference line
+  referenceEnglishStyle?: any;
+  referenceEnglishPosition?: LinePosition;
 }
 
 interface ToolsState {
-  countdown?: { active: boolean; remaining: string; message: string };
+  countdown?: { active: boolean; remaining: string; message: string; messageTranslation?: string };
   announcement?: { active: boolean; text: string };
   rotatingMessages?: { active: boolean; messages: string[]; currentIndex: number };
   clock?: { active: boolean; time: string; date: string };
@@ -122,6 +134,7 @@ interface SlidePreviewProps {
   activeMedia?: { type: 'image' | 'video'; url: string } | null;
   showBadge?: boolean;
   presentationSlide?: PresentationSlide | null;
+  combinedSlides?: SlideData[] | null;
 }
 
 const SlidePreview: React.FC<SlidePreviewProps> = ({
@@ -133,14 +146,69 @@ const SlidePreview: React.FC<SlidePreviewProps> = ({
   tools,
   activeMedia,
   showBadge = true,
-  presentationSlide
+  presentationSlide,
+  combinedSlides
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
-  // Get reference dimensions from theme
-  const refWidth = theme?.canvasDimensions?.width || 1920;
-  const refHeight = theme?.canvasDimensions?.height || 1080;
+  // Announcement animation state
+  const [announcementVisible, setAnnouncementVisible] = useState(false);
+  const [announcementText, setAnnouncementText] = useState('');
+  const [announcementFading, setAnnouncementFading] = useState(false);
+  const announcementTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const fadeTimerRef = useRef<NodeJS.Timeout | null>(null); // Track nested fade timer
+  const wasAnnouncementActive = useRef(false);
+
+  // Handle announcement visibility and auto-dismiss
+  useEffect(() => {
+    // Clear any existing timers
+    const clearAllTimers = () => {
+      if (announcementTimerRef.current) {
+        clearTimeout(announcementTimerRef.current);
+        announcementTimerRef.current = null;
+      }
+      if (fadeTimerRef.current) {
+        clearTimeout(fadeTimerRef.current);
+        fadeTimerRef.current = null;
+      }
+    };
+
+    if (tools?.announcement?.active && tools.announcement.text) {
+      clearAllTimers();
+
+      // Show announcement with slide-up animation
+      setAnnouncementText(tools.announcement.text);
+      setAnnouncementFading(false);
+      setAnnouncementVisible(true);
+      wasAnnouncementActive.current = true;
+
+      // Start fade-out after 8 seconds, then hide after 10 seconds total
+      announcementTimerRef.current = setTimeout(() => {
+        setAnnouncementFading(true);
+        // Fully hide after fade animation completes (2 seconds)
+        fadeTimerRef.current = setTimeout(() => {
+          setAnnouncementVisible(false);
+          setAnnouncementFading(false);
+        }, 2000);
+      }, 8000);
+    } else if (!tools?.announcement?.active && wasAnnouncementActive.current) {
+      // If announcement is deactivated and was previously active, start fade out immediately
+      wasAnnouncementActive.current = false;
+      clearAllTimers();
+      setAnnouncementFading(true);
+      fadeTimerRef.current = setTimeout(() => {
+        setAnnouncementVisible(false);
+        setAnnouncementFading(false);
+      }, 500);
+    }
+
+    return clearAllTimers;
+  }, [tools?.announcement?.active, tools?.announcement?.text]);
+
+  // Get reference dimensions from theme with validation
+  const refWidth = Math.max(theme?.canvasDimensions?.width || 1920, 1);
+  const refHeight = Math.max(theme?.canvasDimensions?.height || 1080, 1);
   const aspectRatio = refHeight / refWidth;
 
   // Measure container and calculate display size
@@ -208,41 +276,57 @@ const SlidePreview: React.FC<SlidePreviewProps> = ({
       return (
         <div style={overlayStyle}>
           <div style={{
-            fontSize: '15%',
+            fontSize: 'clamp(16px, 8vw, 48px)',
             fontWeight: 700,
-            color: '#FF8C42'
+            color: '#06b6d4',
+            textShadow: '0 0 10px rgba(6, 182, 212, 0.5)'
           }}>
             {tools.countdown.remaining}
           </div>
           {tools.countdown.message && (
             <div style={{
-              fontSize: '5%',
-              color: 'rgba(255, 255, 255, 0.8)',
-              marginTop: '2%'
+              fontSize: 'clamp(8px, 2vw, 16px)',
+              color: 'rgba(255, 255, 255, 0.9)',
+              marginTop: '4px',
+              marginBottom: '0px',
+              direction: 'rtl',
+              lineHeight: 1.2
             }}>
               {tools.countdown.message}
+            </div>
+          )}
+          {tools.countdown.messageTranslation && (
+            <div style={{
+              fontSize: 'clamp(7px, 1.5vw, 14px)',
+              color: 'rgba(255, 255, 255, 0.7)',
+              marginTop: '0px',
+              lineHeight: 1.2
+            }}>
+              {tools.countdown.messageTranslation}
             </div>
           )}
         </div>
       );
     }
 
+
     if (tools.clock?.active) {
       return (
         <div style={overlayStyle}>
           <div style={{
-            fontSize: '12%',
+            fontSize: 'clamp(14px, 7vw, 40px)',
             fontWeight: 700,
             color: '#00d4ff',
-            fontFamily: 'monospace'
+            fontFamily: 'monospace',
+            textShadow: '0 0 10px rgba(0, 212, 255, 0.5)'
           }}>
             {tools.clock.time}
           </div>
           {tools.clock.date && (
             <div style={{
-              fontSize: '4%',
+              fontSize: 'clamp(8px, 2vw, 14px)',
               color: 'rgba(255, 255, 255, 0.7)',
-              marginTop: '2%'
+              marginTop: '4px'
             }}>
               {tools.clock.date}
             </div>
@@ -255,17 +339,18 @@ const SlidePreview: React.FC<SlidePreviewProps> = ({
       return (
         <div style={overlayStyle}>
           <div style={{
-            fontSize: '15%',
+            fontSize: 'clamp(16px, 8vw, 48px)',
             fontWeight: 700,
             color: tools.stopwatch.running ? '#00d4ff' : '#ffc107',
-            fontFamily: 'monospace'
+            fontFamily: 'monospace',
+            textShadow: `0 0 10px ${tools.stopwatch.running ? 'rgba(0, 212, 255, 0.5)' : 'rgba(255, 193, 7, 0.5)'}`
           }}>
             {tools.stopwatch.time}
           </div>
           <div style={{
-            fontSize: '3%',
+            fontSize: 'clamp(8px, 1.5vw, 12px)',
             color: 'rgba(255, 255, 255, 0.5)',
-            marginTop: '2%'
+            marginTop: '4px'
           }}>
             {tools.stopwatch.running ? 'RUNNING' : 'PAUSED'}
           </div>
@@ -326,7 +411,69 @@ const SlidePreview: React.FC<SlidePreviewProps> = ({
     return null;
   };
 
-  // Check if a tool that takes over the screen is active
+  // Render announcement banner at bottom
+  const renderAnnouncementBanner = () => {
+    if (!announcementVisible || !announcementText) return null;
+
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: 'linear-gradient(to top, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0.85))',
+          padding: 'clamp(8px, 3%, 20px) clamp(12px, 5%, 40px)',
+          zIndex: 150,
+          animation: announcementFading ? 'slideDown 0.5s ease-out forwards' : 'slideUp 0.5s ease-out forwards',
+          opacity: announcementFading ? 0 : 1,
+          transition: announcementFading ? 'opacity 0.5s ease-out' : 'none',
+          borderTop: '2px solid rgba(0, 212, 255, 0.6)',
+          boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.5)',
+          willChange: 'transform, opacity' // GPU acceleration hint for animations
+        }}
+      >
+        <style>
+          {`
+            @keyframes slideUp {
+              from {
+                transform: translateY(100%);
+                opacity: 0;
+              }
+              to {
+                transform: translateY(0);
+                opacity: 1;
+              }
+            }
+            @keyframes slideDown {
+              from {
+                transform: translateY(0);
+                opacity: 1;
+              }
+              to {
+                transform: translateY(100%);
+                opacity: 0;
+              }
+            }
+          `}
+        </style>
+        <div
+          style={{
+            color: '#ffffff',
+            fontSize: 'clamp(10px, 3vw, 24px)',
+            fontWeight: 600,
+            textAlign: 'center',
+            textShadow: '0 2px 4px rgba(0, 0, 0, 0.5)',
+            lineHeight: 1.4
+          }}
+        >
+          {announcementText}
+        </div>
+      </div>
+    );
+  };
+
+  // Check if a tool that takes over the screen is active (announcement is a banner, not fullscreen)
   const hasFullScreenTool = tools?.countdown?.active || tools?.clock?.active || tools?.stopwatch?.active;
 
   return (
@@ -361,6 +508,7 @@ const SlidePreview: React.FC<SlidePreviewProps> = ({
             containerWidth={fitSize.width}
             containerHeight={fitSize.height}
             presentationSlide={presentationSlide}
+            combinedSlides={combinedSlides}
           />
         )}
 
@@ -369,6 +517,9 @@ const SlidePreview: React.FC<SlidePreviewProps> = ({
 
         {/* Tool overlays */}
         {renderToolOverlays()}
+
+        {/* Announcement banner at bottom */}
+        {renderAnnouncementBanner()}
 
         {/* Preview badge */}
         {showBadge && (
@@ -392,4 +543,4 @@ const SlidePreview: React.FC<SlidePreviewProps> = ({
   );
 };
 
-export default SlidePreview;
+export default memo(SlidePreview);

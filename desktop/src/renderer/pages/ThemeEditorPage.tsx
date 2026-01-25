@@ -71,13 +71,17 @@ const ThemeEditorPage: React.FC = () => {
     backgroundBoxes: []
   });
 
-  const [selectedElement, setSelectedElement] = useState<{ type: 'line' | 'box' | 'reference'; id: string } | null>(null);
+  const [selectedElement, setSelectedElement] = useState<{ type: 'line' | 'box' | 'reference' | 'referenceTranslation' | 'referenceEnglish'; id: string } | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [hasChanges, setHasChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<'layout' | 'background' | 'resolution'>('layout');
 
   // Preview text for testing (not saved with theme)
   const [previewTexts, setPreviewTexts] = useState<Record<string, string>>({});
+
+  // Drag and drop state for layer reordering
+  const [draggedItem, setDraggedItem] = useState<{ type: 'line' | 'box'; id: string; index: number } | null>(null);
+  const [dragOverItem, setDragOverItem] = useState<{ type: 'line' | 'box'; index: number } | null>(null);
 
   const handlePreviewTextChange = useCallback((lineType: string, text: string) => {
     setPreviewTexts(prev => ({ ...prev, [lineType]: text }));
@@ -89,9 +93,9 @@ const ThemeEditorPage: React.FC = () => {
       window.electronAPI.getTheme(themeId).then((loadedTheme: any) => {
         if (loadedTheme) {
           setTheme({
-            id: loadedTheme.id,
-            name: loadedTheme.name,
-            isBuiltIn: loadedTheme.isBuiltIn,
+            id: loadedTheme.id || '',
+            name: loadedTheme.name || 'Untitled Theme',
+            isBuiltIn: loadedTheme.isBuiltIn ?? false,
             viewerBackground: loadedTheme.viewerBackground || { type: 'color', color: '#000000' },
             canvasDimensions: loadedTheme.canvasDimensions || { width: 1920, height: 1080 },
             lineOrder: loadedTheme.lineOrder || ['original', 'transliteration', 'translation'],
@@ -100,6 +104,8 @@ const ThemeEditorPage: React.FC = () => {
             backgroundBoxes: loadedTheme.backgroundBoxes || []
           });
         }
+      }).catch((error) => {
+        console.error('Failed to load theme:', error);
       });
     }
   }, [themeId]);
@@ -161,6 +167,50 @@ const ThemeEditorPage: React.FC = () => {
     setSelectedElement({ type: 'box', id: newBox.id });
     setHasChanges(true);
   }, [theme.backgroundBoxes.length]);
+
+  // Drag and drop handlers for layer reordering
+  const handleDragStart = useCallback((type: 'line' | 'box', id: string, index: number) => {
+    setDraggedItem({ type, id, index });
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, type: 'line' | 'box', index: number) => {
+    e.preventDefault();
+    if (draggedItem && draggedItem.type === type) {
+      setDragOverItem({ type, index });
+    }
+  }, [draggedItem]);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedItem(null);
+    setDragOverItem(null);
+  }, []);
+
+  const handleDrop = useCallback((type: 'line' | 'box', dropIndex: number) => {
+    if (!draggedItem || draggedItem.type !== type) return;
+
+    const dragIndex = draggedItem.index;
+    if (dragIndex === dropIndex) {
+      handleDragEnd();
+      return;
+    }
+
+    if (type === 'line') {
+      // Reorder line order
+      const newLineOrder = [...theme.lineOrder];
+      const [removed] = newLineOrder.splice(dragIndex, 1);
+      newLineOrder.splice(dropIndex, 0, removed);
+      setTheme(prev => ({ ...prev, lineOrder: newLineOrder as ('original' | 'transliteration' | 'translation')[] }));
+    } else {
+      // Reorder background boxes
+      const newBoxes = [...theme.backgroundBoxes];
+      const [removed] = newBoxes.splice(dragIndex, 1);
+      newBoxes.splice(dropIndex, 0, removed);
+      setTheme(prev => ({ ...prev, backgroundBoxes: newBoxes }));
+    }
+
+    setHasChanges(true);
+    handleDragEnd();
+  }, [draggedItem, theme.lineOrder, theme.backgroundBoxes, handleDragEnd]);
 
   const handleSave = async () => {
     setSaveStatus('saving');
@@ -388,15 +438,22 @@ const ThemeEditorPage: React.FC = () => {
                       marginBottom: '6px',
                       textTransform: 'uppercase'
                     }}>
-                      Text Lines
+                      Text Lines (drag to reorder)
                     </div>
-                    {(['original', 'transliteration', 'translation'] as const).map((lineType) => {
+                    {theme.lineOrder.map((lineType, index) => {
                       const style = theme.lineStyles[lineType];
                       const isSelected = selectedElement?.type === 'line' && selectedElement.id === lineType;
                       const isVisible = style?.visible !== false;
+                      const isDragging = draggedItem?.type === 'line' && draggedItem.id === lineType;
+                      const isDragOver = dragOverItem?.type === 'line' && dragOverItem.index === index;
                       return (
                         <div
                           key={lineType}
+                          draggable
+                          onDragStart={() => handleDragStart('line', lineType, index)}
+                          onDragOver={(e) => handleDragOver(e, 'line', index)}
+                          onDragEnd={handleDragEnd}
+                          onDrop={() => handleDrop('line', index)}
                           onClick={() => setSelectedElement({ type: 'line', id: lineType })}
                           style={{
                             display: 'flex',
@@ -406,11 +463,38 @@ const ThemeEditorPage: React.FC = () => {
                             marginBottom: '4px',
                             borderRadius: '4px',
                             background: isSelected ? 'rgba(0,212,255,0.2)' : 'rgba(255,255,255,0.05)',
-                            border: isSelected ? '1px solid rgba(0,212,255,0.5)' : '1px solid transparent',
-                            cursor: 'pointer',
-                            opacity: isVisible ? 1 : 0.5
+                            border: isDragOver
+                              ? '2px dashed #00d4ff'
+                              : isSelected
+                                ? '1px solid rgba(0,212,255,0.5)'
+                                : '1px solid transparent',
+                            cursor: 'grab',
+                            opacity: isDragging ? 0.5 : isVisible ? 1 : 0.5,
+                            transition: 'border 0.15s, opacity 0.15s'
                           }}
                         >
+                          {/* Drag Handle */}
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '2px',
+                            cursor: 'grab',
+                            padding: '2px'
+                          }}>
+                            <div style={{ display: 'flex', gap: '2px' }}>
+                              <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                              <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: '2px' }}>
+                              <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                              <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: '2px' }}>
+                              <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                              <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                            </div>
+                          </div>
+
                           {/* Visibility Toggle */}
                           <button
                             onClick={(e) => {
@@ -457,13 +541,20 @@ const ThemeEditorPage: React.FC = () => {
                         marginBottom: '6px',
                         textTransform: 'uppercase'
                       }}>
-                        Background Boxes
+                        Background Boxes (drag to reorder)
                       </div>
                       {theme.backgroundBoxes.map((box, index) => {
                         const isSelected = selectedElement?.type === 'box' && selectedElement.id === box.id;
+                        const isDragging = draggedItem?.type === 'box' && draggedItem.id === box.id;
+                        const isDragOver = dragOverItem?.type === 'box' && dragOverItem.index === index;
                         return (
                           <div
                             key={box.id}
+                            draggable
+                            onDragStart={() => handleDragStart('box', box.id, index)}
+                            onDragOver={(e) => handleDragOver(e, 'box', index)}
+                            onDragEnd={handleDragEnd}
+                            onDrop={() => handleDrop('box', index)}
                             onClick={() => setSelectedElement({ type: 'box', id: box.id })}
                             style={{
                               display: 'flex',
@@ -473,12 +564,46 @@ const ThemeEditorPage: React.FC = () => {
                               marginBottom: '4px',
                               borderRadius: '4px',
                               background: isSelected ? 'rgba(0,212,255,0.2)' : 'rgba(255,255,255,0.05)',
-                              border: isSelected ? '1px solid rgba(0,212,255,0.5)' : '1px solid transparent',
-                              cursor: 'pointer'
+                              border: isDragOver
+                                ? '2px dashed #00d4ff'
+                                : isSelected
+                                  ? '1px solid rgba(0,212,255,0.5)'
+                                  : '1px solid transparent',
+                              cursor: 'grab',
+                              opacity: isDragging ? 0.5 : 1,
+                              transition: 'border 0.15s, opacity 0.15s'
                             }}
                           >
-                            {/* Box Icon */}
-                            <span style={{ fontSize: '14px' }}>◻️</span>
+                            {/* Drag Handle */}
+                            <div style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '2px',
+                              cursor: 'grab',
+                              padding: '2px'
+                            }}>
+                              <div style={{ display: 'flex', gap: '2px' }}>
+                                <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                                <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                              </div>
+                              <div style={{ display: 'flex', gap: '2px' }}>
+                                <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                                <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                              </div>
+                              <div style={{ display: 'flex', gap: '2px' }}>
+                                <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                                <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                              </div>
+                            </div>
+
+                            {/* Box Color Preview */}
+                            <div style={{
+                              width: '16px',
+                              height: '16px',
+                              borderRadius: '3px',
+                              background: box.color,
+                              border: '1px solid rgba(255,255,255,0.2)'
+                            }} />
 
                             {/* Box Name */}
                             <span style={{
@@ -526,6 +651,7 @@ const ThemeEditorPage: React.FC = () => {
                     style={theme.lineStyles[selectedLineType]}
                     onPositionChange={(pos) => handleLinePositionChange(selectedLineType, pos)}
                     onStyleChange={(style) => handleLineStyleChange(selectedLineType, style)}
+                    availableLineTypes={theme.lineOrder}
                   />
                 )}
 

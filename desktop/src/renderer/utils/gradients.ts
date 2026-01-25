@@ -10,7 +10,7 @@ export const gradientPresets: GradientPreset[] = [
   {
     id: 'ocean-blue',
     name: 'Ocean Blue',
-    value: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+    value: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)'
   },
   {
     id: 'sunset',

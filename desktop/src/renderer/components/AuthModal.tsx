@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 
 interface AuthModalProps {
   onClose: () => void;
@@ -120,7 +120,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess }) => {
             width: '60px',
             height: '60px',
             borderRadius: '50%',
-            background: 'linear-gradient(135deg, #667eea, #764ba2)',
+            background: 'linear-gradient(135deg, #06b6d4, #0891b2)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -224,7 +224,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess }) => {
             style={{
               width: '100%',
               padding: '14px',
-              background: loading ? 'rgba(102, 126, 234, 0.5)' : 'linear-gradient(135deg, #667eea, #764ba2)',
+              background: loading ? 'rgba(102, 126, 234, 0.5)' : 'linear-gradient(135deg, #06b6d4, #0891b2)',
               border: 'none',
               borderRadius: '10px',
               color: 'white',
@@ -252,7 +252,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess }) => {
             style={{
               background: 'none',
               border: 'none',
-              color: '#667eea',
+              color: '#06b6d4',
               cursor: 'pointer',
               fontSize: '0.85rem',
               fontWeight: 600,
@@ -286,4 +286,4 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess }) => {
   );
 };
 
-export default AuthModal;
+export default memo(AuthModal);

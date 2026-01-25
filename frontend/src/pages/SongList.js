@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Form, InputGroup, Badge, Table, Spinner, Modal, Alert, ProgressBar, Toast, ToastContainer } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Form, InputGroup, Badge, Table, Spinner, Modal, Alert, ProgressBar } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +21,6 @@ function SongList() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadResults, setUploadResults] = useState(null);
   const [error, setError] = useState(null);
-  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   const languages = [
     { code: 'he', name: t('songs.hebrew') },
@@ -49,6 +48,7 @@ function SongList() {
     }, 300);
 
     return () => clearTimeout(delayDebounce);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, selectedLanguage, selectedTags]);
 
   const fetchSongs = async () => {
@@ -56,8 +56,6 @@ function SongList() {
       setLoading(true);
       setError(null);
       const response = await api.get('/api/songs');
-      console.log('Fetched songs:', response.data.songs.length);
-      console.log('Sample song:', response.data.songs[0]);
       setSongs(response.data.songs);
     } catch (error) {
       console.error('Error fetching songs:', error);

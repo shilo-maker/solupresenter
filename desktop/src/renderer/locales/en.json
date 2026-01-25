@@ -28,6 +28,7 @@
     "clear": "Clear",
     "stop": "Stop",
     "start": "Start",
+    "copy": "Copy",
     "pause": "Pause",
     "play": "Play",
     "settings": "Settings",
@@ -35,7 +36,9 @@
     "export": "Export",
     "new": "New",
     "duplicate": "Duplicate",
-    "rename": "Rename"
+    "rename": "Rename",
+    "playing": "Playing",
+    "showing": "Showing"
   },
   "nav": {
     "songs": "Songs",
@@ -102,7 +105,18 @@
     "exportSettings": "Export Settings",
     "youtubeApiKey": "YouTube API Key",
     "youtubeApiKeyDesc": "Required for YouTube search. Get one from Google Cloud Console.",
-    "apiKeyConfigured": "API Key configured"
+    "apiKeyConfigured": "API Key configured",
+    "remoteControl": "Remote Control",
+    "remoteControlDescription": "Control SoluPresenter from your mobile device on the local network.",
+    "startRemoteControl": "Start Remote Control",
+    "stopRemoteControl": "Stop Remote Control",
+    "remoteControlRunning": "Running",
+    "connected": "connected",
+    "url": "URL",
+    "pin": "PIN",
+    "uiScale": "Interface Size",
+    "uiScaleDescription": "Adjust the size of buttons, text, and controls",
+    "resetToDefault": "Reset to 100%"
   },
   "songs": {
     "title": "Songs",
@@ -143,7 +157,9 @@
     "youtubeApiKeyInvalid": "Invalid YouTube API key or quota exceeded",
     "youtubeSearchFailed": "YouTube search failed",
     "searchYoutube": "Search YouTube",
-    "searchYoutubeHint": "Type a search query above to find videos"
+    "searchYoutubeHint": "Type a search query above to find videos",
+    "moveToFolder": "Move to Folder",
+    "noFolder": "No Folder (Root)"
   },
   "tools": {
     "title": "Tools",
@@ -151,7 +167,7 @@
     "countdown": "Countdown",
     "clock": "Clock",
     "stopwatch": "Stopwatch",
-    "announce": "Announce",
+    "announce": "Notification",
     "announcement": "Announcement",
     "messages": "Messages",
     "hours": "Hours",
@@ -181,6 +197,9 @@
     "broadcast": "Broadcast",
     "broadcastClock": "Broadcast Clock",
     "broadcastStopwatch": "Broadcast Stopwatch",
+    "broadcastCountdown": "Broadcast",
+    "broadcastAnnouncement": "Broadcast",
+    "broadcastMessages": "Broadcast",
     "hide": "Hide",
     "start": "Start",
     "resume": "Resume",
@@ -301,7 +320,10 @@
     "generating": "Generating...",
     "preview": "Preview",
     "addToSetlist": "Add to Setlist",
-    "generateTranslation": "Generate Translation"
+    "generateTranslation": "Generate Translation",
+    "sermonLabel": "Sermon",
+    "prayerLabel": "Prayer",
+    "announcementsLabel": "Announcements"
   },
   "shortcuts": {
     "title": "Keyboard Shortcuts",
@@ -356,11 +378,22 @@
   },
   "controlPanel": {
     "connectedDisplays": "Connected Displays",
+    "identify": "Identify",
+    "identifyDisplays": "Show display numbers on each screen",
+    "controlScreen": "Control Screen",
     "primary": "Primary",
     "viewer": "Viewer",
     "stage": "Stage",
     "viewerThemes": "Viewer Themes",
     "stageMonitorThemes": "Stage Monitor Themes",
+    "songsTheme": "Songs Theme",
+    "stageMonitorTheme": "Stage Monitor",
+    "bibleTheme": "Bible",
+    "prayerTheme": "Prayer/Sermon",
+    "obsSongsTheme": "OBS Songs",
+    "obsBibleTheme": "OBS Bible",
+    "obsPrayerTheme": "OBS Prayer",
+    "obsBrowserSource": "OBS Browser Source",
     "noThemesAvailable": "No themes available",
     "noStageMonitorThemes": "No stage monitor themes",
     "stopCountdown": "Stop Countdown",
@@ -372,6 +405,13 @@
     "slidePreview": "Slide Preview",
     "backgrounds": "Backgrounds",
     "addSection": "Add Section",
+    "sectionWorship": "Worship",
+    "sectionSermon": "Sermon",
+    "sectionPrayer": "Prayer",
+    "sectionAnnouncements": "Announcements",
+    "sectionReading": "Reading",
+    "sectionOffering": "Offering",
+    "sectionClosing": "Closing",
     "saveSetlist": "Save Setlist",
     "loadSetlist": "Load Setlist",
     "noSavedSetlists": "No saved setlists",
@@ -459,6 +499,7 @@
     "edit": "Edit",
     "delete": "Delete",
     "addToSetlist": "Add to Setlist",
+    "removeFromSetlist": "Remove from Setlist",
     "searchPresentations": "Search presentations..."
   }
 }

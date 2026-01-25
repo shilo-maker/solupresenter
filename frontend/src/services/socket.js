@@ -27,9 +27,7 @@ class SocketService {
   }
 
   connect() {
-    console.log('🔌 socketService.connect() called, current socket:', this.socket);
     if (!this.socket) {
-      console.log('📡 Creating new socket connection to:', SOCKET_URL);
       this.updateConnectionStatus('connecting');
 
       this.socket = io(SOCKET_URL, {
@@ -45,48 +43,41 @@ class SocketService {
       });
 
       this.socket.on('connect', () => {
-        console.log('✅ Socket connected, ID:', this.socket.id);
         this.updateConnectionStatus('connected');
         this.startHeartbeat();
       });
 
-      this.socket.on('disconnect', (reason) => {
-        console.log('❌ Socket disconnected, reason:', reason);
+      this.socket.on('disconnect', () => {
         this.updateConnectionStatus('disconnected');
         this.stopHeartbeat();
       });
 
       this.socket.on('reconnect_attempt', () => {
-        console.log('🔄 Attempting to reconnect...');
         this.updateConnectionStatus('reconnecting');
       });
 
-      this.socket.on('reconnect', (attemptNumber) => {
-        console.log('✅ Reconnected after', attemptNumber, 'attempts');
+      this.socket.on('reconnect', () => {
         this.updateConnectionStatus('connected');
         this.startHeartbeat();
       });
 
       this.socket.on('reconnect_error', (error) => {
-        console.error('⚠️ Reconnection error:', error);
+        console.error('Reconnection error:', error);
       });
 
       this.socket.on('reconnect_failed', () => {
-        console.error('❌ Reconnection failed after all attempts');
+        console.error('Reconnection failed after all attempts');
         this.updateConnectionStatus('disconnected');
       });
 
       this.socket.on('error', (error) => {
-        console.error('⚠️ Socket error:', error);
+        console.error('Socket error:', error);
       });
 
       // Heartbeat response
       this.socket.on('pong', (timestamp) => {
         this.latency = Date.now() - timestamp;
-        console.log('💓 Heartbeat latency:', this.latency, 'ms');
       });
-    } else {
-      console.log('ℹ️ Socket already exists, reusing it');
     }
     return this.socket;
   }
@@ -145,25 +136,16 @@ class SocketService {
   // Operator methods
   operatorJoinRoom(userId, roomId) {
     if (!this.socket) {
-      console.error('❌ No socket available for operator to join');
+      console.error('No socket available for operator to join');
       return;
     }
-
-    console.log('👤 Operator joining room:', {
-      connected: this.socket.connected,
-      socketId: this.socket.id,
-      userId,
-      roomId
-    });
 
     // If socket is already connected, emit immediately
     if (this.socket.connected) {
       this.socket.emit('operator:join', { userId, roomId });
     } else {
       // Otherwise, wait for connection before emitting
-      console.log('⏳ Socket not connected yet, waiting...');
       this.socket.once('connect', () => {
-        console.log('✅ Socket connected, now joining room');
         this.socket.emit('operator:join', { userId, roomId });
       });
     }
@@ -171,7 +153,7 @@ class SocketService {
 
   operatorUpdateSlide(data) {
     if (!this.socket) {
-      console.error('❌ No socket available');
+      console.error('No socket available');
       return;
     }
 
@@ -199,19 +181,14 @@ class SocketService {
 
   operatorUpdateBackground(roomId, backgroundImage) {
     if (!this.socket) {
-      console.error('❌ No socket available to update background');
+      console.error('No socket available to update background');
       return;
     }
 
-    console.log('🎨 Updating background:', { roomId, backgroundImage });
-
     if (this.socket.connected) {
       this.socket.emit('operator:updateBackground', { roomId, backgroundImage });
-      console.log('📡 operator:updateBackground event emitted');
     } else {
-      console.log('⏳ Socket not connected, waiting...');
       this.socket.once('connect', () => {
-        console.log('✅ Socket connected, now sending background update');
         this.socket.emit('operator:updateBackground', { roomId, backgroundImage });
       });
     }
@@ -219,19 +196,14 @@ class SocketService {
 
   operatorUpdateQuickSlideText(roomId, quickSlideText) {
     if (!this.socket) {
-      console.error('❌ No socket available to update quick slide text');
+      console.error('No socket available to update quick slide text');
       return;
     }
 
-    console.log('⚡ Updating quick slide text:', { roomId, textLength: quickSlideText?.length || 0 });
-
     if (this.socket.connected) {
       this.socket.emit('operator:updateQuickSlideText', { roomId, quickSlideText });
-      console.log('📡 operator:updateQuickSlideText event emitted');
     } else {
-      console.log('⏳ Socket not connected, waiting...');
       this.socket.once('connect', () => {
-        console.log('✅ Socket connected, now sending quick slide text update');
         this.socket.emit('operator:updateQuickSlideText', { roomId, quickSlideText });
       });
     }
@@ -239,19 +211,14 @@ class SocketService {
 
   operatorApplyTheme(roomId, themeId) {
     if (!this.socket) {
-      console.error('❌ No socket available to apply theme');
+      console.error('No socket available to apply theme');
       return;
     }
 
-    console.log('🎨 Applying viewer theme:', { roomId, themeId });
-
     if (this.socket.connected) {
       this.socket.emit('operator:applyTheme', { roomId, themeId });
-      console.log('📡 operator:applyTheme event emitted');
     } else {
-      console.log('⏳ Socket not connected, waiting...');
       this.socket.once('connect', () => {
-        console.log('✅ Socket connected, now applying theme');
         this.socket.emit('operator:applyTheme', { roomId, themeId });
       });
     }
@@ -259,19 +226,14 @@ class SocketService {
 
   operatorUpdateLocalMediaStatus(roomId, visible) {
     if (!this.socket) {
-      console.error('❌ No socket available to update local media status');
+      console.error('No socket available to update local media status');
       return;
     }
 
-    console.log('📺 Updating local media status:', { roomId, visible });
-
     if (this.socket.connected) {
       this.socket.emit('operator:localMediaStatus', { roomId, visible });
-      console.log('📡 operator:localMediaStatus event emitted');
     } else {
-      console.log('⏳ Socket not connected, waiting...');
       this.socket.once('connect', () => {
-        console.log('✅ Socket connected, now sending local media status');
         this.socket.emit('operator:localMediaStatus', { roomId, visible });
       });
     }
@@ -281,11 +243,9 @@ class SocketService {
   // YouTube methods
   operatorYoutubeLoad(roomId, videoId, title) {
     if (!this.socket) {
-      console.error('❌ No socket available to load YouTube video');
+      console.error('No socket available to load YouTube video');
       return;
     }
-
-    console.log('▶️ Loading YouTube video:', { roomId, videoId, title });
 
     if (this.socket.connected) {
       this.socket.emit('operator:youtubeLoad', { roomId, videoId, title });
@@ -343,16 +303,14 @@ class SocketService {
   // Viewer methods
   viewerJoinRoom(pin) {
     if (!this.socket) {
-      console.error('❌ No socket available for viewer to join');
+      console.error('No socket available for viewer to join');
       return;
     }
 
     if (this.socket.connected) {
       this.socket.emit('viewer:join', { pin });
     } else {
-      console.log('⏳ Socket not connected yet, waiting...');
       this.socket.once('connect', () => {
-        console.log('✅ Socket connected, now joining room by PIN');
         this.socket.emit('viewer:join', { pin });
       });
     }
@@ -360,16 +318,14 @@ class SocketService {
 
   viewerJoinRoomBySlug(slug) {
     if (!this.socket) {
-      console.error('❌ No socket available for viewer to join');
+      console.error('No socket available for viewer to join');
       return;
     }
 
     if (this.socket.connected) {
       this.socket.emit('viewer:join', { slug });
     } else {
-      console.log('⏳ Socket not connected yet, waiting...');
       this.socket.once('connect', () => {
-        console.log('✅ Socket connected, now joining room by slug');
         this.socket.emit('viewer:join', { slug });
       });
     }
@@ -430,6 +386,11 @@ class SocketService {
     }
   }
 
+  onToolsUpdate(callback) {
+    if (this.socket) {
+      this.socket.on('tools:update', callback);
+    }
+  }
 
   onYoutubeLoad(callback) {
     if (this.socket) {

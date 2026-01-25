@@ -23,6 +23,21 @@ export class SocketService {
   private token: string | null = null;
   private userId: string | null = null;
   private connectionTimeoutId: NodeJS.Timeout | null = null;
+  private roomJoinTimeoutId: NodeJS.Timeout | null = null;
+  private axiosAbortController: AbortController | null = null;
+
+  // Track last broadcast state for reconnection recovery
+  private lastSlideData: any = null;
+  private lastTheme: any = null;
+  private lastBackground: string | null = null;
+  private lastYoutubeState: { videoId: string; title: string; currentTime: number; isPlaying: boolean } | null = null;
+  private lastToolData: any = null;
+  private reconnectAttempts: number = 0;
+  private maxReconnectAttempts: number = 10;
+
+  // Rate limiting for broadcasts
+  private lastBroadcastTime: { [key: string]: number } = {};
+  private minBroadcastIntervalMs: number = 50; // Minimum 50ms between broadcasts of same type
 
   /**
    * Connect to the online server
@@ -55,7 +70,6 @@ export class SocketService {
         });
 
         this.socket.on('connect', () => {
-          console.log('Connected to server');
           // Clear timeout on successful connection
           if (this.connectionTimeoutId) {
             clearTimeout(this.connectionTimeoutId);
@@ -63,12 +77,18 @@ export class SocketService {
           }
           this.status.connected = true;
           this.status.serverUrl = serverUrl;
+          this.reconnectAttempts = 0; // Reset reconnect attempts on success
+
+          // Restore state on reconnection if we had a room
+          if (this.status.roomId && this.status.roomPin) {
+            this.restoreStateOnReconnect();
+          }
+
           this.notifyStatusChange();
           resolve(true);
         });
 
         this.socket.on('disconnect', () => {
-          console.log('Disconnected from server');
           this.status.connected = false;
           this.status.roomPin = undefined;
           this.status.roomId = undefined;
@@ -88,7 +108,6 @@ export class SocketService {
 
         // Handle room events
         this.socket.on('operator:joined', (data: { roomPin: string }) => {
-          console.log('Operator joined room, PIN:', data.roomPin);
           this.status.roomPin = data.roomPin;
           this.notifyStatusChange();
         });
@@ -117,6 +136,20 @@ export class SocketService {
    * Disconnect from the server
    */
   disconnect(): void {
+    // Clear any pending timeouts
+    if (this.connectionTimeoutId) {
+      clearTimeout(this.connectionTimeoutId);
+      this.connectionTimeoutId = null;
+    }
+    if (this.roomJoinTimeoutId) {
+      clearTimeout(this.roomJoinTimeoutId);
+      this.roomJoinTimeoutId = null;
+    }
+    // Abort any pending axios requests
+    if (this.axiosAbortController) {
+      this.axiosAbortController.abort();
+      this.axiosAbortController = null;
+    }
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
@@ -125,6 +158,10 @@ export class SocketService {
       connected: false,
       viewerCount: 0
     };
+    // Clear cached state to prevent memory leaks
+    this.clearCachedState();
+    this.reconnectAttempts = 0;
+    this.lastBroadcastTime = {};
     this.notifyStatusChange();
   }
 
@@ -139,7 +176,8 @@ export class SocketService {
 
     try {
       // Step 1: Create room via REST API
-      console.log('Creating room via API...');
+      // Create abort controller for this request
+      this.axiosAbortController = new AbortController();
       const response = await axios.post(
         `${this.status.serverUrl}/api/rooms/create`,
         { publicRoomId },
@@ -148,7 +186,8 @@ export class SocketService {
             'Authorization': `Bearer ${this.token}`,
             'Content-Type': 'application/json'
           },
-          timeout: AXIOS_TIMEOUT
+          timeout: AXIOS_TIMEOUT,
+          signal: this.axiosAbortController.signal
         }
       );
 
@@ -158,7 +197,6 @@ export class SocketService {
         return null;
       }
 
-      console.log('Room created:', room.pin);
       this.status.roomId = room.id;
       this.status.roomPin = room.pin;
 
@@ -171,7 +209,12 @@ export class SocketService {
 
         // Wait for operator:joined event (already handled in connect)
         // Just resolve with the room info
-        setTimeout(() => {
+        // Clear any existing timeout to prevent memory leaks
+        if (this.roomJoinTimeoutId) {
+          clearTimeout(this.roomJoinTimeoutId);
+        }
+        this.roomJoinTimeoutId = setTimeout(() => {
+          this.roomJoinTimeoutId = null;
           this.notifyStatusChange();
           resolve({ roomPin: room.pin, roomId: room.id });
         }, 500);
@@ -186,25 +229,22 @@ export class SocketService {
    * Get public rooms for the current user
    */
   async getPublicRooms(): Promise<any[]> {
-    console.log('getPublicRooms called, token:', this.token ? 'present' : 'missing', 'serverUrl:', this.status.serverUrl);
-
     if (!this.token || !this.status.serverUrl) {
-      console.log('getPublicRooms: missing token or serverUrl');
       return [];
     }
 
     try {
       const url = `${this.status.serverUrl}/api/public-rooms/my-rooms`;
-      console.log('Fetching public rooms from:', url);
 
+      this.axiosAbortController = new AbortController();
       const response = await axios.get(url, {
         headers: {
           'Authorization': `Bearer ${this.token}`
         },
-        timeout: AXIOS_TIMEOUT
+        timeout: AXIOS_TIMEOUT,
+        signal: this.axiosAbortController.signal
       });
 
-      console.log('Public rooms response:', JSON.stringify(response.data));
       // API returns { publicRooms: [...] }
       return response.data?.publicRooms || response.data || [];
     } catch (error: any) {
@@ -222,6 +262,7 @@ export class SocketService {
     }
 
     try {
+      this.axiosAbortController = new AbortController();
       if (publicRoomId) {
         await axios.post(
           `${this.status.serverUrl}/api/rooms/${this.status.roomId}/link-public-room`,
@@ -231,7 +272,8 @@ export class SocketService {
               'Authorization': `Bearer ${this.token}`,
               'Content-Type': 'application/json'
             },
-            timeout: AXIOS_TIMEOUT
+            timeout: AXIOS_TIMEOUT,
+            signal: this.axiosAbortController.signal
           }
         );
       } else {
@@ -244,7 +286,8 @@ export class SocketService {
               'Authorization': `Bearer ${this.token}`,
               'Content-Type': 'application/json'
             },
-            timeout: AXIOS_TIMEOUT
+            timeout: AXIOS_TIMEOUT,
+            signal: this.axiosAbortController.signal
           }
         );
       }
@@ -273,6 +316,19 @@ export class SocketService {
    * Broadcast slide to online viewers
    */
   broadcastSlide(slideData: any): void {
+    // Validate input
+    if (!slideData || typeof slideData !== 'object') {
+      console.error('[SocketService] broadcastSlide: invalid slideData');
+      return;
+    }
+    // Cache for reconnection recovery
+    this.lastSlideData = slideData;
+
+    // Rate limit slide broadcasts
+    if (!this.checkRateLimit('slide')) {
+      return;
+    }
+
     if (this.socket && this.status.connected && this.status.roomPin) {
       // Transform data to match backend expected format
       const transformedData: any = {
@@ -315,6 +371,8 @@ export class SocketService {
    * Broadcast theme to online viewers
    */
   broadcastTheme(theme: any): void {
+    // Cache for reconnection recovery
+    this.lastTheme = theme;
     if (this.socket && this.status.connected && this.status.roomPin) {
       this.socket.emit('operator:applyTheme', {
         roomPin: this.status.roomPin,
@@ -327,8 +385,9 @@ export class SocketService {
    * Broadcast background to online viewers
    */
   broadcastBackground(backgroundImage: string): void {
+    // Cache for reconnection recovery
+    this.lastBackground = backgroundImage;
     if (this.socket && this.status.connected && this.status.roomId) {
-      console.log('Broadcasting background to online viewers, roomId:', this.status.roomId);
       this.socket.emit('operator:updateBackground', {
         roomId: this.status.roomId,
         backgroundImage
@@ -337,14 +396,38 @@ export class SocketService {
   }
 
   /**
-   * Broadcast tool data (countdown, announcement) to online viewers
+   * Broadcast tool data (countdown, announcement, clock, stopwatch, rotatingMessages) to online viewers
    */
   broadcastTool(toolData: any): void {
+    // Validate input
+    if (!toolData || typeof toolData !== 'object') {
+      console.error('[SocketService] broadcastTool: invalid toolData');
+      return;
+    }
+
+    // Validate tool type
+    const validToolTypes = ['countdown', 'announcement', 'rotatingMessages', 'clock', 'stopwatch'];
+    if (!toolData.type || typeof toolData.type !== 'string' || !validToolTypes.includes(toolData.type)) {
+      console.error('[SocketService] broadcastTool: invalid tool type:', toolData.type);
+      return;
+    }
+
+    // Cache tool data for reconnection recovery
+    if (toolData.active) {
+      this.lastToolData = toolData;
+    } else {
+      this.lastToolData = null;
+    }
+
     if (this.socket && this.status.connected && this.status.roomPin) {
-      this.socket.emit('operator:updateTool', {
-        roomPin: this.status.roomPin,
-        ...toolData
-      });
+      try {
+        this.socket.emit('operator:updateTool', {
+          roomPin: this.status.roomPin,
+          toolData
+        });
+      } catch (error) {
+        console.error('[SocketService] broadcastTool error:', error);
+      }
     }
   }
 
@@ -354,8 +437,12 @@ export class SocketService {
    * indicating that local media is being displayed on HDMI screens
    */
   broadcastLocalMediaStatus(visible: boolean): void {
+    // Validate input
+    if (typeof visible !== 'boolean') {
+      console.error('[SocketService] broadcastLocalMediaStatus: invalid visible value');
+      return;
+    }
     if (this.socket && this.status.connected && this.status.roomId) {
-      console.log('Broadcasting local media status:', visible ? 'showing' : 'hidden');
       this.socket.emit('operator:localMediaStatus', {
         roomId: this.status.roomId,
         visible
@@ -367,17 +454,37 @@ export class SocketService {
    * YouTube video control methods
    */
   youtubeLoad(videoId: string, title: string): void {
+    // Validate inputs
+    if (!videoId || typeof videoId !== 'string') {
+      console.error('[SocketService] youtubeLoad: invalid videoId');
+      return;
+    }
+    // Sanitize videoId - YouTube IDs should only be alphanumeric with - and _
+    const sanitizedVideoId = videoId.replace(/[^a-zA-Z0-9_-]/g, '');
+    if (sanitizedVideoId.length === 0 || sanitizedVideoId.length > 20) {
+      console.error('[SocketService] youtubeLoad: invalid videoId format');
+      return;
+    }
+    const sanitizedTitle = typeof title === 'string' ? title.substring(0, 500) : '';
+
+    // Cache for reconnection recovery
+    this.lastYoutubeState = { videoId: sanitizedVideoId, title: sanitizedTitle, currentTime: 0, isPlaying: false };
+
     if (this.socket && this.status.connected && this.status.roomId) {
-      console.log('Broadcasting YouTube load:', videoId);
       this.socket.emit('operator:youtubeLoad', {
         roomId: this.status.roomId,
-        videoId,
-        title
+        videoId: sanitizedVideoId,
+        title: sanitizedTitle
       });
     }
   }
 
   youtubePlay(currentTime: number): void {
+    // Validate currentTime
+    if (typeof currentTime !== 'number' || !isFinite(currentTime) || currentTime < 0) {
+      console.error('[SocketService] youtubePlay: invalid currentTime');
+      return;
+    }
     if (this.socket && this.status.connected && this.status.roomId) {
       this.socket.emit('operator:youtubePlay', {
         roomId: this.status.roomId,
@@ -387,6 +494,11 @@ export class SocketService {
   }
 
   youtubePause(currentTime: number): void {
+    // Validate currentTime
+    if (typeof currentTime !== 'number' || !isFinite(currentTime) || currentTime < 0) {
+      console.error('[SocketService] youtubePause: invalid currentTime');
+      return;
+    }
     if (this.socket && this.status.connected && this.status.roomId) {
       this.socket.emit('operator:youtubePause', {
         roomId: this.status.roomId,
@@ -396,6 +508,11 @@ export class SocketService {
   }
 
   youtubeSeek(currentTime: number): void {
+    // Validate currentTime
+    if (typeof currentTime !== 'number' || !isFinite(currentTime) || currentTime < 0) {
+      console.error('[SocketService] youtubeSeek: invalid currentTime');
+      return;
+    }
     if (this.socket && this.status.connected && this.status.roomId) {
       this.socket.emit('operator:youtubeSeek', {
         roomId: this.status.roomId,
@@ -405,8 +522,10 @@ export class SocketService {
   }
 
   youtubeStop(): void {
+    // Clear cached YouTube state
+    this.lastYoutubeState = null;
+
     if (this.socket && this.status.connected && this.status.roomId) {
-      console.log('Broadcasting YouTube stop');
       this.socket.emit('operator:youtubeStop', {
         roomId: this.status.roomId
       });
@@ -414,6 +533,15 @@ export class SocketService {
   }
 
   youtubeSync(currentTime: number, isPlaying: boolean): void {
+    // Validate inputs
+    if (typeof currentTime !== 'number' || !isFinite(currentTime) || currentTime < 0) {
+      console.error('[SocketService] youtubeSync: invalid currentTime');
+      return;
+    }
+    if (typeof isPlaying !== 'boolean') {
+      console.error('[SocketService] youtubeSync: invalid isPlaying');
+      return;
+    }
     if (this.socket && this.status.connected && this.status.roomId) {
       this.socket.emit('operator:youtubeSync', {
         roomId: this.status.roomId,
@@ -440,5 +568,59 @@ export class SocketService {
     if (this.controlWindow && !this.controlWindow.isDestroyed()) {
       this.controlWindow.webContents.send('online:viewerCount', count);
     }
+  }
+
+  /**
+   * Check if a broadcast is rate-limited
+   * @returns true if the broadcast should be allowed, false if rate-limited
+   */
+  private checkRateLimit(broadcastType: string): boolean {
+    const now = Date.now();
+    const lastTime = this.lastBroadcastTime[broadcastType] || 0;
+
+    if (now - lastTime < this.minBroadcastIntervalMs) {
+      return false; // Rate limited
+    }
+
+    this.lastBroadcastTime[broadcastType] = now;
+    return true;
+  }
+
+  /**
+   * Restore broadcast state after reconnection
+   */
+  private restoreStateOnReconnect(): void {
+    // Re-broadcast last known state to sync viewers
+    setTimeout(() => {
+      if (this.lastTheme) {
+        this.broadcastTheme(this.lastTheme);
+      }
+      if (this.lastBackground) {
+        this.broadcastBackground(this.lastBackground);
+      }
+      if (this.lastSlideData) {
+        this.broadcastSlide(this.lastSlideData);
+      }
+      if (this.lastYoutubeState) {
+        this.youtubeLoad(this.lastYoutubeState.videoId, this.lastYoutubeState.title);
+        if (this.lastYoutubeState.isPlaying) {
+          this.youtubePlay(this.lastYoutubeState.currentTime);
+        }
+      }
+      if (this.lastToolData) {
+        this.broadcastTool(this.lastToolData);
+      }
+    }, 500); // Small delay to ensure socket is fully ready
+  }
+
+  /**
+   * Clear all cached state (call when intentionally disconnecting)
+   */
+  clearCachedState(): void {
+    this.lastSlideData = null;
+    this.lastTheme = null;
+    this.lastBackground = null;
+    this.lastYoutubeState = null;
+    this.lastToolData = null;
   }
 }

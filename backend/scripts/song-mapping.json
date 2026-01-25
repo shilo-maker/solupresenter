@@ -1,0 +1,3108 @@
+{
+  "created": "2025-12-14T18:59:20.148Z",
+  "description": "Mapping between SoluFlow and SoluPresenter songs",
+  "stats": {
+    "highConfidence": 95,
+    "mediumConfidence": 93,
+    "total": 238,
+    "lowConfidenceApproved": 33,
+    "questionableApproved": 17
+  },
+  "mappings": [
+    {
+      "soluflow": {
+        "id": 98,
+        "title": "את ידי ארים לך"
+      },
+      "solupresenter": {
+        "id": "033f9c3c-92de-4cf3-a0df-6094a5430d39",
+        "title": "את ידי ארים לך"
+      },
+      "confidence": 100,
+      "titleMatch": 100,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 27,
+        "title": "לא אמהר"
+      },
+      "solupresenter": {
+        "id": "14c08db2-0e5c-43ae-95a4-3811bfb41efe",
+        "title": "לא אמהר"
+      },
+      "confidence": 100,
+      "titleMatch": 100,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 34,
+        "title": "אבא אנו זקוקים לך"
+      },
+      "solupresenter": {
+        "id": "59a2c14f-add7-4e72-a671-9627495c2a06",
+        "title": "אבא אנו זקוקים לך"
+      },
+      "confidence": 100,
+      "titleMatch": 100,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 70,
+        "title": "איזו מן אהבה זו"
+      },
+      "solupresenter": {
+        "id": "8c914801-81d6-4792-bdbc-5502f665a883",
+        "title": "איזו מן אהבה זו"
+      },
+      "confidence": 100,
+      "titleMatch": 100,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 79,
+        "title": "אל כל הניסים"
+      },
+      "solupresenter": {
+        "id": "5443245e-04eb-4b58-9500-5229cc7b89d6",
+        "title": "אל כל הניסים"
+      },
+      "confidence": 100,
+      "titleMatch": 100,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 126,
+        "title": "אדוני מחסנו"
+      },
+      "solupresenter": {
+        "id": "04d6e40b-a54f-49c1-aed6-4f52cd093b5d",
+        "title": "אדוני מחסנו"
+      },
+      "confidence": 100,
+      "titleMatch": 100,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 159,
+        "title": "איך זה אפשרי"
+      },
+      "solupresenter": {
+        "id": "de6af420-2a19-4f10-8bf2-51756af6f052",
+        "title": "איך זה אפשרי"
+      },
+      "confidence": 100,
+      "titleMatch": 100,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 161,
+        "title": "אין בור עמוק"
+      },
+      "solupresenter": {
+        "id": "133e0ef5-d984-4879-9e44-2bf33347d571",
+        "title": "אין בור עמוק"
+      },
+      "confidence": 100,
+      "titleMatch": 100,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 169,
+        "title": "אני חופשי"
+      },
+      "solupresenter": {
+        "id": "21f82a4c-a942-45fd-9d12-d749b99a0ef6",
+        "title": "אני חופשי"
+      },
+      "confidence": 100,
+      "titleMatch": 100,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 269,
+        "title": "ליבי שלך ישוע"
+      },
+      "solupresenter": {
+        "id": "111e9053-9934-4d0f-9282-414a53a509d0",
+        "title": "ליבי שלך ישוע"
+      },
+      "confidence": 100,
+      "titleMatch": 100,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 274,
+        "title": "מה יקר חסדך"
+      },
+      "solupresenter": {
+        "id": "9093b11b-581e-4a9c-8db5-71b7c3401168",
+        "title": "מה יקר חסדך"
+      },
+      "confidence": 100,
+      "titleMatch": 100,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 297,
+        "title": "עתיק היומין"
+      },
+      "solupresenter": {
+        "id": "9a617c35-69a2-4573-8a97-533ba96845cc",
+        "title": "עתיק היומין"
+      },
+      "confidence": 100,
+      "titleMatch": 100,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 305,
+        "title": "קול דודי"
+      },
+      "solupresenter": {
+        "id": "ff93e9e4-fa91-401c-bb9b-00eeb6e0f79d",
+        "title": "קול דודי"
+      },
+      "confidence": 100,
+      "titleMatch": 100,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 321,
+        "title": "שוב ושוב"
+      },
+      "solupresenter": {
+        "id": "b1c2a4a2-d453-4c90-8640-7b5c3d77f2e3",
+        "title": "שוב ושוב"
+      },
+      "confidence": 100,
+      "titleMatch": 100,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 158,
+        "title": "אי אפשר לזייף"
+      },
+      "solupresenter": {
+        "id": "2a4e46a2-fc32-4216-943a-d5cd27a0d9c4",
+        "title": "אי אפשר לזייף"
+      },
+      "confidence": 100,
+      "titleMatch": 100,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 67,
+        "title": "אהלל אותך לנצח"
+      },
+      "solupresenter": {
+        "id": "f902fd65-d6f1-4b61-8b41-d1d2e28e218f",
+        "title": "אהלל אותך לנצח"
+      },
+      "confidence": 100,
+      "titleMatch": 100,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 2,
+        "title": "ריבון עולם"
+      },
+      "solupresenter": {
+        "id": "04a31d75-864f-430c-9842-506defbe74a8",
+        "title": "ריבון עולם"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 99
+    },
+    {
+      "soluflow": {
+        "id": 57,
+        "title": "רק אתה ראוי"
+      },
+      "solupresenter": {
+        "id": "142104aa-d1a7-4024-b7ac-32cf7e2f04a4",
+        "title": "רק אתה ראוי"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 98
+    },
+    {
+      "soluflow": {
+        "id": 58,
+        "title": "רק עם ישוע"
+      },
+      "solupresenter": {
+        "id": "28c1a792-263e-455e-9c69-b9af8f4049c3",
+        "title": "רק עם ישוע"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 98
+    },
+    {
+      "soluflow": {
+        "id": 94,
+        "title": "אשא עיני אל אדוני עוזי"
+      },
+      "solupresenter": {
+        "id": "13ce5562-bd1e-4d57-a6ca-73c04c05f42c",
+        "title": "אשא עיני אל אדוני עוזי"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 98
+    },
+    {
+      "soluflow": {
+        "id": 173,
+        "title": "אני שלך"
+      },
+      "solupresenter": {
+        "id": "1a5650df-4076-4057-b1f5-e9647501945a",
+        "title": "אני שלך"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 99
+    },
+    {
+      "soluflow": {
+        "id": 164,
+        "title": "אל מי נלך"
+      },
+      "solupresenter": {
+        "id": "31e2bec1-4f13-42dd-b49a-27621eaffafc",
+        "title": "אל מי נלך"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 99
+    },
+    {
+      "soluflow": {
+        "id": 218,
+        "title": "הכי טוב"
+      },
+      "solupresenter": {
+        "id": "28a37243-357b-4f60-8782-b7e0dedc8830",
+        "title": "הכי טוב"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 99
+    },
+    {
+      "soluflow": {
+        "id": 289,
+        "title": "ריבון"
+      },
+      "solupresenter": {
+        "id": "e3c45c2f-e8f0-4e86-878f-615d1a376eab",
+        "title": "ריבון"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 99
+    },
+    {
+      "soluflow": {
+        "id": 33,
+        "title": "מה ידידות"
+      },
+      "solupresenter": {
+        "id": "fe857ce2-9174-47ea-a2b1-228bb4b6c9a1",
+        "title": "מה ידידות"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 98
+    },
+    {
+      "soluflow": {
+        "id": 323,
+        "title": "שיר אהבה"
+      },
+      "solupresenter": {
+        "id": "e972dce4-ecc4-4d27-8b5b-30c66c48a1dc",
+        "title": "שיר אהבה"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 99
+    },
+    {
+      "soluflow": {
+        "id": 125,
+        "title": "אדון אתה אורי"
+      },
+      "solupresenter": {
+        "id": "94deb748-34d8-4e1b-a4ce-33323dbc1b54",
+        "title": "אדון אתה אורי"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 99
+    },
+    {
+      "soluflow": {
+        "id": 78,
+        "title": "אל ואדון"
+      },
+      "solupresenter": {
+        "id": "00ffbe2f-f3c7-4920-8fb7-90c00562e57d",
+        "title": "אל ואדון"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 98
+    },
+    {
+      "soluflow": {
+        "id": 211,
+        "title": "די לי"
+      },
+      "solupresenter": {
+        "id": "bd7753bd-ba9a-4498-849c-f9d444470def",
+        "title": "די לי"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 99
+    },
+    {
+      "soluflow": {
+        "id": 296,
+        "title": "צור ישראל"
+      },
+      "solupresenter": {
+        "id": "c4b7fb29-ecfb-493a-9856-4295fc36f187",
+        "title": "צור ישראל"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 99
+    },
+    {
+      "soluflow": {
+        "id": 190,
+        "title": "בביתך"
+      },
+      "solupresenter": {
+        "id": "26127810-2052-4e8c-a5e5-2b9432b5f190",
+        "title": "בביתך"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 98
+    },
+    {
+      "soluflow": {
+        "id": 267,
+        "title": "להיות קרוב"
+      },
+      "solupresenter": {
+        "id": "8a4eade9-6954-4389-a614-906fcd180d85",
+        "title": "להיות קרוב"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 99
+    },
+    {
+      "soluflow": {
+        "id": 227,
+        "title": "התקווה"
+      },
+      "solupresenter": {
+        "id": "03e46e8d-746f-457e-a1fd-f775ecfcced6",
+        "title": "התקווה"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 98
+    },
+    {
+      "soluflow": {
+        "id": 245,
+        "title": "כאן אדון"
+      },
+      "solupresenter": {
+        "id": "4e17cdb3-f99f-45d5-9108-793b99e8616f",
+        "title": "כאן אדון"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 98
+    },
+    {
+      "soluflow": {
+        "id": 293,
+        "title": "עומד בך"
+      },
+      "solupresenter": {
+        "id": "cb740301-3255-48d5-880f-0f1c6983815e",
+        "title": "עומד בך"
+      },
+      "confidence": 99,
+      "titleMatch": 100,
+      "lyricsMatch": 99
+    },
+    {
+      "soluflow": {
+        "id": 40,
+        "title": "נולדתי אלי"
+      },
+      "solupresenter": {
+        "id": "8095d852-5e7d-4983-9a2f-9f6edc071234",
+        "title": "נולדתי אלי"
+      },
+      "confidence": 98,
+      "titleMatch": 100,
+      "lyricsMatch": 96
+    },
+    {
+      "soluflow": {
+        "id": 75,
+        "title": "הגיבור של הסיפור"
+      },
+      "solupresenter": {
+        "id": "8d0073d5-2daf-4807-9a37-0fa72f6317a8",
+        "title": "הגיבור של הסיפור"
+      },
+      "confidence": 98,
+      "titleMatch": 100,
+      "lyricsMatch": 97
+    },
+    {
+      "soluflow": {
+        "id": 97,
+        "title": "אשוב אליך"
+      },
+      "solupresenter": {
+        "id": "6d10d977-c002-4087-bc8a-09783615bd89",
+        "title": "אשוב אליך"
+      },
+      "confidence": 98,
+      "titleMatch": 100,
+      "lyricsMatch": 97
+    },
+    {
+      "soluflow": {
+        "id": 134,
+        "title": "גואלי חי"
+      },
+      "solupresenter": {
+        "id": "ff39c0ee-d73b-48f9-b938-d152fca14bf8",
+        "title": "גואלי חי"
+      },
+      "confidence": 98,
+      "titleMatch": 100,
+      "lyricsMatch": 97
+    },
+    {
+      "soluflow": {
+        "id": 143,
+        "title": "הנה חיי"
+      },
+      "solupresenter": {
+        "id": "cdaf94e4-0037-4031-b917-2abc7fc7a7a4",
+        "title": "הנה חיי"
+      },
+      "confidence": 98,
+      "titleMatch": 100,
+      "lyricsMatch": 96
+    },
+    {
+      "soluflow": {
+        "id": 165,
+        "title": "אל מלא בתשוקה"
+      },
+      "solupresenter": {
+        "id": "60b601ee-c448-42a7-9d12-e452fd2166a2",
+        "title": "אל מלא בתשוקה"
+      },
+      "confidence": 98,
+      "titleMatch": 100,
+      "lyricsMatch": 97
+    },
+    {
+      "soluflow": {
+        "id": 256,
+        "title": "כמה חסד"
+      },
+      "solupresenter": {
+        "id": "6611628f-8ebf-450f-90f9-1587cc820b15",
+        "title": "כמה חסד"
+      },
+      "confidence": 98,
+      "titleMatch": 100,
+      "lyricsMatch": 97
+    },
+    {
+      "soluflow": {
+        "id": 260,
+        "title": "כס הרחמים"
+      },
+      "solupresenter": {
+        "id": "2e2687d5-4c0c-4630-aac8-dc9a9aa42b73",
+        "title": "כס הרחמים"
+      },
+      "confidence": 98,
+      "titleMatch": 100,
+      "lyricsMatch": 97
+    },
+    {
+      "soluflow": {
+        "id": 268,
+        "title": "לו הכבוד"
+      },
+      "solupresenter": {
+        "id": "91c5afec-3a55-4499-bc34-dd55107722d5",
+        "title": "לו הכבוד"
+      },
+      "confidence": 98,
+      "titleMatch": 100,
+      "lyricsMatch": 96
+    },
+    {
+      "soluflow": {
+        "id": 282,
+        "title": "מנת חלקי"
+      },
+      "solupresenter": {
+        "id": "1501db16-74bf-4e0f-8559-84f14f74e145",
+        "title": "מנת חלקי"
+      },
+      "confidence": 98,
+      "titleMatch": 100,
+      "lyricsMatch": 97
+    },
+    {
+      "soluflow": {
+        "id": 295,
+        "title": "עמנואל"
+      },
+      "solupresenter": {
+        "id": "dacb5f21-4a52-4dd9-99b7-2ba0c3c3c517",
+        "title": "עמנואל"
+      },
+      "confidence": 98,
+      "titleMatch": 100,
+      "lyricsMatch": 97
+    },
+    {
+      "soluflow": {
+        "id": 41,
+        "title": "נשמת כל חי"
+      },
+      "solupresenter": {
+        "id": "3c46f21d-2454-4133-8bb7-a0736597b908",
+        "title": "נשמת כל חי"
+      },
+      "confidence": 97,
+      "titleMatch": 100,
+      "lyricsMatch": 95
+    },
+    {
+      "soluflow": {
+        "id": 65,
+        "title": "אדוני אהובי"
+      },
+      "solupresenter": {
+        "id": "8a0bf111-a397-47e9-a555-4b4c8751c0f6",
+        "title": "אדוני אהובי"
+      },
+      "confidence": 97,
+      "titleMatch": 100,
+      "lyricsMatch": 95
+    },
+    {
+      "soluflow": {
+        "id": 91,
+        "title": "אני מאמין"
+      },
+      "solupresenter": {
+        "id": "79c16d73-dfb8-4d38-bb45-7a04426af79c",
+        "title": "אני מאמין"
+      },
+      "confidence": 97,
+      "titleMatch": 100,
+      "lyricsMatch": 95
+    },
+    {
+      "soluflow": {
+        "id": 168,
+        "title": "אני ארקוד"
+      },
+      "solupresenter": {
+        "id": "a744655a-ad52-4704-8a8e-f328e88c5024",
+        "title": "אני ארקוד"
+      },
+      "confidence": 97,
+      "titleMatch": 100,
+      "lyricsMatch": 95
+    },
+    {
+      "soluflow": {
+        "id": 243,
+        "title": "ישוע הנני כאן"
+      },
+      "solupresenter": {
+        "id": "ffd6574b-d318-4c8d-9782-6a624d16496a",
+        "title": "ישוע הנני כאן"
+      },
+      "confidence": 97,
+      "titleMatch": 100,
+      "lyricsMatch": 95
+    },
+    {
+      "soluflow": {
+        "id": 279,
+        "title": "אדיר אלוהינו"
+      },
+      "solupresenter": {
+        "id": "45a569a3-5562-4173-83f8-fa56a12493b8",
+        "title": "אדיר אלוהינו"
+      },
+      "confidence": 97,
+      "titleMatch": 100,
+      "lyricsMatch": 95
+    },
+    {
+      "soluflow": {
+        "id": 311,
+        "title": "ראוי הוא השה"
+      },
+      "solupresenter": {
+        "id": "e130833c-9275-408d-a00a-bd9c3786bbcc",
+        "title": "ראוי הוא השה"
+      },
+      "confidence": 97,
+      "titleMatch": 100,
+      "lyricsMatch": 95
+    },
+    {
+      "soluflow": {
+        "id": 294,
+        "title": "על כל הניסים"
+      },
+      "solupresenter": {
+        "id": "0787cb5b-9e87-4d6b-beae-c45ee7acd8e8",
+        "title": "על כל הניסים"
+      },
+      "confidence": 97,
+      "titleMatch": 100,
+      "lyricsMatch": 95
+    },
+    {
+      "soluflow": {
+        "id": 275,
+        "title": "מול"
+      },
+      "solupresenter": {
+        "id": "280188e7-a834-4d7d-8dae-1661e6a545b8",
+        "title": "מול"
+      },
+      "confidence": 97,
+      "titleMatch": 100,
+      "lyricsMatch": 95
+    },
+    {
+      "soluflow": {
+        "id": 42,
+        "title": "עוד ממך"
+      },
+      "solupresenter": {
+        "id": "d6c3acb7-6257-4b17-949a-5391bd6a6933",
+        "title": "עוד ממך"
+      },
+      "confidence": 96,
+      "titleMatch": 100,
+      "lyricsMatch": 94
+    },
+    {
+      "soluflow": {
+        "id": 68,
+        "title": "אהלל"
+      },
+      "solupresenter": {
+        "id": "8670d3ff-d6ec-413c-8a94-7f6ada9f39c0",
+        "title": "אהלל"
+      },
+      "confidence": 96,
+      "titleMatch": 100,
+      "lyricsMatch": 93
+    },
+    {
+      "soluflow": {
+        "id": 56,
+        "title": "רץ אל המטרה"
+      },
+      "solupresenter": {
+        "id": "96e66e35-bcfa-4b75-b888-fabd4a2c674c",
+        "title": "רץ אל המטרה"
+      },
+      "confidence": 96,
+      "titleMatch": 100,
+      "lyricsMatch": 94
+    },
+    {
+      "soluflow": {
+        "id": 123,
+        "title": "ישוע בוא לכאן היום"
+      },
+      "solupresenter": {
+        "id": "df78f1cf-d958-422c-9375-c12355d8a2fa",
+        "title": "ישוע בוא לכאן היום"
+      },
+      "confidence": 96,
+      "titleMatch": 100,
+      "lyricsMatch": 94
+    },
+    {
+      "soluflow": {
+        "id": 114,
+        "title": "ברכה וכבוד"
+      },
+      "solupresenter": {
+        "id": "37c4bfe6-8d05-4126-a2f5-3fee054258f9",
+        "title": "ברכה וכבוד"
+      },
+      "confidence": 96,
+      "titleMatch": 100,
+      "lyricsMatch": 94
+    },
+    {
+      "soluflow": {
+        "id": 242,
+        "title": "ישוע אל יקר"
+      },
+      "solupresenter": {
+        "id": "9cb96afe-799f-43eb-bfac-0d10f95be570",
+        "title": "ישוע אל יקר"
+      },
+      "confidence": 96,
+      "titleMatch": 100,
+      "lyricsMatch": 94
+    },
+    {
+      "soluflow": {
+        "id": 259,
+        "title": "כמה טוב לשיר לך"
+      },
+      "solupresenter": {
+        "id": "0e00a8ac-fd74-4204-a243-a2847e530ff5",
+        "title": "כמה טוב לשיר לך"
+      },
+      "confidence": 96,
+      "titleMatch": 100,
+      "lyricsMatch": 93
+    },
+    {
+      "soluflow": {
+        "id": 308,
+        "title": "קח הכל"
+      },
+      "solupresenter": {
+        "id": "60f93efb-f109-44f3-a660-d369636b445c",
+        "title": "קח הכל"
+      },
+      "confidence": 96,
+      "titleMatch": 100,
+      "lyricsMatch": 94
+    },
+    {
+      "soluflow": {
+        "id": 44,
+        "title": "אבא טוב"
+      },
+      "solupresenter": {
+        "id": "e5c3a9e9-1a74-4fa2-9532-67d351ee3648",
+        "title": "אבא טוב"
+      },
+      "confidence": 96,
+      "titleMatch": 100,
+      "lyricsMatch": 94
+    },
+    {
+      "soluflow": {
+        "id": 10,
+        "title": "חיים לנצח"
+      },
+      "solupresenter": {
+        "id": "7bd135bd-343e-4253-9a9f-4bf3d8c06033",
+        "title": "חיים לנצח"
+      },
+      "confidence": 95,
+      "titleMatch": 100,
+      "lyricsMatch": 91
+    },
+    {
+      "soluflow": {
+        "id": 12,
+        "title": "תמיד תנצח"
+      },
+      "solupresenter": {
+        "id": "dc374d58-33c2-4e33-a882-7f7231f051e6",
+        "title": "תמיד תנצח"
+      },
+      "confidence": 95,
+      "titleMatch": 100,
+      "lyricsMatch": 92
+    },
+    {
+      "soluflow": {
+        "id": 49,
+        "title": "קרבן חי"
+      },
+      "solupresenter": {
+        "id": "27b387dd-203e-4a46-a8f0-da7fe3f1988b",
+        "title": "קורבן חי"
+      },
+      "confidence": 95,
+      "titleMatch": 88,
+      "lyricsMatch": 99
+    },
+    {
+      "soluflow": {
+        "id": 66,
+        "title": "אהבתו גדולה"
+      },
+      "solupresenter": {
+        "id": "1f9a97fc-658e-4b7d-ba52-35ad0939cc5e",
+        "title": "אהבתו גדולה"
+      },
+      "confidence": 95,
+      "titleMatch": 100,
+      "lyricsMatch": 91
+    },
+    {
+      "soluflow": {
+        "id": 117,
+        "title": "טעמו וראו"
+      },
+      "solupresenter": {
+        "id": "3de42f62-9be8-410e-a0d8-868606a3fafa",
+        "title": "טעמו וראו"
+      },
+      "confidence": 95,
+      "titleMatch": 100,
+      "lyricsMatch": 91
+    },
+    {
+      "soluflow": {
+        "id": 139,
+        "title": "הישועה לאלוהינו"
+      },
+      "solupresenter": {
+        "id": "137e06b0-32d7-41b9-9902-eb1587ce03d8",
+        "title": "הישועה לאלוהינו"
+      },
+      "confidence": 95,
+      "titleMatch": 100,
+      "lyricsMatch": 92
+    },
+    {
+      "soluflow": {
+        "id": 220,
+        "title": "הכן את כלתך"
+      },
+      "solupresenter": {
+        "id": "dccfc8c5-1954-45eb-bf84-98e4c98d4a01",
+        "title": "הכן את כלתך"
+      },
+      "confidence": 95,
+      "titleMatch": 100,
+      "lyricsMatch": 92
+    },
+    {
+      "soluflow": {
+        "id": 198,
+        "title": "שער השמיים"
+      },
+      "solupresenter": {
+        "id": "3fb6c938-f40b-41ab-b1ca-cbc66e409332",
+        "title": "שער השמיים"
+      },
+      "confidence": 95,
+      "titleMatch": 100,
+      "lyricsMatch": 91
+    },
+    {
+      "soluflow": {
+        "id": 124,
+        "title": "תן לאש ליפול"
+      },
+      "solupresenter": {
+        "id": "03236c8b-8ebc-4361-ad54-fc180745f040",
+        "title": "תן לאש ליפול"
+      },
+      "confidence": 94,
+      "titleMatch": 100,
+      "lyricsMatch": 90
+    },
+    {
+      "soluflow": {
+        "id": 318,
+        "title": "רק בזכותך"
+      },
+      "solupresenter": {
+        "id": "aca1998e-a6df-40a2-a723-aea231bfb78d",
+        "title": "רק בזכותך"
+      },
+      "confidence": 94,
+      "titleMatch": 100,
+      "lyricsMatch": 90
+    },
+    {
+      "soluflow": {
+        "id": 334,
+        "title": "תודה לך"
+      },
+      "solupresenter": {
+        "id": "5a8b6c75-9b6e-4dc3-9bb9-ef575086e256",
+        "title": "תודה לך"
+      },
+      "confidence": 94,
+      "titleMatch": 100,
+      "lyricsMatch": 90
+    },
+    {
+      "soluflow": {
+        "id": 336,
+        "title": "תם ונישלם"
+      },
+      "solupresenter": {
+        "id": "4a883a16-3d04-49bf-9269-0fa8f636718a",
+        "title": "תם ונשלם"
+      },
+      "confidence": 94,
+      "titleMatch": 89,
+      "lyricsMatch": 97
+    },
+    {
+      "soluflow": {
+        "id": 30,
+        "title": "לאן אלך מרוחך"
+      },
+      "solupresenter": {
+        "id": "819e267f-1821-449d-b8e2-a8c0f56d9f74",
+        "title": "לאן אלך מרוחך"
+      },
+      "confidence": 93,
+      "titleMatch": 100,
+      "lyricsMatch": 88
+    },
+    {
+      "soluflow": {
+        "id": 106,
+        "title": "טיפות יין"
+      },
+      "solupresenter": {
+        "id": "6021d8bf-77ba-4ee6-9de1-c75e6af6f360",
+        "title": "טיפות יין"
+      },
+      "confidence": 93,
+      "titleMatch": 100,
+      "lyricsMatch": 89
+    },
+    {
+      "soluflow": {
+        "id": 104,
+        "title": "בורא קדושים"
+      },
+      "solupresenter": {
+        "id": "547cb1a1-e0b9-4223-ba96-9c0acc3cf979",
+        "title": "בורא קדושים"
+      },
+      "confidence": 93,
+      "titleMatch": 100,
+      "lyricsMatch": 89
+    },
+    {
+      "soluflow": {
+        "id": 127,
+        "title": "אהבתך היא לנצח"
+      },
+      "solupresenter": {
+        "id": "78d6937b-6065-459e-ac89-a77638c06323",
+        "title": "אהבתך היא לנצח"
+      },
+      "confidence": 93,
+      "titleMatch": 100,
+      "lyricsMatch": 88
+    },
+    {
+      "soluflow": {
+        "id": 149,
+        "title": "אגילה בך"
+      },
+      "solupresenter": {
+        "id": "b13ea9d5-8410-4996-9092-fdfd3b5c263e",
+        "title": "אגילה בך"
+      },
+      "confidence": 93,
+      "titleMatch": 100,
+      "lyricsMatch": 89
+    },
+    {
+      "soluflow": {
+        "id": 115,
+        "title": "הביטו אליו"
+      },
+      "solupresenter": {
+        "id": "28c529f3-17d4-4c9d-a19a-752ee81b2b14",
+        "title": "הביטו אליו"
+      },
+      "confidence": 93,
+      "titleMatch": 100,
+      "lyricsMatch": 89
+    },
+    {
+      "soluflow": {
+        "id": 135,
+        "title": "דור דורשיו"
+      },
+      "solupresenter": {
+        "id": "0be3a655-b874-4510-9b91-3b80703c9920",
+        "title": "דור דורשיו"
+      },
+      "confidence": 93,
+      "titleMatch": 100,
+      "lyricsMatch": 88
+    },
+    {
+      "soluflow": {
+        "id": 52,
+        "title": "רחמים אבקש"
+      },
+      "solupresenter": {
+        "id": "62b94b2d-918d-462a-9786-4c8edde25cc0",
+        "title": "רחמים אבקש"
+      },
+      "confidence": 92,
+      "titleMatch": 100,
+      "lyricsMatch": 86
+    },
+    {
+      "soluflow": {
+        "id": 147,
+        "title": "הנני שלחני"
+      },
+      "solupresenter": {
+        "id": "1b953c38-950f-4024-9dae-33c767ff41fe",
+        "title": "הנני שלחני"
+      },
+      "confidence": 92,
+      "titleMatch": 100,
+      "lyricsMatch": 87
+    },
+    {
+      "soluflow": {
+        "id": 145,
+        "title": "הנה כעיני עבדים"
+      },
+      "solupresenter": {
+        "id": "37e53dc4-0b59-45d2-b74c-2cc633b094dc",
+        "title": "הנה כעיני עבדים"
+      },
+      "confidence": 92,
+      "titleMatch": 100,
+      "lyricsMatch": 87
+    },
+    {
+      "soluflow": {
+        "id": 291,
+        "title": "בישראל"
+      },
+      "solupresenter": {
+        "id": "796af777-95fe-4662-8c2b-26c74e804f66",
+        "title": "בישראל"
+      },
+      "confidence": 92,
+      "titleMatch": 100,
+      "lyricsMatch": 87
+    },
+    {
+      "soluflow": {
+        "id": 347,
+        "title": "אתה גדול"
+      },
+      "solupresenter": {
+        "id": "654130a2-e7b9-428a-9f2f-7c4adc99bac3",
+        "title": "אתה גדול"
+      },
+      "confidence": 92,
+      "titleMatch": 100,
+      "lyricsMatch": 86
+    },
+    {
+      "soluflow": {
+        "id": 47,
+        "title": "קדוש אתה (לפניך אני משתחווה)"
+      },
+      "solupresenter": {
+        "id": "dd69dd77-013d-4689-829b-ee758da1ea9d",
+        "title": "קדוש (לפניך אני משתחווה)"
+      },
+      "confidence": 91,
+      "titleMatch": 85,
+      "lyricsMatch": 95
+    },
+    {
+      "soluflow": {
+        "id": 153,
+        "title": "אדוני שפתי תפתח"
+      },
+      "solupresenter": {
+        "id": "ace18c1b-100e-4644-9ac0-d73db26d101f",
+        "title": "אדוני שפתי תפתח"
+      },
+      "confidence": 91,
+      "titleMatch": 100,
+      "lyricsMatch": 85
+    },
+    {
+      "soluflow": {
+        "id": 182,
+        "title": "פורץ דרך"
+      },
+      "solupresenter": {
+        "id": "9bc28af4-b594-42ca-84fc-289f6168704c",
+        "title": "פורץ דרך"
+      },
+      "confidence": 91,
+      "titleMatch": 100,
+      "lyricsMatch": 85
+    },
+    {
+      "soluflow": {
+        "id": 239,
+        "title": "ימי אליהו"
+      },
+      "solupresenter": {
+        "id": "e799e4e3-f5cc-44d5-9c4f-e733192ad55b",
+        "title": "ימי אליהו"
+      },
+      "confidence": 91,
+      "titleMatch": 100,
+      "lyricsMatch": 85
+    },
+    {
+      "soluflow": {
+        "id": 244,
+        "title": "תתגלה לנו"
+      },
+      "solupresenter": {
+        "id": "d3836001-d9fd-4744-af91-ffe344c099f0",
+        "title": "יתגלה לנו"
+      },
+      "confidence": 91,
+      "titleMatch": 89,
+      "lyricsMatch": 93
+    },
+    {
+      "soluflow": {
+        "id": 71,
+        "title": "אין אחד"
+      },
+      "solupresenter": {
+        "id": "63f0f00c-4ae1-4f88-928b-814dad7bb99f",
+        "title": "אין אחד"
+      },
+      "confidence": 90,
+      "titleMatch": 100,
+      "lyricsMatch": 84
+    },
+    {
+      "soluflow": {
+        "id": 271,
+        "title": "לכל הצמאים(בוא ישוע)"
+      },
+      "solupresenter": {
+        "id": "ff96d06f-5216-4563-8377-c191d3829572",
+        "title": "לכל הצמאים(בוא ישוע בוא)"
+      },
+      "confidence": 90,
+      "titleMatch": 82,
+      "lyricsMatch": 96
+    },
+    {
+      "soluflow": {
+        "id": 38,
+        "title": "מתחת לכנפיך"
+      },
+      "solupresenter": {
+        "id": "8038ea9d-7ce0-4bb0-a866-b9a8e5a6da8c",
+        "title": "מתחת לכנפיך"
+      },
+      "confidence": 89,
+      "titleMatch": 100,
+      "lyricsMatch": 81
+    },
+    {
+      "soluflow": {
+        "id": 196,
+        "title": "בונים מזבח"
+      },
+      "solupresenter": {
+        "id": "4094ec2e-a205-403c-a94e-bfe67ed25d6b",
+        "title": "בונים מזבח"
+      },
+      "confidence": 89,
+      "titleMatch": 100,
+      "lyricsMatch": 81
+    },
+    {
+      "soluflow": {
+        "id": 202,
+        "title": "במדבר"
+      },
+      "solupresenter": {
+        "id": "93cb7374-6e93-434d-bda0-702715c5ba93",
+        "title": "במדבר"
+      },
+      "confidence": 89,
+      "titleMatch": 100,
+      "lyricsMatch": 81
+    },
+    {
+      "soluflow": {
+        "id": 132,
+        "title": "גדול אדוני כבוד ותפארת)"
+      },
+      "solupresenter": {
+        "id": "682c9e5e-a0d8-47c3-b6c9-7e8f594318f8",
+        "title": "גדול אדוני כבוד ותפארת"
+      },
+      "confidence": 88,
+      "titleMatch": 100,
+      "lyricsMatch": 80
+    },
+    {
+      "soluflow": {
+        "id": 236,
+        "title": "יותר מתמיד"
+      },
+      "solupresenter": {
+        "id": "74e6351e-7ba9-43a4-9ea0-ab5f8e0db783",
+        "title": "אבא יותר מתמיד"
+      },
+      "confidence": 88,
+      "titleMatch": 71,
+      "lyricsMatch": 99
+    },
+    {
+      "soluflow": {
+        "id": 76,
+        "title": "אל אבותינו"
+      },
+      "solupresenter": {
+        "id": "0c3fbc5e-908a-46cb-b7cf-fa2111e04d7d",
+        "title": "אל אבותינו"
+      },
+      "confidence": 87,
+      "titleMatch": 100,
+      "lyricsMatch": 78
+    },
+    {
+      "soluflow": {
+        "id": 156,
+        "title": "אהבתך"
+      },
+      "solupresenter": {
+        "id": "d940db92-5ab6-4513-90c1-d521cd68f796",
+        "title": "אהבתך"
+      },
+      "confidence": 87,
+      "titleMatch": 100,
+      "lyricsMatch": 79
+    },
+    {
+      "soluflow": {
+        "id": 300,
+        "title": "קדוש אדוני אלוהינו"
+      },
+      "solupresenter": {
+        "id": "078ebb05-8db7-478e-875b-7ae9195fc12a",
+        "title": "קדוש אדוני אלוהנו"
+      },
+      "confidence": 87,
+      "titleMatch": 94,
+      "lyricsMatch": 83
+    },
+    {
+      "soluflow": {
+        "id": 302,
+        "title": "קדוש שמו"
+      },
+      "solupresenter": {
+        "id": "0b50f0e3-1cd6-400c-b7a8-99a25d73d467",
+        "title": "קדוש שמו"
+      },
+      "confidence": 87,
+      "titleMatch": 100,
+      "lyricsMatch": 79
+    },
+    {
+      "soluflow": {
+        "id": 309,
+        "title": "ראו איזו אהבה"
+      },
+      "solupresenter": {
+        "id": "01a777a3-100d-4002-9aa6-8f564497ae35",
+        "title": "ראו איזו אהבה"
+      },
+      "confidence": 87,
+      "titleMatch": 100,
+      "lyricsMatch": 78
+    },
+    {
+      "soluflow": {
+        "id": 31,
+        "title": "מה אדיר שמך"
+      },
+      "solupresenter": {
+        "id": "6ea88a66-c8a5-4f02-954e-c4364ab35f8e",
+        "title": "מה אדיר שמך"
+      },
+      "confidence": 87,
+      "titleMatch": 100,
+      "lyricsMatch": 79
+    },
+    {
+      "soluflow": {
+        "id": 20,
+        "title": "ישוע נרומם אותך"
+      },
+      "solupresenter": {
+        "id": "8f38a492-450b-4d14-a0e3-3c70c22e757e",
+        "title": "ישוע נרומם אותך"
+      },
+      "confidence": 86,
+      "titleMatch": 100,
+      "lyricsMatch": 76
+    },
+    {
+      "soluflow": {
+        "id": 35,
+        "title": "מי כמוך אדוני"
+      },
+      "solupresenter": {
+        "id": "36e7c5db-3051-4f07-a95a-f52f0f6c56bb",
+        "title": "מי כמוך אדוני"
+      },
+      "confidence": 86,
+      "titleMatch": 100,
+      "lyricsMatch": 77
+    },
+    {
+      "soluflow": {
+        "id": 93,
+        "title": "אני שייך לך"
+      },
+      "solupresenter": {
+        "id": "c72cf572-c803-4be6-a1c2-37965d6e793b",
+        "title": "אני שייך לך"
+      },
+      "confidence": 86,
+      "titleMatch": 100,
+      "lyricsMatch": 77
+    },
+    {
+      "soluflow": {
+        "id": 184,
+        "title": "אתה מרים אותי גבוהה"
+      },
+      "solupresenter": {
+        "id": "8a6d5e70-9bb4-4d0c-8684-c7e6734df190",
+        "title": "אתה מרים אותי"
+      },
+      "confidence": 86,
+      "titleMatch": 68,
+      "lyricsMatch": 98
+    },
+    {
+      "soluflow": {
+        "id": 195,
+        "title": "בואי רוח"
+      },
+      "solupresenter": {
+        "id": "195c827c-69fc-4351-8861-45f7a8da1af2",
+        "title": "בואי רוח"
+      },
+      "confidence": 86,
+      "titleMatch": 100,
+      "lyricsMatch": 77
+    },
+    {
+      "soluflow": {
+        "id": 209,
+        "title": "דבר אל ליבי"
+      },
+      "solupresenter": {
+        "id": "48da57ca-9962-40ce-a0b4-11abb9e730e8",
+        "title": "דבר אל ליבי ישוע"
+      },
+      "confidence": 86,
+      "titleMatch": 69,
+      "lyricsMatch": 97
+    },
+    {
+      "soluflow": {
+        "id": 213,
+        "title": "הברכה"
+      },
+      "solupresenter": {
+        "id": "578688f8-6ed9-4eeb-8dca-00964e253225",
+        "title": "הברכה"
+      },
+      "confidence": 86,
+      "titleMatch": 100,
+      "lyricsMatch": 76
+    },
+    {
+      "soluflow": {
+        "id": 167,
+        "title": "אנו אוהבים אותך"
+      },
+      "solupresenter": {
+        "id": "c97a7020-92f5-4b7c-ad20-ac531eaffbe8",
+        "title": "אנו אוהבים אותך"
+      },
+      "confidence": 86,
+      "titleMatch": 100,
+      "lyricsMatch": 76
+    },
+    {
+      "soluflow": {
+        "id": 63,
+        "title": "אדוני אדוננו"
+      },
+      "solupresenter": {
+        "id": "9d8d1252-a0bf-4331-a0ad-af4052576ca1",
+        "title": "אדוני אדוננו (ישן)"
+      },
+      "confidence": 86,
+      "titleMatch": 75,
+      "lyricsMatch": 94
+    },
+    {
+      "soluflow": {
+        "id": 316,
+        "title": "רם ונישא(קלאסי)"
+      },
+      "solupresenter": {
+        "id": "76ef6e1b-03cb-4c2f-af37-cc68f8ec62aa",
+        "title": "רם ונישא המשיח"
+      },
+      "confidence": 86,
+      "titleMatch": 64,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 11,
+        "title": "יגדל אדוני"
+      },
+      "solupresenter": {
+        "id": "ea4b293c-ccc4-4d87-8895-7bce3d1d51f8",
+        "title": "יגדל אדוני"
+      },
+      "confidence": 84,
+      "titleMatch": 100,
+      "lyricsMatch": 74
+    },
+    {
+      "soluflow": {
+        "id": 130,
+        "title": "בוא רוח אלוהים"
+      },
+      "solupresenter": {
+        "id": "a58df993-0b7d-44e8-9b3b-bdf414cf6c1a",
+        "title": "בוא רוח אלהים"
+      },
+      "confidence": 84,
+      "titleMatch": 93,
+      "lyricsMatch": 78
+    },
+    {
+      "soluflow": {
+        "id": 163,
+        "title": "אכרע ברך"
+      },
+      "solupresenter": {
+        "id": "38130a44-d1fb-4cb2-b6bb-34953e543a47",
+        "title": "אכרע ברך"
+      },
+      "confidence": 84,
+      "titleMatch": 100,
+      "lyricsMatch": 74
+    },
+    {
+      "soluflow": {
+        "id": 314,
+        "title": "רחום וחנון"
+      },
+      "solupresenter": {
+        "id": "a979a323-d07b-468d-984f-ef67e23bbb5b",
+        "title": "רחום וחנון"
+      },
+      "confidence": 84,
+      "titleMatch": 100,
+      "lyricsMatch": 74
+    },
+    {
+      "soluflow": {
+        "id": 199,
+        "title": "בכל דבר שאעשה"
+      },
+      "solupresenter": {
+        "id": "017fc59e-94fb-477c-8ad6-074b30137d49",
+        "title": "בכל דבר שאעשה"
+      },
+      "confidence": 84,
+      "titleMatch": 100,
+      "lyricsMatch": 73
+    },
+    {
+      "soluflow": {
+        "id": 86,
+        "title": "הימים האחרונים"
+      },
+      "solupresenter": {
+        "id": "0e20c5ab-b697-409e-84c8-69b72bfe9f27",
+        "title": "הימים האחרונים"
+      },
+      "confidence": 84,
+      "titleMatch": 100,
+      "lyricsMatch": 73
+    },
+    {
+      "soluflow": {
+        "id": 290,
+        "title": "נרומם אותך"
+      },
+      "solupresenter": {
+        "id": "4fcdefa5-43e6-4cff-a44b-6f610484d4c5",
+        "title": "נרומם אותך"
+      },
+      "confidence": 83,
+      "titleMatch": 100,
+      "lyricsMatch": 72
+    },
+    {
+      "soluflow": {
+        "id": 342,
+        "title": "אדון אתה טוב"
+      },
+      "solupresenter": {
+        "id": "3f1d0fe8-ef42-46b6-91c7-5a73db5aa5b6",
+        "title": "אדון אתה טוב"
+      },
+      "confidence": 83,
+      "titleMatch": 100,
+      "lyricsMatch": 72
+    },
+    {
+      "soluflow": {
+        "id": 152,
+        "title": "אדוני חילי"
+      },
+      "solupresenter": {
+        "id": "16838b9b-c20d-4b22-8267-c1729cb35605",
+        "title": "אדוני חילי"
+      },
+      "confidence": 83,
+      "titleMatch": 100,
+      "lyricsMatch": 72
+    },
+    {
+      "soluflow": {
+        "id": 55,
+        "title": "אבינו שבשמיים(מתורגם)"
+      },
+      "solupresenter": {
+        "id": "9d113d48-a21a-4fb6-9b89-e48bc798c57d",
+        "title": "אבינו שבשמיים - מתורגם"
+      },
+      "confidence": 82,
+      "titleMatch": 95,
+      "lyricsMatch": 74
+    },
+    {
+      "soluflow": {
+        "id": 72,
+        "title": "אין כמוך אלוהים"
+      },
+      "solupresenter": {
+        "id": "ea4e0fe3-97c9-4121-a994-3a2c4d40341f",
+        "title": "אין כמוך אלהים"
+      },
+      "confidence": 82,
+      "titleMatch": 93,
+      "lyricsMatch": 75
+    },
+    {
+      "soluflow": {
+        "id": 108,
+        "title": "בכל ליבי"
+      },
+      "solupresenter": {
+        "id": "70bccf6d-7219-44b2-a04b-0571518183ab",
+        "title": "בכל ליבי"
+      },
+      "confidence": 82,
+      "titleMatch": 100,
+      "lyricsMatch": 70
+    },
+    {
+      "soluflow": {
+        "id": 221,
+        "title": "הלב שלי"
+      },
+      "solupresenter": {
+        "id": "5ece53aa-53b9-4b8c-bb65-e02a11298ff1",
+        "title": "הלב שלי שלך"
+      },
+      "confidence": 82,
+      "titleMatch": 64,
+      "lyricsMatch": 94
+    },
+    {
+      "soluflow": {
+        "id": 286,
+        "title": "מתגלה לנו"
+      },
+      "solupresenter": {
+        "id": "d3836001-d9fd-4744-af91-ffe344c099f0",
+        "title": "יתגלה לנו"
+      },
+      "confidence": 82,
+      "titleMatch": 89,
+      "lyricsMatch": 77
+    },
+    {
+      "soluflow": {
+        "id": 18,
+        "title": "ישוע מושיע"
+      },
+      "solupresenter": {
+        "id": "a2247275-d574-40f7-b5cf-5756ba9579d0",
+        "title": "ישוע מושיע - מתורגם"
+      },
+      "confidence": 81,
+      "titleMatch": 59,
+      "lyricsMatch": 96
+    },
+    {
+      "soluflow": {
+        "id": 92,
+        "title": "אני רץ"
+      },
+      "solupresenter": {
+        "id": "cec4dd41-0431-43a7-bcdc-99f5f84c85fe",
+        "title": "אני רץ"
+      },
+      "confidence": 81,
+      "titleMatch": 100,
+      "lyricsMatch": 69
+    },
+    {
+      "soluflow": {
+        "id": 107,
+        "title": "בכל ליבי אאדיר אותך"
+      },
+      "solupresenter": {
+        "id": "b712da51-db21-4487-9438-226b4f494208",
+        "title": "בכל ליבי(אתמיד להודות)"
+      },
+      "confidence": 81,
+      "titleMatch": 55,
+      "lyricsMatch": 98
+    },
+    {
+      "soluflow": {
+        "id": 241,
+        "title": "ישוע"
+      },
+      "solupresenter": {
+        "id": "143baf30-37e7-4e8d-8867-b2b85963a249",
+        "title": "ישוע"
+      },
+      "confidence": 81,
+      "titleMatch": 100,
+      "lyricsMatch": 69
+    },
+    {
+      "soluflow": {
+        "id": 246,
+        "title": "כבוד"
+      },
+      "solupresenter": {
+        "id": "2795c48b-8410-4554-87b8-cebc85442b6e",
+        "title": "כבוד"
+      },
+      "confidence": 81,
+      "titleMatch": 100,
+      "lyricsMatch": 69
+    },
+    {
+      "soluflow": {
+        "id": 131,
+        "title": "ברוך הבא"
+      },
+      "solupresenter": {
+        "id": "8a08bbb5-e197-4faf-90dc-798562ed2f2b",
+        "title": "ברוך הבא"
+      },
+      "confidence": 80,
+      "titleMatch": 100,
+      "lyricsMatch": 66
+    },
+    {
+      "soluflow": {
+        "id": 46,
+        "title": "פקח את עיני ליבי"
+      },
+      "solupresenter": {
+        "id": "15308e78-4c80-4c6d-9d8c-0514c8dac334",
+        "title": "פקח את עיני ליבי"
+      },
+      "confidence": 80,
+      "titleMatch": 100,
+      "lyricsMatch": 66
+    },
+    {
+      "soluflow": {
+        "id": 322,
+        "title": "שים בנו"
+      },
+      "solupresenter": {
+        "id": "3407335c-992d-4504-b85d-6ae990755079",
+        "title": "שים בנו רעב"
+      },
+      "confidence": 80,
+      "titleMatch": 64,
+      "lyricsMatch": 91
+    },
+    {
+      "soluflow": {
+        "id": 109,
+        "title": "בכל עת אברכהו"
+      },
+      "solupresenter": {
+        "id": "856d974d-6f0a-4fef-9b0c-cff7378efe67",
+        "title": "בכל עת אברכהו"
+      },
+      "confidence": 79,
+      "titleMatch": 100,
+      "lyricsMatch": 65
+    },
+    {
+      "soluflow": {
+        "id": 315,
+        "title": "רם ונישא(מלך רם ונישא)"
+      },
+      "solupresenter": {
+        "id": "5f83938d-562b-4e55-9350-b9153c483876",
+        "title": "רם ונישא מלך"
+      },
+      "confidence": 79,
+      "titleMatch": 50,
+      "lyricsMatch": 98
+    },
+    {
+      "soluflow": {
+        "id": 214,
+        "title": "הוא אור לעולמים"
+      },
+      "solupresenter": {
+        "id": "fb577c4f-1ea8-4538-8201-7df9969e14fc",
+        "title": "הוא אור"
+      },
+      "confidence": 78,
+      "titleMatch": 47,
+      "lyricsMatch": 99
+    },
+    {
+      "soluflow": {
+        "id": 284,
+        "title": "משכני"
+      },
+      "solupresenter": {
+        "id": "848a609e-2510-47e7-8e3f-6e593099d361",
+        "title": "משכני"
+      },
+      "confidence": 78,
+      "titleMatch": 100,
+      "lyricsMatch": 64
+    },
+    {
+      "soluflow": {
+        "id": 357,
+        "title": "נולדתי להלל אותך"
+      },
+      "solupresenter": {
+        "id": "694d6f46-2df2-4e01-839d-4dcb2617108a",
+        "title": "נולדתי להלל אותך - קרן סילבר"
+      },
+      "confidence": 78,
+      "titleMatch": 62,
+      "lyricsMatch": 88
+    },
+    {
+      "soluflow": {
+        "id": 101,
+        "title": "באנו לכאן להלל אותך"
+      },
+      "solupresenter": {
+        "id": "f649906c-af7c-4d60-ae5b-42a6baecdeeb",
+        "title": "באנו לכאן"
+      },
+      "confidence": 77,
+      "titleMatch": 47,
+      "lyricsMatch": 97
+    },
+    {
+      "soluflow": {
+        "id": 102,
+        "title": "בואו נהלל אותו"
+      },
+      "solupresenter": {
+        "id": "3ecfeea0-3da8-44b0-a455-a23ae5c034dd",
+        "title": "בואו נהלל אותו"
+      },
+      "confidence": 77,
+      "titleMatch": 100,
+      "lyricsMatch": 61
+    },
+    {
+      "soluflow": {
+        "id": 118,
+        "title": "הוא נתן לי"
+      },
+      "solupresenter": {
+        "id": "95486f55-a674-4fdc-a3a0-9fd01119e299",
+        "title": "הוא נתן לי"
+      },
+      "confidence": 77,
+      "titleMatch": 100,
+      "lyricsMatch": 61
+    },
+    {
+      "soluflow": {
+        "id": 237,
+        "title": "ילדיך רעבים"
+      },
+      "solupresenter": {
+        "id": "75823a51-48a0-4fb9-bda4-0887951f0207",
+        "title": "ילדיך רעבים"
+      },
+      "confidence": 77,
+      "titleMatch": 100,
+      "lyricsMatch": 61
+    },
+    {
+      "soluflow": {
+        "id": 261,
+        "title": "לא אתבייש"
+      },
+      "solupresenter": {
+        "id": "cfe7cd46-67bb-4fc1-9302-795607a04426",
+        "title": "לא אתבייש"
+      },
+      "confidence": 77,
+      "titleMatch": 100,
+      "lyricsMatch": 62
+    },
+    {
+      "soluflow": {
+        "id": 183,
+        "title": "אתה הוא הכל בכל"
+      },
+      "solupresenter": {
+        "id": "bb9e3c18-ae39-43d0-b22a-87895f04b6f6",
+        "title": "הכל בכל"
+      },
+      "confidence": 77,
+      "titleMatch": 47,
+      "lyricsMatch": 97
+    },
+    {
+      "soluflow": {
+        "id": 80,
+        "title": "אל שומרנו"
+      },
+      "solupresenter": {
+        "id": "d88875d8-e90d-4348-87fd-2a3336457cb1",
+        "title": "כי אל שומרנו"
+      },
+      "confidence": 77,
+      "titleMatch": 75,
+      "lyricsMatch": 79
+    },
+    {
+      "soluflow": {
+        "id": 265,
+        "title": "לאל התפארת על כל מעשיו"
+      },
+      "solupresenter": {
+        "id": "75538e2f-6f26-4d7a-8670-e2976760b690",
+        "title": "לאל התפארת"
+      },
+      "confidence": 76,
+      "titleMatch": 45,
+      "lyricsMatch": 97
+    },
+    {
+      "soluflow": {
+        "id": 272,
+        "title": "לכל הצמאים"
+      },
+      "solupresenter": {
+        "id": "ff96d06f-5216-4563-8377-c191d3829572",
+        "title": "לכל הצמאים(בוא ישוע בוא)"
+      },
+      "confidence": 76,
+      "titleMatch": 45,
+      "lyricsMatch": 96
+    },
+    {
+      "soluflow": {
+        "id": 19,
+        "title": "ישוע מלך(נפתחו השמיים)"
+      },
+      "solupresenter": {
+        "id": "8b010ad1-9ffb-41e5-9699-52529a12419c",
+        "title": "נפתחו השמיים"
+      },
+      "confidence": 75,
+      "titleMatch": 60,
+      "lyricsMatch": 85
+    },
+    {
+      "soluflow": {
+        "id": 84,
+        "title": "אם אלוהים איתנו"
+      },
+      "solupresenter": {
+        "id": "4cb28911-12b1-4ead-8f5c-b22df24dd954",
+        "title": "אם אלוהים איתנו"
+      },
+      "confidence": 75,
+      "titleMatch": 100,
+      "lyricsMatch": 58
+    },
+    {
+      "soluflow": {
+        "id": 174,
+        "title": "ארוממך אדון"
+      },
+      "solupresenter": {
+        "id": "d48edb31-331c-4516-b15a-f900f6d45d11",
+        "title": "ארוממך"
+      },
+      "confidence": 75,
+      "titleMatch": 55,
+      "lyricsMatch": 89
+    },
+    {
+      "soluflow": {
+        "id": 372,
+        "title": "שמחת האדון"
+      },
+      "solupresenter": {
+        "id": "dc5a935e-a4e4-4510-981d-953cbbf6efb8",
+        "title": "שמחת האדון"
+      },
+      "confidence": 75,
+      "titleMatch": 100,
+      "lyricsMatch": 58
+    },
+    {
+      "soluflow": {
+        "id": 1,
+        "title": "פרוש כנפיך(רפא את ארצך)"
+      },
+      "solupresenter": {
+        "id": "0f2524e8-c976-4219-8a4e-441bb5424202",
+        "title": "רפא את ארצך 1"
+      },
+      "confidence": 74,
+      "titleMatch": 43,
+      "lyricsMatch": 95
+    },
+    {
+      "soluflow": {
+        "id": 62,
+        "title": "אדוני אדוננו(כי אראה שמיך)"
+      },
+      "solupresenter": {
+        "id": "24aa408a-2edf-4ab2-aa87-84a20abd4238",
+        "title": "אדוני אדוננו(כי אראה)"
+      },
+      "confidence": 74,
+      "titleMatch": 79,
+      "lyricsMatch": 71
+    },
+    {
+      "soluflow": {
+        "id": 191,
+        "title": "בוא נא בוא"
+      },
+      "solupresenter": {
+        "id": "83a3ef16-557a-4643-b772-9d071a0674bd",
+        "title": "בוא נא בוא"
+      },
+      "confidence": 74,
+      "titleMatch": 100,
+      "lyricsMatch": 57
+    },
+    {
+      "soluflow": {
+        "id": 288,
+        "title": "נאמן לעד"
+      },
+      "solupresenter": {
+        "id": "0e838399-c95b-4756-94b7-ac2d7326d763",
+        "title": "נאמן לעד"
+      },
+      "confidence": 74,
+      "titleMatch": 100,
+      "lyricsMatch": 56
+    },
+    {
+      "soluflow": {
+        "id": 17,
+        "title": "ישוע יקר מכל"
+      },
+      "solupresenter": {
+        "id": "e87f94b1-e107-48fc-9e0b-f168e615304b",
+        "title": "ישוע יקר מכל"
+      },
+      "confidence": 74,
+      "titleMatch": 100,
+      "lyricsMatch": 57
+    },
+    {
+      "soluflow": {
+        "id": 83,
+        "title": "אלוהים לנו מחסה ועוז"
+      },
+      "solupresenter": {
+        "id": "ac137570-c785-445a-9a2d-1d2fa5792e60",
+        "title": "אלוהים לנו מחסה ועוז"
+      },
+      "confidence": 74,
+      "titleMatch": 100,
+      "lyricsMatch": 57
+    },
+    {
+      "soluflow": {
+        "id": 355,
+        "title": "מה אשיב"
+      },
+      "solupresenter": {
+        "id": "5bb2af58-7be9-4cb4-b3a8-2b9f8ce9d98e",
+        "title": "מה אשיב"
+      },
+      "confidence": 74,
+      "titleMatch": 100,
+      "lyricsMatch": 57
+    },
+    {
+      "soluflow": {
+        "id": 26,
+        "title": "כל הנשמה תהלל יה"
+      },
+      "solupresenter": {
+        "id": "14c6b21c-91b8-4c63-81c9-d404a079e9c7",
+        "title": "כל הנשמה"
+      },
+      "confidence": 73,
+      "titleMatch": 50,
+      "lyricsMatch": 89
+    },
+    {
+      "soluflow": {
+        "id": 59,
+        "title": "באים לפניך וקוראים בשמך"
+      },
+      "solupresenter": {
+        "id": "99a4832b-9650-4520-8da7-01c8dccce782",
+        "title": "באנו לפניך"
+      },
+      "confidence": 73,
+      "titleMatch": 35,
+      "lyricsMatch": 98
+    },
+    {
+      "soluflow": {
+        "id": 81,
+        "title": "אלוהי ישעי"
+      },
+      "solupresenter": {
+        "id": "e13cf49a-5088-4860-8bec-6a654630fbba",
+        "title": "כמה טוב חסדך(אלוהי ישעי)"
+      },
+      "confidence": 73,
+      "titleMatch": 45,
+      "lyricsMatch": 92
+    },
+    {
+      "soluflow": {
+        "id": 111,
+        "title": "בסתר"
+      },
+      "solupresenter": {
+        "id": "f09af319-d252-4f0d-b609-207863937165",
+        "title": "בסתר"
+      },
+      "confidence": 73,
+      "titleMatch": 100,
+      "lyricsMatch": 55
+    },
+    {
+      "soluflow": {
+        "id": 262,
+        "title": "לא בחיל"
+      },
+      "solupresenter": {
+        "id": "f2fe757b-a5cc-46eb-887a-0983ea8184e8",
+        "title": "לא בחיל לא בכוח"
+      },
+      "confidence": 73,
+      "titleMatch": 47,
+      "lyricsMatch": 91
+    },
+    {
+      "soluflow": {
+        "id": 61,
+        "title": "אדון הכבוד"
+      },
+      "solupresenter": {
+        "id": "647a69fd-00a6-458c-97ae-a97dace612f0",
+        "title": "אדון הכבוד"
+      },
+      "confidence": 73,
+      "titleMatch": 100,
+      "lyricsMatch": 55
+    },
+    {
+      "soluflow": {
+        "id": 254,
+        "title": "זה מתחיל"
+      },
+      "solupresenter": {
+        "id": "74fb39bc-25aa-400a-a160-834516549ffb",
+        "title": "זה מתחיל IT BEGINS"
+      },
+      "confidence": 73,
+      "titleMatch": 44,
+      "lyricsMatch": 93
+    },
+    {
+      "soluflow": {
+        "id": 129,
+        "title": "בדמך"
+      },
+      "solupresenter": {
+        "id": "44cbd9dd-0084-4144-bec2-c0ae01736cbc",
+        "title": "בדמך(אדון ישוע)"
+      },
+      "confidence": 72,
+      "titleMatch": 31,
+      "lyricsMatch": 100
+    },
+    {
+      "soluflow": {
+        "id": 64,
+        "title": "אשירה לאדוני"
+      },
+      "solupresenter": {
+        "id": "61570f95-0b34-4508-9e89-7cad6adb4e5f",
+        "title": "אשירה לאדוני"
+      },
+      "confidence": 72,
+      "titleMatch": 100,
+      "lyricsMatch": 53
+    },
+    {
+      "soluflow": {
+        "id": 113,
+        "title": "ברית חדשה"
+      },
+      "solupresenter": {
+        "id": "aac5e2b9-0370-4912-b1b0-b6bf97fec074",
+        "title": "ברית חדשה"
+      },
+      "confidence": 72,
+      "titleMatch": 100,
+      "lyricsMatch": 54
+    },
+    {
+      "soluflow": {
+        "id": 137,
+        "title": "פתחו שערים"
+      },
+      "solupresenter": {
+        "id": "34e64c85-2b0a-48cf-8377-1457f11aba8d",
+        "title": "פתחו שערים ומלך הכבוד"
+      },
+      "confidence": 72,
+      "titleMatch": 48,
+      "lyricsMatch": 88
+    },
+    {
+      "soluflow": {
+        "id": 247,
+        "title": "כבסני"
+      },
+      "solupresenter": {
+        "id": "dd98f682-c3bd-4721-af6b-328e937656ce",
+        "title": "כבסני"
+      },
+      "confidence": 72,
+      "titleMatch": 100,
+      "lyricsMatch": 54
+    },
+    {
+      "soluflow": {
+        "id": 298,
+        "title": "פתח את שערי השמיים"
+      },
+      "solupresenter": {
+        "id": "8a49cca1-27e2-4ac8-b679-4ab7831b0b32",
+        "title": "פתח את שערי השמיים"
+      },
+      "confidence": 72,
+      "titleMatch": 100,
+      "lyricsMatch": 53
+    },
+    {
+      "soluflow": {
+        "id": 328,
+        "title": "שמך לא נשכח"
+      },
+      "solupresenter": {
+        "id": "fd4b2f9b-4d0f-4b1b-b1da-4476a02c3baf",
+        "title": "שמך לא נשכח"
+      },
+      "confidence": 72,
+      "titleMatch": 100,
+      "lyricsMatch": 53
+    },
+    {
+      "soluflow": {
+        "id": 23,
+        "title": "אב הרחמים"
+      },
+      "solupresenter": {
+        "id": "1cf21c58-6ba1-40b0-89c7-6a3841f9be0b",
+        "title": "אב הרחמים"
+      },
+      "confidence": 72,
+      "titleMatch": 100,
+      "lyricsMatch": 53
+    },
+    {
+      "soluflow": {
+        "id": 352,
+        "title": "לך יום"
+      },
+      "solupresenter": {
+        "id": "9aff3e71-cfe0-4813-b1c4-e4c95338a645",
+        "title": "לך יום"
+      },
+      "confidence": 72,
+      "titleMatch": 100,
+      "lyricsMatch": 54
+    },
+    {
+      "soluflow": {
+        "id": 362,
+        "title": "קומה אדוני"
+      },
+      "solupresenter": {
+        "id": "25ef0d9c-51d1-4cf5-9bb2-c9c76ebdd98d",
+        "title": "קומה אדוני"
+      },
+      "confidence": 72,
+      "titleMatch": 100,
+      "lyricsMatch": 53
+    },
+    {
+      "soluflow": {
+        "id": 77,
+        "title": "אל גיבור ואל עליון"
+      },
+      "solupresenter": {
+        "id": "ace6e181-2f5f-422c-87a2-b959749856f3",
+        "title": "הראשון והאחרון"
+      },
+      "confidence": 71,
+      "titleMatch": 28,
+      "lyricsMatch": 99
+    },
+    {
+      "soluflow": {
+        "id": 225,
+        "title": "הנה לא ינום"
+      },
+      "solupresenter": {
+        "id": "f5de57b0-f419-43a2-a029-b03cc2b6e17c",
+        "title": "הנה לא ינום"
+      },
+      "confidence": 71,
+      "titleMatch": 100,
+      "lyricsMatch": 52
+    },
+    {
+      "soluflow": {
+        "id": 301,
+        "title": "קדוש לנצח"
+      },
+      "solupresenter": {
+        "id": "a25bb073-02a5-4682-bf3a-c3c3ba3332af",
+        "title": "קדוש לנצח"
+      },
+      "confidence": 71,
+      "titleMatch": 100,
+      "lyricsMatch": 52
+    },
+    {
+      "soluflow": {
+        "id": 232,
+        "title": "טוב להודות לאדוני"
+      },
+      "solupresenter": {
+        "id": "186e003a-f7c7-4811-b84d-d37cefef491f",
+        "title": "טוב להודות לאדוני"
+      },
+      "confidence": 71,
+      "titleMatch": 100,
+      "lyricsMatch": 51
+    },
+    {
+      "soluflow": {
+        "id": 320,
+        "title": "שבח"
+      },
+      "solupresenter": {
+        "id": "9751938a-64f3-4fe2-926b-285ac07cf927",
+        "title": "שבח"
+      },
+      "confidence": 71,
+      "titleMatch": 100,
+      "lyricsMatch": 51
+    },
+    {
+      "soluflow": {
+        "id": 187,
+        "title": "אתה קדוש"
+      },
+      "solupresenter": {
+        "id": "5d4d3a15-f68b-4c54-addb-b7c561a01174",
+        "title": "אתה קדוש(כולי משתחווה לפניך)"
+      },
+      "confidence": 71,
+      "titleMatch": 31,
+      "lyricsMatch": 98
+    },
+    {
+      "soluflow": {
+        "id": 155,
+        "title": "אהבתי הראשונה"
+      },
+      "solupresenter": {
+        "id": "83115555-aca1-4799-9829-02d1b5e73338",
+        "title": "אהבתי הראשונה"
+      },
+      "confidence": 71,
+      "titleMatch": 100,
+      "lyricsMatch": 52
+    },
+    {
+      "soluflow": {
+        "id": 82,
+        "title": "אלוהי"
+      },
+      "solupresenter": {
+        "id": "8760c03b-65c4-40f8-957b-f09ec2dc3562",
+        "title": "אני פשוט רוצה(אלוהי)"
+      },
+      "confidence": 70,
+      "titleMatch": 28,
+      "lyricsMatch": 98
+    },
+    {
+      "soluflow": {
+        "id": 248,
+        "title": "כוס ישועות אשא"
+      },
+      "solupresenter": {
+        "id": "aba5671d-9aba-42e8-8b34-1129801f8aa3",
+        "title": "כוס ישועות אשא"
+      },
+      "confidence": 69,
+      "titleMatch": 100,
+      "lyricsMatch": 49
+    },
+    {
+      "soluflow": {
+        "id": 312,
+        "title": "רב להושיע"
+      },
+      "solupresenter": {
+        "id": "5a645c00-ab1f-4ff7-8c19-53f192debb86",
+        "title": "רב להושיע"
+      },
+      "confidence": 69,
+      "titleMatch": 100,
+      "lyricsMatch": 48
+    },
+    {
+      "soluflow": {
+        "id": 257,
+        "title": "כמה טוב אתה"
+      },
+      "solupresenter": {
+        "id": "07919e44-1706-4fbe-b3f6-dd61580e8caa",
+        "title": "כמה טוב אתה"
+      },
+      "confidence": 69,
+      "titleMatch": 100,
+      "lyricsMatch": 48
+    },
+    {
+      "soluflow": {
+        "id": 25,
+        "title": "כי כה אהב"
+      },
+      "solupresenter": {
+        "id": "5925c550-3f39-4a3b-b3eb-ea7cecf5d8bf",
+        "title": "כי כה אהב"
+      },
+      "confidence": 68,
+      "titleMatch": 100,
+      "lyricsMatch": 46
+    },
+    {
+      "soluflow": {
+        "id": 277,
+        "title": "מי לא יראך אדוני"
+      },
+      "solupresenter": {
+        "id": "e1ba61ab-4bae-47dc-baa9-f847169c5c6c",
+        "title": "מי לא יראך"
+      },
+      "confidence": 68,
+      "titleMatch": 63,
+      "lyricsMatch": 72
+    },
+    {
+      "soluflow": {
+        "id": 22,
+        "title": "כאייל צמא למים(כי טוב חסדך)"
+      },
+      "solupresenter": {
+        "id": "b2888187-4a79-4d22-bc04-1fea957584fd",
+        "title": "כי טוב חסדך(כאיל צמא למים)"
+      },
+      "confidence": 67,
+      "titleMatch": 24,
+      "lyricsMatch": 96
+    },
+    {
+      "soluflow": {
+        "id": 39,
+        "title": "מתן תודה"
+      },
+      "solupresenter": {
+        "id": "4d695a07-0123-484a-8990-67e38cd453c0",
+        "title": "מתן תודה (באתי לכאן)"
+      },
+      "confidence": 67,
+      "titleMatch": 44,
+      "lyricsMatch": 82
+    },
+    {
+      "soluflow": {
+        "id": 50,
+        "title": "רוח אדוני עלי"
+      },
+      "solupresenter": {
+        "id": "679b3f14-5752-4e8f-b3a0-a8c99495f800",
+        "title": "רוח אדוני עלי"
+      },
+      "confidence": 67,
+      "titleMatch": 100,
+      "lyricsMatch": 45
+    },
+    {
+      "soluflow": {
+        "id": 85,
+        "title": "אם תחפש השחרור מעוון(כוח בדם)"
+      },
+      "solupresenter": {
+        "id": "a422c017-d820-4ccb-832c-f59b980744f6",
+        "title": "כוח בדם"
+      },
+      "confidence": 67,
+      "titleMatch": 26,
+      "lyricsMatch": 95
+    },
+    {
+      "soluflow": {
+        "id": 307,
+        "title": "קומי אורי"
+      },
+      "solupresenter": {
+        "id": "5d34ff1e-a1b2-4c16-a76d-1ceb64288775",
+        "title": "קומי אורי"
+      },
+      "confidence": 67,
+      "titleMatch": 100,
+      "lyricsMatch": 45
+    },
+    {
+      "soluflow": {
+        "id": 29,
+        "title": "לא לנו"
+      },
+      "solupresenter": {
+        "id": "d1cb8b55-e74f-4e8f-983b-b91c569105d1",
+        "title": "לא לנו"
+      },
+      "confidence": 66,
+      "titleMatch": 100,
+      "lyricsMatch": 43
+    },
+    {
+      "soluflow": {
+        "id": 43,
+        "title": "עוזך אהבתך"
+      },
+      "solupresenter": {
+        "id": "f0fdee1e-bdb8-45e5-9553-13f52fa76745",
+        "title": "עוזך אהבתך"
+      },
+      "confidence": 65,
+      "titleMatch": 100,
+      "lyricsMatch": 41
+    },
+    {
+      "soluflow": {
+        "id": 110,
+        "title": "בליבי צפנתי"
+      },
+      "solupresenter": {
+        "id": "a6b35f30-e3cb-4bb0-af5c-16de5645b5be",
+        "title": "בליבי צפנתי"
+      },
+      "confidence": 65,
+      "titleMatch": 100,
+      "lyricsMatch": 41
+    },
+    {
+      "soluflow": {
+        "id": 188,
+        "title": "אתה ראוי להכל"
+      },
+      "solupresenter": {
+        "id": "1e11ad6c-5df2-406b-af31-b870863174a3",
+        "title": "ראוי להכל"
+      },
+      "confidence": 65,
+      "titleMatch": 69,
+      "lyricsMatch": 62
+    },
+    {
+      "soluflow": {
+        "id": 326,
+        "title": "שלום שלום אתה נותן לי"
+      },
+      "solupresenter": {
+        "id": "f4fbe6eb-d574-4fce-b6e0-bd50ad870276",
+        "title": "שלום אתה נותן לי"
+      },
+      "confidence": 65,
+      "titleMatch": 76,
+      "lyricsMatch": 58
+    },
+    {
+      "soluflow": {
+        "id": 6,
+        "title": "אדוני צורי(השמיים מספרים)"
+      },
+      "solupresenter": {
+        "id": "f2a46b88-7cbb-4c0c-973d-12f6db3055aa",
+        "title": "השמיים מספרים"
+      },
+      "confidence": 64,
+      "titleMatch": 57,
+      "lyricsMatch": 69
+    },
+    {
+      "soluflow": {
+        "id": 128,
+        "title": "אתה מולך"
+      },
+      "solupresenter": {
+        "id": "bb0b101f-a28b-4067-80cf-b696607fb8eb",
+        "title": "אתה מולך"
+      },
+      "confidence": 64,
+      "titleMatch": 100,
+      "lyricsMatch": 40
+    },
+    {
+      "soluflow": {
+        "id": 204,
+        "title": "בשם אדוני"
+      },
+      "solupresenter": {
+        "id": "bd8e715e-27f7-4c4a-aab8-5bf962dae930",
+        "title": "בשם אדוני Be'shem Adonai"
+      },
+      "confidence": 63,
+      "titleMatch": 39,
+      "lyricsMatch": 79
+    },
+    {
+      "soluflow": {
+        "id": 330,
+        "title": "שמע ישראל (מהיר)"
+      },
+      "solupresenter": {
+        "id": "dfd24169-d099-49ba-b980-101b89d9f157",
+        "title": "שמע ישראל"
+      },
+      "confidence": 63,
+      "titleMatch": 64,
+      "lyricsMatch": 63
+    },
+    {
+      "soluflow": {
+        "id": 283,
+        "title": "מעל הכל"
+      },
+      "solupresenter": {
+        "id": "3ab637c8-a8eb-415e-8482-c63817102d03",
+        "title": "מעל הכל"
+      },
+      "confidence": 62,
+      "titleMatch": 100,
+      "lyricsMatch": 36
+    },
+    {
+      "soluflow": {
+        "id": 172,
+        "title": "אני נופל על פני"
+      },
+      "solupresenter": {
+        "id": "4af41994-32d9-4689-ae89-8720fe34a3b5",
+        "title": "אני נופל"
+      },
+      "confidence": 61,
+      "titleMatch": 53,
+      "lyricsMatch": 66
+    },
+    {
+      "soluflow": {
+        "id": 170,
+        "title": "אני יודע"
+      },
+      "solupresenter": {
+        "id": "b25e2e26-accc-484c-a4e1-c988d93ae736",
+        "title": "אני יודע - הנכון"
+      },
+      "confidence": 61,
+      "titleMatch": 57,
+      "lyricsMatch": 64
+    },
+    {
+      "soluflow": {
+        "id": 36,
+        "title": "מי כמוך באלים"
+      },
+      "solupresenter": {
+        "id": "508c7546-195e-4d1f-8841-2d0ff367a5cc",
+        "title": "מי כמוך באלים"
+      },
+      "confidence": 60,
+      "titleMatch": 100,
+      "lyricsMatch": 33
+    },
+    {
+      "soluflow": {
+        "id": 120,
+        "title": "הודו לאדוני כי טוב(מהיר)"
+      },
+      "solupresenter": {
+        "id": "1f288cfe-f788-4a1d-88cd-b3a8206c1b3a",
+        "title": "הודו לאדוני כי טוב"
+      },
+      "confidence": 60,
+      "titleMatch": 82,
+      "lyricsMatch": 46
+    },
+    {
+      "soluflow": {
+        "id": 207,
+        "title": "גדולים ונפלאים(כי אתה לבדך קדוש)"
+      },
+      "solupresenter": {
+        "id": "4d57a919-c485-4287-bad9-1ba42e2fc637",
+        "title": "גדולים ונפלאים"
+      },
+      "confidence": 60,
+      "titleMatch": 47,
+      "lyricsMatch": 68
+    },
+    {
+      "soluflow": {
+        "id": 327,
+        "title": "שמך כדבש (קדוש ומושיע)"
+      },
+      "solupresenter": {
+        "id": "85d5c23f-0ab5-42a0-8b41-cb6ecdfed985",
+        "title": "שמך כדבש"
+      },
+      "confidence": 60,
+      "titleMatch": 40,
+      "lyricsMatch": 73
+    },
+    {
+      "soluflow": {
+        "id": 219,
+        "title": "הכל עבורך"
+      },
+      "solupresenter": {
+        "id": "d36bc839-47ce-4022-bcdb-756f98ed9143",
+        "title": "הכל עבורך"
+      },
+      "confidence": 60,
+      "titleMatch": 100,
+      "lyricsMatch": 33
+    },
+    {
+      "soluflow": {
+        "id": 306,
+        "title": "קול רינה"
+      },
+      "solupresenter": {
+        "id": "5d15fe2a-c0f7-461a-84b3-445f07c4c41e",
+        "title": "קול רינה KOL RINA"
+      },
+      "confidence": 58,
+      "titleMatch": 47,
+      "lyricsMatch": 66
+    },
+    {
+      "soluflow": {
+        "id": 121,
+        "title": "הודו לאדוני כי טוב(קלאסי)"
+      },
+      "solupresenter": {
+        "id": "1f288cfe-f788-4a1d-88cd-b3a8206c1b3a",
+        "title": "הודו לאדוני כי טוב"
+      },
+      "confidence": 57,
+      "titleMatch": 78,
+      "lyricsMatch": 43
+    },
+    {
+      "soluflow": {
+        "id": 148,
+        "title": "אביר ישראל"
+      },
+      "solupresenter": {
+        "id": "e45f7569-4d89-42b1-bdf5-0d20e7c7d052",
+        "title": "אביר ישראל"
+      },
+      "confidence": 56,
+      "titleMatch": 100,
+      "lyricsMatch": 26
+    },
+    {
+      "soluflow": {
+        "id": 73,
+        "title": "אין שם אחר"
+      },
+      "solupresenter": {
+        "id": "4e829ccb-eaa8-44eb-8aa1-5ce2aba2df44",
+        "title": "אין שם אחר(יהודה מוריסון)"
+      },
+      "confidence": 56,
+      "titleMatch": 43,
+      "lyricsMatch": 64
+    },
+    {
+      "soluflow": {
+        "id": 205,
+        "title": "גדול אלוהי"
+      },
+      "solupresenter": {
+        "id": "67b81537-9d65-4eb6-ab87-033a601c2ea5",
+        "title": "גדול אלוהי"
+      },
+      "confidence": 54,
+      "titleMatch": 100,
+      "lyricsMatch": 24
+    },
+    {
+      "soluflow": {
+        "id": 329,
+        "title": "שמע ישראל (ישן)"
+      },
+      "solupresenter": {
+        "id": "dfd24169-d099-49ba-b980-101b89d9f157",
+        "title": "שמע ישראל"
+      },
+      "confidence": 50,
+      "titleMatch": 69,
+      "lyricsMatch": 38
+    },
+    {
+      "soluflow": {
+        "id": 96,
+        "title": "אשא עיני אל השמיים"
+      },
+      "solupresenter": {
+        "id": "09817ed0-c084-4dd7-9535-c513e611db05",
+        "title": "הושיע את עמך"
+      },
+      "confidence": 68,
+      "titleMatch": 28,
+      "lyricsMatch": 95
+    },
+    {
+      "soluflow": {
+        "id": 112,
+        "title": "ברוך אתה אדוני(נהלל אותך אדון)"
+      },
+      "solupresenter": {
+        "id": "5747370a-d838-4dc2-b94e-68ae704be2e0",
+        "title": "נהלל אותך אדון"
+      },
+      "confidence": 68,
+      "titleMatch": 50,
+      "lyricsMatch": 80
+    },
+    {
+      "soluflow": {
+        "id": 373,
+        "title": "שנה את חיי"
+      },
+      "solupresenter": {
+        "id": "22ec3af2-c041-45cf-a6a0-8f7ccfa45d4f",
+        "title": "ישוע לך ישוע (שנה את חיי)"
+      },
+      "confidence": 68,
+      "titleMatch": 43,
+      "lyricsMatch": 84
+    },
+    {
+      "soluflow": {
+        "id": 249,
+        "title": "כי אהבת אותי ראשון"
+      },
+      "solupresenter": {
+        "id": "017fc59e-94fb-477c-8ad6-074b30137d49",
+        "title": "בכל דבר שאעשה"
+      },
+      "confidence": 66,
+      "titleMatch": 22,
+      "lyricsMatch": 96
+    },
+    {
+      "soluflow": {
+        "id": 313,
+        "title": "רוח בואי פחי באנו"
+      },
+      "solupresenter": {
+        "id": "d9478156-73de-4e20-99bf-4a1183a3ec4f",
+        "title": "המנון כנס ציון"
+      },
+      "confidence": 66,
+      "titleMatch": 18,
+      "lyricsMatch": 98
+    },
+    {
+      "soluflow": {
+        "id": 37,
+        "title": "ממעמקים"
+      },
+      "solupresenter": {
+        "id": "a0fa0517-673c-4d46-a9e7-595665482491",
+        "title": "מי יעמוד מולך"
+      },
+      "confidence": 65,
+      "titleMatch": 23,
+      "lyricsMatch": 93
+    },
+    {
+      "soluflow": {
+        "id": 48,
+        "title": "קח כבוד"
+      },
+      "solupresenter": {
+        "id": "4c984852-7d92-4732-ab4a-9aa81ae75b7d",
+        "title": "שים בי את האש"
+      },
+      "confidence": 63,
+      "titleMatch": 8,
+      "lyricsMatch": 99
+    },
+    {
+      "soluflow": {
+        "id": 206,
+        "title": "גדול אתה וקדוש שמך"
+      },
+      "solupresenter": {
+        "id": "783feb8e-d8e6-47aa-a73b-b7d44bbf96ad",
+        "title": "קדוש שמך לעד"
+      },
+      "confidence": 63,
+      "titleMatch": 28,
+      "lyricsMatch": 87
+    },
+    {
+      "soluflow": {
+        "id": 358,
+        "title": "נכון ליבי"
+      },
+      "solupresenter": {
+        "id": "02e4aaea-b195-427b-979c-7d2dd10b6617",
+        "title": "רומה"
+      },
+      "confidence": 63,
+      "titleMatch": 11,
+      "lyricsMatch": 97
+    },
+    {
+      "soluflow": {
+        "id": 133,
+        "title": "גדול אדוני(הללויה)"
+      },
+      "solupresenter": {
+        "id": "69930835-fe75-4670-b018-b99392ac5af1",
+        "title": "גדול אדוני ומהולל מאוד"
+      },
+      "confidence": 61,
+      "titleMatch": 59,
+      "lyricsMatch": 63
+    },
+    {
+      "soluflow": {
+        "id": 179,
+        "title": "אשירה לאדוני(ואני אני בחסדך בטחתי)"
+      },
+      "solupresenter": {
+        "id": "61570f95-0b34-4508-9e89-7cad6adb4e5f",
+        "title": "אשירה לאדוני"
+      },
+      "confidence": 60,
+      "titleMatch": 38,
+      "lyricsMatch": 74
+    },
+    {
+      "soluflow": {
+        "id": 53,
+        "title": "רם ונישא כי ראוי אתה(אתה קדוש)"
+      },
+      "solupresenter": {
+        "id": "e217d642-95eb-4b06-ac24-01ce2e32e964",
+        "title": "רם ונישא(מהיר)"
+      },
+      "confidence": 59,
+      "titleMatch": 36,
+      "lyricsMatch": 74
+    },
+    {
+      "soluflow": {
+        "id": 270,
+        "title": "לכו נרננה לה'"
+      },
+      "solupresenter": {
+        "id": "38afa3db-0196-4d7a-a338-1f020ccdfe2e",
+        "title": "לכו נרננה (מקדם)"
+      },
+      "confidence": 58,
+      "titleMatch": 71,
+      "lyricsMatch": 50
+    },
+    {
+      "soluflow": {
+        "id": 208,
+        "title": "גול על אדוני"
+      },
+      "solupresenter": {
+        "id": "ecd1dcf4-060e-4dd5-8222-0bca6ba4b721",
+        "title": "גול על אדוני דרכך"
+      },
+      "confidence": 53,
+      "titleMatch": 71,
+      "lyricsMatch": 41
+    },
+    {
+      "soluflow": {
+        "id": 180,
+        "title": "אבא"
+      },
+      "solupresenter": {
+        "id": "7bab5dd6-0052-47e4-a23f-13aac6f9e8ad",
+        "title": "אתה"
+      },
+      "confidence": 52,
+      "titleMatch": 33,
+      "lyricsMatch": 64
+    },
+    {
+      "soluflow": {
+        "id": 344,
+        "title": "אלוהי השמיים"
+      },
+      "solupresenter": {
+        "id": "ea23227d-d371-4132-a94d-c442d55e4841",
+        "title": "אין שינוי בו"
+      },
+      "confidence": 51,
+      "titleMatch": 8,
+      "lyricsMatch": 80
+    },
+    {
+      "soluflow": {
+        "id": 203,
+        "title": "ברוך אתה אדוני(לך הגדולה, לך הגבורה)"
+      },
+      "solupresenter": {
+        "id": "4d87092d-a90b-47ad-a6d7-450895ed22ed",
+        "title": "ברוך אתה אדוני(קלאסי)"
+      },
+      "confidence": 50,
+      "titleMatch": 45,
+      "lyricsMatch": 54
+    }
+  ],
+  "updated": "2025-12-14T19:10:14.944Z"
+}

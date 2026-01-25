@@ -1,7 +1,8 @@
 import React, { memo, useMemo, useCallback, CSSProperties, MouseEvent } from 'react';
-import { buttonStyles, colors } from '../../styles/controlPanelStyles';
+import { buttonStyles } from '../../styles/controlPanelStyles';
+import { theme, gradients } from '../../styles/theme';
 
-type ButtonVariant = 'primary' | 'success' | 'danger' | 'secondary' | 'info' | 'orange' | 'ghost';
+type ButtonVariant = 'primary' | 'success' | 'danger' | 'secondary' | 'info' | 'ghost';
 type ButtonSize = 'small' | 'medium' | 'icon';
 
 interface ActionButtonProps {
@@ -16,13 +17,36 @@ interface ActionButtonProps {
 }
 
 const variantStyles: Record<ButtonVariant, CSSProperties> = {
-  primary: { background: colors.button.primary },
-  success: { background: colors.button.success },
-  danger: { background: colors.button.danger },
-  secondary: { background: colors.button.secondary },
-  info: { background: colors.button.info },
-  orange: { background: colors.button.orange },
-  ghost: { background: 'transparent', border: '1px solid rgba(255,255,255,0.2)' },
+  primary: {
+    background: theme.gradients.primary,
+    color: theme.colors.background.base,
+    boxShadow: theme.shadows.sm,
+  },
+  success: {
+    background: theme.gradients.success,
+    color: 'white',
+    boxShadow: theme.shadows.sm,
+  },
+  danger: {
+    background: theme.gradients.danger,
+    color: 'white',
+    boxShadow: theme.shadows.sm,
+  },
+  secondary: {
+    background: theme.colors.background.surface,
+    color: theme.colors.text.primary,
+    border: `1px solid ${theme.colors.glass.border}`,
+  },
+  info: {
+    background: `linear-gradient(135deg, ${theme.colors.info.main}, ${theme.colors.info.light})`,
+    color: 'white',
+    boxShadow: theme.shadows.sm,
+  },
+  ghost: {
+    background: 'transparent',
+    color: theme.colors.text.secondary,
+    border: `1px solid ${theme.colors.glass.borderHover}`,
+  },
 };
 
 const sizeStyles: Record<ButtonSize, CSSProperties> = {
@@ -46,7 +70,7 @@ const ActionButton: React.FC<ActionButtonProps> = memo(({
     ...variantStyles[variant],
     ...sizeStyles[size],
     ...(fullWidth && { width: '100%' }),
-    ...(disabled && { opacity: 0.5, cursor: 'not-allowed' }),
+    ...(disabled && { opacity: 0.4, cursor: 'not-allowed' }),
     ...style,
   }), [variant, size, fullWidth, disabled, style]);
 

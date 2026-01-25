@@ -8,6 +8,12 @@ export interface UserSettings {
   showTutorial: boolean;
   syncEnabled: boolean;
   youtubeApiKey: string;
+  // Timeout settings (in seconds for user-friendly display)
+  mediaLoadTimeout: number;
+  thumbnailGenerationTimeout: number;
+  youtubeSearchTimeout: number;
+  // UI Scale (zoom factor: 0.8 = 80%, 1.0 = 100%, 1.5 = 150%)
+  uiScale: number;
 }
 
 const defaultSettings: UserSettings = {
@@ -16,7 +22,13 @@ const defaultSettings: UserSettings = {
   autoConnect: false,
   showTutorial: true,
   syncEnabled: true,
-  youtubeApiKey: ''
+  youtubeApiKey: '',
+  // Default timeout values (in seconds)
+  mediaLoadTimeout: 15,
+  thumbnailGenerationTimeout: 8,
+  youtubeSearchTimeout: 15,
+  // Default UI scale (100%)
+  uiScale: 1.0
 };
 
 interface SettingsContextType {
@@ -51,6 +63,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           // Apply language
           if (merged.language && merged.language !== i18n.language) {
             await i18n.changeLanguage(merged.language);
+          }
+
+          // Apply UI scale
+          if (merged.uiScale && window.electronAPI?.setZoomFactor) {
+            window.electronAPI.setZoomFactor(merged.uiScale);
           }
         }
       } catch (error) {
@@ -96,35 +113,45 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newSettings));
     } catch (error) {
-      console.error('Failed to save settings to localStorage:', error);
+      // Handle QuotaExceededError specifically
+      if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.code === 22)) {
+        console.error('[SettingsContext] localStorage quota exceeded. Attempting to clear old data...');
+        try {
+          // Try to clear non-essential cached data
+          const keysToPreserve = [STORAGE_KEY, 'solupresenter_draft_setlist'];
+          const keysToRemove: string[] = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && !keysToPreserve.includes(key)) {
+              keysToRemove.push(key);
+            }
+          }
+          keysToRemove.forEach(key => localStorage.removeItem(key));
+          // Retry save after clearing
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(newSettings));
+          console.log('[SettingsContext] Successfully saved after clearing old data');
+        } catch (retryError) {
+          console.error('[SettingsContext] Failed to save even after clearing data:', retryError);
+        }
+      } else {
+        console.error('[SettingsContext] Failed to save settings to localStorage:', error);
+      }
     }
   }, []);
 
   const syncToServer = useCallback(async (newSettings: UserSettings) => {
-    console.log('[Settings] syncToServer called, syncEnabled:', settings.syncEnabled);
-    if (!settings.syncEnabled) {
-      console.log('[Settings] Sync disabled, skipping');
-      return;
-    }
+    if (!settings.syncEnabled) return;
     // Skip if electronAPI is not available (e.g., in display windows)
-    if (!window.electronAPI?.getAuthState) {
-      console.log('[Settings] electronAPI not available, skipping sync');
-      return;
-    }
+    if (!window.electronAPI?.getAuthState) return;
 
     try {
       const authState = await window.electronAPI.getAuthState();
-      console.log('[Settings] Auth state:', { isAuthenticated: authState.isAuthenticated, hasToken: !!authState.token, serverUrl: authState.serverUrl });
-      if (!authState.isAuthenticated || !authState.token) {
-        console.log('[Settings] Not authenticated, skipping sync');
-        return;
-      }
+      if (!authState.isAuthenticated || !authState.token) return;
 
       setIsSyncing(true);
 
       // Sync language preference to server
       const serverUrl = authState.serverUrl || 'https://solupresenter-backend-4rn5.onrender.com';
-      console.log('[Settings] Syncing language to server:', newSettings.language, 'URL:', serverUrl);
       const response = await fetch(`${serverUrl}/auth/preferences`, {
         method: 'PUT',
         headers: {
@@ -135,12 +162,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        console.error('[Settings] Failed to sync settings to server, status:', response.status);
-      } else {
-        console.log('[Settings] Successfully synced language to server');
+        console.error('Failed to sync settings to server, status:', response.status);
       }
     } catch (error) {
-      console.error('[Settings] Failed to sync settings to server:', error);
+      console.error('Failed to sync settings to server:', error);
     } finally {
       setIsSyncing(false);
     }
@@ -156,7 +181,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     // Apply language change immediately
     if (key === 'language') {
-      await i18n.changeLanguage(value as string);
+      try {
+        await i18n.changeLanguage(value as string);
+      } catch (error) {
+        console.error('Failed to change language:', error);
+      }
+    }
+
+    // Apply UI scale immediately
+    if (key === 'uiScale' && window.electronAPI?.setZoomFactor) {
+      window.electronAPI.setZoomFactor(value as number);
     }
 
     // Sync to server if enabled
@@ -172,7 +206,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     // Apply language change if included
     if (newSettings.language && newSettings.language !== i18n.language) {
-      await i18n.changeLanguage(newSettings.language);
+      try {
+        await i18n.changeLanguage(newSettings.language);
+      } catch (error) {
+        console.error('Failed to change language:', error);
+      }
     }
 
     // Sync to server
@@ -182,7 +220,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const resetSettings = useCallback(async () => {
     setSettings(defaultSettings);
     saveToLocalStorage(defaultSettings);
-    await i18n.changeLanguage(defaultSettings.language);
+    try {
+      await i18n.changeLanguage(defaultSettings.language);
+    } catch (error) {
+      console.error('Failed to change language:', error);
+    }
     await syncToServer(defaultSettings);
   }, [saveToLocalStorage, syncToServer, i18n]);
 

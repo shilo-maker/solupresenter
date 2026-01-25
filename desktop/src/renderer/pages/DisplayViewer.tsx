@@ -1,5 +1,23 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo, useMemo } from 'react';
 import SlideRenderer from '../components/SlideRenderer';
+import { useSettings } from '../contexts/SettingsContext';
+import { createLogger } from '../utils/debug';
+
+// Create logger for this module
+const log = createLogger('DisplayViewer');
+
+/**
+ * Convert a media:// URL to an HTTP URL for video streaming.
+ * The HTTP server handles streaming with proper range request support,
+ * which works more reliably than the custom protocol for large videos.
+ */
+// ============ Constants ============
+/** Default media load timeout in seconds (used when settings not available) */
+const DEFAULT_MEDIA_LOAD_TIMEOUT_SEC = 15;
+/** Threshold in seconds for video position sync (avoids micro-seeks) */
+const VIDEO_SYNC_THRESHOLD_SEC = 0.5;
+/** Threshold in seconds for YouTube position sync (slightly tighter than video) */
+const YOUTUBE_SYNC_THRESHOLD_SEC = 0.3;
 
 // YouTube IFrame API types
 declare global {
@@ -26,6 +44,7 @@ interface SlideData {
   translationOverflow?: string;
   reference?: string;
   referenceTranslation?: string;
+  referenceEnglish?: string; // English reference for Bible themes (e.g., "Genesis 1:1")
   // Prayer/Sermon content fields
   title?: string;
   titleTranslation?: string;
@@ -86,6 +105,8 @@ interface LinePosition {
   alignV: 'top' | 'center' | 'bottom';
 }
 
+type TextureType = 'none' | 'paper' | 'parchment' | 'linen' | 'canvas' | 'noise';
+
 interface BackgroundBox {
   id: string;
   x: number;
@@ -95,7 +116,34 @@ interface BackgroundBox {
   color: string;
   opacity: number;
   borderRadius: number;
+  texture?: TextureType;
+  textureOpacity?: number;
 }
+
+// CSS texture patterns (for legacy renderBackgroundBoxes - main rendering uses SlideRenderer)
+const texturePatterns: Record<TextureType, { pattern: string; size: string }> = {
+  none: { pattern: 'none', size: 'auto' },
+  paper: {
+    pattern: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23888'/%3E%3Ccircle cx='20' cy='30' r='3' fill='%23666'/%3E%3Ccircle cx='70' cy='15' r='2' fill='%23999'/%3E%3Ccircle cx='45' cy='60' r='4' fill='%23777'/%3E%3Ccircle cx='10' cy='80' r='2' fill='%23aaa'/%3E%3Ccircle cx='85' cy='70' r='3' fill='%23666'/%3E%3Ccircle cx='30' cy='90' r='2' fill='%23999'/%3E%3Ccircle cx='60' cy='40' r='2' fill='%23555'/%3E%3Ccircle cx='90' cy='50' r='3' fill='%23888'/%3E%3Ccircle cx='5' cy='45' r='2' fill='%23777'/%3E%3Ccircle cx='55' cy='85' r='3' fill='%23666'/%3E%3Ccircle cx='75' cy='35' r='2' fill='%23aaa'/%3E%3Ccircle cx='35' cy='10' r='2' fill='%23999'/%3E%3C/svg%3E")`,
+    size: '100px 100px'
+  },
+  parchment: {
+    pattern: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23888'/%3E%3Cpath d='M0 15 Q15 12 30 15 T60 15' stroke='%23666' stroke-width='1' fill='none'/%3E%3Cpath d='M0 35 Q15 38 30 35 T60 35' stroke='%23999' stroke-width='0.8' fill='none'/%3E%3Cpath d='M0 50 Q15 47 30 50 T60 50' stroke='%23777' stroke-width='0.6' fill='none'/%3E%3Ccircle cx='10' cy='10' r='4' fill='%23777'/%3E%3Ccircle cx='45' cy='25' r='5' fill='%23999'/%3E%3Ccircle cx='25' cy='45' r='3' fill='%23666'/%3E%3C/svg%3E")`,
+    size: '60px 60px'
+  },
+  linen: {
+    pattern: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Crect width='8' height='8' fill='%23888'/%3E%3Cpath d='M0 0L8 8M8 0L0 8' stroke='%23666' stroke-width='1'/%3E%3C/svg%3E")`,
+    size: '8px 8px'
+  },
+  canvas: {
+    pattern: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Crect width='12' height='12' fill='%23888'/%3E%3Crect x='0' y='0' width='6' height='6' fill='%23777'/%3E%3Crect x='6' y='6' width='6' height='6' fill='%23777'/%3E%3C/svg%3E")`,
+    size: '12px 12px'
+  },
+  noise: {
+    pattern: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%23808080'/%3E%3Crect x='2' y='3' width='2' height='2' fill='%23606060'/%3E%3Crect x='12' y='7' width='2' height='2' fill='%23a0a0a0'/%3E%3Crect x='25' y='2' width='2' height='2' fill='%23707070'/%3E%3Crect x='35' y='10' width='2' height='2' fill='%23909090'/%3E%3Crect x='8' y='18' width='2' height='2' fill='%23505050'/%3E%3Crect x='20' y='15' width='2' height='2' fill='%23b0b0b0'/%3E%3Crect x='32' y='22' width='2' height='2' fill='%23656565'/%3E%3Crect x='5' y='30' width='2' height='2' fill='%23959595'/%3E%3Crect x='18' y='28' width='2' height='2' fill='%23757575'/%3E%3Crect x='28' y='35' width='2' height='2' fill='%23858585'/%3E%3Crect x='38' y='32' width='2' height='2' fill='%23555555'/%3E%3Crect x='15' y='38' width='2' height='2' fill='%23a5a5a5'/%3E%3C/svg%3E")`,
+    size: '40px 40px'
+  }
+};
 
 interface Theme {
   lineOrder?: string[];
@@ -107,6 +155,13 @@ interface Theme {
   linePositions?: Record<string, LinePosition> | null;
   backgroundBoxes?: BackgroundBox[] | null;
   canvasDimensions?: { width: number; height: number };
+  // Bible/Prayer reference line properties
+  referenceStyle?: any;
+  referencePosition?: LinePosition;
+  referenceTranslationStyle?: any;
+  referenceTranslationPosition?: LinePosition;
+  referenceEnglishStyle?: any;
+  referenceEnglishPosition?: LinePosition;
 }
 
 interface ToolData {
@@ -114,6 +169,7 @@ interface ToolData {
   active: boolean;
   remaining?: string;
   message?: string;
+  messageTranslation?: string;
   text?: string;
   messages?: string[];
   interval?: number;
@@ -124,7 +180,22 @@ interface ToolData {
 }
 
 const DisplayViewer: React.FC = () => {
+  const { settings } = useSettings();
   const [slideData, setSlideData] = useState<SlideData | null>(null);
+
+  // Check if this display window is on the same screen as the control window
+  const isSameScreenAsControl = useMemo(() => {
+    // Check URL parameter - passed when opening the display window
+    // With hash-based routing, query params are in the hash (e.g., #/display/viewer?sameScreen=true)
+    const hash = window.location.hash;
+    const queryIndex = hash.indexOf('?');
+    if (queryIndex !== -1) {
+      const queryString = hash.substring(queryIndex);
+      const urlParams = new URLSearchParams(queryString);
+      return urlParams.get('sameScreen') === 'true';
+    }
+    return false;
+  }, []);
   const [combinedSlides, setCombinedSlides] = useState<SlideData[] | null>(null);
   const [displayMode, setDisplayMode] = useState<string>('bilingual');
   const [isBlank, setIsBlank] = useState(false);
@@ -135,18 +206,40 @@ const DisplayViewer: React.FC = () => {
   // Media state
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
   const [mediaPath, setMediaPath] = useState<string>('');
+  const [mediaLoadError, setMediaLoadError] = useState<string | null>(null);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaRetryCount, setMediaRetryCount] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mediaRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoReloadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoSyncedRef = useRef(false); // Track if initial video sync has been performed
+  const mediaLoadingRef = useRef(false); // Ref to track current loading state for timeout callback
+
+  // Constants for media error recovery
+  const MAX_MEDIA_RETRIES = 3;
+  const MEDIA_RETRY_DELAY_MS = 2000;
+
+  // Media load timeout duration in milliseconds (from settings, converted to ms)
+  const mediaLoadTimeout = (settings.mediaLoadTimeout || DEFAULT_MEDIA_LOAD_TIMEOUT_SEC) * 1000;
 
   // Tools state
-  const [countdown, setCountdown] = useState<{ active: boolean; remaining: string; message: string }>({
+  const [countdown, setCountdown] = useState<{ active: boolean; remaining: string; message: string; messageTranslation?: string }>({
     active: false,
     remaining: '',
-    message: ''
+    message: '',
+    messageTranslation: ''
   });
   const [announcement, setAnnouncement] = useState<{ active: boolean; text: string }>({
     active: false,
     text: ''
   });
+  // Announcement auto-fade state
+  const [announcementVisible, setAnnouncementVisible] = useState(false);
+  const [announcementFading, setAnnouncementFading] = useState(false);
+  const announcementTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const announcementFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wasAnnouncementActive = useRef(false);
   const [rotatingMessages, setRotatingMessages] = useState<{ active: boolean; messages: string[]; interval: number; currentIndex: number }>({
     active: false,
     messages: [],
@@ -156,10 +249,11 @@ const DisplayViewer: React.FC = () => {
   const rotatingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Clock state
-  const [clock, setClock] = useState<{ active: boolean; time: string; date: string }>({
+  const [clock, setClock] = useState<{ active: boolean; time: string; date: string; format: '12h' | '24h' }>({
     active: false,
     time: '',
-    date: ''
+    date: '',
+    format: '12h'
   });
 
   // Stopwatch state
@@ -175,16 +269,14 @@ const DisplayViewer: React.FC = () => {
   const youtubeContainerRef = useRef<HTMLDivElement>(null);
   const youtubePlayerRef = useRef<any>(null);
   const youtubeReadyRef = useRef(false);
+  const youtubeCreateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // Report ready
-    console.log('[DisplayViewer] Component mounted, calling reportReady()');
     window.displayAPI.reportReady();
 
     // Listen for slide updates
     const slideCleanup = window.displayAPI.onSlideUpdate((data) => {
-      console.log('Slide update received:', data);
-
       if (data.isBlank) {
         setIsBlank(true);
         setMediaType(null);
@@ -209,14 +301,11 @@ const DisplayViewer: React.FC = () => {
           setDisplayMode(data.displayMode);
         }
         // Update background if explicitly provided (including empty string to clear)
-        console.log('[Viewer] backgroundImage in slide data:', data.backgroundImage, 'undefined?', data.backgroundImage === undefined);
         if (data.backgroundImage !== undefined) {
-          console.log('[Viewer] Setting background to:', data.backgroundImage?.substring(0, 50));
           setBackgroundImage(data.backgroundImage);
         }
         // Apply activeTheme if included (for content-type specific themes like bible)
         if (data.activeTheme) {
-          console.log('[Viewer] Applying active theme from slide:', data.activeTheme?.name, 'contentType:', data.contentType);
           setTheme(data.activeTheme);
         }
         // Handle combined slides for original-only mode
@@ -229,57 +318,92 @@ const DisplayViewer: React.FC = () => {
     });
 
     // Listen for media updates
-    const mediaCleanup = window.displayAPI.onMediaUpdate((data) => {
-      console.log('Media update received:', data);
+    const mediaCleanup = window.displayAPI.onMediaUpdate(async (data) => {
+      // Clear any pending retry/reload timeouts
+      if (mediaRetryTimeoutRef.current) {
+        clearTimeout(mediaRetryTimeoutRef.current);
+        mediaRetryTimeoutRef.current = null;
+      }
+      if (videoReloadTimeoutRef.current) {
+        clearTimeout(videoReloadTimeoutRef.current);
+        videoReloadTimeoutRef.current = null;
+      }
+
       if (!data.path) {
         // Clear media
         setMediaType(null);
         setMediaPath('');
+        setMediaLoadError(null);
+        setMediaLoading(false);
+        setMediaRetryCount(0);
+        videoSyncedRef.current = false;
         return;
       }
-      setMediaType(data.type);
-      // Path already includes protocol (media://...) so use it directly
-      setMediaPath(data.path.startsWith('media://') ? data.path : `media://${data.path}`);
+      // IMPORTANT: Set isBlank FIRST to prevent render branch switch
+      // If isBlank is checked before it's updated, the video component could unmount
       setIsBlank(false);
       setYoutubeVideoId(null); // Clear YouTube when showing media
+      setMediaType(data.type);
+
+      // Use media:// URL directly - the custom protocol should work in display windows
+      // since they're Electron windows with the same protocol handler
+      console.log('[DisplayViewer] Received media path:', data.path);
+      setMediaPath(data.path);
+      setMediaLoadError(null);
+      setMediaLoading(true);
+      setMediaRetryCount(0); // Reset retry count for new media
+      videoSyncedRef.current = false; // Reset sync flag for new video
     });
 
     // Listen for video commands
     const videoCleanup = window.displayAPI.onVideoCommand((command) => {
-      console.log('Video command received:', command);
       const video = videoRef.current;
-      if (!video) return;
 
       switch (command.type) {
         case 'play':
-          if (command.path) {
+          if (command.path && typeof command.path === 'string' && command.path.trim()) {
             setMediaType('video');
-            setMediaPath(`media://${command.path}`);
+            setMediaPath(command.path.startsWith('media://') ? command.path : `media://${command.path}`);
           }
-          video.play().catch(console.error);
+          if (video && video.src && !video.src.endsWith('/')) {
+            video.play().catch((err) => {
+              log.error('Video play error:', err);
+            });
+          }
           break;
         case 'pause':
-          video.pause();
+          if (video) video.pause();
           break;
         case 'resume':
-          video.play().catch(console.error);
+          // Only resume if video has a valid source
+          if (video && video.src && !video.src.endsWith('/')) {
+            video.play().catch((err) => {
+              log.error('Video resume error:', err);
+            });
+          }
           break;
         case 'seek':
-          if (typeof command.time === 'number') {
+          if (video && typeof command.time === 'number') {
             video.currentTime = command.time;
           }
           break;
         case 'stop':
-          video.pause();
-          video.currentTime = 0;
+          if (video) {
+            video.pause();
+            video.currentTime = 0;
+          }
           setMediaType(null);
+          setMediaPath('');
           break;
         case 'mute':
-          video.muted = command.muted ?? true;
+          if (video) video.muted = command.muted ?? true;
           break;
         case 'volume':
-          if (typeof command.volume === 'number') {
+          if (video && typeof command.volume === 'number') {
             video.volume = Math.max(0, Math.min(1, command.volume));
+            if (command.volume > 0) {
+              video.muted = false;
+            }
           }
           break;
       }
@@ -287,35 +411,26 @@ const DisplayViewer: React.FC = () => {
 
     // Listen for theme updates (songs theme)
     const themeCleanup = window.displayAPI.onThemeUpdate((newTheme) => {
-      console.log('Theme update received:', newTheme);
       setTheme(newTheme);
     });
 
     // Listen for bible theme updates (also applies to current display if showing bible content)
     const bibleThemeCleanup = window.displayAPI.onBibleThemeUpdate((newTheme) => {
-      console.log('Bible theme update received:', newTheme);
-      // Apply immediately - the viewer will use this theme when showing bible content
       setTheme(newTheme);
     });
 
     // Listen for prayer theme updates (applies when showing prayer/sermon content)
     const prayerThemeCleanup = window.displayAPI.onPrayerThemeUpdate((newTheme) => {
-      console.log('Prayer theme update received:', newTheme);
-      // Apply immediately - the viewer will use this theme when showing prayer content
       setTheme(newTheme);
     });
 
     // Listen for background updates
     const backgroundCleanup = window.displayAPI.onBackgroundUpdate((background: string) => {
-      console.log('Background update received:', background);
-      console.log('Is gradient:', background?.startsWith('linear-gradient') || background?.startsWith('radial-gradient'));
       setBackgroundImage(background);
     });
 
     // Listen for YouTube commands
     const youtubeCleanup = window.displayAPI.onYoutubeCommand((command) => {
-      console.log('YouTube command received:', command);
-
       switch (command.type) {
         case 'load':
           setYoutubeVideoId(command.videoId);
@@ -358,8 +473,8 @@ const DisplayViewer: React.FC = () => {
         case 'sync':
           if (youtubePlayerRef.current && youtubeReadyRef.current) {
             const currentTime = youtubePlayerRef.current.getCurrentTime();
-            // Only seek if drift is more than 0.3 seconds for tighter sync
-            if (Math.abs(currentTime - command.currentTime) > 0.3) {
+            // Only seek if drift exceeds threshold for tighter sync
+            if (Math.abs(currentTime - command.currentTime) > YOUTUBE_SYNC_THRESHOLD_SEC) {
               youtubePlayerRef.current.seekTo(command.currentTime, true);
             }
             // Sync play/pause state
@@ -377,13 +492,12 @@ const DisplayViewer: React.FC = () => {
 
     // Listen for tool updates
     const toolCleanup = window.displayAPI.onToolUpdate((toolData: ToolData) => {
-      console.log('Tool update received:', toolData);
-
       if (toolData.type === 'countdown') {
         setCountdown({
           active: toolData.active,
           remaining: toolData.remaining || '',
-          message: toolData.message || ''
+          message: toolData.message || '',
+          messageTranslation: toolData.messageTranslation || ''
         });
       } else if (toolData.type === 'announcement') {
         setAnnouncement({
@@ -405,7 +519,8 @@ const DisplayViewer: React.FC = () => {
         setClock({
           active: toolData.active,
           time: toolData.time || '',
-          date: toolData.date || ''
+          date: toolData.date || '',
+          format: toolData.format || '12h'
         });
       } else if (toolData.type === 'stopwatch') {
         setStopwatch({
@@ -429,13 +544,67 @@ const DisplayViewer: React.FC = () => {
     };
   }, []);
 
+  // Handle announcement visibility and auto-dismiss after 10 seconds
+  useEffect(() => {
+    if (announcement.active && announcement.text) {
+      // Clear any existing timer
+      if (announcementTimerRef.current) {
+        clearTimeout(announcementTimerRef.current);
+      }
+
+      // Show announcement with slide-up animation
+      setAnnouncementFading(false);
+      setAnnouncementVisible(true);
+      wasAnnouncementActive.current = true;
+
+      // Start fade-out after 8 seconds, then hide after 10 seconds total
+      announcementTimerRef.current = setTimeout(() => {
+        setAnnouncementFading(true);
+        // Fully hide after fade animation completes (2 seconds)
+        announcementFadeRef.current = setTimeout(() => {
+          setAnnouncementVisible(false);
+          setAnnouncementFading(false);
+        }, 2000);
+      }, 8000);
+    } else if (!announcement.active && wasAnnouncementActive.current) {
+      // If announcement is deactivated and was previously active, start fade out immediately
+      wasAnnouncementActive.current = false;
+      setAnnouncementFading(true);
+      announcementFadeRef.current = setTimeout(() => {
+        setAnnouncementVisible(false);
+        setAnnouncementFading(false);
+      }, 500);
+      if (announcementTimerRef.current) {
+        clearTimeout(announcementTimerRef.current);
+      }
+    }
+
+    return () => {
+      if (announcementTimerRef.current) {
+        clearTimeout(announcementTimerRef.current);
+      }
+      if (announcementFadeRef.current) {
+        clearTimeout(announcementFadeRef.current);
+      }
+    };
+  }, [announcement.active, announcement.text]);
+
   // Load YouTube IFrame API
   useEffect(() => {
+    let scriptElement: HTMLScriptElement | null = null;
+
     if (!window.YT && !document.querySelector('script[src*="youtube.com/iframe_api"]')) {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      document.head.appendChild(tag);
+      scriptElement = document.createElement('script');
+      scriptElement.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(scriptElement);
     }
+
+    // Cleanup: Remove script element on unmount (only if we added it)
+    return () => {
+      if (scriptElement && scriptElement.parentNode) {
+        scriptElement.parentNode.removeChild(scriptElement);
+      }
+    };
   }, []);
 
   // Create YouTube player when video ID changes
@@ -444,9 +613,16 @@ const DisplayViewer: React.FC = () => {
       return;
     }
 
+    let retryCount = 0;
+    const MAX_RETRIES = 50; // 5 seconds max wait for YouTube API
+
     const createPlayer = () => {
       if (!window.YT || !window.YT.Player || !youtubeContainerRef.current) {
-        setTimeout(createPlayer, 100);
+        if (retryCount++ >= MAX_RETRIES) {
+          log.error('YouTube API failed to load after maximum retries');
+          return;
+        }
+        youtubeCreateTimeoutRef.current = setTimeout(createPlayer, 100);
         return;
       }
 
@@ -477,23 +653,33 @@ const DisplayViewer: React.FC = () => {
         },
         events: {
           onReady: async () => {
-            console.log('[DisplayViewer] YouTube player ready, requesting position sync');
             youtubeReadyRef.current = true;
             // Request current position from preview and sync immediately
             try {
               const pos = await window.displayAPI.getYoutubePosition();
               if (pos && youtubePlayerRef.current) {
-                console.log('[DisplayViewer] Syncing YouTube to position:', pos.time, 'playing:', pos.isPlaying);
                 youtubePlayerRef.current.seekTo(pos.time, true);
                 if (pos.isPlaying) {
                   youtubePlayerRef.current.playVideo();
                 }
               }
             } catch (err) {
-              console.error('[DisplayViewer] Failed to get YouTube position:', err);
+              log.error('Failed to get YouTube position:', err);
               // Fallback: just start playing
               youtubePlayerRef.current?.playVideo();
             }
+          },
+          onError: (event: any) => {
+            const errorCodes: Record<number, string> = {
+              2: 'Invalid video ID',
+              5: 'Video cannot be played in HTML5 player',
+              100: 'Video not found or removed',
+              101: 'Video not allowed for embedded playback',
+              150: 'Video not allowed for embedded playback'
+            };
+            const errorMessage = errorCodes[event.data] || `Unknown error (code: ${event.data})`;
+            log.error('YouTube player error:', errorMessage);
+            window.displayAPI.reportError(`YouTube error: ${errorMessage}`);
           }
         }
       });
@@ -502,15 +688,27 @@ const DisplayViewer: React.FC = () => {
     createPlayer();
 
     return () => {
+      // Clear pending create timeout
+      if (youtubeCreateTimeoutRef.current) {
+        clearTimeout(youtubeCreateTimeoutRef.current);
+        youtubeCreateTimeoutRef.current = null;
+      }
       if (youtubePlayerRef.current) {
         try {
+          // Stop video playback first to release resources
+          youtubePlayerRef.current.stopVideo?.();
           youtubePlayerRef.current.destroy();
         } catch (e) {
-          // Ignore
+          // Ignore - player may already be destroyed
         }
         youtubePlayerRef.current = null;
       }
       youtubeReadyRef.current = false;
+
+      // Clear container to remove any orphaned iframes
+      if (youtubeContainerRef.current) {
+        youtubeContainerRef.current.innerHTML = '';
+      }
     };
   }, [youtubeVideoId]);
 
@@ -547,6 +745,74 @@ const DisplayViewer: React.FC = () => {
       video.removeEventListener('pause', handlePause);
     };
   }, [mediaType]);
+
+  // Cleanup video element when media changes or component unmounts
+  useEffect(() => {
+    const currentMediaPath = mediaPath;
+
+    return () => {
+      // Clear any pending video reload timeout
+      if (videoReloadTimeoutRef.current) {
+        clearTimeout(videoReloadTimeoutRef.current);
+        videoReloadTimeoutRef.current = null;
+      }
+
+      const video = videoRef.current;
+      if (video) {
+        // Pause video to stop playback
+        video.pause();
+
+        // Revoke blob URL if it was created to prevent memory leaks
+        if (currentMediaPath && currentMediaPath.startsWith('blob:')) {
+          try {
+            URL.revokeObjectURL(currentMediaPath);
+          } catch (e) {
+            // Ignore - URL may already be revoked
+          }
+        }
+
+        // Note: Don't set video.src = '' here as it causes issues with the ref
+        // pointing to a stale element with the page URL. The video element will
+        // be unmounted by React anyway if the key changes.
+      }
+    };
+  }, [mediaPath]);
+
+  // Keep mediaLoadingRef in sync with mediaLoading state for timeout callback
+  useEffect(() => {
+    mediaLoadingRef.current = mediaLoading;
+  }, [mediaLoading]);
+
+  // Media load timeout handling
+  useEffect(() => {
+    // Clear any existing timeout
+    if (mediaLoadTimeoutRef.current) {
+      clearTimeout(mediaLoadTimeoutRef.current);
+      mediaLoadTimeoutRef.current = null;
+    }
+
+    // Only set timeout if we're loading media
+    if (mediaLoading && mediaPath) {
+      // Capture mediaPath at timeout creation time for the callback
+      const currentMediaPath = mediaPath;
+      mediaLoadTimeoutRef.current = setTimeout(() => {
+        // Use ref to check current loading state (not stale closure)
+        if (mediaLoadingRef.current) {
+          log.error('Media load timeout:', currentMediaPath);
+          setMediaLoadError('Media load timed out');
+          setMediaLoading(false);
+          window.displayAPI.reportError(`Media load timeout: ${currentMediaPath.substring(0, 50)}`);
+        }
+      }, mediaLoadTimeout);
+    }
+
+    return () => {
+      if (mediaLoadTimeoutRef.current) {
+        clearTimeout(mediaLoadTimeoutRef.current);
+        mediaLoadTimeoutRef.current = null;
+      }
+    };
+  }, [mediaLoading, mediaPath]);
 
   // Handle rotating messages interval
   useEffect(() => {
@@ -692,7 +958,7 @@ const DisplayViewer: React.FC = () => {
     });
   };
 
-  // Render background boxes (for visual theme editor)
+  // Render background boxes (legacy - main rendering uses SlideRenderer)
   const renderBackgroundBoxes = () => {
     if (!theme?.backgroundBoxes || theme.backgroundBoxes.length === 0) return null;
 
@@ -708,9 +974,26 @@ const DisplayViewer: React.FC = () => {
           backgroundColor: box.color,
           opacity: box.opacity,
           borderRadius: `${box.borderRadius}px`,
-          zIndex: 1
+          zIndex: 1,
+          overflow: 'hidden'
         }}
-      />
+      >
+        {/* Texture overlay */}
+        {box.texture && box.texture !== 'none' && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage: texturePatterns[box.texture].pattern,
+              backgroundRepeat: 'repeat',
+              backgroundSize: texturePatterns[box.texture].size,
+              opacity: box.textureOpacity ?? 0.3,
+              pointerEvents: 'none',
+              mixBlendMode: 'overlay'
+            }}
+          />
+        )}
+      </div>
     ));
   };
 
@@ -848,8 +1131,8 @@ const DisplayViewer: React.FC = () => {
         <div style={{
           fontSize: '15vw',
           fontWeight: 700,
-          color: '#FF8C42',
-          textShadow: '0 0 50px rgba(255, 140, 66, 0.5)',
+          color: '#06b6d4',
+          textShadow: '0 0 50px rgba(6, 182, 212, 0.5)',
           fontFamily: 'Inter, sans-serif'
         }}>
           {countdown.remaining}
@@ -857,19 +1140,32 @@ const DisplayViewer: React.FC = () => {
         {countdown.message && (
           <div style={{
             fontSize: '3vw',
-            color: 'rgba(255, 255, 255, 0.8)',
-            marginTop: '2vh'
+            color: 'rgba(255, 255, 255, 0.9)',
+            marginTop: '2vh',
+            marginBottom: '0',
+            direction: 'rtl',
+            lineHeight: 1.2
           }}>
             {countdown.message}
+          </div>
+        )}
+        {countdown.messageTranslation && (
+          <div style={{
+            fontSize: '2vw',
+            color: 'rgba(255, 255, 255, 0.7)',
+            marginTop: '0.3vh',
+            lineHeight: 1.2
+          }}>
+            {countdown.messageTranslation}
           </div>
         )}
       </div>
     );
   };
 
-  // Render announcement banner
+  // Render announcement banner with auto-fade
   const renderAnnouncement = () => {
-    if (!announcement.active) return null;
+    if (!announcementVisible || !announcement.text) return null;
 
     return (
       <div style={{
@@ -878,11 +1174,11 @@ const DisplayViewer: React.FC = () => {
         left: '5vw',
         right: '5vw',
         padding: '2vh 3vw',
-        background: 'linear-gradient(135deg, rgba(255, 140, 66, 0.95), rgba(244, 120, 32, 0.95))',
+        background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.95), rgba(8, 145, 178, 0.95))',
         borderRadius: '1vw',
         boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)',
         zIndex: 90,
-        animation: 'slideUp 0.5s ease'
+        animation: announcementFading ? 'slideDown 0.5s ease-out forwards' : 'slideUp 0.5s ease-out forwards'
       }}>
         <div style={{
           fontSize: '3vw',
@@ -904,6 +1200,16 @@ const DisplayViewer: React.FC = () => {
               transform: translateY(0);
             }
           }
+          @keyframes slideDown {
+            from {
+              opacity: 1;
+              transform: translateY(0);
+            }
+            to {
+              opacity: 0;
+              transform: translateY(50px);
+            }
+          }
         `}</style>
       </div>
     );
@@ -913,7 +1219,10 @@ const DisplayViewer: React.FC = () => {
   const renderRotatingMessages = () => {
     if (!rotatingMessages.active || rotatingMessages.messages.length === 0) return null;
 
-    const currentMessage = rotatingMessages.messages[rotatingMessages.currentIndex];
+    // Ensure currentIndex is within bounds
+    const safeIndex = Math.min(rotatingMessages.currentIndex, rotatingMessages.messages.length - 1);
+    const currentMessage = rotatingMessages.messages[safeIndex];
+    if (!currentMessage) return null;
 
     return (
       <div style={{
@@ -925,23 +1234,27 @@ const DisplayViewer: React.FC = () => {
         background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.95), rgba(118, 75, 162, 0.95))',
         borderRadius: '1vw',
         boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)',
-        zIndex: 85,
-        animation: 'fadeIn 0.5s ease'
+        zIndex: 85
       }}>
-        <div style={{
-          fontSize: '2.5vw',
-          fontWeight: 600,
-          color: 'white',
-          textAlign: 'center',
-          textShadow: '0 2px 10px rgba(0, 0, 0, 0.3)'
-        }}>
+        {/* Key prop forces re-mount on message change, triggering animation */}
+        <div
+          key={`msg-${rotatingMessages.currentIndex}`}
+          style={{
+            fontSize: '2.5vw',
+            fontWeight: 600,
+            color: 'white',
+            textAlign: 'center',
+            textShadow: '0 2px 10px rgba(0, 0, 0, 0.3)',
+            animation: 'messageSlideIn 0.4s ease-out'
+          }}
+        >
           {currentMessage}
         </div>
         <style>{`
-          @keyframes fadeIn {
+          @keyframes messageSlideIn {
             from {
               opacity: 0;
-              transform: translateY(-20px);
+              transform: translateY(-10px);
             }
             to {
               opacity: 1;
@@ -1038,6 +1351,44 @@ const DisplayViewer: React.FC = () => {
     );
   };
 
+  // Render close button (only shown when display is on same screen as control)
+  const renderCloseButton = () => {
+    if (!isSameScreenAsControl) return null;
+
+    return (
+      <button
+        onClick={() => {
+          window.displayAPI.closeDisplay();
+        }}
+        style={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          padding: '12px 32px',
+          fontSize: '16px',
+          fontWeight: 600,
+          color: 'white',
+          background: 'rgba(220, 38, 38, 0.9)',
+          border: 'none',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          zIndex: 1000,
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+          transition: 'background 0.2s ease'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(185, 28, 28, 0.95)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(220, 38, 38, 0.9)';
+        }}
+      >
+        ✕ Stop Presenting
+      </button>
+    );
+  };
+
   // Render blank screen (still show background)
   if (isBlank && !countdown.active && !clock.active && !stopwatch.active) {
     return (
@@ -1050,6 +1401,7 @@ const DisplayViewer: React.FC = () => {
           isBlank={true}
           fillContainer={true}
         />
+        {renderCloseButton()}
       </div>
     );
   }
@@ -1070,6 +1422,7 @@ const DisplayViewer: React.FC = () => {
         />
         {renderRotatingMessages()}
         {renderAnnouncement()}
+        {renderCloseButton()}
       </div>
     );
   }
@@ -1078,37 +1431,191 @@ const DisplayViewer: React.FC = () => {
   if (mediaType === 'video' && !countdown.active && !clock.active && !stopwatch.active) {
     return (
       <div className="display-window" style={backgroundStyle}>
-        <video
-          ref={videoRef}
-          src={mediaPath}
-          className="display-video"
-          autoPlay
-          muted
-          onLoadedData={async () => {
-            // After video loads, request current position for precise sync
-            console.log('[DisplayViewer] Video loaded, requesting position sync');
+        {/* Loading overlay */}
+        {mediaLoading && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 10
+          }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              border: '3px solid rgba(255, 255, 255, 0.2)',
+              borderTopColor: '#06b6d4',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+            <style>{`
+              @keyframes spin {
+                to { transform: rotate(360deg); }
+              }
+            `}</style>
+          </div>
+        )}
+        {/* Error overlay */}
+        {mediaLoadError && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0, 0, 0, 0.9)',
+            zIndex: 10
+          }}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <div style={{ color: '#ff6b6b', fontSize: '1.5vw', marginTop: '1vh' }}>
+              {mediaLoadError}
+            </div>
+          </div>
+        )}
+        {mediaPath && (
+          <video
+            key={`video-${mediaPath}-${mediaRetryCount}`}
+            ref={videoRef}
+            src={mediaPath}
+            className="display-video"
+            muted
+            playsInline
+            onLoadStart={() => {
+              console.log('[DisplayViewer] Video load started, src:', mediaPath);
+            }}
+            onProgress={(e) => {
+              const video = e.target as HTMLVideoElement;
+              const buffered = video.buffered;
+              console.log('[DisplayViewer] Video progress event - buffered ranges:', buffered.length,
+                'networkState:', video.networkState, 'readyState:', video.readyState);
+              if (buffered.length > 0) {
+                console.log('[DisplayViewer] Video buffered:', buffered.end(0).toFixed(2), 'sec of', video.duration?.toFixed(2) || 'unknown', 'sec');
+              }
+            }}
+          onLoadedMetadata={(e) => {
+            const video = e.target as HTMLVideoElement;
+            console.log('[DisplayViewer] Video metadata loaded:', {
+              duration: video.duration,
+              videoWidth: video.videoWidth,
+              videoHeight: video.videoHeight,
+              src: video.src
+            });
+          }}
+          onLoadedData={() => {
+            console.log('[DisplayViewer] Video data loaded');
+            // Mark loading as complete (video metadata loaded)
+            setMediaLoading(false);
+            setMediaLoadError(null);
+          }}
+          onAbort={() => {
+            console.log('[DisplayViewer] Video load aborted');
+          }}
+          onStalled={() => {
+            console.log('[DisplayViewer] Video stalled - waiting for data');
+          }}
+          onWaiting={() => {
+            console.log('[DisplayViewer] Video waiting for data');
+          }}
+          onCanPlay={async () => {
+            console.log('[DisplayViewer] Video can play');
+            // Signal ready only once per video load to avoid race conditions
+            if (videoSyncedRef.current) return;
+            videoSyncedRef.current = true;
+
             try {
-              const pos = await window.displayAPI.getVideoPosition();
-              if (pos && videoRef.current) {
-                console.log('[DisplayViewer] Syncing to position:', pos.time, 'playing:', pos.isPlaying);
-                videoRef.current.currentTime = pos.time;
-                if (pos.isPlaying) {
-                  videoRef.current.play().catch(console.error);
-                } else {
-                  videoRef.current.pause();
+              // Signal to main process that display is ready
+              // This triggers synchronized playback start on all windows
+              const started = await window.displayAPI.signalVideoReady();
+              console.log('[DisplayViewer] Video ready signal sent, playback started:', started);
+
+              // If playback was already started (by another display), sync to current position
+              if (!started) {
+                const pos = await window.displayAPI.getVideoPosition();
+                if (pos && videoRef.current) {
+                  if (Math.abs(videoRef.current.currentTime - pos.time) > VIDEO_SYNC_THRESHOLD_SEC) {
+                    videoRef.current.currentTime = pos.time;
+                  }
+                  if (pos.isPlaying) {
+                    videoRef.current.play().catch(err => log.error('Video play failed:', err));
+                  }
                 }
               }
             } catch (err) {
-              console.error('[DisplayViewer] Failed to sync video position:', err);
+              log.error('Failed to signal video ready:', err);
             }
           }}
           onError={(e) => {
-            console.error('Video error:', e);
-            window.displayAPI.reportError('Video playback error');
+            // Get detailed error information from the video element
+            const videoElement = e.target as HTMLVideoElement;
+            const videoSrc = videoElement?.src || '';
+
+            // Ignore errors from stale/empty video elements
+            // Empty src resolves to page URL (ends with '/')
+            if (!videoSrc || videoSrc.endsWith('/') || (!videoSrc.includes('/media/') && !videoSrc.startsWith('media://'))) {
+              console.log('[DisplayViewer] Ignoring stale video error, src:', videoSrc);
+              return;
+            }
+
+            const mediaError = videoElement?.error;
+            const errorCode = mediaError?.code;
+            const errorMessage = mediaError?.message || 'Unknown error';
+
+            // Map error codes to readable names
+            const errorCodeNames: Record<number, string> = {
+              1: 'MEDIA_ERR_ABORTED',
+              2: 'MEDIA_ERR_NETWORK',
+              3: 'MEDIA_ERR_DECODE',
+              4: 'MEDIA_ERR_SRC_NOT_SUPPORTED'
+            };
+            const errorName = errorCode ? errorCodeNames[errorCode] || `Unknown (${errorCode})` : 'No error code';
+
+            log.error(`Video error: ${errorName} - ${errorMessage}`, 'src:', videoSrc, 'retry count:', mediaRetryCount);
+            console.error('[DisplayViewer] Video error details:', {
+              errorCode,
+              errorName,
+              errorMessage,
+              src: videoSrc,
+              networkState: videoElement?.networkState,
+              readyState: videoElement?.readyState,
+              retryCount: mediaRetryCount
+            });
+
+            setMediaLoading(false);
+            videoSyncedRef.current = false; // Allow retry on error
+
+            // Auto-retry for transient errors
+            if (mediaRetryCount < MAX_MEDIA_RETRIES) {
+              setMediaLoadError(`Retrying... (${mediaRetryCount + 1}/${MAX_MEDIA_RETRIES})`);
+
+              mediaRetryTimeoutRef.current = setTimeout(() => {
+                // Incrementing retry count with the new key will recreate the video element
+                setMediaRetryCount(prev => prev + 1);
+                setMediaLoading(true);
+                setMediaLoadError(null);
+              }, MEDIA_RETRY_DELAY_MS);
+            } else {
+              setMediaLoadError('Video playback error - max retries exceeded');
+              window.displayAPI.reportError('Video playback error after max retries');
+            }
           }}
-        />
+          />
+        )}
         {renderRotatingMessages()}
         {renderAnnouncement()}
+        {renderCloseButton()}
       </div>
     );
   }
@@ -1117,9 +1624,94 @@ const DisplayViewer: React.FC = () => {
   if (mediaType === 'image' && !countdown.active && !clock.active && !stopwatch.active) {
     return (
       <div className="display-window" style={backgroundStyle}>
-        <img src={mediaPath} className="display-image" alt="" />
+        {/* Loading overlay */}
+        {mediaLoading && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 10
+          }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              border: '3px solid rgba(255, 255, 255, 0.2)',
+              borderTopColor: '#06b6d4',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+            <style>{`
+              @keyframes spin {
+                to { transform: rotate(360deg); }
+              }
+            `}</style>
+          </div>
+        )}
+        {/* Error overlay */}
+        {mediaLoadError && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0, 0, 0, 0.9)',
+            zIndex: 10
+          }}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <div style={{ color: '#ff6b6b', fontSize: '1.5vw', marginTop: '1vh' }}>
+              {mediaLoadError}
+            </div>
+          </div>
+        )}
+        {mediaPath && (
+          <img
+            key={`image-${mediaPath}-${mediaRetryCount}`}
+            src={mediaPath}
+            className="display-image"
+            alt=""
+            onLoad={() => {
+              setMediaLoading(false);
+              setMediaLoadError(null);
+              setMediaRetryCount(0);
+            }}
+            onError={(e) => {
+              log.error('Image load error:', e, 'retry count:', mediaRetryCount);
+              setMediaLoading(false);
+
+              // Auto-retry for transient errors
+              if (mediaRetryCount < MAX_MEDIA_RETRIES) {
+                setMediaLoadError(`Retrying... (${mediaRetryCount + 1}/${MAX_MEDIA_RETRIES})`);
+
+                mediaRetryTimeoutRef.current = setTimeout(() => {
+                  setMediaRetryCount(prev => prev + 1);
+                  setMediaLoading(true);
+                  setMediaLoadError(null);
+                }, MEDIA_RETRY_DELAY_MS);
+              } else {
+                setMediaLoadError('Image load error - max retries exceeded');
+                window.displayAPI.reportError('Image load error after max retries');
+              }
+            }}
+          />
+        )}
         {renderRotatingMessages()}
         {renderAnnouncement()}
+        {renderCloseButton()}
       </div>
     );
   }
@@ -1131,6 +1723,7 @@ const DisplayViewer: React.FC = () => {
         {renderCountdown()}
         {renderRotatingMessages()}
         {renderAnnouncement()}
+        {renderCloseButton()}
       </div>
     );
   }
@@ -1142,6 +1735,7 @@ const DisplayViewer: React.FC = () => {
         {renderClock()}
         {renderRotatingMessages()}
         {renderAnnouncement()}
+        {renderCloseButton()}
       </div>
     );
   }
@@ -1153,6 +1747,7 @@ const DisplayViewer: React.FC = () => {
         {renderStopwatch()}
         {renderRotatingMessages()}
         {renderAnnouncement()}
+        {renderCloseButton()}
       </div>
     );
   }
@@ -1172,8 +1767,9 @@ const DisplayViewer: React.FC = () => {
       {/* Overlay tools on top of the slide content */}
       {renderRotatingMessages()}
       {renderAnnouncement()}
+      {renderCloseButton()}
     </div>
   );
 };
 
-export default DisplayViewer;
+export default memo(DisplayViewer);

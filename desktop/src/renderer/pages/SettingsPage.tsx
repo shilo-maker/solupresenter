@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSettings } from '../contexts/SettingsContext';
@@ -10,18 +10,55 @@ interface AuthState {
   serverUrl: string;
 }
 
+interface RemoteControlStatus {
+  running: boolean;
+  url: string | null;
+  pin: string;
+  clients: number;
+}
+
 export default function SettingsPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { settings, updateSetting, resetSettings, isSyncing } = useSettings();
   const [authState, setAuthState] = useState<AuthState | null>(null);
   const [appVersion, setAppVersion] = useState('');
+  const [remoteControlStatus, setRemoteControlStatus] = useState<RemoteControlStatus | null>(null);
+  const [remoteControlLoading, setRemoteControlLoading] = useState(false);
+  const [remoteControlQRCode, setRemoteControlQRCode] = useState<string | null>(null);
+
+  const loadRemoteControlStatus = useCallback(async () => {
+    try {
+      const status = await window.electronAPI.remoteControl.getStatus();
+      setRemoteControlStatus(status);
+      // Load QR code if running
+      if (status.running) {
+        const qrCode = await window.electronAPI.remoteControl.getQRCode();
+        setRemoteControlQRCode(qrCode);
+      } else {
+        setRemoteControlQRCode(null);
+      }
+    } catch (error) {
+      console.error('Failed to load remote control status:', error);
+    }
+  }, []);
 
   useEffect(() => {
     // Load auth state
-    window.electronAPI.getAuthState().then(setAuthState);
-    window.electronAPI.getAppVersion().then(setAppVersion);
-  }, []);
+    window.electronAPI.getAuthState()
+      .then(setAuthState)
+      .catch((error) => console.error('Failed to load auth state:', error));
+    window.electronAPI.getAppVersion()
+      .then(setAppVersion)
+      .catch((error) => console.error('Failed to load app version:', error));
+
+    // Load remote control status
+    loadRemoteControlStatus();
+
+    // Poll for status updates while component is mounted
+    const interval = setInterval(loadRemoteControlStatus, 5000);
+    return () => clearInterval(interval);
+  }, [loadRemoteControlStatus]);
 
   const handleLanguageChange = async (lang: 'en' | 'he') => {
     await updateSetting('language', lang);
@@ -32,12 +69,45 @@ export default function SettingsPage() {
     setAuthState(await window.electronAPI.getAuthState());
   };
 
+  const handleStartRemoteControl = async () => {
+    setRemoteControlLoading(true);
+    try {
+      const result = await window.electronAPI.remoteControl.start();
+      if (result.success) {
+        await loadRemoteControlStatus();
+      } else {
+        console.error('Failed to start remote control:', result.error);
+      }
+    } catch (error) {
+      console.error('Failed to start remote control:', error);
+    } finally {
+      setRemoteControlLoading(false);
+    }
+  };
+
+  const handleStopRemoteControl = async () => {
+    setRemoteControlLoading(true);
+    try {
+      await window.electronAPI.remoteControl.stop();
+      await loadRemoteControlStatus();
+    } catch (error) {
+      console.error('Failed to stop remote control:', error);
+    } finally {
+      setRemoteControlLoading(false);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    window.electronAPI.copyToClipboard(text);
+  };
+
   const isRTL = i18n.language === 'he';
 
   return (
     <div
       style={{
-        minHeight: '100vh',
+        height: '100vh',
+        overflow: 'auto',
         background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
         color: 'white',
         direction: isRTL ? 'rtl' : 'ltr'
@@ -86,7 +156,7 @@ export default function SettingsPage() {
             marginBottom: '20px'
           }}
         >
-          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#FF8C42' }}>
+          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#06b6d4' }}>
             {t('settings.language')}
           </h2>
 
@@ -97,8 +167,8 @@ export default function SettingsPage() {
                 flex: 1,
                 padding: '16px',
                 borderRadius: '8px',
-                border: settings.language === 'en' ? '2px solid #FF8C42' : '2px solid rgba(255,255,255,0.2)',
-                background: settings.language === 'en' ? 'rgba(255, 140, 66, 0.2)' : 'rgba(255,255,255,0.05)',
+                border: settings.language === 'en' ? '2px solid #06b6d4' : '2px solid rgba(255,255,255,0.2)',
+                background: settings.language === 'en' ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255,255,255,0.05)',
                 color: 'white',
                 cursor: 'pointer',
                 display: 'flex',
@@ -118,8 +188,8 @@ export default function SettingsPage() {
                 flex: 1,
                 padding: '16px',
                 borderRadius: '8px',
-                border: settings.language === 'he' ? '2px solid #FF8C42' : '2px solid rgba(255,255,255,0.2)',
-                background: settings.language === 'he' ? 'rgba(255, 140, 66, 0.2)' : 'rgba(255,255,255,0.05)',
+                border: settings.language === 'he' ? '2px solid #06b6d4' : '2px solid rgba(255,255,255,0.2)',
+                background: settings.language === 'he' ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255,255,255,0.05)',
                 color: 'white',
                 cursor: 'pointer',
                 display: 'flex',
@@ -150,7 +220,7 @@ export default function SettingsPage() {
             marginBottom: '20px'
           }}
         >
-          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#FF8C42' }}>
+          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#06b6d4' }}>
             {t('settings.display')}
           </h2>
 
@@ -165,7 +235,7 @@ export default function SettingsPage() {
                   flex: 1,
                   padding: '12px',
                   borderRadius: '8px',
-                  border: settings.displayMode === 'bilingual' ? '2px solid #667eea' : '2px solid rgba(255,255,255,0.2)',
+                  border: settings.displayMode === 'bilingual' ? '2px solid #06b6d4' : '2px solid rgba(255,255,255,0.2)',
                   background: settings.displayMode === 'bilingual' ? 'rgba(102, 126, 234, 0.2)' : 'transparent',
                   color: 'white',
                   cursor: 'pointer'
@@ -179,7 +249,7 @@ export default function SettingsPage() {
                   flex: 1,
                   padding: '12px',
                   borderRadius: '8px',
-                  border: settings.displayMode === 'original' ? '2px solid #667eea' : '2px solid rgba(255,255,255,0.2)',
+                  border: settings.displayMode === 'original' ? '2px solid #06b6d4' : '2px solid rgba(255,255,255,0.2)',
                   background: settings.displayMode === 'original' ? 'rgba(102, 126, 234, 0.2)' : 'transparent',
                   color: 'white',
                   cursor: 'pointer'
@@ -188,6 +258,78 @@ export default function SettingsPage() {
                 {t('settings.originalOnly')}
               </button>
             </div>
+          </div>
+        </section>
+
+        {/* UI Scale Section */}
+        <section
+          style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '20px'
+          }}
+        >
+          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#06b6d4' }}>
+            {t('settings.uiScale')}
+          </h2>
+
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ display: 'block', marginBottom: '12px', fontSize: '0.9rem', color: 'rgba(255,255,255,0.7)' }}>
+              {t('settings.uiScaleDescription')}
+            </label>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <input
+                type="range"
+                min="0.8"
+                max="1.5"
+                step="0.05"
+                value={settings.uiScale}
+                onChange={(e) => updateSetting('uiScale', parseFloat(e.target.value))}
+                style={{
+                  flex: 1,
+                  height: '6px',
+                  accentColor: '#06b6d4',
+                  cursor: 'pointer'
+                }}
+              />
+              <span style={{
+                minWidth: '60px',
+                textAlign: 'center',
+                padding: '6px 12px',
+                background: 'rgba(6, 182, 212, 0.2)',
+                borderRadius: '6px',
+                fontSize: '0.9rem',
+                fontWeight: 600
+              }}>
+                {Math.round(settings.uiScale * 100)}%
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>
+              <span>80%</span>
+              <span>100%</span>
+              <span>150%</span>
+            </div>
+
+            {settings.uiScale !== 1.0 && (
+              <button
+                onClick={() => updateSetting('uiScale', 1.0)}
+                style={{
+                  marginTop: '12px',
+                  padding: '8px 16px',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '6px',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem'
+                }}
+              >
+                {t('settings.resetToDefault')}
+              </button>
+            )}
           </div>
         </section>
 
@@ -200,7 +342,7 @@ export default function SettingsPage() {
             marginBottom: '20px'
           }}
         >
-          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#FF8C42' }}>
+          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#06b6d4' }}>
             {t('settings.account')}
           </h2>
 
@@ -236,7 +378,7 @@ export default function SettingsPage() {
                     height: '28px',
                     borderRadius: '14px',
                     border: 'none',
-                    background: settings.syncEnabled ? '#FF8C42' : 'rgba(255,255,255,0.2)',
+                    background: settings.syncEnabled ? '#06b6d4' : 'rgba(255,255,255,0.2)',
                     cursor: 'pointer',
                     position: 'relative',
                     transition: 'background 0.2s'
@@ -282,10 +424,10 @@ export default function SettingsPage() {
                 onClick={() => navigate('/')}
                 style={{
                   padding: '12px 24px',
-                  background: 'rgba(255, 140, 66, 0.2)',
-                  border: '1px solid rgba(255, 140, 66, 0.4)',
+                  background: 'rgba(6, 182, 212, 0.2)',
+                  border: '1px solid rgba(6, 182, 212, 0.4)',
                   borderRadius: '8px',
-                  color: '#FF8C42',
+                  color: '#06b6d4',
                   cursor: 'pointer',
                   fontSize: '0.9rem'
                 }}
@@ -305,7 +447,7 @@ export default function SettingsPage() {
             marginBottom: '20px'
           }}
         >
-          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#FF8C42' }}>
+          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#06b6d4' }}>
             {t('settings.general')}
           </h2>
 
@@ -327,7 +469,7 @@ export default function SettingsPage() {
                 height: '28px',
                 borderRadius: '14px',
                 border: 'none',
-                background: settings.autoConnect ? '#FF8C42' : 'rgba(255,255,255,0.2)',
+                background: settings.autoConnect ? '#06b6d4' : 'rgba(255,255,255,0.2)',
                 cursor: 'pointer',
                 position: 'relative',
                 transition: 'background 0.2s'
@@ -365,7 +507,7 @@ export default function SettingsPage() {
                 height: '28px',
                 borderRadius: '14px',
                 border: 'none',
-                background: settings.showTutorial ? '#FF8C42' : 'rgba(255,255,255,0.2)',
+                background: settings.showTutorial ? '#06b6d4' : 'rgba(255,255,255,0.2)',
                 cursor: 'pointer',
                 position: 'relative',
                 transition: 'background 0.2s'
@@ -387,6 +529,313 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        {/* Remote Control Section */}
+        <section
+          style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '20px'
+          }}
+        >
+          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#06b6d4' }}>
+            {t('settings.remoteControl', 'Remote Control')}
+          </h2>
+          <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginBottom: '16px' }}>
+            {t('settings.remoteControlDescription', 'Control SoluPresenter from your mobile device on the local network.')}
+          </p>
+
+          {remoteControlStatus?.running ? (
+            <div>
+              {/* Status display */}
+              <div
+                style={{
+                  background: 'rgba(16, 185, 129, 0.1)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  marginBottom: '16px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                  <div
+                    style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      background: '#10b981',
+                      boxShadow: '0 0 8px rgba(16, 185, 129, 0.5)'
+                    }}
+                  />
+                  <span style={{ color: '#10b981', fontWeight: 500 }}>
+                    {t('settings.remoteControlRunning', 'Running')}
+                  </span>
+                  {remoteControlStatus.clients > 0 && (
+                    <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>
+                      ({remoteControlStatus.clients} {t('settings.connected', 'connected')})
+                    </span>
+                  )}
+                </div>
+
+                {/* URL */}
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>
+                    {t('settings.url', 'URL')}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <code
+                      style={{
+                        flex: 1,
+                        background: 'rgba(0,0,0,0.3)',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        fontSize: '0.9rem',
+                        fontFamily: 'monospace'
+                      }}
+                    >
+                      {remoteControlStatus.url}
+                    </code>
+                    <button
+                      onClick={() => copyToClipboard(remoteControlStatus.url || '')}
+                      style={{
+                        padding: '8px 12px',
+                        background: 'rgba(255,255,255,0.1)',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        borderRadius: '6px',
+                        color: 'white',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem'
+                      }}
+                    >
+                      {t('common.copy', 'Copy')}
+                    </button>
+                  </div>
+                </div>
+
+                {/* PIN */}
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>
+                    {t('settings.pin', 'PIN')}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <code
+                      style={{
+                        background: 'rgba(0,0,0,0.3)',
+                        padding: '8px 16px',
+                        borderRadius: '6px',
+                        fontSize: '1.5rem',
+                        fontFamily: 'monospace',
+                        letterSpacing: '4px',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {remoteControlStatus.pin}
+                    </code>
+                  </div>
+                </div>
+              </div>
+
+              {/* QR Code */}
+              {remoteControlQRCode && (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    padding: '16px',
+                    background: 'rgba(255,255,255,0.05)',
+                    borderRadius: '8px',
+                    marginBottom: '16px'
+                  }}
+                >
+                  <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '12px' }}>
+                    {t('settings.scanToConnect', 'Scan to connect instantly')}
+                  </div>
+                  <div
+                    style={{
+                      background: 'white',
+                      padding: '8px',
+                      borderRadius: '8px'
+                    }}
+                  >
+                    <img
+                      src={remoteControlQRCode}
+                      alt="QR Code"
+                      style={{ display: 'block', width: '180px', height: '180px' }}
+                    />
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '8px', textAlign: 'center' }}>
+                    {t('settings.qrCodeInstructions', 'Includes URL and PIN for instant access')}
+                  </div>
+                </div>
+              )}
+
+              {/* Stop button */}
+              <button
+                onClick={handleStopRemoteControl}
+                disabled={remoteControlLoading}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  background: 'rgba(239, 68, 68, 0.2)',
+                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  borderRadius: '8px',
+                  color: '#ef4444',
+                  cursor: remoteControlLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '0.9rem',
+                  fontWeight: 500,
+                  opacity: remoteControlLoading ? 0.5 : 1
+                }}
+              >
+                {remoteControlLoading ? t('common.loading', 'Loading...') : t('settings.stopRemoteControl', 'Stop Remote Control')}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleStartRemoteControl}
+              disabled={remoteControlLoading}
+              style={{
+                width: '100%',
+                padding: '14px',
+                background: 'linear-gradient(135deg, #06b6d4, #0891b2)',
+                border: 'none',
+                borderRadius: '8px',
+                color: 'white',
+                cursor: remoteControlLoading ? 'not-allowed' : 'pointer',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                opacity: remoteControlLoading ? 0.5 : 1
+              }}
+            >
+              {remoteControlLoading ? t('common.loading', 'Loading...') : t('settings.startRemoteControl', 'Start Remote Control')}
+            </button>
+          )}
+        </section>
+
+        {/* Advanced/Performance Section */}
+        <section
+          style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '20px'
+          }}
+        >
+          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#06b6d4' }}>
+            {t('settings.advanced', 'Advanced')}
+          </h2>
+          <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginBottom: '16px' }}>
+            {t('settings.advancedDescription', 'Configure timeout values for media operations. Increase these if you experience loading issues on slower connections.')}
+          </p>
+
+          {/* Media Load Timeout */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '0.9rem' }}>{t('settings.mediaLoadTimeout', 'Media Load Timeout')}</span>
+              <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>{settings.mediaLoadTimeout}s</span>
+            </label>
+            <input
+              type="range"
+              min="5"
+              max="60"
+              step="5"
+              value={settings.mediaLoadTimeout}
+              onChange={(e) => updateSetting('mediaLoadTimeout', parseInt(e.target.value))}
+              style={{
+                width: '100%',
+                height: '8px',
+                borderRadius: '4px',
+                background: 'rgba(255,255,255,0.2)',
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+              aria-label={t('settings.mediaLoadTimeout', 'Media Load Timeout')}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>
+              <span>5s</span>
+              <span>60s</span>
+            </div>
+          </div>
+
+          {/* Thumbnail Generation Timeout */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '0.9rem' }}>{t('settings.thumbnailTimeout', 'Thumbnail Generation Timeout')}</span>
+              <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>{settings.thumbnailGenerationTimeout}s</span>
+            </label>
+            <input
+              type="range"
+              min="3"
+              max="30"
+              step="1"
+              value={settings.thumbnailGenerationTimeout}
+              onChange={(e) => updateSetting('thumbnailGenerationTimeout', parseInt(e.target.value))}
+              style={{
+                width: '100%',
+                height: '8px',
+                borderRadius: '4px',
+                background: 'rgba(255,255,255,0.2)',
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+              aria-label={t('settings.thumbnailTimeout', 'Thumbnail Generation Timeout')}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>
+              <span>3s</span>
+              <span>30s</span>
+            </div>
+          </div>
+
+          {/* YouTube Search Timeout */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '0.9rem' }}>{t('settings.youtubeSearchTimeout', 'YouTube Search Timeout')}</span>
+              <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>{settings.youtubeSearchTimeout}s</span>
+            </label>
+            <input
+              type="range"
+              min="5"
+              max="60"
+              step="5"
+              value={settings.youtubeSearchTimeout}
+              onChange={(e) => updateSetting('youtubeSearchTimeout', parseInt(e.target.value))}
+              style={{
+                width: '100%',
+                height: '8px',
+                borderRadius: '4px',
+                background: 'rgba(255,255,255,0.2)',
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+              aria-label={t('settings.youtubeSearchTimeout', 'YouTube Search Timeout')}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>
+              <span>5s</span>
+              <span>60s</span>
+            </div>
+          </div>
+
+          {/* Reset to defaults button */}
+          <button
+            onClick={() => {
+              updateSetting('mediaLoadTimeout', 15);
+              updateSetting('thumbnailGenerationTimeout', 8);
+              updateSetting('youtubeSearchTimeout', 15);
+            }}
+            style={{
+              padding: '8px 16px',
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: '6px',
+              color: 'rgba(255,255,255,0.6)',
+              cursor: 'pointer',
+              fontSize: '0.85rem'
+            }}
+          >
+            {t('settings.resetToDefaults', 'Reset to Defaults')}
+          </button>
+        </section>
+
         {/* About Section */}
         <section
           style={{
@@ -396,7 +845,7 @@ export default function SettingsPage() {
             marginBottom: '20px'
           }}
         >
-          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#FF8C42' }}>
+          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#06b6d4' }}>
             {t('settings.about')}
           </h2>
 

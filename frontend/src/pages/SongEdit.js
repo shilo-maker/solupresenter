@@ -53,6 +53,7 @@ function SongEdit() {
   useEffect(() => {
     fetchSong();
     fetchTags();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchSong = async () => {
@@ -60,9 +61,6 @@ function SongEdit() {
       setLoading(true);
       const response = await api.get(`/api/songs/${id}`);
       const song = response.data.song;
-
-      console.log('Fetched song from API:', song);
-      console.log('Raw slides from database:', song.slides);
 
       setTitle(song.title);
       setAuthor(song.author || '');
@@ -81,7 +79,6 @@ function SongEdit() {
         verseType: ''
       }];
 
-      console.log('Processed slides with verseType:', processedSlides);
       setSlides(processedSlides);
       setTags(song.tags || []);
     } catch (error) {
@@ -147,14 +144,12 @@ function SongEdit() {
 
   const convertSlidesToExpressText = () => {
     // Convert current slides to express text format
-    console.log('Converting slides to express text:', slides);
     let lastVerseType = '';
     const result = slides.map(slide => {
       const lines = [];
 
       // Add verse type marker if it changed
       if (slide.verseType && slide.verseType !== lastVerseType) {
-        console.log(`Adding verse type marker: [${slide.verseType}]`);
         lines.push(`[${slide.verseType}]`);
         lastVerseType = slide.verseType;
       }
@@ -165,7 +160,6 @@ function SongEdit() {
       if (slide.translationOverflow) lines.push(slide.translationOverflow);
       return lines.join('\n');
     }).join('\n\n');
-    console.log('Converted express text:', result);
     return result;
   };
 
@@ -225,9 +219,6 @@ function SongEdit() {
     let slidesToSubmit = slides;
     if (expressMode) {
       slidesToSubmit = parseExpressText();
-      console.log('Parsed slides from express mode:', slidesToSubmit);
-    } else {
-      console.log('Submitting slides from standard mode:', slides);
     }
 
     const validSlides = slidesToSubmit.filter(slide => slide.originalText.trim());
@@ -235,9 +226,6 @@ function SongEdit() {
       setError(t('songs.addSlideError'));
       return;
     }
-
-    console.log('Final slides being submitted:', validSlides);
-    console.log('First slide verseType:', validSlides[0].verseType);
 
     setSaving(true);
 

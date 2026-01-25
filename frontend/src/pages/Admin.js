@@ -24,6 +24,7 @@ function Admin() {
     }
 
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, navigate]);
 
   const fetchData = async () => {

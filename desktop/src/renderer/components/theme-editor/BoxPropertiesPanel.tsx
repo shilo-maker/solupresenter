@@ -1,5 +1,5 @@
-import React from 'react';
-import { BackgroundBox } from './DraggableBox';
+import React, { memo } from 'react';
+import { BackgroundBox, TextureType, texturePatterns, textureLabels } from './DraggableBox';
 
 interface BoxPropertiesPanelProps {
   box: BackgroundBox;
@@ -104,9 +104,12 @@ const BoxPropertiesPanel: React.FC<BoxPropertiesPanelProps> = ({
         <label style={labelStyle}>Color Presets</label>
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
           {[
+            // Dark colors
             '#000000', '#1a1a2e', '#16213e', '#1f1f1f',
             '#2d2d44', '#1e3a5f', '#0a3d62', '#1b4f72',
-            '#2c3e50', '#34495e', '#7f8c8d', '#95a5a6'
+            // Paper/beige/warm tones
+            '#f5f0e6', '#e8dcc8', '#d4c4a8', '#c9b896',
+            '#b8a07a', '#a08060', '#8b7355', '#f5f5dc'
           ].map(color => (
             <button
               key={color}
@@ -135,6 +138,43 @@ const BoxPropertiesPanel: React.FC<BoxPropertiesPanelProps> = ({
           onChange={(e) => onUpdate({ ...box, opacity: parseInt(e.target.value) / 100 })}
           style={{ width: '100%', accentColor: '#00d4ff' }}
         />
+      </div>
+
+      {/* Texture */}
+      <div style={sectionStyle}>
+        <label style={labelStyle}>Texture</label>
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '8px' }}>
+          {(Object.keys(textureLabels) as TextureType[]).map(texture => (
+            <button
+              key={texture}
+              onClick={() => onUpdate({ ...box, texture, textureOpacity: box.textureOpacity ?? 0.3 })}
+              style={{
+                padding: '6px 10px',
+                borderRadius: '4px',
+                border: (box.texture || 'none') === texture ? '2px solid #00d4ff' : '1px solid rgba(255,255,255,0.2)',
+                background: 'rgba(0,0,0,0.3)',
+                color: (box.texture || 'none') === texture ? '#00d4ff' : 'white',
+                cursor: 'pointer',
+                fontSize: '11px'
+              }}
+            >
+              {textureLabels[texture]}
+            </button>
+          ))}
+        </div>
+        {box.texture && box.texture !== 'none' && (
+          <>
+            <label style={{ ...labelStyle, marginTop: '8px' }}>Texture Intensity: {Math.round((box.textureOpacity ?? 0.3) * 100)}%</label>
+            <input
+              type="range"
+              min="10"
+              max="100"
+              value={(box.textureOpacity ?? 0.3) * 100}
+              onChange={(e) => onUpdate({ ...box, textureOpacity: parseInt(e.target.value) / 100 })}
+              style={{ width: '100%', accentColor: '#00d4ff' }}
+            />
+          </>
+        )}
       </div>
 
       {/* Border Radius */}
@@ -278,4 +318,4 @@ const BoxPropertiesPanel: React.FC<BoxPropertiesPanelProps> = ({
   );
 };
 
-export default BoxPropertiesPanel;
+export default memo(BoxPropertiesPanel);

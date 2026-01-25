@@ -1,0 +1,3405 @@
+{
+  "timestamp": "2025-12-14T18:53:50.841Z",
+  "summary": {
+    "flowSongsCount": 367,
+    "presenterSongsCount": 285,
+    "highConfidenceCount": 95,
+    "mediumConfidenceCount": 93,
+    "lowConfidenceCount": 54,
+    "unmatchedCount": 125
+  },
+  "highConfidence": [
+    {
+      "flowSong": {
+        "id": 98,
+        "title": "את ידי ארים לך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "033f9c3c-92de-4cf3-a0df-6094a5430d39",
+        "title": "את ידי ארים לך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 100,
+      "overallScore": 100
+    },
+    {
+      "flowSong": {
+        "id": 27,
+        "title": "לא אמהר",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "14c08db2-0e5c-43ae-95a4-3811bfb41efe",
+        "title": "לא אמהר"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 100,
+      "overallScore": 100
+    },
+    {
+      "flowSong": {
+        "id": 34,
+        "title": "אבא אנו זקוקים לך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "59a2c14f-add7-4e72-a671-9627495c2a06",
+        "title": "אבא אנו זקוקים לך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 100,
+      "overallScore": 100
+    },
+    {
+      "flowSong": {
+        "id": 70,
+        "title": "איזו מן אהבה זו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "8c914801-81d6-4792-bdbc-5502f665a883",
+        "title": "איזו מן אהבה זו"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 100,
+      "overallScore": 100
+    },
+    {
+      "flowSong": {
+        "id": 79,
+        "title": "אל כל הניסים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "5443245e-04eb-4b58-9500-5229cc7b89d6",
+        "title": "אל כל הניסים"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 100,
+      "overallScore": 100
+    },
+    {
+      "flowSong": {
+        "id": 126,
+        "title": "אדוני מחסנו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "04d6e40b-a54f-49c1-aed6-4f52cd093b5d",
+        "title": "אדוני מחסנו"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 100,
+      "overallScore": 100
+    },
+    {
+      "flowSong": {
+        "id": 159,
+        "title": "איך זה אפשרי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "de6af420-2a19-4f10-8bf2-51756af6f052",
+        "title": "איך זה אפשרי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 100,
+      "overallScore": 100
+    },
+    {
+      "flowSong": {
+        "id": 161,
+        "title": "אין בור עמוק",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "133e0ef5-d984-4879-9e44-2bf33347d571",
+        "title": "אין בור עמוק"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 100,
+      "overallScore": 100
+    },
+    {
+      "flowSong": {
+        "id": 169,
+        "title": "אני חופשי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "21f82a4c-a942-45fd-9d12-d749b99a0ef6",
+        "title": "אני חופשי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 100,
+      "overallScore": 100
+    },
+    {
+      "flowSong": {
+        "id": 269,
+        "title": "ליבי שלך ישוע",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "111e9053-9934-4d0f-9282-414a53a509d0",
+        "title": "ליבי שלך ישוע"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 100,
+      "overallScore": 100
+    },
+    {
+      "flowSong": {
+        "id": 274,
+        "title": "מה יקר חסדך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "9093b11b-581e-4a9c-8db5-71b7c3401168",
+        "title": "מה יקר חסדך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 100,
+      "overallScore": 100
+    },
+    {
+      "flowSong": {
+        "id": 297,
+        "title": "עתיק היומין",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "9a617c35-69a2-4573-8a97-533ba96845cc",
+        "title": "עתיק היומין"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 100,
+      "overallScore": 100
+    },
+    {
+      "flowSong": {
+        "id": 305,
+        "title": "קול דודי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "ff93e9e4-fa91-401c-bb9b-00eeb6e0f79d",
+        "title": "קול דודי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 100,
+      "overallScore": 100
+    },
+    {
+      "flowSong": {
+        "id": 321,
+        "title": "שוב ושוב",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "b1c2a4a2-d453-4c90-8640-7b5c3d77f2e3",
+        "title": "שוב ושוב"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 100,
+      "overallScore": 100
+    },
+    {
+      "flowSong": {
+        "id": 158,
+        "title": "אי אפשר לזייף",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "2a4e46a2-fc32-4216-943a-d5cd27a0d9c4",
+        "title": "אי אפשר לזייף"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 100,
+      "overallScore": 100
+    },
+    {
+      "flowSong": {
+        "id": 67,
+        "title": "אהלל אותך לנצח",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "f902fd65-d6f1-4b61-8b41-d1d2e28e218f",
+        "title": "אהלל אותך לנצח"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 100,
+      "overallScore": 100
+    },
+    {
+      "flowSong": {
+        "id": 2,
+        "title": "ריבון עולם",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "04a31d75-864f-430c-9842-506defbe74a8",
+        "title": "ריבון עולם"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 99,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 57,
+        "title": "רק אתה ראוי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "142104aa-d1a7-4024-b7ac-32cf7e2f04a4",
+        "title": "רק אתה ראוי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 98,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 58,
+        "title": "רק עם ישוע",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "28c1a792-263e-455e-9c69-b9af8f4049c3",
+        "title": "רק עם ישוע"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 98,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 94,
+        "title": "אשא עיני אל אדוני עוזי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "13ce5562-bd1e-4d57-a6ca-73c04c05f42c",
+        "title": "אשא עיני אל אדוני עוזי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 98,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 173,
+        "title": "אני שלך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "1a5650df-4076-4057-b1f5-e9647501945a",
+        "title": "אני שלך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 99,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 164,
+        "title": "אל מי נלך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "31e2bec1-4f13-42dd-b49a-27621eaffafc",
+        "title": "אל מי נלך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 99,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 218,
+        "title": "הכי טוב",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "28a37243-357b-4f60-8782-b7e0dedc8830",
+        "title": "הכי טוב"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 99,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 289,
+        "title": "ריבון",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "e3c45c2f-e8f0-4e86-878f-615d1a376eab",
+        "title": "ריבון"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 99,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 33,
+        "title": "מה ידידות",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "fe857ce2-9174-47ea-a2b1-228bb4b6c9a1",
+        "title": "מה ידידות"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 98,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 323,
+        "title": "שיר אהבה",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "e972dce4-ecc4-4d27-8b5b-30c66c48a1dc",
+        "title": "שיר אהבה"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 99,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 125,
+        "title": "אדון אתה אורי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "94deb748-34d8-4e1b-a4ce-33323dbc1b54",
+        "title": "אדון אתה אורי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 99,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 78,
+        "title": "אל ואדון",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "00ffbe2f-f3c7-4920-8fb7-90c00562e57d",
+        "title": "אל ואדון"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 98,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 211,
+        "title": "די לי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "bd7753bd-ba9a-4498-849c-f9d444470def",
+        "title": "די לי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 99,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 296,
+        "title": "צור ישראל",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "c4b7fb29-ecfb-493a-9856-4295fc36f187",
+        "title": "צור ישראל"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 99,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 190,
+        "title": "בביתך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "26127810-2052-4e8c-a5e5-2b9432b5f190",
+        "title": "בביתך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 98,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 267,
+        "title": "להיות קרוב",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "8a4eade9-6954-4389-a614-906fcd180d85",
+        "title": "להיות קרוב"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 99,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 227,
+        "title": "התקווה",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "03e46e8d-746f-457e-a1fd-f775ecfcced6",
+        "title": "התקווה"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 98,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 245,
+        "title": "כאן אדון",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "4e17cdb3-f99f-45d5-9108-793b99e8616f",
+        "title": "כאן אדון"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 98,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 293,
+        "title": "עומד בך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "cb740301-3255-48d5-880f-0f1c6983815e",
+        "title": "עומד בך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 99,
+      "overallScore": 99
+    },
+    {
+      "flowSong": {
+        "id": 40,
+        "title": "נולדתי אלי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "8095d852-5e7d-4983-9a2f-9f6edc071234",
+        "title": "נולדתי אלי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 96,
+      "overallScore": 98
+    },
+    {
+      "flowSong": {
+        "id": 75,
+        "title": "הגיבור של הסיפור",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "8d0073d5-2daf-4807-9a37-0fa72f6317a8",
+        "title": "הגיבור של הסיפור"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 97,
+      "overallScore": 98
+    },
+    {
+      "flowSong": {
+        "id": 97,
+        "title": "אשוב אליך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "6d10d977-c002-4087-bc8a-09783615bd89",
+        "title": "אשוב אליך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 97,
+      "overallScore": 98
+    },
+    {
+      "flowSong": {
+        "id": 134,
+        "title": "גואלי חי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "ff39c0ee-d73b-48f9-b938-d152fca14bf8",
+        "title": "גואלי חי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 97,
+      "overallScore": 98
+    },
+    {
+      "flowSong": {
+        "id": 143,
+        "title": "הנה חיי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "cdaf94e4-0037-4031-b917-2abc7fc7a7a4",
+        "title": "הנה חיי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 96,
+      "overallScore": 98
+    },
+    {
+      "flowSong": {
+        "id": 165,
+        "title": "אל מלא בתשוקה",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "60b601ee-c448-42a7-9d12-e452fd2166a2",
+        "title": "אל מלא בתשוקה"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 97,
+      "overallScore": 98
+    },
+    {
+      "flowSong": {
+        "id": 256,
+        "title": "כמה חסד",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "6611628f-8ebf-450f-90f9-1587cc820b15",
+        "title": "כמה חסד"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 97,
+      "overallScore": 98
+    },
+    {
+      "flowSong": {
+        "id": 260,
+        "title": "כס הרחמים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "2e2687d5-4c0c-4630-aac8-dc9a9aa42b73",
+        "title": "כס הרחמים"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 97,
+      "overallScore": 98
+    },
+    {
+      "flowSong": {
+        "id": 268,
+        "title": "לו הכבוד",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "91c5afec-3a55-4499-bc34-dd55107722d5",
+        "title": "לו הכבוד"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 96,
+      "overallScore": 98
+    },
+    {
+      "flowSong": {
+        "id": 282,
+        "title": "מנת חלקי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "1501db16-74bf-4e0f-8559-84f14f74e145",
+        "title": "מנת חלקי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 97,
+      "overallScore": 98
+    },
+    {
+      "flowSong": {
+        "id": 295,
+        "title": "עמנואל",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "dacb5f21-4a52-4dd9-99b7-2ba0c3c3c517",
+        "title": "עמנואל"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 97,
+      "overallScore": 98
+    },
+    {
+      "flowSong": {
+        "id": 41,
+        "title": "נשמת כל חי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "3c46f21d-2454-4133-8bb7-a0736597b908",
+        "title": "נשמת כל חי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 95,
+      "overallScore": 97
+    },
+    {
+      "flowSong": {
+        "id": 65,
+        "title": "אדוני אהובי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "8a0bf111-a397-47e9-a555-4b4c8751c0f6",
+        "title": "אדוני אהובי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 95,
+      "overallScore": 97
+    },
+    {
+      "flowSong": {
+        "id": 91,
+        "title": "אני מאמין",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "79c16d73-dfb8-4d38-bb45-7a04426af79c",
+        "title": "אני מאמין"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 95,
+      "overallScore": 97
+    },
+    {
+      "flowSong": {
+        "id": 168,
+        "title": "אני ארקוד",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "a744655a-ad52-4704-8a8e-f328e88c5024",
+        "title": "אני ארקוד"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 95,
+      "overallScore": 97
+    },
+    {
+      "flowSong": {
+        "id": 243,
+        "title": "ישוע הנני כאן",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "ffd6574b-d318-4c8d-9782-6a624d16496a",
+        "title": "ישוע הנני כאן"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 95,
+      "overallScore": 97
+    },
+    {
+      "flowSong": {
+        "id": 279,
+        "title": "אדיר אלוהינו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "45a569a3-5562-4173-83f8-fa56a12493b8",
+        "title": "אדיר אלוהינו"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 95,
+      "overallScore": 97
+    },
+    {
+      "flowSong": {
+        "id": 311,
+        "title": "ראוי הוא השה",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "e130833c-9275-408d-a00a-bd9c3786bbcc",
+        "title": "ראוי הוא השה"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 95,
+      "overallScore": 97
+    },
+    {
+      "flowSong": {
+        "id": 294,
+        "title": "על כל הניסים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "0787cb5b-9e87-4d6b-beae-c45ee7acd8e8",
+        "title": "על כל הניסים"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 95,
+      "overallScore": 97
+    },
+    {
+      "flowSong": {
+        "id": 275,
+        "title": "מול",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "280188e7-a834-4d7d-8dae-1661e6a545b8",
+        "title": "מול"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 95,
+      "overallScore": 97
+    },
+    {
+      "flowSong": {
+        "id": 42,
+        "title": "עוד ממך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "d6c3acb7-6257-4b17-949a-5391bd6a6933",
+        "title": "עוד ממך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 94,
+      "overallScore": 96
+    },
+    {
+      "flowSong": {
+        "id": 68,
+        "title": "אהלל",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "8670d3ff-d6ec-413c-8a94-7f6ada9f39c0",
+        "title": "אהלל"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 93,
+      "overallScore": 96
+    },
+    {
+      "flowSong": {
+        "id": 56,
+        "title": "רץ אל המטרה",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "96e66e35-bcfa-4b75-b888-fabd4a2c674c",
+        "title": "רץ אל המטרה"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 94,
+      "overallScore": 96
+    },
+    {
+      "flowSong": {
+        "id": 123,
+        "title": "ישוע בוא לכאן היום",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "df78f1cf-d958-422c-9375-c12355d8a2fa",
+        "title": "ישוע בוא לכאן היום"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 94,
+      "overallScore": 96
+    },
+    {
+      "flowSong": {
+        "id": 114,
+        "title": "ברכה וכבוד",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "37c4bfe6-8d05-4126-a2f5-3fee054258f9",
+        "title": "ברכה וכבוד"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 94,
+      "overallScore": 96
+    },
+    {
+      "flowSong": {
+        "id": 242,
+        "title": "ישוע אל יקר",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "9cb96afe-799f-43eb-bfac-0d10f95be570",
+        "title": "ישוע אל יקר"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 94,
+      "overallScore": 96
+    },
+    {
+      "flowSong": {
+        "id": 259,
+        "title": "כמה טוב לשיר לך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "0e00a8ac-fd74-4204-a243-a2847e530ff5",
+        "title": "כמה טוב לשיר לך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 93,
+      "overallScore": 96
+    },
+    {
+      "flowSong": {
+        "id": 308,
+        "title": "קח הכל",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "60f93efb-f109-44f3-a660-d369636b445c",
+        "title": "קח הכל"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 94,
+      "overallScore": 96
+    },
+    {
+      "flowSong": {
+        "id": 44,
+        "title": "אבא טוב",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "e5c3a9e9-1a74-4fa2-9532-67d351ee3648",
+        "title": "אבא טוב"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 94,
+      "overallScore": 96
+    },
+    {
+      "flowSong": {
+        "id": 10,
+        "title": "חיים לנצח",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "7bd135bd-343e-4253-9a9f-4bf3d8c06033",
+        "title": "חיים לנצח"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 91,
+      "overallScore": 95
+    },
+    {
+      "flowSong": {
+        "id": 12,
+        "title": "תמיד תנצח",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "dc374d58-33c2-4e33-a882-7f7231f051e6",
+        "title": "תמיד תנצח"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 92,
+      "overallScore": 95
+    },
+    {
+      "flowSong": {
+        "id": 49,
+        "title": "קרבן חי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "27b387dd-203e-4a46-a8f0-da7fe3f1988b",
+        "title": "קורבן חי"
+      },
+      "titleSimilarity": 88,
+      "lyricsSimilarity": 99,
+      "overallScore": 95
+    },
+    {
+      "flowSong": {
+        "id": 66,
+        "title": "אהבתו גדולה",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "1f9a97fc-658e-4b7d-ba52-35ad0939cc5e",
+        "title": "אהבתו גדולה"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 91,
+      "overallScore": 95
+    },
+    {
+      "flowSong": {
+        "id": 117,
+        "title": "טעמו וראו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "3de42f62-9be8-410e-a0d8-868606a3fafa",
+        "title": "טעמו וראו"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 91,
+      "overallScore": 95
+    },
+    {
+      "flowSong": {
+        "id": 139,
+        "title": "הישועה לאלוהינו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "137e06b0-32d7-41b9-9902-eb1587ce03d8",
+        "title": "הישועה לאלוהינו"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 92,
+      "overallScore": 95
+    },
+    {
+      "flowSong": {
+        "id": 220,
+        "title": "הכן את כלתך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "dccfc8c5-1954-45eb-bf84-98e4c98d4a01",
+        "title": "הכן את כלתך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 92,
+      "overallScore": 95
+    },
+    {
+      "flowSong": {
+        "id": 198,
+        "title": "שער השמיים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "3fb6c938-f40b-41ab-b1ca-cbc66e409332",
+        "title": "שער השמיים"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 91,
+      "overallScore": 95
+    },
+    {
+      "flowSong": {
+        "id": 124,
+        "title": "תן לאש ליפול",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "03236c8b-8ebc-4361-ad54-fc180745f040",
+        "title": "תן לאש ליפול"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 90,
+      "overallScore": 94
+    },
+    {
+      "flowSong": {
+        "id": 318,
+        "title": "רק בזכותך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "aca1998e-a6df-40a2-a723-aea231bfb78d",
+        "title": "רק בזכותך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 90,
+      "overallScore": 94
+    },
+    {
+      "flowSong": {
+        "id": 334,
+        "title": "תודה לך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "5a8b6c75-9b6e-4dc3-9bb9-ef575086e256",
+        "title": "תודה לך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 90,
+      "overallScore": 94
+    },
+    {
+      "flowSong": {
+        "id": 336,
+        "title": "תם ונישלם",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "4a883a16-3d04-49bf-9269-0fa8f636718a",
+        "title": "תם ונשלם"
+      },
+      "titleSimilarity": 89,
+      "lyricsSimilarity": 97,
+      "overallScore": 94
+    },
+    {
+      "flowSong": {
+        "id": 30,
+        "title": "לאן אלך מרוחך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "819e267f-1821-449d-b8e2-a8c0f56d9f74",
+        "title": "לאן אלך מרוחך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 88,
+      "overallScore": 93
+    },
+    {
+      "flowSong": {
+        "id": 106,
+        "title": "טיפות יין",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "6021d8bf-77ba-4ee6-9de1-c75e6af6f360",
+        "title": "טיפות יין"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 89,
+      "overallScore": 93
+    },
+    {
+      "flowSong": {
+        "id": 104,
+        "title": "בורא קדושים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "547cb1a1-e0b9-4223-ba96-9c0acc3cf979",
+        "title": "בורא קדושים"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 89,
+      "overallScore": 93
+    },
+    {
+      "flowSong": {
+        "id": 127,
+        "title": "אהבתך היא לנצח",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "78d6937b-6065-459e-ac89-a77638c06323",
+        "title": "אהבתך היא לנצח"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 88,
+      "overallScore": 93
+    },
+    {
+      "flowSong": {
+        "id": 149,
+        "title": "אגילה בך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "b13ea9d5-8410-4996-9092-fdfd3b5c263e",
+        "title": "אגילה בך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 89,
+      "overallScore": 93
+    },
+    {
+      "flowSong": {
+        "id": 115,
+        "title": "הביטו אליו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "28c529f3-17d4-4c9d-a19a-752ee81b2b14",
+        "title": "הביטו אליו"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 89,
+      "overallScore": 93
+    },
+    {
+      "flowSong": {
+        "id": 135,
+        "title": "דור דורשיו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "0be3a655-b874-4510-9b91-3b80703c9920",
+        "title": "דור דורשיו"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 88,
+      "overallScore": 93
+    },
+    {
+      "flowSong": {
+        "id": 52,
+        "title": "רחמים אבקש",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "62b94b2d-918d-462a-9786-4c8edde25cc0",
+        "title": "רחמים אבקש"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 86,
+      "overallScore": 92
+    },
+    {
+      "flowSong": {
+        "id": 147,
+        "title": "הנני שלחני",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "1b953c38-950f-4024-9dae-33c767ff41fe",
+        "title": "הנני שלחני"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 87,
+      "overallScore": 92
+    },
+    {
+      "flowSong": {
+        "id": 145,
+        "title": "הנה כעיני עבדים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "37e53dc4-0b59-45d2-b74c-2cc633b094dc",
+        "title": "הנה כעיני עבדים"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 87,
+      "overallScore": 92
+    },
+    {
+      "flowSong": {
+        "id": 291,
+        "title": "בישראל",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "796af777-95fe-4662-8c2b-26c74e804f66",
+        "title": "בישראל"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 87,
+      "overallScore": 92
+    },
+    {
+      "flowSong": {
+        "id": 347,
+        "title": "אתה גדול",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "654130a2-e7b9-428a-9f2f-7c4adc99bac3",
+        "title": "אתה גדול"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 86,
+      "overallScore": 92
+    },
+    {
+      "flowSong": {
+        "id": 47,
+        "title": "קדוש אתה (לפניך אני משתחווה)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "dd69dd77-013d-4689-829b-ee758da1ea9d",
+        "title": "קדוש (לפניך אני משתחווה)"
+      },
+      "titleSimilarity": 85,
+      "lyricsSimilarity": 95,
+      "overallScore": 91
+    },
+    {
+      "flowSong": {
+        "id": 153,
+        "title": "אדוני שפתי תפתח",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "ace18c1b-100e-4644-9ac0-d73db26d101f",
+        "title": "אדוני שפתי תפתח"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 85,
+      "overallScore": 91
+    },
+    {
+      "flowSong": {
+        "id": 182,
+        "title": "פורץ דרך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "9bc28af4-b594-42ca-84fc-289f6168704c",
+        "title": "פורץ דרך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 85,
+      "overallScore": 91
+    },
+    {
+      "flowSong": {
+        "id": 239,
+        "title": "ימי אליהו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "e799e4e3-f5cc-44d5-9c4f-e733192ad55b",
+        "title": "ימי אליהו"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 85,
+      "overallScore": 91
+    },
+    {
+      "flowSong": {
+        "id": 244,
+        "title": "תתגלה לנו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "d3836001-d9fd-4744-af91-ffe344c099f0",
+        "title": "יתגלה לנו"
+      },
+      "titleSimilarity": 89,
+      "lyricsSimilarity": 93,
+      "overallScore": 91
+    },
+    {
+      "flowSong": {
+        "id": 71,
+        "title": "אין אחד",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "63f0f00c-4ae1-4f88-928b-814dad7bb99f",
+        "title": "אין אחד"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 84,
+      "overallScore": 90
+    },
+    {
+      "flowSong": {
+        "id": 271,
+        "title": "לכל הצמאים(בוא ישוע)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "ff96d06f-5216-4563-8377-c191d3829572",
+        "title": "לכל הצמאים(בוא ישוע בוא)"
+      },
+      "titleSimilarity": 82,
+      "lyricsSimilarity": 96,
+      "overallScore": 90
+    }
+  ],
+  "mediumConfidence": [
+    {
+      "flowSong": {
+        "id": 38,
+        "title": "מתחת לכנפיך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "8038ea9d-7ce0-4bb0-a866-b9a8e5a6da8c",
+        "title": "מתחת לכנפיך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 81,
+      "overallScore": 89
+    },
+    {
+      "flowSong": {
+        "id": 196,
+        "title": "בונים מזבח",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "4094ec2e-a205-403c-a94e-bfe67ed25d6b",
+        "title": "בונים מזבח"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 81,
+      "overallScore": 89
+    },
+    {
+      "flowSong": {
+        "id": 202,
+        "title": "במדבר",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "93cb7374-6e93-434d-bda0-702715c5ba93",
+        "title": "במדבר"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 81,
+      "overallScore": 89
+    },
+    {
+      "flowSong": {
+        "id": 132,
+        "title": "גדול אדוני כבוד ותפארת)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "682c9e5e-a0d8-47c3-b6c9-7e8f594318f8",
+        "title": "גדול אדוני כבוד ותפארת"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 80,
+      "overallScore": 88
+    },
+    {
+      "flowSong": {
+        "id": 236,
+        "title": "יותר מתמיד",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "74e6351e-7ba9-43a4-9ea0-ab5f8e0db783",
+        "title": "אבא יותר מתמיד"
+      },
+      "titleSimilarity": 71,
+      "lyricsSimilarity": 99,
+      "overallScore": 88
+    },
+    {
+      "flowSong": {
+        "id": 76,
+        "title": "אל אבותינו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "0c3fbc5e-908a-46cb-b7cf-fa2111e04d7d",
+        "title": "אל אבותינו"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 78,
+      "overallScore": 87
+    },
+    {
+      "flowSong": {
+        "id": 156,
+        "title": "אהבתך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "d940db92-5ab6-4513-90c1-d521cd68f796",
+        "title": "אהבתך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 79,
+      "overallScore": 87
+    },
+    {
+      "flowSong": {
+        "id": 300,
+        "title": "קדוש אדוני אלוהינו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "078ebb05-8db7-478e-875b-7ae9195fc12a",
+        "title": "קדוש אדוני אלוהנו"
+      },
+      "titleSimilarity": 94,
+      "lyricsSimilarity": 83,
+      "overallScore": 87
+    },
+    {
+      "flowSong": {
+        "id": 302,
+        "title": "קדוש שמו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "0b50f0e3-1cd6-400c-b7a8-99a25d73d467",
+        "title": "קדוש שמו"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 79,
+      "overallScore": 87
+    },
+    {
+      "flowSong": {
+        "id": 309,
+        "title": "ראו איזו אהבה",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "01a777a3-100d-4002-9aa6-8f564497ae35",
+        "title": "ראו איזו אהבה"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 78,
+      "overallScore": 87
+    },
+    {
+      "flowSong": {
+        "id": 31,
+        "title": "מה אדיר שמך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "6ea88a66-c8a5-4f02-954e-c4364ab35f8e",
+        "title": "מה אדיר שמך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 79,
+      "overallScore": 87
+    },
+    {
+      "flowSong": {
+        "id": 20,
+        "title": "ישוע נרומם אותך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "8f38a492-450b-4d14-a0e3-3c70c22e757e",
+        "title": "ישוע נרומם אותך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 76,
+      "overallScore": 86
+    },
+    {
+      "flowSong": {
+        "id": 35,
+        "title": "מי כמוך אדוני",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "36e7c5db-3051-4f07-a95a-f52f0f6c56bb",
+        "title": "מי כמוך אדוני"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 77,
+      "overallScore": 86
+    },
+    {
+      "flowSong": {
+        "id": 93,
+        "title": "אני שייך לך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "c72cf572-c803-4be6-a1c2-37965d6e793b",
+        "title": "אני שייך לך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 77,
+      "overallScore": 86
+    },
+    {
+      "flowSong": {
+        "id": 184,
+        "title": "אתה מרים אותי גבוהה",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "8a6d5e70-9bb4-4d0c-8684-c7e6734df190",
+        "title": "אתה מרים אותי"
+      },
+      "titleSimilarity": 68,
+      "lyricsSimilarity": 98,
+      "overallScore": 86
+    },
+    {
+      "flowSong": {
+        "id": 195,
+        "title": "בואי רוח",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "195c827c-69fc-4351-8861-45f7a8da1af2",
+        "title": "בואי רוח"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 77,
+      "overallScore": 86
+    },
+    {
+      "flowSong": {
+        "id": 209,
+        "title": "דבר אל ליבי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "48da57ca-9962-40ce-a0b4-11abb9e730e8",
+        "title": "דבר אל ליבי ישוע"
+      },
+      "titleSimilarity": 69,
+      "lyricsSimilarity": 97,
+      "overallScore": 86
+    },
+    {
+      "flowSong": {
+        "id": 213,
+        "title": "הברכה",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "578688f8-6ed9-4eeb-8dca-00964e253225",
+        "title": "הברכה"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 76,
+      "overallScore": 86
+    },
+    {
+      "flowSong": {
+        "id": 167,
+        "title": "אנו אוהבים אותך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "c97a7020-92f5-4b7c-ad20-ac531eaffbe8",
+        "title": "אנו אוהבים אותך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 76,
+      "overallScore": 86
+    },
+    {
+      "flowSong": {
+        "id": 63,
+        "title": "אדוני אדוננו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "9d8d1252-a0bf-4331-a0ad-af4052576ca1",
+        "title": "אדוני אדוננו (ישן)"
+      },
+      "titleSimilarity": 75,
+      "lyricsSimilarity": 94,
+      "overallScore": 86
+    },
+    {
+      "flowSong": {
+        "id": 316,
+        "title": "רם ונישא(קלאסי)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "76ef6e1b-03cb-4c2f-af37-cc68f8ec62aa",
+        "title": "רם ונישא המשיח"
+      },
+      "titleSimilarity": 64,
+      "lyricsSimilarity": 100,
+      "overallScore": 86
+    },
+    {
+      "flowSong": {
+        "id": 11,
+        "title": "יגדל אדוני",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "ea4b293c-ccc4-4d87-8895-7bce3d1d51f8",
+        "title": "יגדל אדוני"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 74,
+      "overallScore": 84
+    },
+    {
+      "flowSong": {
+        "id": 130,
+        "title": "בוא רוח אלוהים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "a58df993-0b7d-44e8-9b3b-bdf414cf6c1a",
+        "title": "בוא רוח אלהים"
+      },
+      "titleSimilarity": 93,
+      "lyricsSimilarity": 78,
+      "overallScore": 84
+    },
+    {
+      "flowSong": {
+        "id": 163,
+        "title": "אכרע ברך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "38130a44-d1fb-4cb2-b6bb-34953e543a47",
+        "title": "אכרע ברך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 74,
+      "overallScore": 84
+    },
+    {
+      "flowSong": {
+        "id": 314,
+        "title": "רחום וחנון",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "a979a323-d07b-468d-984f-ef67e23bbb5b",
+        "title": "רחום וחנון"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 74,
+      "overallScore": 84
+    },
+    {
+      "flowSong": {
+        "id": 199,
+        "title": "בכל דבר שאעשה",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "017fc59e-94fb-477c-8ad6-074b30137d49",
+        "title": "בכל דבר שאעשה"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 73,
+      "overallScore": 84
+    },
+    {
+      "flowSong": {
+        "id": 86,
+        "title": "הימים האחרונים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "0e20c5ab-b697-409e-84c8-69b72bfe9f27",
+        "title": "הימים האחרונים"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 73,
+      "overallScore": 84
+    },
+    {
+      "flowSong": {
+        "id": 290,
+        "title": "נרומם אותך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "4fcdefa5-43e6-4cff-a44b-6f610484d4c5",
+        "title": "נרומם אותך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 72,
+      "overallScore": 83
+    },
+    {
+      "flowSong": {
+        "id": 342,
+        "title": "אדון אתה טוב",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "3f1d0fe8-ef42-46b6-91c7-5a73db5aa5b6",
+        "title": "אדון אתה טוב"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 72,
+      "overallScore": 83
+    },
+    {
+      "flowSong": {
+        "id": 152,
+        "title": "אדוני חילי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "16838b9b-c20d-4b22-8267-c1729cb35605",
+        "title": "אדוני חילי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 72,
+      "overallScore": 83
+    },
+    {
+      "flowSong": {
+        "id": 55,
+        "title": "אבינו שבשמיים(מתורגם)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "9d113d48-a21a-4fb6-9b89-e48bc798c57d",
+        "title": "אבינו שבשמיים - מתורגם"
+      },
+      "titleSimilarity": 95,
+      "lyricsSimilarity": 74,
+      "overallScore": 82
+    },
+    {
+      "flowSong": {
+        "id": 72,
+        "title": "אין כמוך אלוהים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "ea4e0fe3-97c9-4121-a994-3a2c4d40341f",
+        "title": "אין כמוך אלהים"
+      },
+      "titleSimilarity": 93,
+      "lyricsSimilarity": 75,
+      "overallScore": 82
+    },
+    {
+      "flowSong": {
+        "id": 108,
+        "title": "בכל ליבי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "70bccf6d-7219-44b2-a04b-0571518183ab",
+        "title": "בכל ליבי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 70,
+      "overallScore": 82
+    },
+    {
+      "flowSong": {
+        "id": 221,
+        "title": "הלב שלי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "5ece53aa-53b9-4b8c-bb65-e02a11298ff1",
+        "title": "הלב שלי שלך"
+      },
+      "titleSimilarity": 64,
+      "lyricsSimilarity": 94,
+      "overallScore": 82
+    },
+    {
+      "flowSong": {
+        "id": 286,
+        "title": "מתגלה לנו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "d3836001-d9fd-4744-af91-ffe344c099f0",
+        "title": "יתגלה לנו"
+      },
+      "titleSimilarity": 89,
+      "lyricsSimilarity": 77,
+      "overallScore": 82
+    },
+    {
+      "flowSong": {
+        "id": 18,
+        "title": "ישוע מושיע",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "a2247275-d574-40f7-b5cf-5756ba9579d0",
+        "title": "ישוע מושיע - מתורגם"
+      },
+      "titleSimilarity": 59,
+      "lyricsSimilarity": 96,
+      "overallScore": 81
+    },
+    {
+      "flowSong": {
+        "id": 92,
+        "title": "אני רץ",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "cec4dd41-0431-43a7-bcdc-99f5f84c85fe",
+        "title": "אני רץ"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 69,
+      "overallScore": 81
+    },
+    {
+      "flowSong": {
+        "id": 107,
+        "title": "בכל ליבי אאדיר אותך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "b712da51-db21-4487-9438-226b4f494208",
+        "title": "בכל ליבי(אתמיד להודות)"
+      },
+      "titleSimilarity": 55,
+      "lyricsSimilarity": 98,
+      "overallScore": 81
+    },
+    {
+      "flowSong": {
+        "id": 241,
+        "title": "ישוע",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "143baf30-37e7-4e8d-8867-b2b85963a249",
+        "title": "ישוע"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 69,
+      "overallScore": 81
+    },
+    {
+      "flowSong": {
+        "id": 246,
+        "title": "כבוד",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "2795c48b-8410-4554-87b8-cebc85442b6e",
+        "title": "כבוד"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 69,
+      "overallScore": 81
+    },
+    {
+      "flowSong": {
+        "id": 131,
+        "title": "ברוך הבא",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "8a08bbb5-e197-4faf-90dc-798562ed2f2b",
+        "title": "ברוך הבא"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 66,
+      "overallScore": 80
+    },
+    {
+      "flowSong": {
+        "id": 46,
+        "title": "פקח את עיני ליבי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "15308e78-4c80-4c6d-9d8c-0514c8dac334",
+        "title": "פקח את עיני ליבי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 66,
+      "overallScore": 80
+    },
+    {
+      "flowSong": {
+        "id": 322,
+        "title": "שים בנו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "3407335c-992d-4504-b85d-6ae990755079",
+        "title": "שים בנו רעב"
+      },
+      "titleSimilarity": 64,
+      "lyricsSimilarity": 91,
+      "overallScore": 80
+    },
+    {
+      "flowSong": {
+        "id": 109,
+        "title": "בכל עת אברכהו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "856d974d-6f0a-4fef-9b0c-cff7378efe67",
+        "title": "בכל עת אברכהו"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 65,
+      "overallScore": 79
+    },
+    {
+      "flowSong": {
+        "id": 315,
+        "title": "רם ונישא(מלך רם ונישא)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "5f83938d-562b-4e55-9350-b9153c483876",
+        "title": "רם ונישא מלך"
+      },
+      "titleSimilarity": 50,
+      "lyricsSimilarity": 98,
+      "overallScore": 79
+    },
+    {
+      "flowSong": {
+        "id": 214,
+        "title": "הוא אור לעולמים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "fb577c4f-1ea8-4538-8201-7df9969e14fc",
+        "title": "הוא אור"
+      },
+      "titleSimilarity": 47,
+      "lyricsSimilarity": 99,
+      "overallScore": 78
+    },
+    {
+      "flowSong": {
+        "id": 284,
+        "title": "משכני",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "848a609e-2510-47e7-8e3f-6e593099d361",
+        "title": "משכני"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 64,
+      "overallScore": 78
+    },
+    {
+      "flowSong": {
+        "id": 357,
+        "title": "נולדתי להלל אותך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "694d6f46-2df2-4e01-839d-4dcb2617108a",
+        "title": "נולדתי להלל אותך - קרן סילבר"
+      },
+      "titleSimilarity": 62,
+      "lyricsSimilarity": 88,
+      "overallScore": 78
+    },
+    {
+      "flowSong": {
+        "id": 101,
+        "title": "באנו לכאן להלל אותך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "f649906c-af7c-4d60-ae5b-42a6baecdeeb",
+        "title": "באנו לכאן"
+      },
+      "titleSimilarity": 47,
+      "lyricsSimilarity": 97,
+      "overallScore": 77
+    },
+    {
+      "flowSong": {
+        "id": 102,
+        "title": "בואו נהלל אותו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "3ecfeea0-3da8-44b0-a455-a23ae5c034dd",
+        "title": "בואו נהלל אותו"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 61,
+      "overallScore": 77
+    },
+    {
+      "flowSong": {
+        "id": 118,
+        "title": "הוא נתן לי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "95486f55-a674-4fdc-a3a0-9fd01119e299",
+        "title": "הוא נתן לי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 61,
+      "overallScore": 77
+    },
+    {
+      "flowSong": {
+        "id": 237,
+        "title": "ילדיך רעבים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "75823a51-48a0-4fb9-bda4-0887951f0207",
+        "title": "ילדיך רעבים"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 61,
+      "overallScore": 77
+    },
+    {
+      "flowSong": {
+        "id": 261,
+        "title": "לא אתבייש",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "cfe7cd46-67bb-4fc1-9302-795607a04426",
+        "title": "לא אתבייש"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 62,
+      "overallScore": 77
+    },
+    {
+      "flowSong": {
+        "id": 183,
+        "title": "אתה הוא הכל בכל",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "bb9e3c18-ae39-43d0-b22a-87895f04b6f6",
+        "title": "הכל בכל"
+      },
+      "titleSimilarity": 47,
+      "lyricsSimilarity": 97,
+      "overallScore": 77
+    },
+    {
+      "flowSong": {
+        "id": 80,
+        "title": "אל שומרנו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "d88875d8-e90d-4348-87fd-2a3336457cb1",
+        "title": "כי אל שומרנו"
+      },
+      "titleSimilarity": 75,
+      "lyricsSimilarity": 79,
+      "overallScore": 77
+    },
+    {
+      "flowSong": {
+        "id": 265,
+        "title": "לאל התפארת על כל מעשיו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "75538e2f-6f26-4d7a-8670-e2976760b690",
+        "title": "לאל התפארת"
+      },
+      "titleSimilarity": 45,
+      "lyricsSimilarity": 97,
+      "overallScore": 76
+    },
+    {
+      "flowSong": {
+        "id": 272,
+        "title": "לכל הצמאים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "ff96d06f-5216-4563-8377-c191d3829572",
+        "title": "לכל הצמאים(בוא ישוע בוא)"
+      },
+      "titleSimilarity": 45,
+      "lyricsSimilarity": 96,
+      "overallScore": 76
+    },
+    {
+      "flowSong": {
+        "id": 19,
+        "title": "ישוע מלך(נפתחו השמיים)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "8b010ad1-9ffb-41e5-9699-52529a12419c",
+        "title": "נפתחו השמיים"
+      },
+      "titleSimilarity": 60,
+      "lyricsSimilarity": 85,
+      "overallScore": 75
+    },
+    {
+      "flowSong": {
+        "id": 84,
+        "title": "אם אלוהים איתנו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "4cb28911-12b1-4ead-8f5c-b22df24dd954",
+        "title": "אם אלוהים איתנו"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 58,
+      "overallScore": 75
+    },
+    {
+      "flowSong": {
+        "id": 174,
+        "title": "ארוממך אדון",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "d48edb31-331c-4516-b15a-f900f6d45d11",
+        "title": "ארוממך"
+      },
+      "titleSimilarity": 55,
+      "lyricsSimilarity": 89,
+      "overallScore": 75
+    },
+    {
+      "flowSong": {
+        "id": 372,
+        "title": "שמחת האדון",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "dc5a935e-a4e4-4510-981d-953cbbf6efb8",
+        "title": "שמחת האדון"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 58,
+      "overallScore": 75
+    },
+    {
+      "flowSong": {
+        "id": 1,
+        "title": "פרוש כנפיך(רפא את ארצך)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "0f2524e8-c976-4219-8a4e-441bb5424202",
+        "title": "רפא את ארצך 1"
+      },
+      "titleSimilarity": 43,
+      "lyricsSimilarity": 95,
+      "overallScore": 74
+    },
+    {
+      "flowSong": {
+        "id": 62,
+        "title": "אדוני אדוננו(כי אראה שמיך)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "24aa408a-2edf-4ab2-aa87-84a20abd4238",
+        "title": "אדוני אדוננו(כי אראה)"
+      },
+      "titleSimilarity": 79,
+      "lyricsSimilarity": 71,
+      "overallScore": 74
+    },
+    {
+      "flowSong": {
+        "id": 191,
+        "title": "בוא נא בוא",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "83a3ef16-557a-4643-b772-9d071a0674bd",
+        "title": "בוא נא בוא"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 57,
+      "overallScore": 74
+    },
+    {
+      "flowSong": {
+        "id": 288,
+        "title": "נאמן לעד",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "0e838399-c95b-4756-94b7-ac2d7326d763",
+        "title": "נאמן לעד"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 56,
+      "overallScore": 74
+    },
+    {
+      "flowSong": {
+        "id": 17,
+        "title": "ישוע יקר מכל",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "e87f94b1-e107-48fc-9e0b-f168e615304b",
+        "title": "ישוע יקר מכל"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 57,
+      "overallScore": 74
+    },
+    {
+      "flowSong": {
+        "id": 83,
+        "title": "אלוהים לנו מחסה ועוז",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "ac137570-c785-445a-9a2d-1d2fa5792e60",
+        "title": "אלוהים לנו מחסה ועוז"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 57,
+      "overallScore": 74
+    },
+    {
+      "flowSong": {
+        "id": 355,
+        "title": "מה אשיב",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "5bb2af58-7be9-4cb4-b3a8-2b9f8ce9d98e",
+        "title": "מה אשיב"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 57,
+      "overallScore": 74
+    },
+    {
+      "flowSong": {
+        "id": 26,
+        "title": "כל הנשמה תהלל יה",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "14c6b21c-91b8-4c63-81c9-d404a079e9c7",
+        "title": "כל הנשמה"
+      },
+      "titleSimilarity": 50,
+      "lyricsSimilarity": 89,
+      "overallScore": 73
+    },
+    {
+      "flowSong": {
+        "id": 59,
+        "title": "באים לפניך וקוראים בשמך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "99a4832b-9650-4520-8da7-01c8dccce782",
+        "title": "באנו לפניך"
+      },
+      "titleSimilarity": 35,
+      "lyricsSimilarity": 98,
+      "overallScore": 73
+    },
+    {
+      "flowSong": {
+        "id": 81,
+        "title": "אלוהי ישעי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "e13cf49a-5088-4860-8bec-6a654630fbba",
+        "title": "כמה טוב חסדך(אלוהי ישעי)"
+      },
+      "titleSimilarity": 45,
+      "lyricsSimilarity": 92,
+      "overallScore": 73
+    },
+    {
+      "flowSong": {
+        "id": 111,
+        "title": "בסתר",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "f09af319-d252-4f0d-b609-207863937165",
+        "title": "בסתר"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 55,
+      "overallScore": 73
+    },
+    {
+      "flowSong": {
+        "id": 262,
+        "title": "לא בחיל",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "f2fe757b-a5cc-46eb-887a-0983ea8184e8",
+        "title": "לא בחיל לא בכוח"
+      },
+      "titleSimilarity": 47,
+      "lyricsSimilarity": 91,
+      "overallScore": 73
+    },
+    {
+      "flowSong": {
+        "id": 61,
+        "title": "אדון הכבוד",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "647a69fd-00a6-458c-97ae-a97dace612f0",
+        "title": "אדון הכבוד"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 55,
+      "overallScore": 73
+    },
+    {
+      "flowSong": {
+        "id": 254,
+        "title": "זה מתחיל",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "74fb39bc-25aa-400a-a160-834516549ffb",
+        "title": "זה מתחיל IT BEGINS"
+      },
+      "titleSimilarity": 44,
+      "lyricsSimilarity": 93,
+      "overallScore": 73
+    },
+    {
+      "flowSong": {
+        "id": 129,
+        "title": "בדמך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "44cbd9dd-0084-4144-bec2-c0ae01736cbc",
+        "title": "בדמך(אדון ישוע)"
+      },
+      "titleSimilarity": 31,
+      "lyricsSimilarity": 100,
+      "overallScore": 72
+    },
+    {
+      "flowSong": {
+        "id": 64,
+        "title": "אשירה לאדוני",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "61570f95-0b34-4508-9e89-7cad6adb4e5f",
+        "title": "אשירה לאדוני"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 53,
+      "overallScore": 72
+    },
+    {
+      "flowSong": {
+        "id": 113,
+        "title": "ברית חדשה",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "aac5e2b9-0370-4912-b1b0-b6bf97fec074",
+        "title": "ברית חדשה"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 54,
+      "overallScore": 72
+    },
+    {
+      "flowSong": {
+        "id": 137,
+        "title": "פתחו שערים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "34e64c85-2b0a-48cf-8377-1457f11aba8d",
+        "title": "פתחו שערים ומלך הכבוד"
+      },
+      "titleSimilarity": 48,
+      "lyricsSimilarity": 88,
+      "overallScore": 72
+    },
+    {
+      "flowSong": {
+        "id": 247,
+        "title": "כבסני",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "dd98f682-c3bd-4721-af6b-328e937656ce",
+        "title": "כבסני"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 54,
+      "overallScore": 72
+    },
+    {
+      "flowSong": {
+        "id": 298,
+        "title": "פתח את שערי השמיים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "8a49cca1-27e2-4ac8-b679-4ab7831b0b32",
+        "title": "פתח את שערי השמיים"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 53,
+      "overallScore": 72
+    },
+    {
+      "flowSong": {
+        "id": 328,
+        "title": "שמך לא נשכח",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "fd4b2f9b-4d0f-4b1b-b1da-4476a02c3baf",
+        "title": "שמך לא נשכח"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 53,
+      "overallScore": 72
+    },
+    {
+      "flowSong": {
+        "id": 23,
+        "title": "אב הרחמים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "1cf21c58-6ba1-40b0-89c7-6a3841f9be0b",
+        "title": "אב הרחמים"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 53,
+      "overallScore": 72
+    },
+    {
+      "flowSong": {
+        "id": 352,
+        "title": "לך יום",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "9aff3e71-cfe0-4813-b1c4-e4c95338a645",
+        "title": "לך יום"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 54,
+      "overallScore": 72
+    },
+    {
+      "flowSong": {
+        "id": 362,
+        "title": "קומה אדוני",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "25ef0d9c-51d1-4cf5-9bb2-c9c76ebdd98d",
+        "title": "קומה אדוני"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 53,
+      "overallScore": 72
+    },
+    {
+      "flowSong": {
+        "id": 77,
+        "title": "אל גיבור ואל עליון",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "ace6e181-2f5f-422c-87a2-b959749856f3",
+        "title": "הראשון והאחרון"
+      },
+      "titleSimilarity": 28,
+      "lyricsSimilarity": 99,
+      "overallScore": 71
+    },
+    {
+      "flowSong": {
+        "id": 225,
+        "title": "הנה לא ינום",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "f5de57b0-f419-43a2-a029-b03cc2b6e17c",
+        "title": "הנה לא ינום"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 52,
+      "overallScore": 71
+    },
+    {
+      "flowSong": {
+        "id": 301,
+        "title": "קדוש לנצח",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "a25bb073-02a5-4682-bf3a-c3c3ba3332af",
+        "title": "קדוש לנצח"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 52,
+      "overallScore": 71
+    },
+    {
+      "flowSong": {
+        "id": 232,
+        "title": "טוב להודות לאדוני",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "186e003a-f7c7-4811-b84d-d37cefef491f",
+        "title": "טוב להודות לאדוני"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 51,
+      "overallScore": 71
+    },
+    {
+      "flowSong": {
+        "id": 320,
+        "title": "שבח",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "9751938a-64f3-4fe2-926b-285ac07cf927",
+        "title": "שבח"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 51,
+      "overallScore": 71
+    },
+    {
+      "flowSong": {
+        "id": 187,
+        "title": "אתה קדוש",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "5d4d3a15-f68b-4c54-addb-b7c561a01174",
+        "title": "אתה קדוש(כולי משתחווה לפניך)"
+      },
+      "titleSimilarity": 31,
+      "lyricsSimilarity": 98,
+      "overallScore": 71
+    },
+    {
+      "flowSong": {
+        "id": 155,
+        "title": "אהבתי הראשונה",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "83115555-aca1-4799-9829-02d1b5e73338",
+        "title": "אהבתי הראשונה"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 52,
+      "overallScore": 71
+    },
+    {
+      "flowSong": {
+        "id": 82,
+        "title": "אלוהי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "8760c03b-65c4-40f8-957b-f09ec2dc3562",
+        "title": "אני פשוט רוצה(אלוהי)"
+      },
+      "titleSimilarity": 28,
+      "lyricsSimilarity": 98,
+      "overallScore": 70
+    }
+  ],
+  "lowConfidence": [
+    {
+      "flowSong": {
+        "id": 192,
+        "title": "בואו אליו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "c845829a-f88b-4c74-9652-2720313e887b",
+        "title": "בואו אל ישוע(כל הצמאים)"
+      },
+      "titleSimilarity": 43,
+      "lyricsSimilarity": 86,
+      "overallScore": 69
+    },
+    {
+      "flowSong": {
+        "id": 248,
+        "title": "כוס ישועות אשא",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "aba5671d-9aba-42e8-8b34-1129801f8aa3",
+        "title": "כוס ישועות אשא"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 49,
+      "overallScore": 69
+    },
+    {
+      "flowSong": {
+        "id": 312,
+        "title": "רב להושיע",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "5a645c00-ab1f-4ff7-8c19-53f192debb86",
+        "title": "רב להושיע"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 48,
+      "overallScore": 69
+    },
+    {
+      "flowSong": {
+        "id": 257,
+        "title": "כמה טוב אתה",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "07919e44-1706-4fbe-b3f6-dd61580e8caa",
+        "title": "כמה טוב אתה"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 48,
+      "overallScore": 69
+    },
+    {
+      "flowSong": {
+        "id": 25,
+        "title": "כי כה אהב",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "5925c550-3f39-4a3b-b3eb-ea7cecf5d8bf",
+        "title": "כי כה אהב"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 46,
+      "overallScore": 68
+    },
+    {
+      "flowSong": {
+        "id": 96,
+        "title": "אשא עיני אל השמיים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "09817ed0-c084-4dd7-9535-c513e611db05",
+        "title": "הושיע את עמך"
+      },
+      "titleSimilarity": 28,
+      "lyricsSimilarity": 95,
+      "overallScore": 68
+    },
+    {
+      "flowSong": {
+        "id": 112,
+        "title": "ברוך אתה אדוני(נהלל אותך אדון)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "5747370a-d838-4dc2-b94e-68ae704be2e0",
+        "title": "נהלל אותך אדון"
+      },
+      "titleSimilarity": 50,
+      "lyricsSimilarity": 80,
+      "overallScore": 68
+    },
+    {
+      "flowSong": {
+        "id": 277,
+        "title": "מי לא יראך אדוני",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "e1ba61ab-4bae-47dc-baa9-f847169c5c6c",
+        "title": "מי לא יראך"
+      },
+      "titleSimilarity": 63,
+      "lyricsSimilarity": 72,
+      "overallScore": 68
+    },
+    {
+      "flowSong": {
+        "id": 373,
+        "title": "שנה את חיי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "22ec3af2-c041-45cf-a6a0-8f7ccfa45d4f",
+        "title": "ישוע לך ישוע (שנה את חיי)"
+      },
+      "titleSimilarity": 43,
+      "lyricsSimilarity": 84,
+      "overallScore": 68
+    },
+    {
+      "flowSong": {
+        "id": 22,
+        "title": "כאייל צמא למים(כי טוב חסדך)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "b2888187-4a79-4d22-bc04-1fea957584fd",
+        "title": "כי טוב חסדך(כאיל צמא למים)"
+      },
+      "titleSimilarity": 24,
+      "lyricsSimilarity": 96,
+      "overallScore": 67
+    },
+    {
+      "flowSong": {
+        "id": 39,
+        "title": "מתן תודה",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "4d695a07-0123-484a-8990-67e38cd453c0",
+        "title": "מתן תודה (באתי לכאן)"
+      },
+      "titleSimilarity": 44,
+      "lyricsSimilarity": 82,
+      "overallScore": 67
+    },
+    {
+      "flowSong": {
+        "id": 50,
+        "title": "רוח אדוני עלי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "679b3f14-5752-4e8f-b3a0-a8c99495f800",
+        "title": "רוח אדוני עלי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 45,
+      "overallScore": 67
+    },
+    {
+      "flowSong": {
+        "id": 85,
+        "title": "אם תחפש השחרור מעוון(כוח בדם)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "a422c017-d820-4ccb-832c-f59b980744f6",
+        "title": "כוח בדם"
+      },
+      "titleSimilarity": 26,
+      "lyricsSimilarity": 95,
+      "overallScore": 67
+    },
+    {
+      "flowSong": {
+        "id": 307,
+        "title": "קומי אורי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "5d34ff1e-a1b2-4c16-a76d-1ceb64288775",
+        "title": "קומי אורי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 45,
+      "overallScore": 67
+    },
+    {
+      "flowSong": {
+        "id": 335,
+        "title": "תודה לך ישוע",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "37753b9d-b395-402c-baae-bb5997ef244a",
+        "title": "כל מה שחסר"
+      },
+      "titleSimilarity": 17,
+      "lyricsSimilarity": 100,
+      "overallScore": 67
+    },
+    {
+      "flowSong": {
+        "id": 29,
+        "title": "לא לנו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "d1cb8b55-e74f-4e8f-983b-b91c569105d1",
+        "title": "לא לנו"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 43,
+      "overallScore": 66
+    },
+    {
+      "flowSong": {
+        "id": 249,
+        "title": "כי אהבת אותי ראשון",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "017fc59e-94fb-477c-8ad6-074b30137d49",
+        "title": "בכל דבר שאעשה"
+      },
+      "titleSimilarity": 22,
+      "lyricsSimilarity": 96,
+      "overallScore": 66
+    },
+    {
+      "flowSong": {
+        "id": 313,
+        "title": "רוח בואי פחי באנו",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "d9478156-73de-4e20-99bf-4a1183a3ec4f",
+        "title": "המנון כנס ציון"
+      },
+      "titleSimilarity": 18,
+      "lyricsSimilarity": 98,
+      "overallScore": 66
+    },
+    {
+      "flowSong": {
+        "id": 37,
+        "title": "ממעמקים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "a0fa0517-673c-4d46-a9e7-595665482491",
+        "title": "מי יעמוד מולך"
+      },
+      "titleSimilarity": 23,
+      "lyricsSimilarity": 93,
+      "overallScore": 65
+    },
+    {
+      "flowSong": {
+        "id": 43,
+        "title": "עוזך אהבתך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "f0fdee1e-bdb8-45e5-9553-13f52fa76745",
+        "title": "עוזך אהבתך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 41,
+      "overallScore": 65
+    },
+    {
+      "flowSong": {
+        "id": 110,
+        "title": "בליבי צפנתי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "a6b35f30-e3cb-4bb0-af5c-16de5645b5be",
+        "title": "בליבי צפנתי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 41,
+      "overallScore": 65
+    },
+    {
+      "flowSong": {
+        "id": 188,
+        "title": "אתה ראוי להכל",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "1e11ad6c-5df2-406b-af31-b870863174a3",
+        "title": "ראוי להכל"
+      },
+      "titleSimilarity": 69,
+      "lyricsSimilarity": 62,
+      "overallScore": 65
+    },
+    {
+      "flowSong": {
+        "id": 326,
+        "title": "שלום שלום אתה נותן לי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "f4fbe6eb-d574-4fce-b6e0-bd50ad870276",
+        "title": "שלום אתה נותן לי"
+      },
+      "titleSimilarity": 76,
+      "lyricsSimilarity": 58,
+      "overallScore": 65
+    },
+    {
+      "flowSong": {
+        "id": 6,
+        "title": "אדוני צורי(השמיים מספרים)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "f2a46b88-7cbb-4c0c-973d-12f6db3055aa",
+        "title": "השמיים מספרים"
+      },
+      "titleSimilarity": 57,
+      "lyricsSimilarity": 69,
+      "overallScore": 64
+    },
+    {
+      "flowSong": {
+        "id": 128,
+        "title": "אתה מולך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "bb0b101f-a28b-4067-80cf-b696607fb8eb",
+        "title": "אתה מולך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 40,
+      "overallScore": 64
+    },
+    {
+      "flowSong": {
+        "id": 48,
+        "title": "קח כבוד",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "4c984852-7d92-4732-ab4a-9aa81ae75b7d",
+        "title": "שים בי את האש"
+      },
+      "titleSimilarity": 8,
+      "lyricsSimilarity": 99,
+      "overallScore": 63
+    },
+    {
+      "flowSong": {
+        "id": 206,
+        "title": "גדול אתה וקדוש שמך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "783feb8e-d8e6-47aa-a73b-b7d44bbf96ad",
+        "title": "קדוש שמך לעד"
+      },
+      "titleSimilarity": 28,
+      "lyricsSimilarity": 87,
+      "overallScore": 63
+    },
+    {
+      "flowSong": {
+        "id": 204,
+        "title": "בשם אדוני",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "bd8e715e-27f7-4c4a-aab8-5bf962dae930",
+        "title": "בשם אדוני Be'shem Adonai"
+      },
+      "titleSimilarity": 39,
+      "lyricsSimilarity": 79,
+      "overallScore": 63
+    },
+    {
+      "flowSong": {
+        "id": 330,
+        "title": "שמע ישראל (מהיר)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "dfd24169-d099-49ba-b980-101b89d9f157",
+        "title": "שמע ישראל"
+      },
+      "titleSimilarity": 64,
+      "lyricsSimilarity": 63,
+      "overallScore": 63
+    },
+    {
+      "flowSong": {
+        "id": 358,
+        "title": "נכון ליבי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "02e4aaea-b195-427b-979c-7d2dd10b6617",
+        "title": "רומה"
+      },
+      "titleSimilarity": 11,
+      "lyricsSimilarity": 97,
+      "overallScore": 63
+    },
+    {
+      "flowSong": {
+        "id": 283,
+        "title": "מעל הכל",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "3ab637c8-a8eb-415e-8482-c63817102d03",
+        "title": "מעל הכל"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 36,
+      "overallScore": 62
+    },
+    {
+      "flowSong": {
+        "id": 133,
+        "title": "גדול אדוני(הללויה)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "69930835-fe75-4670-b018-b99392ac5af1",
+        "title": "גדול אדוני ומהולל מאוד"
+      },
+      "titleSimilarity": 59,
+      "lyricsSimilarity": 63,
+      "overallScore": 61
+    },
+    {
+      "flowSong": {
+        "id": 172,
+        "title": "אני נופל על פני",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "4af41994-32d9-4689-ae89-8720fe34a3b5",
+        "title": "אני נופל"
+      },
+      "titleSimilarity": 53,
+      "lyricsSimilarity": 66,
+      "overallScore": 61
+    },
+    {
+      "flowSong": {
+        "id": 170,
+        "title": "אני יודע",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "b25e2e26-accc-484c-a4e1-c988d93ae736",
+        "title": "אני יודע - הנכון"
+      },
+      "titleSimilarity": 57,
+      "lyricsSimilarity": 64,
+      "overallScore": 61
+    },
+    {
+      "flowSong": {
+        "id": 36,
+        "title": "מי כמוך באלים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "508c7546-195e-4d1f-8841-2d0ff367a5cc",
+        "title": "מי כמוך באלים"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 33,
+      "overallScore": 60
+    },
+    {
+      "flowSong": {
+        "id": 120,
+        "title": "הודו לאדוני כי טוב(מהיר)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "1f288cfe-f788-4a1d-88cd-b3a8206c1b3a",
+        "title": "הודו לאדוני כי טוב"
+      },
+      "titleSimilarity": 82,
+      "lyricsSimilarity": 46,
+      "overallScore": 60
+    },
+    {
+      "flowSong": {
+        "id": 179,
+        "title": "אשירה לאדוני(ואני אני בחסדך בטחתי)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "61570f95-0b34-4508-9e89-7cad6adb4e5f",
+        "title": "אשירה לאדוני"
+      },
+      "titleSimilarity": 38,
+      "lyricsSimilarity": 74,
+      "overallScore": 60
+    },
+    {
+      "flowSong": {
+        "id": 207,
+        "title": "גדולים ונפלאים(כי אתה לבדך קדוש)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "4d57a919-c485-4287-bad9-1ba42e2fc637",
+        "title": "גדולים ונפלאים"
+      },
+      "titleSimilarity": 47,
+      "lyricsSimilarity": 68,
+      "overallScore": 60
+    },
+    {
+      "flowSong": {
+        "id": 327,
+        "title": "שמך כדבש (קדוש ומושיע)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "85d5c23f-0ab5-42a0-8b41-cb6ecdfed985",
+        "title": "שמך כדבש"
+      },
+      "titleSimilarity": 40,
+      "lyricsSimilarity": 73,
+      "overallScore": 60
+    },
+    {
+      "flowSong": {
+        "id": 219,
+        "title": "הכל עבורך",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "d36bc839-47ce-4022-bcdb-756f98ed9143",
+        "title": "הכל עבורך"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 33,
+      "overallScore": 60
+    },
+    {
+      "flowSong": {
+        "id": 53,
+        "title": "רם ונישא כי ראוי אתה(אתה קדוש)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "e217d642-95eb-4b06-ac24-01ce2e32e964",
+        "title": "רם ונישא(מהיר)"
+      },
+      "titleSimilarity": 36,
+      "lyricsSimilarity": 74,
+      "overallScore": 59
+    },
+    {
+      "flowSong": {
+        "id": 270,
+        "title": "לכו נרננה לה'",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "38afa3db-0196-4d7a-a338-1f020ccdfe2e",
+        "title": "לכו נרננה (מקדם)"
+      },
+      "titleSimilarity": 71,
+      "lyricsSimilarity": 50,
+      "overallScore": 58
+    },
+    {
+      "flowSong": {
+        "id": 306,
+        "title": "קול רינה",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "5d15fe2a-c0f7-461a-84b3-445f07c4c41e",
+        "title": "קול רינה KOL RINA"
+      },
+      "titleSimilarity": 47,
+      "lyricsSimilarity": 66,
+      "overallScore": 58
+    },
+    {
+      "flowSong": {
+        "id": 121,
+        "title": "הודו לאדוני כי טוב(קלאסי)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "1f288cfe-f788-4a1d-88cd-b3a8206c1b3a",
+        "title": "הודו לאדוני כי טוב"
+      },
+      "titleSimilarity": 78,
+      "lyricsSimilarity": 43,
+      "overallScore": 57
+    },
+    {
+      "flowSong": {
+        "id": 148,
+        "title": "אביר ישראל",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "e45f7569-4d89-42b1-bdf5-0d20e7c7d052",
+        "title": "אביר ישראל"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 26,
+      "overallScore": 56
+    },
+    {
+      "flowSong": {
+        "id": 73,
+        "title": "אין שם אחר",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "4e829ccb-eaa8-44eb-8aa1-5ce2aba2df44",
+        "title": "אין שם אחר(יהודה מוריסון)"
+      },
+      "titleSimilarity": 43,
+      "lyricsSimilarity": 64,
+      "overallScore": 56
+    },
+    {
+      "flowSong": {
+        "id": 368,
+        "title": "שירו לאדוני שיר חדש",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "85c2c594-7307-422e-b3c2-55892f8a30b8",
+        "title": "שירו לאדוני שיר חדש תהילתו"
+      },
+      "titleSimilarity": 73,
+      "lyricsSimilarity": 44,
+      "overallScore": 56
+    },
+    {
+      "flowSong": {
+        "id": 205,
+        "title": "גדול אלוהי",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "67b81537-9d65-4eb6-ab87-033a601c2ea5",
+        "title": "גדול אלוהי"
+      },
+      "titleSimilarity": 100,
+      "lyricsSimilarity": 24,
+      "overallScore": 54
+    },
+    {
+      "flowSong": {
+        "id": 208,
+        "title": "גול על אדוני",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "ecd1dcf4-060e-4dd5-8222-0bca6ba4b721",
+        "title": "גול על אדוני דרכך"
+      },
+      "titleSimilarity": 71,
+      "lyricsSimilarity": 41,
+      "overallScore": 53
+    },
+    {
+      "flowSong": {
+        "id": 180,
+        "title": "אבא",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "7bab5dd6-0052-47e4-a23f-13aac6f9e8ad",
+        "title": "אתה"
+      },
+      "titleSimilarity": 33,
+      "lyricsSimilarity": 64,
+      "overallScore": 52
+    },
+    {
+      "flowSong": {
+        "id": 136,
+        "title": "הוא מלך המלכים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "3a1313a7-1112-4f64-9821-458de8c6dd04",
+        "title": "מלך המלכים"
+      },
+      "titleSimilarity": 71,
+      "lyricsSimilarity": 37,
+      "overallScore": 51
+    },
+    {
+      "flowSong": {
+        "id": 344,
+        "title": "אלוהי השמיים",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "ea23227d-d371-4132-a94d-c442d55e4841",
+        "title": "אין שינוי בו"
+      },
+      "titleSimilarity": 8,
+      "lyricsSimilarity": 80,
+      "overallScore": 51
+    },
+    {
+      "flowSong": {
+        "id": 203,
+        "title": "ברוך אתה אדוני(לך הגדולה, לך הגבורה)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "4d87092d-a90b-47ad-a6d7-450895ed22ed",
+        "title": "ברוך אתה אדוני(קלאסי)"
+      },
+      "titleSimilarity": 45,
+      "lyricsSimilarity": 54,
+      "overallScore": 50
+    },
+    {
+      "flowSong": {
+        "id": 329,
+        "title": "שמע ישראל (ישן)",
+        "workspace_id": 1
+      },
+      "presenterSong": {
+        "id": "dfd24169-d099-49ba-b980-101b89d9f157",
+        "title": "שמע ישראל"
+      },
+      "titleSimilarity": 69,
+      "lyricsSimilarity": 38,
+      "overallScore": 50
+    }
+  ]
+}

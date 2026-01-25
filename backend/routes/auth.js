@@ -99,7 +99,6 @@ router.post('/register', registerLimiter, async (req, res) => {
 
 // Login with email/password
 router.post('/login', authLimiter, (req, res, next) => {
-  console.log('🔐 Login attempt:', req.body.email);
   passport.authenticate('local', { session: false }, (err, user, info) => {
     if (err) {
       return res.status(500).json({ error: 'Server error during login' });

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Generate Minimal Video</title>
+</head>
+<body>
+  <h1>Generating minimal video...</h1>
+  <canvas id="canvas" width="64" height="64" style="display:none;"></canvas>
+  <video id="preview" controls style="display:none;"></video>
+  <button id="download" style="display:none;">Download Video</button>
+  <p id="status">Processing...</p>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const preview = document.getElementById('preview');
+    const downloadBtn = document.getElementById('download');
+    const status = document.getElementById('status');
+
+    // Draw a single black frame
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.01)';
+    ctx.fillRect(0, 0, 64, 64);
+
+    // Capture the canvas as a video stream
+    const stream = canvas.captureStream(30); // 30 fps
+    const mediaRecorder = new MediaRecorder(stream, {
+      mimeType: 'video/webm;codecs=vp8',
+      videoBitsPerSecond: 100000 // Very low bitrate for small file
+    });
+
+    const chunks = [];
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) {
+        chunks.push(e.data);
+      }
+    };
+
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(chunks, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+
+      preview.src = url;
+      preview.style.display = 'block';
+
+      downloadBtn.style.display = 'block';
+      downloadBtn.onclick = () => {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'transparent-keepalive.webm';
+        a.click();
+      };
+
+      status.textContent = `Video generated! Size: ${(blob.size / 1024).toFixed(2)} KB`;
+      console.log('Video blob size:', blob.size);
+    };
+
+    // Record for 1 second
+    mediaRecorder.start();
+
+    // Keep drawing the same frame for 1 second
+    let frameCount = 0;
+    const interval = setInterval(() => {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.01)';
+      ctx.fillRect(0, 0, 64, 64);
+      frameCount++;
+      if (frameCount >= 30) { // 1 second at 30fps
+        clearInterval(interval);
+        mediaRecorder.stop();
+      }
+    }, 1000 / 30);
+  </script>
+</body>
+</html>

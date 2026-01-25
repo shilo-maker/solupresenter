@@ -142,7 +142,7 @@ test('obsThemes.ts exports required functions', () => {
 
 test('obsThemes.ts has OBSThemeType definition', () => {
   const content = fs.readFileSync(path.join(__dirname, 'src/main/database/obsThemes.ts'), 'utf-8');
-  if (!content.includes("OBSThemeType = 'songs' | 'bible'")) {
+  if (!content.includes("OBSThemeType = 'songs' | 'bible' | 'prayer'")) {
     throw new Error('OBSThemeType not properly defined');
   }
 });
@@ -270,7 +270,7 @@ test('Preload has type declarations for Bible themes', () => {
 
 test('Preload has type declarations for OBS themes', () => {
   const content = fs.readFileSync(path.join(__dirname, 'src/preload/control.ts'), 'utf-8');
-  if (!content.includes("getOBSThemes: (type?: 'songs' | 'bible') => Promise<any[]>")) {
+  if (!content.includes("getOBSThemes: (type?: 'songs' | 'bible' | 'prayer') => Promise<any[]>")) {
     throw new Error('Missing type declaration for getOBSThemes');
   }
 });

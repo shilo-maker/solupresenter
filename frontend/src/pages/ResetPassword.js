@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { Form, Button, Alert, Card, Container } from 'react-bootstrap';
 import api from '../services/api';
 
@@ -9,7 +9,6 @@ function ResetPassword() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
   const token = searchParams.get('token');
 
   useEffect(() => {

@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [react()],
   base: './',
   root: 'src/renderer',
+  publicDir: '../../resources',
   build: {
     outDir: '../../dist/renderer',
     emptyOutDir: true,

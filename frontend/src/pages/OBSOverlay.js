@@ -190,6 +190,7 @@ function OBSOverlay({ remotePin, remoteConfig }) {
       }
       socketService.disconnect();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pin, roomSlug]);
 
   // Calculate position styles for the wrapper

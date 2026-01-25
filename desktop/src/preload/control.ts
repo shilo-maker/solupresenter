@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, clipboard, webFrame } from 'electron';
 
 // Expose protected methods to the renderer process
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -15,6 +15,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('displays:changed', handler);
     return () => ipcRenderer.removeListener('displays:changed', handler);
   },
+  identifyDisplays: (displayId?: number) => ipcRenderer.invoke('displays:identify', displayId),
+  moveControlWindow: (targetDisplayId: number) => ipcRenderer.invoke('displays:moveControlWindow', targetDisplayId),
+  getControlWindowDisplay: () => ipcRenderer.invoke('displays:getControlWindowDisplay'),
 
   // ============ OBS Browser Source Server ============
   startOBSServer: () => ipcRenderer.invoke('obs:start'),
@@ -27,11 +30,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   isOBSOverlayOpen: () => ipcRenderer.invoke('obs:isOpen'),
 
   // ============ Slide Control ============
-  sendSlide: (slideData: any) => ipcRenderer.invoke('slides:send', slideData),
-  sendBlank: () => ipcRenderer.invoke('slides:blank'),
-  sendTool: (toolData: any) => ipcRenderer.invoke('tools:send', toolData),
-  applyTheme: (theme: any) => ipcRenderer.invoke('theme:apply', theme),
-  setBackground: (background: string) => ipcRenderer.invoke('background:set', background),
+  // Use send (fire-and-forget) for instant slide updates instead of invoke (request-response)
+  sendSlide: (slideData: any) => ipcRenderer.send('slides:send', slideData),
+  sendBlank: () => ipcRenderer.send('slides:blank'),
+  sendTool: (toolData: any) => ipcRenderer.send('tools:send', toolData),
+  applyTheme: (theme: any) => ipcRenderer.send('theme:apply', theme),
+  setBackground: (background: string) => ipcRenderer.send('background:set', background),
+  applyOBSTheme: (theme: any) => ipcRenderer.send('obsTheme:apply', theme),
 
   // ============ Fullscreen Media Display ============
   displayMedia: (mediaData: { type: 'image' | 'video'; url: string }) => ipcRenderer.invoke('media:display', mediaData),
@@ -86,6 +91,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('video:playing', handler);
     return () => ipcRenderer.removeListener('video:playing', handler);
   },
+  onVideoSyncStart: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('video:syncStart', handler);
+    return () => ipcRenderer.removeListener('video:syncStart', handler);
+  },
 
   // ============ Database - Songs ============
   getSongs: (query?: string) => ipcRenderer.invoke(query ? 'db:songs:search' : 'db:songs:getAll', query),
@@ -129,13 +139,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   applyBibleTheme: (theme: any) => ipcRenderer.invoke('bibleTheme:apply', theme),
 
   // ============ Database - OBS Themes ============
-  getOBSThemes: (type?: 'songs' | 'bible') => ipcRenderer.invoke('db:obsThemes:getAll', type),
+  getOBSThemes: (type?: 'songs' | 'bible' | 'prayer') => ipcRenderer.invoke('db:obsThemes:getAll', type),
   getOBSTheme: (id: string) => ipcRenderer.invoke('db:obsThemes:get', id),
-  getDefaultOBSTheme: (type: 'songs' | 'bible') => ipcRenderer.invoke('db:obsThemes:getDefault', type),
+  getDefaultOBSTheme: (type: 'songs' | 'bible' | 'prayer') => ipcRenderer.invoke('db:obsThemes:getDefault', type),
   createOBSTheme: (data: any) => ipcRenderer.invoke('db:obsThemes:create', data),
   updateOBSTheme: (id: string, data: any) => ipcRenderer.invoke('db:obsThemes:update', id, data),
   deleteOBSTheme: (id: string) => ipcRenderer.invoke('db:obsThemes:delete', id),
-  applyOBSTheme: (theme: any) => ipcRenderer.invoke('obsTheme:apply', theme),
 
   // ============ Database - Prayer Themes ============
   getPrayerThemes: () => ipcRenderer.invoke('db:prayerThemes:getAll'),
@@ -148,7 +157,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // ============ Theme Selection Persistence ============
   getSelectedThemeIds: () => ipcRenderer.invoke('settings:getSelectedThemeIds'),
-  saveSelectedThemeId: (themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'prayer', themeId: string | null) =>
+  saveSelectedThemeId: (themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'obsBible' | 'prayer' | 'obsPrayer', themeId: string | null) =>
     ipcRenderer.invoke('settings:saveSelectedThemeId', themeType, themeId),
 
   // ============ Database - Presentations ============
@@ -157,6 +166,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createPresentation: (data: any) => ipcRenderer.invoke('db:presentations:create', data),
   updatePresentation: (id: string, data: any) => ipcRenderer.invoke('db:presentations:update', id, data),
   deletePresentation: (id: string) => ipcRenderer.invoke('db:presentations:delete', id),
+
+  // ============ Database - Audio Playlists ============
+  getAudioPlaylists: () => ipcRenderer.invoke('db:audioPlaylists:getAll'),
+  getAudioPlaylist: (id: string) => ipcRenderer.invoke('db:audioPlaylists:get', id),
+  createAudioPlaylist: (data: any) => ipcRenderer.invoke('db:audioPlaylists:create', data),
+  updateAudioPlaylist: (id: string, data: any) => ipcRenderer.invoke('db:audioPlaylists:update', id, data),
+  deleteAudioPlaylist: (id: string) => ipcRenderer.invoke('db:audioPlaylists:delete', id),
 
   // ============ Bible ============
   getBibleBooks: () => ipcRenderer.invoke('bible:getBooks'),
@@ -191,6 +207,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAppVersion: () => ipcRenderer.invoke('app:version'),
   getAppPath: (name: string) => ipcRenderer.invoke('app:getPath', name),
   openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
+  copyToClipboard: (text: string) => clipboard.writeText(text),
 
   // ============ Dialogs ============
   openFileDialog: (options: any) => ipcRenderer.invoke('dialog:openFile', options),
@@ -214,7 +231,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
   youtubeSeek: (currentTime: number) => ipcRenderer.invoke('youtube:seek', currentTime),
   youtubeStop: () => ipcRenderer.invoke('youtube:stop'),
   youtubeSync: (currentTime: number, isPlaying: boolean) => ipcRenderer.invoke('youtube:sync', currentTime, isPlaying),
-  youtubeSearch: (query: string) => ipcRenderer.invoke('youtube:search', query)
+  youtubeSearch: (query: string, timeoutMs?: number) => ipcRenderer.invoke('youtube:search', query, timeoutMs),
+
+  // ============ Remote Control ============
+  remoteControl: {
+    start: () => ipcRenderer.invoke('remoteControl:start'),
+    stop: () => ipcRenderer.invoke('remoteControl:stop'),
+    getStatus: () => ipcRenderer.invoke('remoteControl:getStatus'),
+    getQRCode: () => ipcRenderer.invoke('remoteControl:getQRCode'),
+    updateState: (state: any) => ipcRenderer.send('remoteControl:updateState', state),
+    onCommand: (callback: (command: any) => void) => {
+      const handler = (_: any, command: any) => callback(command);
+      ipcRenderer.on('remote:command', handler);
+      return () => ipcRenderer.removeListener('remote:command', handler);
+    }
+  },
+
+  // ============ UI Scaling ============
+  setZoomFactor: (factor: number) => {
+    // Clamp to reasonable range (80% to 150%)
+    const clampedFactor = Math.max(0.8, Math.min(1.5, factor));
+    webFrame.setZoomFactor(clampedFactor);
+  },
+  getZoomFactor: () => webFrame.getZoomFactor()
 });
 
 // Type declarations for TypeScript
@@ -229,6 +268,15 @@ declare global {
       closeAllDisplays: () => Promise<boolean>;
       captureViewer: () => Promise<string | null>;
       onDisplaysChanged: (callback: (displays: any[]) => void) => () => void;
+      identifyDisplays: (displayId?: number) => Promise<boolean>;
+      moveControlWindow: (targetDisplayId: number) => Promise<boolean>;
+      getControlWindowDisplay: () => Promise<number | null>;
+
+      // OBS Browser Source Server
+      startOBSServer: () => Promise<{ success: boolean; url?: string; port?: number; error?: string }>;
+      stopOBSServer: () => Promise<boolean>;
+      getOBSServerUrl: () => Promise<string | null>;
+      isOBSServerRunning: () => Promise<boolean>;
 
       // OBS Overlay
       openOBSOverlay: (config?: {
@@ -244,25 +292,14 @@ declare global {
       }) => Promise<boolean>;
       closeOBSOverlay: () => Promise<boolean>;
       isOBSOverlayOpen: () => Promise<boolean>;
-      getOBSOverlayConfig: () => Promise<{
-        position: 'top' | 'center' | 'bottom';
-        fontSize: number;
-        textColor: string;
-        showOriginal: boolean;
-        showTransliteration: boolean;
-        showTranslation: boolean;
-        paddingBottom: number;
-        paddingTop: number;
-        maxWidth: number;
-      } | null>;
-      updateOBSOverlayConfig: (config: any) => Promise<boolean>;
 
-      // Slide Control
-      sendSlide: (slideData: any) => Promise<boolean>;
-      sendBlank: () => Promise<boolean>;
-      sendTool: (toolData: any) => Promise<boolean>;
-      applyTheme: (theme: any) => Promise<boolean>;
-      setBackground: (background: string) => Promise<boolean>;
+      // Slide Control (fire-and-forget, no return value)
+      sendSlide: (slideData: any) => void;
+      sendBlank: () => void;
+      sendTool: (toolData: any) => void;
+      applyTheme: (theme: any) => void;
+      setBackground: (background: string) => void;
+      applyOBSTheme: (theme: any) => void;
 
       // Fullscreen Media Display
       displayMedia: (mediaData: { type: 'image' | 'video'; url: string }) => Promise<boolean>;
@@ -303,6 +340,7 @@ declare global {
       onVideoStatus: (callback: (status: { currentTime: number; duration: number }) => void) => () => void;
       onVideoEnded: (callback: () => void) => () => void;
       onVideoPlaying: (callback: (playing: boolean) => void) => () => void;
+      onVideoSyncStart: (callback: () => void) => () => void;
 
       // Database - Songs
       getSongs: (query?: string) => Promise<any[]>;
@@ -346,13 +384,12 @@ declare global {
       applyBibleTheme: (theme: any) => Promise<boolean>;
 
       // Database - OBS Themes
-      getOBSThemes: (type?: 'songs' | 'bible') => Promise<any[]>;
+      getOBSThemes: (type?: 'songs' | 'bible' | 'prayer') => Promise<any[]>;
       getOBSTheme: (id: string) => Promise<any>;
-      getDefaultOBSTheme: (type: 'songs' | 'bible') => Promise<any>;
+      getDefaultOBSTheme: (type: 'songs' | 'bible' | 'prayer') => Promise<any>;
       createOBSTheme: (data: any) => Promise<any>;
       updateOBSTheme: (id: string, data: any) => Promise<any>;
       deleteOBSTheme: (id: string) => Promise<boolean>;
-      applyOBSTheme: (theme: any) => Promise<boolean>;
 
       // Database - Prayer Themes
       getPrayerThemes: () => Promise<any[]>;
@@ -369,9 +406,11 @@ declare global {
         stageThemeId: string | null;
         bibleThemeId: string | null;
         obsThemeId: string | null;
+        obsBibleThemeId: string | null;
         prayerThemeId: string | null;
+        obsPrayerThemeId: string | null;
       }>;
-      saveSelectedThemeId: (themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'prayer', themeId: string | null) => Promise<boolean>;
+      saveSelectedThemeId: (themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'obsBible' | 'prayer' | 'obsPrayer', themeId: string | null) => Promise<boolean>;
 
       // Database - Presentations
       getPresentations: () => Promise<any[]>;
@@ -379,6 +418,49 @@ declare global {
       createPresentation: (data: any) => Promise<any>;
       updatePresentation: (id: string, data: any) => Promise<any>;
       deletePresentation: (id: string) => Promise<boolean>;
+
+      // Database - Audio Playlists
+      getAudioPlaylists: () => Promise<Array<{
+        id: string;
+        name: string;
+        tracks: Array<{ path: string; name: string; duration?: number | null }>;
+        shuffle: boolean;
+        createdAt: string;
+        updatedAt: string;
+      }>>;
+      getAudioPlaylist: (id: string) => Promise<{
+        id: string;
+        name: string;
+        tracks: Array<{ path: string; name: string; duration?: number | null }>;
+        shuffle: boolean;
+        createdAt: string;
+        updatedAt: string;
+      } | null>;
+      createAudioPlaylist: (data: {
+        name: string;
+        tracks: Array<{ path: string; name: string; duration?: number | null }>;
+        shuffle?: boolean;
+      }) => Promise<{
+        id: string;
+        name: string;
+        tracks: Array<{ path: string; name: string; duration?: number | null }>;
+        shuffle: boolean;
+        createdAt: string;
+        updatedAt: string;
+      }>;
+      updateAudioPlaylist: (id: string, data: {
+        name?: string;
+        tracks?: Array<{ path: string; name: string; duration?: number | null }>;
+        shuffle?: boolean;
+      }) => Promise<{
+        id: string;
+        name: string;
+        tracks: Array<{ path: string; name: string; duration?: number | null }>;
+        shuffle: boolean;
+        createdAt: string;
+        updatedAt: string;
+      } | null>;
+      deleteAudioPlaylist: (id: string) => Promise<boolean>;
 
       // Bible
       getBibleBooks: () => Promise<Array<{ name: string; chapters: number; hebrewName?: string; testament?: string }>>;
@@ -411,6 +493,7 @@ declare global {
       getAppVersion: () => Promise<string>;
       getAppPath: (name: string) => Promise<string>;
       openExternal: (url: string) => Promise<boolean>;
+      copyToClipboard: (text: string) => void;
 
       // Dialogs
       openFileDialog: (options: any) => Promise<any>;
@@ -437,7 +520,31 @@ declare global {
       youtubeSeek: (currentTime: number) => Promise<boolean>;
       youtubeStop: () => Promise<boolean>;
       youtubeSync: (currentTime: number, isPlaying: boolean) => Promise<boolean>;
-      youtubeSearch: (query: string) => Promise<{ success: boolean; results?: Array<{ videoId: string; title: string; thumbnail: string; channelTitle: string }>; error?: string }>;
+      youtubeSearch: (query: string, timeoutMs?: number) => Promise<{ success: boolean; results?: Array<{ videoId: string; title: string; thumbnail: string; channelTitle: string }>; error?: string }>;
+
+      // Remote Control
+      remoteControl: {
+        start: () => Promise<{ success: boolean; port?: number; url?: string; pin?: string; error?: string }>;
+        stop: () => Promise<boolean>;
+        getStatus: () => Promise<{ running: boolean; url: string | null; pin: string; clients: number }>;
+        getQRCode: () => Promise<string | null>;
+        updateState: (state: {
+          currentItem?: { id: string; type: string; title: string; slideCount: number } | null;
+          currentSlideIndex?: number;
+          totalSlides?: number;
+          displayMode?: 'bilingual' | 'original' | 'translation';
+          isBlank?: boolean;
+          setlist?: Array<{ id: string; type: string; title: string }>;
+          slides?: Array<{ index: number; preview: string; verseType?: string; isCombined?: boolean }>;
+          activeTools?: string[];
+          onlineViewerCount?: number;
+        }) => void;
+        onCommand: (callback: (command: { type: string; payload?: any }) => void) => () => void;
+      };
+
+      // UI Scaling
+      setZoomFactor: (factor: number) => void;
+      getZoomFactor: () => number;
     };
   }
 }

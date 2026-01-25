@@ -19,7 +19,7 @@ interface Theme {
   id: string;
   name: string;
   isDefault?: boolean;
-  type?: 'songs' | 'bible';
+  type?: 'songs' | 'bible' | 'prayer';
 }
 
 interface ThemeSelectionPanelProps {
@@ -33,6 +33,9 @@ interface ThemeSelectionPanelProps {
   selectedBibleTheme: Theme | null;
   selectedPrayerTheme: Theme | null;
   selectedOBSTheme: Theme | null;
+  selectedOBSSongsTheme?: Theme | null;
+  selectedOBSBibleTheme?: Theme | null;
+  selectedOBSPrayerTheme?: Theme | null;
   isRTL: boolean;
   onApplyViewerTheme: (theme: Theme) => void;
   onApplyStageTheme: (theme: Theme) => void;
@@ -144,6 +147,9 @@ const ThemeSelectionPanel: React.FC<ThemeSelectionPanelProps> = memo(({
   selectedBibleTheme,
   selectedPrayerTheme,
   selectedOBSTheme,
+  selectedOBSSongsTheme,
+  selectedOBSBibleTheme,
+  selectedOBSPrayerTheme,
   isRTL,
   onApplyViewerTheme,
   onApplyStageTheme,
@@ -155,9 +161,14 @@ const ThemeSelectionPanel: React.FC<ThemeSelectionPanelProps> = memo(({
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [open, setOpen] = useState<'v' | 's' | 'b' | 'p' | 'o' | null>(null);
+  const [open, setOpen] = useState<'v' | 's' | 'b' | 'p' | 'os' | 'ob' | 'op' | null>(null);
 
-  const toggle = useCallback((d: 'v' | 's' | 'b' | 'p' | 'o') => {
+  // Filter OBS themes by type
+  const obsSongsThemes = obsThemes.filter(t => t.type === 'songs');
+  const obsBibleThemes = obsThemes.filter(t => t.type === 'bible');
+  const obsPrayerThemes = obsThemes.filter(t => t.type === 'prayer');
+
+  const toggle = useCallback((d: 'v' | 's' | 'b' | 'p' | 'os' | 'ob' | 'op') => {
     setOpen(p => p === d ? null : d);
   }, []);
 
@@ -269,18 +280,18 @@ const ThemeSelectionPanel: React.FC<ThemeSelectionPanelProps> = memo(({
       {/* Prayer/Sermon Theme */}
       <div style={rowStyle}>
         <label style={labelStyle}>{t('controlPanel.prayerTheme', 'Prayer/Sermon')}</label>
-        <button onClick={() => toggle('p')} style={btnStyle('rgba(255, 140, 66, 0.5)')}>
+        <button onClick={() => toggle('p')} style={btnStyle('rgba(6, 182, 212, 0.5)')}>
           <span>{selectedPrayerTheme?.name || t('controlPanel.selectTheme', 'Select...')}</span>
           <span style={{ ...arrowStyle, transform: open === 'p' ? 'rotate(180deg)' : 'none' }}>▼</span>
         </button>
         {open === 'p' && (
-          <div style={{ ...dropdownStyle, border: '1px solid rgba(255, 140, 66, 0.5)', '--hover-bg': 'rgba(255, 140, 66, 0.2)' } as CSSProperties}>
+          <div style={{ ...dropdownStyle, border: '1px solid rgba(6, 182, 212, 0.5)', '--hover-bg': 'rgba(6, 182, 212, 0.2)' } as CSSProperties}>
             {prayerThemes.map((theme) => (
               <div
                 key={theme.id}
                 className="theme-dd-item"
                 onClick={() => { onApplyPrayerTheme(theme); setOpen(null); }}
-                style={{ ...itemStyle, background: selectedPrayerTheme?.id === theme.id ? 'rgba(255, 140, 66, 0.3)' : 'transparent' }}
+                style={{ ...itemStyle, background: selectedPrayerTheme?.id === theme.id ? 'rgba(6, 182, 212, 0.3)' : 'transparent' }}
               >
                 <span style={{ color: 'white', fontSize: '0.85rem' }}>{theme.name}</span>
                 <button onClick={(e) => edit(e, `/prayer-theme-editor?id=${theme.id}`)} style={editBtnStyle}>{t('common.edit', 'Edit')}</button>
@@ -291,43 +302,92 @@ const ThemeSelectionPanel: React.FC<ThemeSelectionPanelProps> = memo(({
         )}
       </div>
 
-      {/* OBS Overlay Theme */}
-      <div style={{ ...rowStyle, marginBottom: 0 }}>
-        <label style={labelStyle}>{t('controlPanel.obsTheme', 'OBS Overlay')}</label>
-        <button onClick={() => toggle('o')} style={btnStyle('rgba(23, 162, 184, 0.5)')}>
-          <span>{selectedOBSTheme?.name || t('controlPanel.selectTheme', 'Select...')}</span>
-          <span style={{ ...arrowStyle, transform: open === 'o' ? 'rotate(180deg)' : 'none' }}>▼</span>
+      {/* OBS Songs Theme */}
+      <div style={rowStyle}>
+        <label style={labelStyle}>{t('controlPanel.obsSongsTheme', 'OBS Songs')}</label>
+        <button onClick={() => toggle('os')} style={btnStyle('rgba(102, 126, 234, 0.5)')}>
+          <span>{selectedOBSSongsTheme?.name || t('controlPanel.selectTheme', 'Select...')}</span>
+          <span style={{ ...arrowStyle, transform: open === 'os' ? 'rotate(180deg)' : 'none' }}>▼</span>
         </button>
-        {open === 'o' && (
-          <div style={{ ...dropdownStyle, border: '1px solid rgba(23, 162, 184, 0.5)', '--hover-bg': 'rgba(23, 162, 184, 0.2)' } as CSSProperties}>
-            {obsThemes.map((theme) => (
+        {open === 'os' && (
+          <div style={{ ...dropdownStyle, border: '1px solid rgba(102, 126, 234, 0.5)', '--hover-bg': 'rgba(102, 126, 234, 0.2)' } as CSSProperties}>
+            {obsSongsThemes.map((theme) => (
               <div
                 key={theme.id}
                 className="theme-dd-item"
                 onClick={() => { onApplyOBSTheme(theme); setOpen(null); }}
-                style={{ ...itemStyle, background: selectedOBSTheme?.id === theme.id ? 'rgba(23, 162, 184, 0.3)' : 'transparent' }}
+                style={{ ...itemStyle, background: selectedOBSSongsTheme?.id === theme.id ? 'rgba(102, 126, 234, 0.3)' : 'transparent' }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ color: 'white', fontSize: '0.85rem' }}>{theme.name}</span>
-                  <span style={{
-                    fontSize: '0.65rem',
-                    padding: '2px 6px',
-                    borderRadius: '3px',
-                    background: theme.type === 'songs' ? 'rgba(102, 126, 234, 0.3)' : 'rgba(76, 175, 80, 0.3)',
-                    color: theme.type === 'songs' ? '#a0b4f7' : '#81c784'
-                  }}>
-                    {theme.type === 'songs' ? t('themes.songs', 'Songs') : t('themes.bible', 'Bible')}
-                  </span>
-                </div>
+                <span style={{ color: 'white', fontSize: '0.85rem' }}>{theme.name}</span>
                 <button
-                  onClick={(e) => edit(e, `${theme.type === 'songs' ? '/obs-songs-theme-editor' : '/obs-bible-theme-editor'}?id=${theme.id}`)}
+                  onClick={(e) => edit(e, `/obs-songs-theme-editor?id=${theme.id}`)}
                   style={editBtnStyle}
                 >
                   {t('common.edit', 'Edit')}
                 </button>
               </div>
             ))}
-            {obsThemes.length === 0 && <p style={emptyStyle}>{t('controlPanel.noThemesAvailable')}</p>}
+            {obsSongsThemes.length === 0 && <p style={emptyStyle}>{t('controlPanel.noThemesAvailable')}</p>}
+          </div>
+        )}
+      </div>
+
+      {/* OBS Bible Theme */}
+      <div style={rowStyle}>
+        <label style={labelStyle}>{t('controlPanel.obsBibleTheme', 'OBS Bible')}</label>
+        <button onClick={() => toggle('ob')} style={btnStyle('rgba(76, 175, 80, 0.5)')}>
+          <span>{selectedOBSBibleTheme?.name || t('controlPanel.selectTheme', 'Select...')}</span>
+          <span style={{ ...arrowStyle, transform: open === 'ob' ? 'rotate(180deg)' : 'none' }}>▼</span>
+        </button>
+        {open === 'ob' && (
+          <div style={{ ...dropdownStyle, border: '1px solid rgba(76, 175, 80, 0.5)', '--hover-bg': 'rgba(76, 175, 80, 0.2)' } as CSSProperties}>
+            {obsBibleThemes.map((theme) => (
+              <div
+                key={theme.id}
+                className="theme-dd-item"
+                onClick={() => { onApplyOBSTheme(theme); setOpen(null); }}
+                style={{ ...itemStyle, background: selectedOBSBibleTheme?.id === theme.id ? 'rgba(76, 175, 80, 0.3)' : 'transparent' }}
+              >
+                <span style={{ color: 'white', fontSize: '0.85rem' }}>{theme.name}</span>
+                <button
+                  onClick={(e) => edit(e, `/obs-bible-theme-editor?id=${theme.id}`)}
+                  style={editBtnStyle}
+                >
+                  {t('common.edit', 'Edit')}
+                </button>
+              </div>
+            ))}
+            {obsBibleThemes.length === 0 && <p style={emptyStyle}>{t('controlPanel.noThemesAvailable')}</p>}
+          </div>
+        )}
+      </div>
+
+      {/* OBS Prayer Theme */}
+      <div style={{ ...rowStyle, marginBottom: 0 }}>
+        <label style={labelStyle}>{t('controlPanel.obsPrayerTheme', 'OBS Prayer')}</label>
+        <button onClick={() => toggle('op')} style={btnStyle('rgba(6, 182, 212, 0.5)')}>
+          <span>{selectedOBSPrayerTheme?.name || t('controlPanel.selectTheme', 'Select...')}</span>
+          <span style={{ ...arrowStyle, transform: open === 'op' ? 'rotate(180deg)' : 'none' }}>▼</span>
+        </button>
+        {open === 'op' && (
+          <div style={{ ...dropdownStyle, border: '1px solid rgba(6, 182, 212, 0.5)', '--hover-bg': 'rgba(6, 182, 212, 0.2)' } as CSSProperties}>
+            {obsPrayerThemes.map((theme) => (
+              <div
+                key={theme.id}
+                className="theme-dd-item"
+                onClick={() => { onApplyOBSTheme(theme); setOpen(null); }}
+                style={{ ...itemStyle, background: selectedOBSPrayerTheme?.id === theme.id ? 'rgba(6, 182, 212, 0.3)' : 'transparent' }}
+              >
+                <span style={{ color: 'white', fontSize: '0.85rem' }}>{theme.name}</span>
+                <button
+                  onClick={(e) => edit(e, `/obs-prayer-theme-editor?id=${theme.id}`)}
+                  style={editBtnStyle}
+                >
+                  {t('common.edit', 'Edit')}
+                </button>
+              </div>
+            ))}
+            {obsPrayerThemes.length === 0 && <p style={emptyStyle}>{t('controlPanel.noThemesAvailable')}</p>}
           </div>
         )}
       </div>

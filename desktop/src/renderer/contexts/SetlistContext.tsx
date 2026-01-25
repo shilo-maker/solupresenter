@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 // Types - duplicated here to avoid circular imports
 interface Song {
@@ -31,9 +31,15 @@ interface Presentation {
   quickModeData?: any;
 }
 
+interface AudioPlaylistTrack {
+  path: string;
+  name: string;
+  duration?: number | null;
+}
+
 export interface SetlistItem {
   id: string;
-  type: 'song' | 'blank' | 'section' | 'countdown' | 'announcement' | 'messages' | 'media' | 'bible' | 'presentation' | 'youtube';
+  type: 'song' | 'blank' | 'section' | 'countdown' | 'announcement' | 'messages' | 'media' | 'bible' | 'presentation' | 'youtube' | 'clock' | 'stopwatch' | 'audioPlaylist';
   song?: Song;
   title?: string;
   // Tool-specific data
@@ -47,6 +53,13 @@ export interface SetlistItem {
   mediaPath?: string;
   mediaDuration?: number | null;
   mediaName?: string;
+  thumbnailPath?: string | null;
+  // Audio playlist data
+  audioPlaylist?: {
+    tracks: AudioPlaylistTrack[];
+    shuffle: boolean;
+    name: string;
+  };
   // Presentation data
   presentation?: Presentation;
   // Bible data
@@ -67,7 +80,7 @@ export interface SavedSetlist {
   name: string;
   venue?: string;
   items: SetlistItem[];
-  createdAt: number;
+  createdAt: string;  // ISO timestamp string
   updatedAt?: string;
 }
 
@@ -103,111 +116,107 @@ interface DraftSetlist {
   lastSavedSnapshot: string;
 }
 
+// Helper to serialize setlist items for comparison (avoids duplicate code)
+const serializeSetlistForComparison = (items: SetlistItem[]): string => {
+  return JSON.stringify(items.map(item => ({
+    type: item.type,
+    songId: item.song?.id,
+    title: item.title,
+    countdownTime: item.countdownTime,
+    countdownMessage: item.countdownMessage,
+    announcementText: item.announcementText,
+    messages: item.messages,
+    messagesInterval: item.messagesInterval,
+    mediaPath: item.mediaPath,
+    mediaType: item.mediaType,
+    mediaDuration: item.mediaDuration,
+    mediaName: item.mediaName,
+    presentationId: item.presentation?.id,
+    bibleData: item.bibleData,
+    youtubeVideoId: item.youtubeVideoId,
+    youtubeTitle: item.youtubeTitle,
+    youtubeThumbnail: item.youtubeThumbnail,
+    audioPlaylist: item.audioPlaylist
+  })));
+};
+
+// Validate a single setlist item
+const isValidSetlistItem = (item: unknown): item is SetlistItem => {
+  if (!item || typeof item !== 'object') return false;
+  const obj = item as Record<string, unknown>;
+  // Must have id and type
+  if (typeof obj.id !== 'string' || !obj.id) return false;
+  if (typeof obj.type !== 'string' || !obj.type) return false;
+  // Validate type is one of the allowed types
+  const validTypes = ['song', 'blank', 'section', 'countdown', 'announcement', 'messages', 'media', 'bible', 'presentation', 'youtube', 'clock', 'stopwatch', 'audioPlaylist'];
+  if (!validTypes.includes(obj.type)) return false;
+  return true;
+};
+
+// Load draft setlist from localStorage
+const loadDraftSetlist = (): DraftSetlist | null => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Validate the structure
+      if (parsed && Array.isArray(parsed.items)) {
+        // Filter out any invalid items
+        const validItems = parsed.items.filter(isValidSetlistItem);
+        if (validItems.length !== parsed.items.length) {
+          console.warn('[SetlistContext] Filtered out', parsed.items.length - validItems.length, 'invalid setlist items');
+        }
+        return {
+          ...parsed,
+          items: validItems
+        } as DraftSetlist;
+      }
+    }
+  } catch (error) {
+    console.error('[SetlistContext] Failed to load draft setlist from localStorage:', error);
+  }
+  return null;
+};
+
+// Save draft setlist to localStorage
+const saveDraftSetlist = (draft: DraftSetlist): void => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+  } catch (error) {
+    console.error('[SetlistContext] Failed to save draft setlist to localStorage:', error);
+  }
+};
+
 export const SetlistProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Initialize state from localStorage
-  const [setlist, setSetlist] = useState<SetlistItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const draft: DraftSetlist = JSON.parse(saved);
-        return draft.items || [];
-      }
-    } catch (e) {
-      console.error('Failed to load draft setlist from localStorage:', e);
-    }
-    return [];
-  });
+  // Load draft setlist from localStorage on initial render
+  const initialDraft = useMemo(() => loadDraftSetlist(), []);
 
-  const [currentSetlistId, setCurrentSetlistId] = useState<string | null>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const draft: DraftSetlist = JSON.parse(saved);
-        return draft.currentSetlistId || null;
-      }
-    } catch (e) {
-      // Ignore
-    }
-    return null;
-  });
-
-  const [currentSetlistName, setCurrentSetlistName] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const draft: DraftSetlist = JSON.parse(saved);
-        return draft.currentSetlistName || '';
-      }
-    } catch (e) {
-      // Ignore
-    }
-    return '';
-  });
-
+  const [setlist, setSetlist] = useState<SetlistItem[]>(initialDraft?.items || []);
+  const [currentSetlistId, setCurrentSetlistId] = useState<string | null>(initialDraft?.currentSetlistId || null);
+  const [currentSetlistName, setCurrentSetlistName] = useState<string>(initialDraft?.currentSetlistName || '');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const lastSavedSetlistRef = useRef<string>(initialDraft?.lastSavedSnapshot || '[]');
 
-  const lastSavedSetlistRef = useRef<string>((() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const draft: DraftSetlist = JSON.parse(saved);
-        return draft.lastSavedSnapshot || '[]';
-      }
-    } catch (e) {
-      // Ignore
-    }
-    return '[]';
-  })());
+  // Memoize the serialized setlist to avoid recalculating on every render
+  const serializedSetlist = useMemo(() => serializeSetlistForComparison(setlist), [setlist]);
 
-  // Save to localStorage whenever state changes
+  // Track unsaved changes - only runs when serializedSetlist changes
   useEffect(() => {
-    try {
-      const draft: DraftSetlist = {
-        items: setlist,
-        currentSetlistId,
-        currentSetlistName,
-        lastSavedSnapshot: lastSavedSetlistRef.current
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
-    } catch (e) {
-      console.error('Failed to save draft setlist to localStorage:', e);
-    }
+    setHasUnsavedChanges(serializedSetlist !== lastSavedSetlistRef.current);
+  }, [serializedSetlist]);
+
+  // Persist draft setlist to localStorage whenever it changes
+  useEffect(() => {
+    saveDraftSetlist({
+      items: setlist,
+      currentSetlistId,
+      currentSetlistName,
+      lastSavedSnapshot: lastSavedSetlistRef.current
+    });
   }, [setlist, currentSetlistId, currentSetlistName]);
 
-  // Track unsaved changes
-  useEffect(() => {
-    const currentSetlistJson = JSON.stringify(setlist.map(item => ({
-      type: item.type,
-      songId: item.song?.id,
-      title: item.title,
-      countdownTime: item.countdownTime,
-      countdownMessage: item.countdownMessage,
-      announcementText: item.announcementText,
-      messages: item.messages,
-      messagesInterval: item.messagesInterval,
-      mediaPath: item.mediaPath,
-      presentationId: item.presentation?.id,
-      bibleData: item.bibleData,
-      youtubeVideoId: item.youtubeVideoId
-    })));
-    setHasUnsavedChanges(currentSetlistJson !== lastSavedSetlistRef.current);
-  }, [setlist]);
-
   const updateSavedSnapshot = useCallback((items: SetlistItem[]) => {
-    lastSavedSetlistRef.current = JSON.stringify(items.map(item => ({
-      type: item.type,
-      songId: item.song?.id,
-      title: item.title,
-      countdownTime: item.countdownTime,
-      countdownMessage: item.countdownMessage,
-      announcementText: item.announcementText,
-      messages: item.messages,
-      messagesInterval: item.messagesInterval,
-      mediaPath: item.mediaPath,
-      presentationId: item.presentation?.id,
-      bibleData: item.bibleData,
-      youtubeVideoId: item.youtubeVideoId
-    })));
+    lastSavedSetlistRef.current = serializeSetlistForComparison(items);
     setHasUnsavedChanges(false);
   }, []);
 
@@ -217,9 +226,16 @@ export const SetlistProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setCurrentSetlistId(null);
     lastSavedSetlistRef.current = '[]';
     setHasUnsavedChanges(false);
+    // Clear localStorage draft
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      console.error('[SetlistContext] Failed to clear draft from localStorage:', error);
+    }
   }, []);
 
-  const value: SetlistContextType = {
+  // Memoize context value to prevent unnecessary re-renders of consumers
+  const value: SetlistContextType = useMemo(() => ({
     setlist,
     setSetlist,
     currentSetlistId,
@@ -231,7 +247,14 @@ export const SetlistProvider: React.FC<{ children: React.ReactNode }> = ({ child
     lastSavedSetlistRef,
     updateSavedSnapshot,
     clearSetlist
-  };
+  }), [
+    setlist,
+    currentSetlistId,
+    currentSetlistName,
+    hasUnsavedChanges,
+    updateSavedSnapshot,
+    clearSetlist
+  ]);
 
   return (
     <SetlistContext.Provider value={value}>

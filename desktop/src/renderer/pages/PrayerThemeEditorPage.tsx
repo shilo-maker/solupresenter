@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { theme as appTheme } from '../styles/theme';
 import {
   ThemeCanvas,
   PropertiesPanel,
@@ -67,10 +68,10 @@ const DEFAULT_LINE_POSITIONS: Record<string, LinePosition> = {
 
 const DEFAULT_LINE_STYLES: Record<string, LineStyle> = {
   title: {
-    fontSize: 130, fontWeight: '700', color: '#FF8C42', opacity: 1, visible: true
+    fontSize: 130, fontWeight: '700', color: '#06b6d4', opacity: 1, visible: true
   },
   titleTranslation: {
-    fontSize: 129, fontWeight: '700', color: '#FF8C42', opacity: 0.9, visible: true
+    fontSize: 129, fontWeight: '700', color: '#06b6d4', opacity: 0.9, visible: true
   },
   subtitle: {
     fontSize: 94, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true
@@ -138,10 +139,14 @@ const PrayerThemeEditorPage: React.FC = () => {
     backgroundBoxes: []
   });
 
-  const [selectedElement, setSelectedElement] = useState<{ type: 'line' | 'box' | 'reference' | 'referenceTranslation'; id: string } | null>(null);
+  const [selectedElement, setSelectedElement] = useState<{ type: 'line' | 'box' | 'reference' | 'referenceTranslation' | 'referenceEnglish'; id: string } | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [hasChanges, setHasChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<'layout' | 'background' | 'resolution'>('layout');
+
+  // Drag and drop state for layer reordering
+  const [draggedItem, setDraggedItem] = useState<{ type: 'line' | 'box'; id: string; index: number } | null>(null);
+  const [dragOverItem, setDragOverItem] = useState<{ type: 'line' | 'box'; index: number } | null>(null);
 
   // Preview text for testing (not saved with theme)
   const [previewTexts, setPreviewTexts] = useState<Record<string, string>>({
@@ -163,25 +168,34 @@ const PrayerThemeEditorPage: React.FC = () => {
   useEffect(() => {
     if (themeId) {
       window.electronAPI.getPrayerTheme(themeId).then((loadedTheme: any) => {
-        console.log('[PrayerThemeEditor] Loaded theme from DB:', loadedTheme);
-        console.log('[PrayerThemeEditor] referenceTranslationPosition from DB:', loadedTheme?.referenceTranslationPosition);
         if (loadedTheme) {
+          // Ensure lineOrder includes reference lines (for backwards compatibility with older themes)
+          let lineOrder = loadedTheme.lineOrder || ['title', 'titleTranslation', 'subtitle', 'subtitleTranslation', 'description', 'descriptionTranslation', 'reference', 'referenceTranslation'];
+          if (!lineOrder.includes('reference')) {
+            lineOrder = [...lineOrder, 'reference'];
+          }
+          if (!lineOrder.includes('referenceTranslation')) {
+            lineOrder = [...lineOrder, 'referenceTranslation'];
+          }
+
           setTheme({
-            id: loadedTheme.id,
-            name: loadedTheme.name,
-            isBuiltIn: loadedTheme.isBuiltIn,
+            id: loadedTheme.id || '',
+            name: loadedTheme.name || 'Untitled Theme',
+            isBuiltIn: loadedTheme.isBuiltIn ?? false,
             viewerBackground: loadedTheme.viewerBackground || { type: 'transparent', color: null },
             canvasDimensions: loadedTheme.canvasDimensions || { width: 1920, height: 1080 },
-            lineOrder: loadedTheme.lineOrder || ['title', 'titleTranslation', 'subtitle', 'subtitleTranslation', 'description', 'descriptionTranslation', 'reference', 'referenceTranslation'],
+            lineOrder,
             linePositions: loadedTheme.linePositions || DEFAULT_LINE_POSITIONS,
             lineStyles: loadedTheme.lineStyles || DEFAULT_LINE_STYLES,
-            referenceStyle: loadedTheme.referenceStyle || DEFAULT_REFERENCE_STYLE,
-            referencePosition: loadedTheme.referencePosition || DEFAULT_REFERENCE_POSITION,
-            referenceTranslationStyle: loadedTheme.referenceTranslationStyle || DEFAULT_REFERENCE_TRANSLATION_STYLE,
-            referenceTranslationPosition: loadedTheme.referenceTranslationPosition || DEFAULT_REFERENCE_TRANSLATION_POSITION,
+            referenceStyle: { ...DEFAULT_REFERENCE_STYLE, ...loadedTheme.referenceStyle },
+            referencePosition: { ...DEFAULT_REFERENCE_POSITION, ...loadedTheme.referencePosition },
+            referenceTranslationStyle: { ...DEFAULT_REFERENCE_TRANSLATION_STYLE, ...loadedTheme.referenceTranslationStyle },
+            referenceTranslationPosition: { ...DEFAULT_REFERENCE_TRANSLATION_POSITION, ...loadedTheme.referenceTranslationPosition },
             backgroundBoxes: loadedTheme.backgroundBoxes || []
           });
         }
+      }).catch((error) => {
+        console.error('Failed to load prayer theme:', error);
       });
     }
   }, [themeId]);
@@ -256,6 +270,50 @@ const PrayerThemeEditorPage: React.FC = () => {
     setHasChanges(true);
   }, [theme.backgroundBoxes.length]);
 
+  // Drag and drop handlers for layer reordering
+  const handleDragStart = useCallback((type: 'line' | 'box', id: string, index: number) => {
+    setDraggedItem({ type, id, index });
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, type: 'line' | 'box', index: number) => {
+    e.preventDefault();
+    if (draggedItem && draggedItem.type === type) {
+      setDragOverItem({ type, index });
+    }
+  }, [draggedItem]);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedItem(null);
+    setDragOverItem(null);
+  }, []);
+
+  const handleDrop = useCallback((type: 'line' | 'box', dropIndex: number) => {
+    if (!draggedItem || draggedItem.type !== type) return;
+
+    const dragIndex = draggedItem.index;
+    if (dragIndex === dropIndex) {
+      handleDragEnd();
+      return;
+    }
+
+    if (type === 'line') {
+      // Reorder line order
+      const newLineOrder = [...theme.lineOrder];
+      const [removed] = newLineOrder.splice(dragIndex, 1);
+      newLineOrder.splice(dropIndex, 0, removed);
+      setTheme(prev => ({ ...prev, lineOrder: newLineOrder }));
+    } else {
+      // Reorder background boxes
+      const newBoxes = [...theme.backgroundBoxes];
+      const [removed] = newBoxes.splice(dragIndex, 1);
+      newBoxes.splice(dropIndex, 0, removed);
+      setTheme(prev => ({ ...prev, backgroundBoxes: newBoxes }));
+    }
+
+    setHasChanges(true);
+    handleDragEnd();
+  }, [draggedItem, theme.lineOrder, theme.backgroundBoxes, handleDragEnd]);
+
   const handleSave = async () => {
     setSaveStatus('saving');
     try {
@@ -273,12 +331,8 @@ const PrayerThemeEditorPage: React.FC = () => {
         backgroundBoxes: theme.backgroundBoxes
       };
 
-      console.log('[PrayerThemeEditor] Saving theme data:', themeData);
-      console.log('[PrayerThemeEditor] referenceTranslationPosition:', themeData.referenceTranslationPosition);
-
       if (theme.id) {
-        const result = await window.electronAPI.updatePrayerTheme(theme.id, themeData);
-        console.log('[PrayerThemeEditor] Update result:', result);
+        await window.electronAPI.updatePrayerTheme(theme.id, themeData);
       } else {
         const created = await window.electronAPI.createPrayerTheme(themeData);
         setTheme(prev => ({ ...prev, id: created.id }));
@@ -382,7 +436,7 @@ const PrayerThemeEditorPage: React.FC = () => {
           <div style={{
             padding: '4px 10px',
             borderRadius: '4px',
-            background: 'rgba(255, 140, 66, 0.3)',
+            background: 'rgba(6, 182, 212, 0.3)',
             color: '#ffb380',
             fontSize: '12px',
             fontWeight: 600
@@ -421,7 +475,7 @@ const PrayerThemeEditorPage: React.FC = () => {
                 padding: '10px 24px',
                 borderRadius: '6px',
                 border: 'none',
-                background: saveStatus === 'saved' ? '#28a745' : '#FF8C42',
+                background: saveStatus === 'saved' ? '#28a745' : '#06b6d4',
                 color: 'white',
                 cursor: saveStatus !== 'idle' ? 'not-allowed' : 'pointer',
                 fontWeight: 600,
@@ -451,12 +505,12 @@ const PrayerThemeEditorPage: React.FC = () => {
           <ThemeCanvas
             canvasDimensions={theme.canvasDimensions}
             viewerBackground={theme.viewerBackground}
-            lineOrder={[...textLineTypes, 'reference', 'referenceTranslation'] as any}
+            lineOrder={theme.lineOrder}
             linePositions={allLinePositions}
             lineStyles={allLineStyles}
             backgroundBoxes={theme.backgroundBoxes}
             selectedElement={selectedElement}
-            onSelectElement={setSelectedElement as any}
+            onSelectElement={setSelectedElement}
             onLinePositionChange={handleLinePositionChange}
             onBoxUpdate={handleBoxUpdate}
             onBoxDelete={handleBoxDelete}
@@ -491,11 +545,11 @@ const PrayerThemeEditorPage: React.FC = () => {
                   flex: 1,
                   padding: '12px',
                   border: 'none',
-                  background: activeTab === tab.id ? 'rgba(255,140,66,0.15)' : 'transparent',
-                  color: activeTab === tab.id ? '#FF8C42' : 'rgba(255,255,255,0.6)',
+                  background: activeTab === tab.id ? appTheme.colors.primary.bg : 'transparent',
+                  color: activeTab === tab.id ? '#06b6d4' : 'rgba(255,255,255,0.6)',
                   cursor: 'pointer',
                   fontWeight: activeTab === tab.id ? 600 : 400,
-                  borderBottom: activeTab === tab.id ? '2px solid #FF8C42' : '2px solid transparent'
+                  borderBottom: activeTab === tab.id ? '2px solid #06b6d4' : '2px solid transparent'
                 }}
               >
                 {tab.label}
@@ -532,16 +586,30 @@ const PrayerThemeEditorPage: React.FC = () => {
                       marginBottom: '6px',
                       textTransform: 'uppercase'
                     }}>
-                      Text Lines
+                      Text Lines (drag to reorder)
                     </div>
-                    {textLineTypes.map((lineType) => {
-                      const style = theme.lineStyles[lineType];
-                      const isSelected = selectedElement?.type === 'line' && selectedElement.id === lineType;
+                    {theme.lineOrder.map((lineType, index) => {
+                      // Get style based on line type (reference lines use separate style objects)
+                      const style = lineType === 'reference' ? theme.referenceStyle :
+                                    lineType === 'referenceTranslation' ? theme.referenceTranslationStyle :
+                                    theme.lineStyles[lineType];
+                      // Determine selection type for reference lines
+                      const elementType = lineType === 'reference' ? 'reference' :
+                                          lineType === 'referenceTranslation' ? 'referenceTranslation' : 'line';
+                      const isSelected = selectedElement?.type === elementType && selectedElement.id === lineType;
                       const isVisible = style?.visible !== false;
+                      const isDragging = draggedItem?.type === 'line' && draggedItem.id === lineType;
+                      const isDragOver = dragOverItem?.type === 'line' && dragOverItem.index === index;
+                      const isReferenceType = lineType === 'reference' || lineType === 'referenceTranslation';
                       return (
                         <div
                           key={lineType}
-                          onClick={() => setSelectedElement({ type: 'line', id: lineType })}
+                          draggable
+                          onDragStart={() => handleDragStart('line', lineType, index)}
+                          onDragOver={(e) => handleDragOver(e, 'line', index)}
+                          onDragEnd={handleDragEnd}
+                          onDrop={() => handleDrop('line', index)}
+                          onClick={() => setSelectedElement({ type: elementType, id: lineType })}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -549,12 +617,38 @@ const PrayerThemeEditorPage: React.FC = () => {
                             padding: '8px 10px',
                             marginBottom: '4px',
                             borderRadius: '4px',
-                            background: isSelected ? 'rgba(255,140,66,0.2)' : 'rgba(255,255,255,0.05)',
-                            border: isSelected ? '1px solid rgba(255,140,66,0.5)' : '1px solid transparent',
-                            cursor: 'pointer',
-                            opacity: isVisible ? 1 : 0.5
+                            background: isSelected ? (isReferenceType ? 'rgba(0,212,255,0.2)' : appTheme.colors.primary.bgHover) : 'rgba(255,255,255,0.05)',
+                            border: isDragOver
+                              ? `2px dashed ${appTheme.colors.primary.main}`
+                              : isSelected
+                                ? (isReferenceType ? '1px solid rgba(0,212,255,0.5)' : `1px solid ${appTheme.colors.primary.border}`)
+                                : '1px solid transparent',
+                            cursor: 'grab',
+                            opacity: isDragging ? 0.5 : isVisible ? 1 : 0.5,
+                            transition: 'border 0.15s, opacity 0.15s'
                           }}
                         >
+                          {/* Drag Handle */}
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '2px',
+                            cursor: 'grab',
+                            padding: '2px'
+                          }}>
+                            <div style={{ display: 'flex', gap: '2px' }}>
+                              <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                              <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: '2px' }}>
+                              <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                              <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: '2px' }}>
+                              <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                              <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                            </div>
+                          </div>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -579,105 +673,13 @@ const PrayerThemeEditorPage: React.FC = () => {
                           <span style={{
                             flex: 1,
                             fontSize: '12px',
-                            color: isVisible ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)'
+                            color: isVisible ? (isReferenceType ? '#00d4ff' : 'rgba(255,255,255,0.9)') : 'rgba(255,255,255,0.4)'
                           }}>
-                            {LINE_LABELS[lineType] || lineType}
+                            {isReferenceType ? '📖 ' : ''}{LINE_LABELS[lineType] || lineType}
                           </span>
                         </div>
                       );
                     })}
-
-                    {/* Reference Line (Hebrew) */}
-                    <div
-                      onClick={() => setSelectedElement({ type: 'reference', id: 'reference' })}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px 10px',
-                        marginBottom: '4px',
-                        borderRadius: '4px',
-                        background: selectedElement?.type === 'reference' ? 'rgba(0,212,255,0.2)' : 'rgba(255,255,255,0.05)',
-                        border: selectedElement?.type === 'reference' ? '1px solid rgba(0,212,255,0.5)' : '1px solid transparent',
-                        cursor: 'pointer',
-                        opacity: theme.referenceStyle?.visible !== false ? 1 : 0.5
-                      }}
-                    >
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleLineStyleChange('reference', { ...theme.referenceStyle, visible: !theme.referenceStyle?.visible });
-                        }}
-                        style={{
-                          width: '24px',
-                          height: '24px',
-                          border: 'none',
-                          background: 'transparent',
-                          cursor: 'pointer',
-                          padding: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '14px'
-                        }}
-                        title={theme.referenceStyle?.visible !== false ? 'Hide layer' : 'Show layer'}
-                      >
-                        {theme.referenceStyle?.visible !== false ? '👁️' : '👁️‍🗨️'}
-                      </button>
-                      <span style={{
-                        flex: 1,
-                        fontSize: '12px',
-                        color: theme.referenceStyle?.visible !== false ? '#00d4ff' : 'rgba(255,255,255,0.4)'
-                      }}>
-                        📖 Reference (Hebrew)
-                      </span>
-                    </div>
-
-                    {/* Reference Translation Line (English) */}
-                    <div
-                      onClick={() => setSelectedElement({ type: 'referenceTranslation', id: 'referenceTranslation' })}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px 10px',
-                        marginBottom: '4px',
-                        borderRadius: '4px',
-                        background: selectedElement?.type === 'referenceTranslation' ? 'rgba(0,212,255,0.2)' : 'rgba(255,255,255,0.05)',
-                        border: selectedElement?.type === 'referenceTranslation' ? '1px solid rgba(0,212,255,0.5)' : '1px solid transparent',
-                        cursor: 'pointer',
-                        opacity: theme.referenceTranslationStyle?.visible !== false ? 1 : 0.5
-                      }}
-                    >
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleLineStyleChange('referenceTranslation', { ...theme.referenceTranslationStyle, visible: !theme.referenceTranslationStyle?.visible });
-                        }}
-                        style={{
-                          width: '24px',
-                          height: '24px',
-                          border: 'none',
-                          background: 'transparent',
-                          cursor: 'pointer',
-                          padding: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '14px'
-                        }}
-                        title={theme.referenceTranslationStyle?.visible !== false ? 'Hide layer' : 'Show layer'}
-                      >
-                        {theme.referenceTranslationStyle?.visible !== false ? '👁️' : '👁️‍🗨️'}
-                      </button>
-                      <span style={{
-                        flex: 1,
-                        fontSize: '12px',
-                        color: theme.referenceTranslationStyle?.visible !== false ? '#00d4ff' : 'rgba(255,255,255,0.4)'
-                      }}>
-                        📖 Reference (English)
-                      </span>
-                    </div>
                   </div>
 
                   {/* Background Boxes */}
@@ -689,13 +691,20 @@ const PrayerThemeEditorPage: React.FC = () => {
                         marginBottom: '6px',
                         textTransform: 'uppercase'
                       }}>
-                        Background Boxes
+                        Background Boxes (drag to reorder)
                       </div>
                       {theme.backgroundBoxes.map((box, index) => {
                         const isSelected = selectedElement?.type === 'box' && selectedElement.id === box.id;
+                        const isDragging = draggedItem?.type === 'box' && draggedItem.id === box.id;
+                        const isDragOver = dragOverItem?.type === 'box' && dragOverItem.index === index;
                         return (
                           <div
                             key={box.id}
+                            draggable
+                            onDragStart={() => handleDragStart('box', box.id, index)}
+                            onDragOver={(e) => handleDragOver(e, 'box', index)}
+                            onDragEnd={handleDragEnd}
+                            onDrop={() => handleDrop('box', index)}
                             onClick={() => setSelectedElement({ type: 'box', id: box.id })}
                             style={{
                               display: 'flex',
@@ -704,12 +713,46 @@ const PrayerThemeEditorPage: React.FC = () => {
                               padding: '8px 10px',
                               marginBottom: '4px',
                               borderRadius: '4px',
-                              background: isSelected ? 'rgba(255,140,66,0.2)' : 'rgba(255,255,255,0.05)',
-                              border: isSelected ? '1px solid rgba(255,140,66,0.5)' : '1px solid transparent',
-                              cursor: 'pointer'
+                              background: isSelected ? appTheme.colors.primary.bgHover : 'rgba(255,255,255,0.05)',
+                              border: isDragOver
+                                ? `2px dashed ${appTheme.colors.primary.main}`
+                                : isSelected
+                                  ? `1px solid ${appTheme.colors.primary.border}`
+                                  : '1px solid transparent',
+                              cursor: 'grab',
+                              opacity: isDragging ? 0.5 : 1,
+                              transition: 'border 0.15s, opacity 0.15s'
                             }}
                           >
-                            <span style={{ fontSize: '14px' }}>◻️</span>
+                            {/* Drag Handle */}
+                            <div style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '2px',
+                              cursor: 'grab',
+                              padding: '2px'
+                            }}>
+                              <div style={{ display: 'flex', gap: '2px' }}>
+                                <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                                <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                              </div>
+                              <div style={{ display: 'flex', gap: '2px' }}>
+                                <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                                <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                              </div>
+                              <div style={{ display: 'flex', gap: '2px' }}>
+                                <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                                <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' }} />
+                              </div>
+                            </div>
+                            {/* Box Color Preview */}
+                            <div style={{
+                              width: '16px',
+                              height: '16px',
+                              borderRadius: '3px',
+                              background: box.color,
+                              border: '1px solid rgba(255,255,255,0.2)'
+                            }} />
                             <span style={{
                               flex: 1,
                               fontSize: '12px',
@@ -750,6 +793,7 @@ const PrayerThemeEditorPage: React.FC = () => {
                     style={getSelectedStyle()!}
                     onPositionChange={(pos) => handleLinePositionChange(selectedLineType, pos)}
                     onStyleChange={(style) => handleLineStyleChange(selectedLineType, style)}
+                    availableLineTypes={theme.lineOrder}
                   />
                 )}
 

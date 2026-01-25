@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Spinner, Alert, Badge, Toast, ToastContainer } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Spinner, Alert, Badge } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
@@ -10,24 +10,23 @@ function SetlistList() {
   const [setlists, setSetlists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   useEffect(() => {
-    fetchSetlists();
-  }, []);
+    const fetchSetlists = async () => {
+      try {
+        setLoading(true);
+        const response = await api.get('/api/setlists');
+        setSetlists(response.data.setlists);
+      } catch (err) {
+        console.error('Error fetching setlists:', err);
+        setError(err.response?.data?.error || t('setlists.failedToLoad'));
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const fetchSetlists = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get('/api/setlists');
-      setSetlists(response.data.setlists);
-    } catch (error) {
-      console.error('Error fetching setlists:', error);
-      setError(error.response?.data?.error || t('setlists.failedToLoad'));
-    } finally {
-      setLoading(false);
-    }
-  };
+    fetchSetlists();
+  }, [t]);
 
   const deleteSetlist = async (id) => {
     if (!window.confirm(t('setlists.deleteSetlistConfirm'))) {
@@ -37,9 +36,9 @@ function SetlistList() {
     try {
       await api.delete(`/api/setlists/${id}`);
       setSetlists(setlists.filter(s => s.id !== id));
-    } catch (error) {
-      console.error('Error deleting setlist:', error);
-      alert(error.response?.data?.error || t('setlists.failedToDelete'));
+    } catch (err) {
+      console.error('Error deleting setlist:', err);
+      alert(err.response?.data?.error || t('setlists.failedToDelete'));
     }
   };
 

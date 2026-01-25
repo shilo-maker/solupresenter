@@ -262,7 +262,7 @@ const PropertiesPanel = ({
                   <Form.Label style={{ color: '#a0aec0', fontSize: '0.8rem' }}>
                     {t('themes.horizontal', 'Horizontal')}
                   </Form.Label>
-                  <ButtonGroup className="w-100" size="sm">
+                  <ButtonGroup className="w-100" size="sm" style={{ direction: 'ltr' }}>
                     <Button
                       variant={position.alignH === 'left' ? 'primary' : 'outline-secondary'}
                       onClick={() => onPositionChange('alignH', 'left')}
@@ -297,7 +297,7 @@ const PropertiesPanel = ({
                   <Form.Label style={{ color: '#a0aec0', fontSize: '0.8rem' }}>
                     {t('themes.vertical', 'Vertical')}
                   </Form.Label>
-                  <ButtonGroup className="w-100" size="sm">
+                  <ButtonGroup className="w-100" size="sm" style={{ direction: 'ltr' }}>
                     <Button
                       variant={position.alignV === 'top' ? 'primary' : 'outline-secondary'}
                       onClick={() => onPositionChange('alignV', 'top')}

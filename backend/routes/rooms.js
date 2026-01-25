@@ -82,7 +82,6 @@ router.post('/create', authenticateToken, async (req, res) => {
       }
       if (roomData.linkedPermanentSetlist) {
         roomData.linkedPermanentSetlist = await populateSetlistItems(room.linkedPermanentSetlist);
-        console.log('📋 Populated linked setlist:', JSON.stringify(roomData.linkedPermanentSetlist.items[0], null, 2));
       }
 
       return res.json({ room: roomData });
@@ -354,7 +353,7 @@ router.post('/:id/link-setlist', authenticateToken, async (req, res) => {
       return item;
     }));
 
-    const responseData = {
+    res.json({
       message: 'Setlist linked successfully',
       room: { linkedPermanentSetlist: setlistId },
       setlist: {
@@ -362,11 +361,7 @@ router.post('/:id/link-setlist', authenticateToken, async (req, res) => {
         name: setlist.name,
         songs
       }
-    };
-
-    console.log('Sending link-setlist response:', JSON.stringify(responseData, null, 2));
-
-    res.json(responseData);
+    });
   } catch (error) {
     console.error('Error linking setlist:', error);
     res.status(500).json({ error: 'Failed to link setlist' });
@@ -415,7 +410,6 @@ router.post('/:id/link-public-room', authenticateToken, async (req, res) => {
     // Notify all current viewers that the broadcast is changing and disconnect them
     const io = req.app.get('io');
     if (io) {
-      console.log(`📢 Emitting room:closed to room:${room.pin} - broadcast room changed`);
       io.to(`room:${room.pin}`).emit('room:closed', {
         message: 'The presenter has changed the broadcast room'
       });

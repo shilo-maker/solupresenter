@@ -1,4 +1,4 @@
-import { getDb, saveDatabase, generateId, queryAll, queryOne, CLASSIC_PRAYER_THEME_ID } from './index';
+import { getDb, saveDatabase, generateId, queryAll, queryOne, CLASSIC_PRAYER_THEME_ID, createBackup } from './index';
 
 export interface PrayerThemeData {
   name: string;
@@ -74,40 +74,68 @@ export async function createPrayerTheme(data: PrayerThemeData): Promise<any> {
   const defaultReferenceTranslationStyle = { fontSize: 60, fontWeight: '400', color: '#ffffff', opacity: 0.7, visible: true };
   const defaultReferenceTranslationPosition = { x: 0, y: 70.32, width: 100, height: 8, paddingTop: 0, paddingBottom: 0, alignH: 'left', alignV: 'center' };
 
+  // Prepare values for return
+  const lineOrder = data.lineOrder || ['title', 'titleTranslation', 'subtitle', 'subtitleTranslation', 'description', 'descriptionTranslation', 'reference', 'referenceTranslation'];
+  const lineStyles = data.lineStyles || defaultStyles;
+  const linePositions = data.linePositions || defaultPositions;
+  const referenceStyle = data.referenceStyle || defaultReferenceStyle;
+  const referencePosition = data.referencePosition || defaultReferencePosition;
+  const referenceTranslationStyle = data.referenceTranslationStyle || defaultReferenceTranslationStyle;
+  const referenceTranslationPosition = data.referenceTranslationPosition || defaultReferenceTranslationPosition;
+  const container = data.container || { maxWidth: '100%', padding: '2vh 6vw', backgroundColor: 'transparent', borderRadius: '0px' };
+  const viewerBackground = data.viewerBackground || { type: 'transparent', color: null };
+  const canvasDimensions = data.canvasDimensions || { width: 1920, height: 1080 };
+  const backgroundBoxes = data.backgroundBoxes || null;
+
   db.run(`
     INSERT INTO prayer_themes (id, name, isBuiltIn, isDefault, lineOrder, lineStyles, linePositions, referenceStyle, referencePosition, referenceTranslationStyle, referenceTranslationPosition, container, viewerBackground, canvasDimensions, backgroundBoxes, createdAt, updatedAt)
     VALUES (?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     id,
     data.name,
-    JSON.stringify(data.lineOrder || ['title', 'titleTranslation', 'subtitle', 'subtitleTranslation', 'description', 'descriptionTranslation', 'reference', 'referenceTranslation']),
-    JSON.stringify(data.lineStyles || defaultStyles),
-    JSON.stringify(data.linePositions || defaultPositions),
-    JSON.stringify(data.referenceStyle || defaultReferenceStyle),
-    JSON.stringify(data.referencePosition || defaultReferencePosition),
-    JSON.stringify(data.referenceTranslationStyle || defaultReferenceTranslationStyle),
-    JSON.stringify(data.referenceTranslationPosition || defaultReferenceTranslationPosition),
-    JSON.stringify(data.container || { maxWidth: '100%', padding: '2vh 6vw', backgroundColor: 'transparent', borderRadius: '0px' }),
-    JSON.stringify(data.viewerBackground || { type: 'transparent', color: null }),
-    JSON.stringify(data.canvasDimensions || { width: 1920, height: 1080 }),
-    data.backgroundBoxes ? JSON.stringify(data.backgroundBoxes) : null,
+    JSON.stringify(lineOrder),
+    JSON.stringify(lineStyles),
+    JSON.stringify(linePositions),
+    JSON.stringify(referenceStyle),
+    JSON.stringify(referencePosition),
+    JSON.stringify(referenceTranslationStyle),
+    JSON.stringify(referenceTranslationPosition),
+    JSON.stringify(container),
+    JSON.stringify(viewerBackground),
+    JSON.stringify(canvasDimensions),
+    backgroundBoxes ? JSON.stringify(backgroundBoxes) : null,
     now,
     now
   ]);
 
   saveDatabase();
-  return getPrayerTheme(id);
+
+  // Return the created object directly instead of re-querying
+  return {
+    id,
+    name: data.name,
+    isBuiltIn: 0,
+    isDefault: 0,
+    lineOrder,
+    lineStyles,
+    linePositions,
+    referenceStyle,
+    referencePosition,
+    referenceTranslationStyle,
+    referenceTranslationPosition,
+    container,
+    viewerBackground,
+    canvasDimensions,
+    backgroundBoxes,
+    createdAt: now,
+    updatedAt: now
+  };
 }
 
 /**
  * Update an existing Prayer theme
  */
 export async function updatePrayerTheme(id: string, data: Partial<PrayerThemeData>): Promise<any | null> {
-  console.log('[prayerThemes] updatePrayerTheme called with id:', id);
-  console.log('[prayerThemes] updatePrayerTheme data:', JSON.stringify(data, null, 2));
-  console.log('[prayerThemes] referenceTranslationPosition:', data.referenceTranslationPosition);
-  console.log('[prayerThemes] referenceTranslationStyle:', data.referenceTranslationStyle);
-
   const db = getDb();
   if (!db) return null;
 
@@ -121,70 +149,82 @@ export async function updatePrayerTheme(id: string, data: Partial<PrayerThemeDat
 
   const updates: string[] = [];
   const values: any[] = [];
+  const now = new Date().toISOString();
+
+  // Track updated values for return object
+  const updatedTheme = { ...existing };
 
   if (data.name !== undefined) {
     updates.push('name = ?');
     values.push(data.name);
+    updatedTheme.name = data.name;
   }
   if (data.lineOrder !== undefined) {
     updates.push('lineOrder = ?');
     values.push(JSON.stringify(data.lineOrder));
+    updatedTheme.lineOrder = data.lineOrder;
   }
   if (data.lineStyles !== undefined) {
     updates.push('lineStyles = ?');
     values.push(JSON.stringify(data.lineStyles));
+    updatedTheme.lineStyles = data.lineStyles;
   }
   if (data.linePositions !== undefined) {
     updates.push('linePositions = ?');
     values.push(data.linePositions ? JSON.stringify(data.linePositions) : null);
+    updatedTheme.linePositions = data.linePositions;
   }
   if (data.referenceStyle !== undefined) {
     updates.push('referenceStyle = ?');
     values.push(JSON.stringify(data.referenceStyle));
+    updatedTheme.referenceStyle = data.referenceStyle;
   }
   if (data.referencePosition !== undefined) {
     updates.push('referencePosition = ?');
     values.push(data.referencePosition ? JSON.stringify(data.referencePosition) : null);
+    updatedTheme.referencePosition = data.referencePosition;
   }
   if (data.referenceTranslationStyle !== undefined) {
     updates.push('referenceTranslationStyle = ?');
     values.push(JSON.stringify(data.referenceTranslationStyle));
+    updatedTheme.referenceTranslationStyle = data.referenceTranslationStyle;
   }
   if (data.referenceTranslationPosition !== undefined) {
     updates.push('referenceTranslationPosition = ?');
     values.push(data.referenceTranslationPosition ? JSON.stringify(data.referenceTranslationPosition) : null);
+    updatedTheme.referenceTranslationPosition = data.referenceTranslationPosition;
   }
   if (data.container !== undefined) {
     updates.push('container = ?');
     values.push(JSON.stringify(data.container));
+    updatedTheme.container = data.container;
   }
   if (data.viewerBackground !== undefined) {
     updates.push('viewerBackground = ?');
     values.push(JSON.stringify(data.viewerBackground));
+    updatedTheme.viewerBackground = data.viewerBackground;
   }
   if (data.canvasDimensions !== undefined) {
     updates.push('canvasDimensions = ?');
     values.push(JSON.stringify(data.canvasDimensions));
+    updatedTheme.canvasDimensions = data.canvasDimensions;
   }
   if (data.backgroundBoxes !== undefined) {
     updates.push('backgroundBoxes = ?');
     values.push(data.backgroundBoxes ? JSON.stringify(data.backgroundBoxes) : null);
+    updatedTheme.backgroundBoxes = data.backgroundBoxes;
   }
 
   updates.push('updatedAt = ?');
-  values.push(new Date().toISOString());
+  values.push(now);
   values.push(id);
+  updatedTheme.updatedAt = now;
 
-  const sql = `UPDATE prayer_themes SET ${updates.join(', ')} WHERE id = ?`;
-  console.log('[prayerThemes] Running SQL:', sql);
-  console.log('[prayerThemes] With values:', values);
-
-  db.run(sql, values);
+  db.run(`UPDATE prayer_themes SET ${updates.join(', ')} WHERE id = ?`, values);
   saveDatabase();
 
-  const result = await getPrayerTheme(id);
-  console.log('[prayerThemes] After update, theme has referenceTranslationPosition:', result?.referenceTranslationPosition);
-  return result;
+  // Return the updated object directly instead of re-querying
+  return updatedTheme;
 }
 
 /**
@@ -194,6 +234,9 @@ export async function deletePrayerTheme(id: string): Promise<boolean> {
   const db = getDb();
   if (!db) return false;
 
+  // Validate input
+  if (!id || typeof id !== 'string') return false;
+
   const existing = await getPrayerTheme(id);
   if (!existing) return false;
 
@@ -202,7 +245,15 @@ export async function deletePrayerTheme(id: string): Promise<boolean> {
     throw new Error('Cannot delete built-in theme');
   }
 
-  db.run(`DELETE FROM prayer_themes WHERE id = ?`, [id]);
-  saveDatabase();
-  return true;
+  // Create backup before destructive operation
+  createBackup('delete_prayer_theme');
+
+  try {
+    db.run(`DELETE FROM prayer_themes WHERE id = ?`, [id]);
+    saveDatabase();
+    return true;
+  } catch (error) {
+    console.error('[prayerThemes] deletePrayerTheme error:', error);
+    throw new Error(`Failed to delete Prayer theme: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }

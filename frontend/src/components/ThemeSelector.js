@@ -10,7 +10,6 @@ function ThemeSelector({ roomId }) {
   const [themes, setThemes] = useState([]);
   const [activeThemeId, setActiveThemeId] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
   const dropdownRef = useRef(null);
 
   // Fetch themes and default theme on mount
@@ -35,8 +34,6 @@ function ThemeSelector({ roomId }) {
         }
       } catch (error) {
         console.error('Error fetching themes:', error);
-      } finally {
-        setLoading(false);
       }
     };
     fetchThemesAndDefault();

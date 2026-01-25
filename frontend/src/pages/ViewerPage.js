@@ -70,17 +70,16 @@ function ViewerPage({ remotePin, remoteConfig }) {
   // Announcement animation state
   const [announcementBanner, setAnnouncementBanner] = useState({ visible: false, text: '', animating: false });
   const [localMediaOverlay, setLocalMediaOverlay] = useState(false);
+  // Rotating messages state (for desktop app format: type: 'rotatingMessages' with messages array)
+  const [rotatingMessageIndex, setRotatingMessageIndex] = useState(0);
+  const rotatingMessagesIntervalRef = useRef(null);
 
   // YouTube state
   const [youtubeVideoId, setYoutubeVideoId] = useState(null);
-  const [youtubeTitle, setYoutubeTitle] = useState('');
-  const [youtubePlaying, setYoutubePlaying] = useState(false);
-  const [youtubeCurrentTime, setYoutubeCurrentTime] = useState(0);
   const youtubePlayerRef = useRef(null);
   const youtubeReadyRef = useRef(false);
   const [youtubeAPIReady, setYoutubeAPIReady] = useState(false);
   const youtubePlayingRef = useRef(false); // Ref to avoid stale closure in sync handler
-  const [youtubeMuted, setYoutubeMuted] = useState(true); // Start muted for autoplay
   const currentPinRef = useRef(null); // Store current room pin for YouTube ready callback
 
   // Helper function to properly clean up YouTube player before state change
@@ -91,14 +90,12 @@ function ViewerPage({ remotePin, remoteConfig }) {
           youtubePlayerRef.current.destroy();
         }
       } catch (e) {
-        console.log('YouTube player cleanup error (safe to ignore):', e);
+        // YouTube player cleanup error (safe to ignore)
       }
       youtubePlayerRef.current = null;
       youtubeReadyRef.current = false;
     }
     setYoutubeVideoId(null);
-    setYoutubeTitle('');
-    setYoutubePlaying(false);
     youtubePlayingRef.current = false;
   }, []);
 
@@ -129,7 +126,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
 
     // Define the callback that YouTube API calls when ready
     window.onYouTubeIframeAPIReady = () => {
-      console.log('YouTube IFrame API ready');
       setYoutubeAPIReady(true);
     };
 
@@ -146,7 +142,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
   useEffect(() => {
     if (youtubeVideoId && youtubeAPIReady) {
       youtubeReadyRef.current = false;
-      setYoutubeMuted(true); // Reset muted state for new video
       youtubePlayerRef.current = new window.YT.Player('youtube-player', {
         videoId: youtubeVideoId,
         playerVars: {
@@ -163,12 +158,10 @@ function ViewerPage({ remotePin, remoteConfig }) {
         },
         events: {
           onReady: () => {
-            console.log('YouTube player ready (muted autoplay)');
             youtubeReadyRef.current = true;
             // Signal to operator that viewer's YouTube player is ready
             if (currentPinRef.current) {
               socketService.viewerYoutubeReady(currentPinRef.current);
-              console.log('Signaled YouTube ready to operator');
             }
           }
         }
@@ -243,7 +236,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
     const checkInactivity = () => {
       const timeSinceLastActivity = Date.now() - lastActivityRef.current;
       if (timeSinceLastActivity >= INACTIVITY_TIMEOUT) {
-        console.log('⏰ Inactivity timeout reached (1 hour). Resetting view...');
         // Reset to join screen
         setJoined(false);
         setCurrentSlide(null);
@@ -266,6 +258,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
     return () => {
       clearInterval(inactivityInterval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- INACTIVITY_TIMEOUT is a constant that never changes
   }, [joined]);
 
   // Clock timer effect - updates every second when clock is displayed
@@ -362,26 +355,48 @@ function ViewerPage({ remotePin, remoteConfig }) {
       // Tool type changed away from announcement - hide immediately
       setAnnouncementBanner({ visible: false, text: '', animating: false });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- We only want to react to specific announcement properties (visible, text), not the whole object
   }, [toolsData?.type, toolsData?.announcement?.visible, toolsData?.announcement?.text, announcementBanner.visible, announcementBanner.text]);
 
+  // Handle rotating messages (desktop app format: type: 'rotatingMessages' with messages array)
   useEffect(() => {
-    console.log('🚀 Component mounted');
-    console.log(`📍 URL: ${window.location.href}`);
+    if (toolsData?.type === 'rotatingMessages' && toolsData?.active && toolsData?.messages?.length > 0) {
+      // Clear any existing interval
+      if (rotatingMessagesIntervalRef.current) {
+        clearInterval(rotatingMessagesIntervalRef.current);
+      }
+      // Reset index when messages change
+      setRotatingMessageIndex(0);
+      // Set up rotation interval
+      const intervalMs = (toolsData.interval || 5) * 1000;
+      rotatingMessagesIntervalRef.current = setInterval(() => {
+        setRotatingMessageIndex(prev => (prev + 1) % toolsData.messages.length);
+      }, intervalMs);
+    } else {
+      // Clear interval if not active
+      if (rotatingMessagesIntervalRef.current) {
+        clearInterval(rotatingMessagesIntervalRef.current);
+        rotatingMessagesIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (rotatingMessagesIntervalRef.current) {
+        clearInterval(rotatingMessagesIntervalRef.current);
+      }
+    };
+  }, [toolsData?.type, toolsData?.active, toolsData?.messages, toolsData?.interval]);
 
+  useEffect(() => {
     socketService.connect();
-    console.log('🔌 Connecting to socket...');
 
     // Subscribe to connection status changes
     const unsubscribe = socketService.onConnectionStatusChange((status, currentLatency) => {
-      console.log(`🔌 Connection: ${status} (${currentLatency}ms)`);
       setConnectionStatus(status);
       setLatency(currentLatency);
     });
 
     // Set up event listeners first
     socketService.onViewerJoined(async (data) => {
-      console.log('✅ Joined room successfully!');
-      console.log(`📊 Room data received: ${JSON.stringify(data.currentSlide)}`);
       lastActivityRef.current = Date.now(); // Reset inactivity timer
       setJoined(true);
       // Store room pin for YouTube ready callback
@@ -427,13 +442,11 @@ function ViewerPage({ remotePin, remoteConfig }) {
 
       // Handle theme data for new viewers (skip if using fixed theme from remote config)
       if (data.theme && !hasFixedTheme) {
-        console.log('🎨 Initial theme for new viewer:', data.theme);
         setViewerTheme(data.theme);
       }
 
       // Handle tools data for new viewers
       if (data.toolsData) {
-        console.log('🔧 Initial toolsData for new viewer:', data.toolsData);
         setToolsData(data.toolsData);
 
         // Handle countdown timing sync
@@ -464,7 +477,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
 
       // Handle local media active status for new viewers
       if (data.localMediaActive) {
-        console.log('📺 Local media is active on join');
         setLocalMediaOverlay(true);
       }
 
@@ -473,14 +485,12 @@ function ViewerPage({ remotePin, remoteConfig }) {
 
     socketService.onSlideUpdate((data) => {
       lastActivityRef.current = Date.now();
-      console.log('📡 slide:update received:', { hasToolsData: !!data.toolsData, toolsType: data.toolsData?.type, isBlank: data.isBlank });
 
       // Clear YouTube video when presenting any other content (destroy player first to avoid React DOM errors)
       cleanupYoutubePlayer();
 
       // Handle tools data
       if (data.toolsData) {
-        console.log('🔧 Setting toolsData:', data.toolsData);
         setToolsData(data.toolsData);
 
         // Announcements are overlays - don't clear existing content
@@ -533,7 +543,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
         setToolsData(prev => prev?.type === 'announcement' ? prev : null);
       } else if (data.localMedia) {
         // Handle local media (Base64 images from operator)
-        console.log('🖼️ Received local media:', data.localMedia.type, data.localMedia.fileName);
         setPresentationData(null);
         setLocalMedia(data.localMedia);
         setCurrentSlide(null);
@@ -581,7 +590,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
 
     // Handle room closed by presenter
     socketService.onRoomClosed((data) => {
-      console.log('🚪 Room closed by presenter:', data.message);
       // Reset to join screen
       setJoined(false);
       setCurrentSlide(null);
@@ -598,24 +606,28 @@ function ViewerPage({ remotePin, remoteConfig }) {
     // Handle theme updates from operator (skip if using fixed theme from remote config)
     socketService.onThemeUpdate((data) => {
       if (!hasFixedTheme) {
-        console.log('🎨 Theme update received:', data.theme);
         setViewerTheme(data.theme);
       }
     });
 
     // Handle local media status (show overlay when operator displays local media on HDMI)
     socketService.onLocalMediaStatus((data) => {
-      console.log('📺 Local media status received:', data.visible);
       setLocalMediaOverlay(data.visible);
+    });
+
+    // Handle standalone tool updates from operator (countdown, clock, stopwatch, announcement, rotatingMessages)
+    socketService.onToolsUpdate((toolData) => {
+      if (toolData && toolData.type) {
+        setToolsData(toolData);
+      } else if (toolData && !toolData.active) {
+        // Tool was stopped
+        setToolsData(null);
+      }
     });
 
     // YouTube socket listeners
     socketService.onYoutubeLoad((data) => {
-      console.log('▶️ YouTube load:', data.videoId);
       setYoutubeVideoId(data.videoId);
-      setYoutubeTitle(data.title);
-      setYoutubePlaying(false);
-      setYoutubeCurrentTime(0);
       // Clear other content
       setCurrentSlide(null);
       setImageUrl(null);
@@ -624,42 +636,32 @@ function ViewerPage({ remotePin, remoteConfig }) {
     });
 
     socketService.onYoutubePlay((data) => {
-      console.log('▶️ YouTube play at', data.currentTime);
-      setYoutubePlaying(true);
       youtubePlayingRef.current = true;
-      setYoutubeCurrentTime(data.currentTime);
       if (youtubePlayerRef.current && youtubeReadyRef.current) {
         youtubePlayerRef.current.seekTo(data.currentTime, true);
         youtubePlayerRef.current.playVideo();
       }
     });
 
-    socketService.onYoutubePause((data) => {
-      console.log('⏸️ YouTube pause at', data.currentTime);
-      setYoutubePlaying(false);
+    socketService.onYoutubePause(() => {
       youtubePlayingRef.current = false;
-      setYoutubeCurrentTime(data.currentTime);
       if (youtubePlayerRef.current && youtubeReadyRef.current) {
         youtubePlayerRef.current.pauseVideo();
       }
     });
 
     socketService.onYoutubeSeek((data) => {
-      setYoutubeCurrentTime(data.currentTime);
       if (youtubePlayerRef.current && youtubeReadyRef.current) {
         const currentPlayerTime = youtubePlayerRef.current.getCurrentTime();
         // Only seek if more than 1 second off to avoid stuttering
         if (Math.abs(currentPlayerTime - data.currentTime) > 1) {
-          console.log('⏩ YouTube sync: drift', Math.abs(currentPlayerTime - data.currentTime).toFixed(2), 's, seeking to', data.currentTime);
           youtubePlayerRef.current.seekTo(data.currentTime, true);
         }
       }
     });
 
     socketService.onYoutubeStop(() => {
-      console.log('🛑 YouTube stop');
       cleanupYoutubePlayer();
-      setYoutubeCurrentTime(0);
     });
 
     socketService.onYoutubeSync((data) => {
@@ -672,11 +674,9 @@ function ViewerPage({ remotePin, remoteConfig }) {
         // Use ref instead of state to avoid stale closure
         if (data.isPlaying && !youtubePlayingRef.current) {
           youtubePlayerRef.current.playVideo();
-          setYoutubePlaying(true);
           youtubePlayingRef.current = true;
         } else if (!data.isPlaying && youtubePlayingRef.current) {
           youtubePlayerRef.current.pauseVideo();
-          setYoutubePlaying(false);
           youtubePlayingRef.current = false;
         }
       }
@@ -690,36 +690,24 @@ function ViewerPage({ remotePin, remoteConfig }) {
 
     // Local display mode - Presentation API opens in fullscreen automatically
     if (isLocalViewer) {
-      console.log('🖥️ Local viewer mode - opened via Presentation API');
-
       // Set up Presentation API receiver to listen for video data from presenter
       if (navigator.presentation && navigator.presentation.receiver) {
-        console.log('📺 Setting up Presentation API receiver...');
-
         let videoChunks = [];
         let videoMeta = null;
 
         navigator.presentation.receiver.connectionList.then((connectionList) => {
-          console.log('📺 Got connection list, connections:', connectionList.connections.length);
-
           const handleConnection = (connection) => {
-            console.log('📺 Presentation connection established');
 
             connection.onmessage = (event) => {
               try {
                 const data = JSON.parse(event.data);
 
                 if (data.type === 'videoStart') {
-                  console.log(`🎬 Starting video receive: ${data.fileName} (${data.totalChunks} chunks)`);
                   videoChunks = [];
                   videoMeta = data;
                 } else if (data.type === 'videoChunk') {
                   videoChunks[data.chunkIndex] = data.data;
-                  if (data.chunkIndex % 10 === 0) {
-                    console.log(`🎬 Received chunk ${data.chunkIndex + 1}/${videoMeta?.totalChunks || '?'}`);
-                  }
                 } else if (data.type === 'videoEnd') {
-                  console.log('🎬 Video transfer complete, assembling...');
 
                   // Convert Base64 chunks back to Uint8Array
                   const allChunks = [];
@@ -744,7 +732,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
                   // Create blob and URL
                   const blob = new Blob([combined], { type: videoMeta?.mimeType || 'video/mp4' });
                   const blobUrl = URL.createObjectURL(blob);
-                  console.log('🎬 Video assembled, blob URL created');
 
                   setLocalVideo({
                     data: blobUrl,
@@ -758,36 +745,29 @@ function ViewerPage({ remotePin, remoteConfig }) {
                   videoChunks = [];
                   videoMeta = null;
                 } else if (data.type === 'stopLocalVideo') {
-                  console.log('🛑 Stopping local video');
                   setLocalVideo(null);
                 } else if (data.type === 'videoPause') {
-                  console.log('⏸️ Pausing video');
                   if (localVideoRef.current) {
                     localVideoRef.current.pause();
                   }
                 } else if (data.type === 'videoPlay') {
-                  console.log('▶️ Playing video');
                   if (localVideoRef.current) {
-                    localVideoRef.current.play().catch(err => console.log('Play failed:', err));
+                    localVideoRef.current.play().catch(() => {});
                   }
                 } else if (data.type === 'videoSeek') {
-                  console.log('⏩ Seeking video to:', data.time);
                   if (localVideoRef.current) {
                     localVideoRef.current.currentTime = data.time;
                   }
                 } else if (data.type === 'videoVolume') {
-                  console.log('🔊 Setting video volume to:', data.volume);
                   if (localVideoRef.current) {
                     localVideoRef.current.volume = data.volume;
                     localVideoRef.current.muted = false;
                   }
                 } else if (data.type === 'videoMute') {
-                  console.log('🔇 Setting video mute:', data.muted);
                   if (localVideoRef.current) {
                     localVideoRef.current.muted = data.muted;
                   }
                 } else if (data.type === 'showImage') {
-                  console.log('🖼️ Showing image:', data.fileName);
                   setLocalMedia({
                     type: 'image',
                     data: data.data,
@@ -796,7 +776,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
                   setLocalVideo(null); // Hide any video
                   setCurrentSlide(null);
                 } else if (data.type === 'hideImage') {
-                  console.log('🖼️ Hiding image');
                   setLocalMedia(null);
                 }
               } catch (err) {
@@ -810,43 +789,34 @@ function ViewerPage({ remotePin, remoteConfig }) {
 
           // Handle new connections
           connectionList.onconnectionavailable = (event) => {
-            console.log('📺 New presentation connection available');
             handleConnection(event.connection);
           };
-        }).catch((err) => {
-          console.log('📺 Presentation receiver not available:', err.message);
+        }).catch(() => {
+          // Presentation receiver not available
         });
       }
     }
 
     // Check for remotePin prop first (from RemoteScreen component)
     if (remotePin) {
-      console.log(`🖥️ Remote screen PIN provided: ${remotePin.toUpperCase()}`);
       setPin(remotePin.toUpperCase());
       setTimeout(() => {
-        console.log(`🚪 Auto-joining room via remote screen: ${remotePin.toUpperCase()}`);
         socketService.viewerJoinRoom(remotePin.toUpperCase());
       }, 500);
     } else if (urlRoom) {
       // Auto-join by room name (slug)
-      console.log(`🏠 Room name found in URL: ${urlRoom}`);
       setJoinMode('name');
       setRoomSearch(urlRoom);
       // Auto-join with the room slug from URL after a short delay to ensure socket is connected
       setTimeout(() => {
-        console.log(`🚪 Auto-joining room by name: ${urlRoom}`);
         socketService.viewerJoinRoomBySlug(urlRoom.toLowerCase());
       }, 500);
     } else if (urlPin) {
-      console.log(`🔑 PIN found in URL: ${urlPin.toUpperCase()}`);
       setPin(urlPin.toUpperCase());
       // Auto-join with the PIN from URL after a short delay to ensure socket is connected
       setTimeout(() => {
-        console.log(`🚪 Auto-joining room: ${urlPin.toUpperCase()}`);
         socketService.viewerJoinRoom(urlPin.toUpperCase());
       }, 500);
-    } else {
-      console.log('⚠️ No PIN or room name in URL - waiting for manual entry');
     }
 
     return () => {
@@ -912,7 +882,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
         const videoData = await loadVideoFromIndexedDB();
         // Check if this is a new video (different timestamp)
         if (videoData.timestamp && videoData.timestamp > lastVideoTimestamp) {
-          console.log('🎬 New video detected in IndexedDB:', videoData.fileName);
           lastVideoTimestamp = videoData.timestamp;
           setLocalVideo({
             data: videoData.blobUrl,
@@ -933,7 +902,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
       if (event.key !== 'solupresenter-local-video') return;
 
       if (!event.newValue) {
-        console.log('🛑 Local video cleared via storage event');
         setLocalVideo(null);
         return;
       }
@@ -941,10 +909,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
       try {
         const data = JSON.parse(event.newValue);
         if (data.type === 'localVideo') {
-          console.log('🎬 Received video signal via storage event:', data.fileName);
           await checkForNewVideo();
         } else if (data.type === 'stopLocalVideo') {
-          console.log('🛑 Stopping local video');
           setLocalVideo(null);
         }
       } catch (err) {
@@ -953,7 +919,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
     };
 
     window.addEventListener('storage', handleStorageChange);
-    console.log('👂 Local viewer listening for video (polling + storage events)');
 
     // Check immediately on mount
     checkForNewVideo();
@@ -1346,7 +1311,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
 
     // Handle tools display (except announcements which are overlays)
     if (toolsData && toolsData.type !== 'announcement') {
-      console.log('🎨 renderSlide - toolsData:', toolsData.type, toolsData);
       const toolsStyle = {
         width: '100%',
         height: '100%',
@@ -1419,7 +1383,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
         );
       }
 
-      // Rotating message display
+      // Rotating message display (legacy single message format)
       if (toolsData.type === 'rotatingMessage') {
         const { text } = toolsData.rotatingMessage || {};
         return (
@@ -1435,6 +1399,28 @@ function ViewerPage({ remotePin, remoteConfig }) {
               textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
             }}>
               {text}
+            </div>
+          </div>
+        );
+      }
+
+      // Rotating messages display (desktop app format: array of messages)
+      if (toolsData.type === 'rotatingMessages' && toolsData.messages?.length > 0) {
+        const currentMessage = toolsData.messages[rotatingMessageIndex % toolsData.messages.length];
+        return (
+          <div style={{
+            ...toolsStyle,
+            animation: 'fadeIn 0.5s ease-in-out'
+          }}>
+            <div style={{
+              fontSize: 'clamp(3rem, 10vw, 8rem)',
+              fontWeight: '300',
+              maxWidth: '90%',
+              lineHeight: 1.3,
+              textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)',
+              textAlign: 'center'
+            }}>
+              {currentMessage}
             </div>
           </div>
         );
@@ -1472,9 +1458,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
               maxHeight: '100%',
               objectFit: 'contain'
             }}
-            onLoadedData={(e) => {
-              console.log('🎬 Local video loaded, waiting for play command');
-            }}
+            onLoadedData={() => {}}
             onError={(e) => console.error('🎬 Local video error:', e.target.error)}
           />
         </div>
@@ -1549,7 +1533,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
     // Render presentation slide (bypasses theme)
     if (presentationData && presentationData.slide) {
       const { slide, canvasDimensions } = presentationData;
-      const aspectRatio = canvasDimensions ? canvasDimensions.width / canvasDimensions.height : 16/9;
       // Calculate container dimensions to fit 16:9 in viewport
       const vpWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
       const vpHeight = typeof window !== 'undefined' ? window.innerHeight : 1080;
@@ -1741,14 +1724,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
     if (viewerTheme?.linePositions) {
       return renderWithAbsolutePositioning(slide, isTransliterationLanguage, getTextDirection);
     }
-
-    // Font size for lines - equal for English songs, bigger first line for Hebrew/Arabic
-    const line1FontSize = isTransliterationLanguage
-      ? `calc(clamp(2rem, 6vw, 6rem) * ${fontSize / 100})`
-      : `calc(clamp(1.8rem, 5vw, 5rem) * ${fontSize / 100})`;
-    const otherLinesFontSize = isTransliterationLanguage
-      ? `calc(clamp(1.5rem, 4.5vw, 4.5rem) * ${fontSize / 100})`
-      : `calc(clamp(1.8rem, 5vw, 5rem) * ${fontSize / 100})`;
 
     // Get theme positioning and container styles
     const positioningStyle = getThemePositioningStyle();

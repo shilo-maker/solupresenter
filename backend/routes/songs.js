@@ -217,10 +217,6 @@ router.get('/meta/tags', authenticateToken, async (req, res) => {
 
 // Bulk import songs from .txt files
 router.post('/bulk-import', authenticateToken, upload.array('songFiles', 50), async (req, res) => {
-  console.log('📤 Bulk import request received');
-  console.log('Files count:', req.files?.length || 0);
-  console.log('User:', req.user?.email);
-
   try {
     if (!req.files || req.files.length === 0) {
       console.error('❌ No files uploaded');
@@ -392,13 +388,6 @@ router.post('/bulk-import', authenticateToken, upload.array('songFiles', 50), as
       }
     }
 
-    console.log('✅ Bulk import completed');
-    console.log('Summary:', {
-      total: req.files.length,
-      successful: results.successful.length,
-      failed: results.failed.length
-    });
-
     res.json({
       message: 'Bulk import completed',
       results,
@@ -428,7 +417,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
     });
 
     if (!song) {
-      console.log(`Song not found: ${req.params.id}`);
       return res.status(404).json({ error: 'Song not found' });
     }
 
@@ -488,15 +476,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     const { title, originalLanguage, slides, tags, backgroundImage, isPublic, isPendingApproval, author } = req.body;
 
-    console.log('Received update request for song:', req.params.id);
-    console.log('Request body:', JSON.stringify(req.body, null, 2));
-    console.log('Extracted values:');
-    console.log('  title:', title);
-    console.log('  originalLanguage:', originalLanguage);
-    console.log('  slides count:', slides?.length);
-    console.log('  tags:', tags);
-    console.log('First slide verseType:', slides && slides.length > 0 ? slides[0].verseType : 'no slides');
-
     // If editing a public song that user doesn't own
     // Admin users can edit directly, non-admin users get a personal copy
     const isAdmin = req.user.role === 'admin' || req.user.isAdmin;
@@ -515,7 +494,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
           author: author !== undefined ? author : originalSong.author
         });
 
-        console.log('Created personal copy with slides:', personalCopy.slides);
         return res.json({ song: personalCopy, message: 'Personal copy created' });
       }
       // Admin users: continue to edit the original song below
@@ -571,12 +549,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       originalSong.isPendingApproval = isPendingApproval;
     }
 
-    console.log('Updating song with slides:', originalSong.slides);
-    console.log('First slide before save:', originalSong.slides[0]);
-
     await originalSong.save();
-
-    console.log('Song saved. First slide after save:', originalSong.slides[0]);
 
     res.json({ song: originalSong });
   } catch (error) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface PublicRoom {
@@ -27,6 +27,17 @@ const BroadcastSelector: React.FC<BroadcastSelectorProps> = ({
   const [showDropdown, setShowDropdown] = useState(false);
   const [publicRooms, setPublicRooms] = useState<PublicRoom[]>([]);
   const [selectedPublicRoom, setSelectedPublicRoom] = useState<PublicRoom | null>(null);
+  const [showCopied, setShowCopied] = useState(false);
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (copiedTimeoutRef.current) {
+        clearTimeout(copiedTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Load public rooms when connected
   useEffect(() => {
@@ -80,7 +91,17 @@ const BroadcastSelector: React.FC<BroadcastSelectorProps> = ({
       const url = selectedPublicRoom
         ? `https://solucast.app/viewer/${selectedPublicRoom.slug}`
         : `https://solucast.app/viewer?pin=${roomPin}`;
-      navigator.clipboard.writeText(url);
+      if (window.electronAPI?.copyToClipboard) {
+        window.electronAPI.copyToClipboard(url);
+      } else {
+        navigator.clipboard.writeText(url);
+      }
+      setShowCopied(true);
+      // Clear any existing timeout before setting a new one
+      if (copiedTimeoutRef.current) {
+        clearTimeout(copiedTimeoutRef.current);
+      }
+      copiedTimeoutRef.current = setTimeout(() => setShowCopied(false), 2000);
     } catch (error) {
       console.error('Failed to copy:', error);
     }
@@ -288,6 +309,26 @@ const BroadcastSelector: React.FC<BroadcastSelectorProps> = ({
         >
           {t('controlPanel.copyViewerLink')}
         </button>
+
+        {/* Toast notification */}
+        {showCopied && (
+          <div style={{
+            position: 'fixed',
+            bottom: '24px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(40, 167, 69, 0.95)',
+            color: 'white',
+            padding: '12px 24px',
+            borderRadius: '8px',
+            fontSize: '0.9rem',
+            fontWeight: 500,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            zIndex: 10000
+          }}>
+            {t('controlPanel.linkCopied', 'Link copied!')}
+          </div>
+        )}
       </div>
     );
   }
@@ -509,6 +550,26 @@ const BroadcastSelector: React.FC<BroadcastSelectorProps> = ({
               {t('controlPanel.copyViewerLink')}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Toast notification */}
+      {showCopied && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(40, 167, 69, 0.95)',
+          color: 'white',
+          padding: '12px 24px',
+          borderRadius: '8px',
+          fontSize: '0.9rem',
+          fontWeight: 500,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          zIndex: 10000
+        }}>
+          {t('controlPanel.linkCopied', 'Link copied!')}
         </div>
       )}
     </div>

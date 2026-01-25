@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Form, Badge, Alert, Toast, ToastContainer } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Form, Badge, Alert } from 'react-bootstrap';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
@@ -26,7 +26,6 @@ function SongCreate() {
   const [error, setError] = useState('');
   const [expressMode, setExpressMode] = useState(searchParams.get('express') !== 'false');
   const [expressText, setExpressText] = useState('');
-  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   const languages = [
     { code: 'he', name: 'Hebrew (עברית)' },

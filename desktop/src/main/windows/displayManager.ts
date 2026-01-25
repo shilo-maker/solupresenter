@@ -1,5 +1,9 @@
 import { BrowserWindow, screen, Display, ipcMain, app } from 'electron';
 import * as path from 'path';
+import { createLogger } from '../utils/debug';
+
+// Create logger for this module
+const log = createLogger('DisplayManager');
 
 // Local server port for production (set from main index.ts)
 let localServerPort = 0;
@@ -70,6 +74,8 @@ export interface SlideData {
   toolsData?: any;
   presentationData?: any;
   theme?: any;
+  contentType?: 'song' | 'bible' | 'prayer' | 'sermon';
+  activeTheme?: any;
 }
 
 const isDev = process.env.NODE_ENV === 'development' || !require('electron').app.isPackaged;
@@ -78,8 +84,19 @@ export class DisplayManager {
   private displays: Map<number, ManagedDisplay> = new Map();
   private onDisplayChangeCallback: ((displays: DisplayInfo[]) => void) | null = null;
 
+  // Store screen event listeners for proper cleanup
+  private screenListeners: {
+    displayAdded?: (event: Electron.Event, display: Display) => void;
+    displayRemoved?: (event: Electron.Event, display: Display) => void;
+    displayMetricsChanged?: (event: Electron.Event, display: Display, changedMetrics: string[]) => void;
+  } = {};
+
   // OBS Overlay window (special transparent window, not tied to a display)
   private obsOverlayWindow: OBSOverlayWindow | null = null;
+
+  // Track identify overlay windows to prevent duplicates
+  private identifyWindows: BrowserWindow[] = [];
+  private identifyTimeout: NodeJS.Timeout | null = null;
 
   // Track ALL current presentation state for late-joining displays
   private currentViewerTheme: any = null;
@@ -107,36 +124,43 @@ export class DisplayManager {
   } | null = null;
 
   constructor() {
-    console.log('[DisplayManager] Constructor called, setting up IPC listener for display:ready');
-
     // Listen for display:ready IPC from renderer processes
     ipcMain.on('display:ready', (event) => {
-      console.log('[DisplayManager] display:ready IPC received!');
       const senderWindow = BrowserWindow.fromWebContents(event.sender);
       if (!senderWindow) {
-        console.log('[DisplayManager] display:ready received but no matching window');
         return;
       }
 
       // Check if this is the OBS overlay window
       if (this.obsOverlayWindow?.window === senderWindow) {
-        console.log('[DisplayManager] display:ready received for OBS overlay window');
         this.sendInitialStateToOBS();
         return;
       }
 
-      console.log(`[DisplayManager] Found sender window, checking ${this.displays.size} managed displays`);
-
       // Find which managed display this is
       for (const [displayId, managed] of this.displays) {
-        console.log(`[DisplayManager] Checking display ${displayId}, window match: ${managed.window === senderWindow}`);
         if (managed.window === senderWindow) {
-          console.log(`[DisplayManager] display:ready received for display ${displayId}, type=${managed.type}`);
           this.sendInitialState(managed);
           return;
         }
       }
-      console.log('[DisplayManager] display:ready received but window not in managed displays');
+    });
+
+    // Listen for display:error IPC from renderer processes
+    ipcMain.on('display:error', (event, error: string) => {
+      const senderWindow = BrowserWindow.fromWebContents(event.sender);
+      let displayId = 'unknown';
+
+      if (senderWindow) {
+        for (const [id, managed] of this.displays) {
+          if (managed.window === senderWindow) {
+            displayId = String(id);
+            break;
+          }
+        }
+      }
+
+      log.error(`Display ${displayId} error:`, error);
     });
   }
 
@@ -147,68 +171,48 @@ export class DisplayManager {
   private sendInitialState(managed: ManagedDisplay): void {
     if (!managed.window || managed.window.isDestroyed()) return;
 
-    console.log('[DisplayManager] Sending initial state to late-joining display');
-
+    try {
     if (managed.type === 'viewer') {
       // Theme
       if (this.currentViewerTheme) {
-        console.log('[DisplayManager] -> Sending theme:', this.currentViewerTheme?.name);
         managed.window.webContents.send('theme:update', this.currentViewerTheme);
       }
 
       // Background
       if (this.currentBackground) {
-        console.log('[DisplayManager] -> Sending background');
         managed.window.webContents.send('background:update', this.currentBackground);
       }
 
-      // Slide data
+      // Slide data (with calculated activeTheme for late-joining displays)
       if (this.currentSlideData) {
-        console.log('[DisplayManager] -> Sending slide data');
-        managed.window.webContents.send('slide:update', this.currentSlideData);
+        const contentType = this.currentSlideData.contentType || 'song';
+        let activeTheme = this.currentViewerTheme;
+        if (contentType === 'bible') {
+          activeTheme = this.currentBibleTheme;
+        } else if (contentType === 'prayer' || contentType === 'sermon') {
+          activeTheme = this.currentPrayerTheme;
+        }
+        managed.window.webContents.send('slide:update', { ...this.currentSlideData, activeTheme });
       }
 
       // Media (image/video)
       if (this.currentMedia && this.currentMedia.path) {
-        console.log('[DisplayManager] -> Sending media:', this.currentMedia.type);
+        log.debug(` sendInitialState - sending media to display ${managed.id}:`, this.currentMedia.path.substring(0, 80));
         managed.window.webContents.send('media:update', this.currentMedia);
-
-        // If it's a video with tracked position, send seek command to sync
-        // Note: The display will also request position after video loads for more precise sync
-        if (this.currentMedia.type === 'video' && this.currentVideoState) {
-          const videoPos = this.getVideoPosition();
-          if (videoPos) {
-            console.log('[DisplayManager] -> Sending initial video sync, time:', videoPos.time, 'playing:', videoPos.isPlaying);
-            // Small delay to ensure video element is ready
-            setTimeout(() => {
-              if (managed.window && !managed.window.isDestroyed()) {
-                managed.window.webContents.send('video:command', {
-                  type: 'seek',
-                  time: videoPos.time
-                });
-                // Also send play/pause state
-                if (videoPos.isPlaying) {
-                  managed.window.webContents.send('video:command', { type: 'resume' });
-                } else {
-                  managed.window.webContents.send('video:command', { type: 'pause' });
-                }
-              }
-            }, 100);
-          }
-        }
+        // Note: The display handles its own video position sync via getVideoPosition()
+        // in the onCanPlay handler. This avoids race conditions between the timeout-based
+        // sync here and the event-based sync in the display.
       }
 
       // All active tools (countdown, announcement, rotating messages, clock, stopwatch)
       for (const [toolType, toolData] of this.currentToolData) {
         if (toolData && toolData.active) {
-          console.log('[DisplayManager] -> Sending tool:', toolType);
           managed.window.webContents.send('tool:update', toolData);
         }
       }
 
       // YouTube state
       if (this.currentYoutubeState) {
-        console.log('[DisplayManager] -> Sending YouTube:', this.currentYoutubeState.videoId);
         managed.window.webContents.send('youtube:command', {
           type: 'load',
           videoId: this.currentYoutubeState.videoId,
@@ -218,26 +222,32 @@ export class DisplayManager {
     } else if (managed.type === 'stage') {
       // Stage theme
       if (this.currentStageTheme) {
-        console.log('[DisplayManager] -> Sending stage theme');
         managed.window.webContents.send('stageTheme:update', this.currentStageTheme);
       }
 
-      // Slide data (stage monitors also show slides)
+      // Slide data (stage monitors also show slides, with activeTheme)
       if (this.currentSlideData) {
-        console.log('[DisplayManager] -> Sending slide data to stage');
-        managed.window.webContents.send('slide:update', this.currentSlideData);
+        const contentType = this.currentSlideData.contentType || 'song';
+        let activeTheme = this.currentViewerTheme;
+        if (contentType === 'bible') {
+          activeTheme = this.currentBibleTheme;
+        } else if (contentType === 'prayer' || contentType === 'sermon') {
+          activeTheme = this.currentPrayerTheme;
+        }
+        managed.window.webContents.send('slide:update', { ...this.currentSlideData, activeTheme });
       }
 
       // Tools also shown on stage
       for (const [toolType, toolData] of this.currentToolData) {
         if (toolData && toolData.active) {
-          console.log('[DisplayManager] -> Sending tool to stage:', toolType);
           managed.window.webContents.send('tool:update', toolData);
         }
       }
     }
-
-    console.log('[DisplayManager] Initial state sent');
+    } catch (error) {
+      // Window may have been destroyed between check and use - this is expected
+      log.debug('Window destroyed during sendInitialState:', error);
+    }
   }
 
   /**
@@ -246,15 +256,22 @@ export class DisplayManager {
   private sendInitialStateToOBS(): void {
     if (!this.obsOverlayWindow?.window || this.obsOverlayWindow.window.isDestroyed()) return;
 
-    console.log('[DisplayManager] Sending initial state to OBS overlay');
+    log.debug(' Sending initial state to OBS overlay');
 
-    // OBS overlay just needs slide data (it doesn't show themes/backgrounds - transparent overlay)
+    // OBS overlay needs slide data with activeTheme for content-specific styling
     if (this.currentSlideData) {
-      console.log('[DisplayManager] -> Sending slide data to OBS');
-      this.obsOverlayWindow.window.webContents.send('slide:update', this.currentSlideData);
+      log.debug(' -> Sending slide data to OBS');
+      const contentType = this.currentSlideData.contentType || 'song';
+      let activeTheme = this.currentViewerTheme;
+      if (contentType === 'bible') {
+        activeTheme = this.currentBibleTheme;
+      } else if (contentType === 'prayer' || contentType === 'sermon') {
+        activeTheme = this.currentPrayerTheme;
+      }
+      this.obsOverlayWindow.window.webContents.send('slide:update', { ...this.currentSlideData, activeTheme });
     }
 
-    console.log('[DisplayManager] OBS overlay initial state sent');
+    log.debug(' OBS overlay initial state sent');
   }
 
   /**
@@ -288,12 +305,16 @@ export class DisplayManager {
   openDisplayWindow(displayId: number, type: 'viewer' | 'stage'): boolean {
     const electronDisplay = screen.getAllDisplays().find((d) => d.id === displayId);
     if (!electronDisplay) {
-      console.error(`Display ${displayId} not found`);
+      log.error(`Display ${displayId} not found`);
       return false;
     }
 
     // Close existing window on this display if any
     this.closeDisplayWindow(displayId);
+
+    // Check if this display is the same as where the control window is located
+    const controlWindowDisplayId = this.getControlWindowDisplay();
+    const isSameScreenAsControl = controlWindowDisplayId === displayId;
 
     const window = new BrowserWindow({
       x: electronDisplay.bounds.x,
@@ -331,14 +352,17 @@ export class DisplayManager {
       });
     }
 
+    // Build URL with sameScreen parameter if applicable
+    const sameScreenParam = isSameScreenAsControl ? '?sameScreen=true' : '';
+
     // Load appropriate content based on type
     if (isDev) {
-      window.loadURL(`http://localhost:5173/#/display/${type}`);
+      window.loadURL(`http://localhost:5173/#/display/${type}${sameScreenParam}`);
       // Open DevTools in development mode
       window.webContents.openDevTools({ mode: 'detach' });
     } else {
       // In production, use local HTTP server for proper origin (needed for YouTube)
-      window.loadURL(`http://127.0.0.1:${localServerPort}/#/display/${type}`);
+      window.loadURL(`http://127.0.0.1:${localServerPort}/#/display/${type}${sameScreenParam}`);
     }
 
     // Note: Initial state is now sent when we receive 'display:ready' IPC from the renderer
@@ -392,7 +416,7 @@ export class DisplayManager {
    * Open OBS Overlay window (transparent, for capture by OBS)
    */
   openOBSOverlay(config: Partial<OBSOverlayConfig> = {}): boolean {
-    console.log('[DisplayManager] openOBSOverlay called with config:', config);
+    log.debug(' openOBSOverlay called with config:', config);
     // Close existing OBS overlay if any
     this.closeOBSOverlay();
 
@@ -448,8 +472,8 @@ export class DisplayManager {
       ? `http://localhost:5173/#/display/obs?${configParams}`
       : path.join(__dirname, '../../../renderer/index.html');
 
-    console.log('[DisplayManager] OBS overlay URL:', url);
-    console.log('[DisplayManager] isDev:', isDev);
+    log.debug(' OBS overlay URL:', url);
+    log.debug(' isDev:', isDev);
 
     if (isDev) {
       window.loadURL(`http://localhost:5173/#/display/obs?${configParams}`);
@@ -460,7 +484,7 @@ export class DisplayManager {
       window.loadURL(`http://127.0.0.1:${localServerPort}/#/display/obs?${configParams}`);
     }
 
-    console.log('[DisplayManager] OBS overlay window created and loading');
+    log.debug(' OBS overlay window created and loading');
 
     // Store reference
     this.obsOverlayWindow = {
@@ -470,11 +494,11 @@ export class DisplayManager {
 
     // Handle window close
     window.on('closed', () => {
-      console.log('[DisplayManager] OBS overlay window closed');
+      log.debug(' OBS overlay window closed');
       this.obsOverlayWindow = null;
     });
 
-    console.log('[DisplayManager] OBS overlay setup complete, returning true');
+    log.debug(' OBS overlay setup complete, returning true');
     return true;
   }
 
@@ -515,12 +539,17 @@ export class DisplayManager {
    * Broadcast slide data to all display windows
    */
   broadcastSlide(slideData: SlideData): void {
+    // Validate input
+    if (!slideData || typeof slideData !== 'object') {
+      log.error(' broadcastSlide: invalid slideData');
+      return;
+    }
+
     // Store for late-joining displays
     this.currentSlideData = slideData;
-    console.log('[DisplayManager] broadcastSlide - storing slide data, isBlank:', slideData.isBlank, 'contentType:', (slideData as any).contentType);
 
     // Include the appropriate theme based on contentType
-    const contentType = (slideData as any).contentType || 'song';
+    const contentType = slideData.contentType || 'song';
     let activeTheme = this.currentViewerTheme;
     if (contentType === 'bible') {
       activeTheme = this.currentBibleTheme;
@@ -533,14 +562,23 @@ export class DisplayManager {
     };
 
     for (const managed of this.displays.values()) {
-      if (managed.window && !managed.window.isDestroyed()) {
-        managed.window.webContents.send('slide:update', slideWithTheme);
+      try {
+        if (managed.window && !managed.window.isDestroyed()) {
+          managed.window.webContents.send('slide:update', slideWithTheme);
+        }
+      } catch (error) {
+        // Window may have been destroyed between check and send
+        log.debug('Window destroyed during broadcastSlide:', error);
       }
     }
 
     // Also send to OBS overlay
-    if (this.obsOverlayWindow?.window && !this.obsOverlayWindow.window.isDestroyed()) {
-      this.obsOverlayWindow.window.webContents.send('slide:update', slideWithTheme);
+    try {
+      if (this.obsOverlayWindow?.window && !this.obsOverlayWindow.window.isDestroyed()) {
+        this.obsOverlayWindow.window.webContents.send('slide:update', slideWithTheme);
+      }
+    } catch (error) {
+      log.debug('OBS window destroyed during broadcastSlide:', error);
     }
   }
 
@@ -548,12 +586,14 @@ export class DisplayManager {
    * Broadcast to specific display types
    */
   broadcastToType(type: 'viewer' | 'stage', channel: string, data: any): void {
-    console.log(`broadcastToType: type=${type}, channel=${channel}, displays=${this.displays.size}`);
     for (const managed of this.displays.values()) {
-      console.log(`  Display ${managed.id}: type=${managed.type}, hasWindow=${!!managed.window}, destroyed=${managed.window?.isDestroyed()}`);
-      if (managed.type === type && managed.window && !managed.window.isDestroyed()) {
-        console.log(`  -> Sending to display ${managed.id}`);
-        managed.window.webContents.send(channel, data);
+      try {
+        if (managed.type === type && managed.window && !managed.window.isDestroyed()) {
+          managed.window.webContents.send(channel, data);
+        }
+      } catch (error) {
+        // Window may have been destroyed between check and send
+        log.debug('Window destroyed during broadcastToType:', error);
       }
     }
   }
@@ -562,8 +602,13 @@ export class DisplayManager {
    * Send theme update to all viewers
    */
   broadcastTheme(theme: any): void {
+    // Validate theme is an object (can be null to clear theme)
+    if (theme !== null && (typeof theme !== 'object' || Array.isArray(theme))) {
+      log.error(' broadcastTheme: invalid theme, expected object or null');
+      return;
+    }
     this.currentViewerTheme = theme;
-    console.log('[DisplayManager] broadcastTheme - storing theme:', theme?.name);
+    log.debug(' broadcastTheme - storing theme:', theme?.name);
     this.broadcastToType('viewer', 'theme:update', theme);
   }
 
@@ -571,6 +616,11 @@ export class DisplayManager {
    * Send stage theme update to all stage monitors
    */
   broadcastStageTheme(theme: any): void {
+    // Validate theme is an object (can be null to clear theme)
+    if (theme !== null && (typeof theme !== 'object' || Array.isArray(theme))) {
+      log.error(' broadcastStageTheme: invalid theme, expected object or null');
+      return;
+    }
     this.currentStageTheme = theme;
     this.broadcastToType('stage', 'stageTheme:update', theme);
   }
@@ -579,6 +629,11 @@ export class DisplayManager {
    * Send bible theme update to all viewers (for bible content)
    */
   broadcastBibleTheme(theme: any): void {
+    // Validate theme is an object (can be null to clear theme)
+    if (theme !== null && (typeof theme !== 'object' || Array.isArray(theme))) {
+      log.error(' broadcastBibleTheme: invalid theme, expected object or null');
+      return;
+    }
     // Store for late-joining displays and content-type detection
     this.currentBibleTheme = theme;
     this.broadcastToType('viewer', 'bibleTheme:update', theme);
@@ -588,6 +643,11 @@ export class DisplayManager {
    * Send prayer theme update to all viewers (for prayer/sermon content)
    */
   broadcastPrayerTheme(theme: any): void {
+    // Validate theme is an object (can be null to clear theme)
+    if (theme !== null && (typeof theme !== 'object' || Array.isArray(theme))) {
+      log.error(' broadcastPrayerTheme: invalid theme, expected object or null');
+      return;
+    }
     // Store for late-joining displays and content-type detection
     this.currentPrayerTheme = theme;
     this.broadcastToType('viewer', 'prayerTheme:update', theme);
@@ -597,9 +657,19 @@ export class DisplayManager {
    * Send background update to all viewers
    */
   broadcastBackground(background: string): void {
+    // Validate background is a string (can be empty to clear)
+    if (typeof background !== 'string') {
+      log.error(' broadcastBackground: invalid background, expected string');
+      return;
+    }
+    // Limit background string length to prevent abuse
+    if (background.length > 10000) {
+      log.error(' broadcastBackground: background string too long');
+      return;
+    }
     // Store for late-joining displays
     this.currentBackground = background;
-    console.log('broadcastBackground called, displays:', this.displays.size);
+    log.debug('broadcastBackground called, displays:', this.displays.size);
     this.broadcastToType('viewer', 'background:update', background);
   }
 
@@ -607,7 +677,13 @@ export class DisplayManager {
    * Send video command to all display windows
    */
   broadcastVideoCommand(command: { type: string; time?: number; path?: string; muted?: boolean; volume?: number }): void {
-    console.log('[DisplayManager] broadcastVideoCommand:', command.type, 'displays:', this.displays.size);
+    // Validate command
+    if (!command || !command.type || typeof command.type !== 'string') {
+      log.error(' broadcastVideoCommand: invalid command');
+      return;
+    }
+
+    log.debug(' broadcastVideoCommand:', command.type, 'displays:', this.displays.size);
 
     // Track video state for late-joining displays
     switch (command.type) {
@@ -632,7 +708,7 @@ export class DisplayManager {
         }
         break;
       case 'seek':
-        if (this.currentVideoState && typeof command.time === 'number') {
+        if (this.currentVideoState && typeof command.time === 'number' && isFinite(command.time) && command.time >= 0) {
           this.currentVideoState.currentTime = command.time;
           // Reset play start time if playing
           if (this.currentVideoState.isPlaying) {
@@ -647,7 +723,7 @@ export class DisplayManager {
 
     for (const managed of this.displays.values()) {
       if (managed.window && !managed.window.isDestroyed()) {
-        console.log('[DisplayManager] -> Sending video command to display:', managed.id);
+        log.debug(' -> Sending video command to display:', managed.id);
         managed.window.webContents.send('video:command', command);
       }
     }
@@ -657,28 +733,62 @@ export class DisplayManager {
    * Send media update to all display windows
    */
   broadcastMedia(mediaData: { type: 'image' | 'video'; path: string }): void {
+    // Validate input
+    if (!mediaData || typeof mediaData !== 'object') {
+      log.error(' broadcastMedia: invalid mediaData');
+      return;
+    }
+    if (mediaData.type && mediaData.type !== 'image' && mediaData.type !== 'video') {
+      log.error(' broadcastMedia: invalid media type:', mediaData.type);
+      return;
+    }
+
     // Store for late-joining displays
     // If path is empty, clear media state
     if (mediaData.path) {
       this.currentMedia = mediaData;
-      console.log('[DisplayManager] broadcastMedia - storing media:', mediaData.type);
+      log.debug(' broadcastMedia - storing media:', mediaData.type);
 
-      // Initialize video state when video starts (autoplay)
+      // Initialize video state when video starts - paused until display is ready
       if (mediaData.type === 'video') {
-        this.currentVideoState = { currentTime: 0, isPlaying: true, playStartedAt: Date.now() };
-        console.log('[DisplayManager] broadcastMedia - initialized video state for autoplay');
+        this.currentVideoState = { currentTime: 0, isPlaying: false, playStartedAt: undefined };
+        log.debug(' broadcastMedia - initialized video state (paused, waiting for display ready)');
       }
     } else {
       this.currentMedia = null;
       this.currentVideoState = null;
-      console.log('[DisplayManager] broadcastMedia - clearing media');
+      log.debug(' broadcastMedia - clearing media');
     }
 
     for (const managed of this.displays.values()) {
       if (managed.window && !managed.window.isDestroyed()) {
+        log.debug(` broadcastMedia - sending to display ${managed.id} (${managed.type}):`, mediaData.path?.substring(0, 80));
         managed.window.webContents.send('media:update', mediaData);
       }
     }
+  }
+
+  /**
+   * Start video playback after display signals ready
+   * Returns true if playback was started, false if no video or already playing
+   */
+  startVideoPlayback(): boolean {
+    if (!this.currentVideoState) return false;
+    if (this.currentVideoState.isPlaying) return false; // Already playing
+
+    this.currentVideoState.isPlaying = true;
+    this.currentVideoState.currentTime = 0;
+    this.currentVideoState.playStartedAt = Date.now();
+    log.debug(' startVideoPlayback - starting synchronized playback');
+
+    // Send play command to all displays
+    for (const managed of this.displays.values()) {
+      if (managed.window && !managed.window.isDestroyed()) {
+        managed.window.webContents.send('video:command', { command: 'play' });
+      }
+    }
+
+    return true;
   }
 
   /**
@@ -702,16 +812,27 @@ export class DisplayManager {
    * Send tool data (countdown, announcement, rotating messages, clock, stopwatch) to all display windows
    */
   broadcastTool(toolData: any): void {
+    // Validate toolData
+    if (!toolData || typeof toolData !== 'object') {
+      log.error(' broadcastTool: invalid toolData, expected object');
+      return;
+    }
+
+    // Validate tool type
+    const validToolTypes = ['countdown', 'announcement', 'rotatingMessages', 'clock', 'stopwatch'];
+    if (!toolData.type || typeof toolData.type !== 'string' || !validToolTypes.includes(toolData.type)) {
+      log.error(' broadcastTool: invalid tool type:', toolData.type);
+      return;
+    }
+
     // Store for late-joining displays, keyed by tool type
-    if (toolData && toolData.type) {
-      if (toolData.active) {
-        this.currentToolData.set(toolData.type, toolData);
-        console.log('[DisplayManager] broadcastTool - storing active tool:', toolData.type);
-      } else {
-        // Tool deactivated, remove from state
-        this.currentToolData.delete(toolData.type);
-        console.log('[DisplayManager] broadcastTool - removing inactive tool:', toolData.type);
-      }
+    if (toolData.active) {
+      this.currentToolData.set(toolData.type, toolData);
+      log.debug(' broadcastTool - storing active tool:', toolData.type);
+    } else {
+      // Tool deactivated, remove from state
+      this.currentToolData.delete(toolData.type);
+      log.debug(' broadcastTool - removing inactive tool:', toolData.type);
     }
 
     for (const managed of this.displays.values()) {
@@ -725,16 +846,35 @@ export class DisplayManager {
    * Broadcast YouTube command to all display windows
    */
   broadcastYoutube(command: { type: string; videoId?: string; title?: string; currentTime?: number; isPlaying?: boolean }): void {
-    console.log('[DisplayManager] broadcastYoutube:', command.type, 'displays:', this.displays.size);
+    // Validate command type
+    if (!command || !command.type) {
+      log.error(' broadcastYoutube: invalid command');
+      return;
+    }
+
+    log.debug(' broadcastYoutube:', command.type, 'displays:', this.displays.size);
 
     // Track YouTube state for late-joining displays
     switch (command.type) {
       case 'load':
-        this.currentYoutubeState = { videoId: command.videoId!, title: command.title || 'YouTube Video' };
+        // Validate videoId for load command
+        if (!command.videoId || typeof command.videoId !== 'string') {
+          log.error(' broadcastYoutube load: invalid videoId');
+          return;
+        }
+        // Sanitize videoId - YouTube IDs should only contain alphanumeric, - and _
+        const sanitizedVideoId = command.videoId.replace(/[^a-zA-Z0-9_-]/g, '');
+        if (sanitizedVideoId.length === 0 || sanitizedVideoId.length > 20) {
+          log.error(' broadcastYoutube load: invalid videoId format');
+          return;
+        }
+        this.currentYoutubeState = { videoId: sanitizedVideoId, title: (command.title || 'YouTube Video').substring(0, 500) };
         this.currentYoutubePosition = { currentTime: 0, isPlaying: true };
         // Clear any other media state when YouTube starts
         this.currentMedia = null;
         this.currentVideoState = null;
+        // Update command with sanitized values
+        command = { ...command, videoId: sanitizedVideoId };
         break;
       case 'stop':
         this.currentYoutubeState = null;
@@ -742,7 +882,8 @@ export class DisplayManager {
         break;
       case 'play':
       case 'sync':
-        if (command.currentTime !== undefined) {
+        // Validate currentTime
+        if (typeof command.currentTime === 'number' && isFinite(command.currentTime) && command.currentTime >= 0) {
           this.currentYoutubePosition = {
             currentTime: command.currentTime,
             isPlaying: command.isPlaying ?? true
@@ -750,10 +891,12 @@ export class DisplayManager {
         }
         break;
       case 'pause':
-        if (command.currentTime !== undefined) {
+      case 'seek':
+        // Validate currentTime
+        if (typeof command.currentTime === 'number' && isFinite(command.currentTime) && command.currentTime >= 0) {
           this.currentYoutubePosition = {
             currentTime: command.currentTime,
-            isPlaying: false
+            isPlaying: command.type === 'seek' ? (this.currentYoutubePosition?.isPlaying ?? false) : false
           };
         }
         break;
@@ -761,7 +904,7 @@ export class DisplayManager {
 
     for (const managed of this.displays.values()) {
       if (managed.type === 'viewer' && managed.window && !managed.window.isDestroyed()) {
-        console.log('[DisplayManager] -> Sending youtube command to display:', managed.id);
+        log.debug(' -> Sending youtube command to display:', managed.id);
         managed.window.webContents.send('youtube:command', command);
       }
     }
@@ -782,15 +925,19 @@ export class DisplayManager {
    * Start watching for display changes (connect/disconnect)
    */
   startWatching(callback: (displays: DisplayInfo[]) => void): void {
+    // Remove any existing listeners first to prevent duplicates
+    this.stopWatching();
+
     this.onDisplayChangeCallback = callback;
 
-    screen.on('display-added', (event, newDisplay) => {
-      console.log('Display added:', newDisplay.id);
+    // Store listeners for proper cleanup
+    this.screenListeners.displayAdded = (event, newDisplay) => {
+      log.debug('Display added:', newDisplay.id);
       this.notifyDisplayChange();
-    });
+    };
 
-    screen.on('display-removed', (event, oldDisplay) => {
-      console.log('Display removed:', oldDisplay.id);
+    this.screenListeners.displayRemoved = (event, oldDisplay) => {
+      log.debug('Display removed:', oldDisplay.id);
       // Close window if it was on this display
       const managed = this.displays.get(oldDisplay.id);
       if (managed?.window && !managed.window.isDestroyed()) {
@@ -798,12 +945,33 @@ export class DisplayManager {
       }
       this.displays.delete(oldDisplay.id);
       this.notifyDisplayChange();
-    });
+    };
 
-    screen.on('display-metrics-changed', (event, display, changedMetrics) => {
-      console.log('Display metrics changed:', display.id, changedMetrics);
+    this.screenListeners.displayMetricsChanged = (event, display, changedMetrics) => {
+      log.debug('Display metrics changed:', display.id, changedMetrics);
       // Could handle resolution changes here
-    });
+    };
+
+    screen.on('display-added', this.screenListeners.displayAdded);
+    screen.on('display-removed', this.screenListeners.displayRemoved);
+    screen.on('display-metrics-changed', this.screenListeners.displayMetricsChanged);
+  }
+
+  /**
+   * Stop watching for display changes and remove listeners
+   */
+  stopWatching(): void {
+    if (this.screenListeners.displayAdded) {
+      screen.off('display-added', this.screenListeners.displayAdded);
+    }
+    if (this.screenListeners.displayRemoved) {
+      screen.off('display-removed', this.screenListeners.displayRemoved);
+    }
+    if (this.screenListeners.displayMetricsChanged) {
+      screen.off('display-metrics-changed', this.screenListeners.displayMetricsChanged);
+    }
+    this.screenListeners = {};
+    this.onDisplayChangeCallback = null;
   }
 
   private notifyDisplayChange(): void {
@@ -839,11 +1007,256 @@ export class DisplayManager {
           const resized = image.resize({ width: 480, height: 270 });
           return resized.toDataURL();
         } catch (err) {
-          console.error('Failed to capture viewer:', err);
+          log.error('Failed to capture viewer:', err);
           return null;
         }
       }
     }
+    return null;
+  }
+
+  /**
+   * Show identification overlay on a specific display or all displays
+   * @param targetDisplayId - Optional. If provided, only identify that display. Otherwise identify all.
+   */
+  identifyDisplays(targetDisplayId?: number): void {
+    // Close any existing identify windows first to prevent duplicates
+    this.closeIdentifyWindows();
+
+    const allDisplays = screen.getAllDisplays();
+    const primaryDisplay = screen.getPrimaryDisplay();
+
+    log.debug('identifyDisplays called with targetDisplayId:', targetDisplayId);
+
+    // Filter to single display if targetDisplayId is provided
+    const displaysToIdentify = targetDisplayId !== undefined
+      ? allDisplays.filter(d => d.id === targetDisplayId)
+      : allDisplays;
+
+    if (displaysToIdentify.length === 0) {
+      log.warn('No displays found to identify for targetDisplayId:', targetDisplayId);
+      return;
+    }
+
+    // Helper to escape HTML special characters
+    const escapeHtml = (str: string): string => {
+      return str.replace(/[&<>"']/g, c => {
+        const entities: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        return entities[c] || c;
+      });
+    };
+
+    displaysToIdentify.forEach((display) => {
+      // Find the index in the full list for consistent numbering
+      const index = allDisplays.findIndex(d => d.id === display.id);
+      const isPrimary = display.id === primaryDisplay.id;
+      const displayNumber = index + 1;
+      const label = escapeHtml(display.label || `Display ${displayNumber}`);
+
+      log.debug(`Creating identify window for display ${display.id} at position:`, {
+        x: display.bounds.x + Math.floor(display.bounds.width / 2) - 200,
+        y: display.bounds.y + Math.floor(display.bounds.height / 2) - 100
+      });
+
+      // Create overlay window with transparency
+      const identifyWindow = new BrowserWindow({
+        x: display.bounds.x + Math.floor(display.bounds.width / 2) - 200,
+        y: display.bounds.y + Math.floor(display.bounds.height / 2) - 100,
+        width: 400,
+        height: 200,
+        frame: false,
+        transparent: true,
+        backgroundColor: '#00000000', // Fully transparent
+        hasShadow: false,
+        alwaysOnTop: true,
+        skipTaskbar: true,
+        focusable: false,
+        resizable: false,
+        show: true,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true
+        }
+      });
+
+      // Create HTML content for the overlay
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            html, body {
+              width: 100%;
+              height: 100%;
+              overflow: hidden;
+              background: transparent !important;
+            }
+            body {
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              height: 100vh;
+              background: transparent !important;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              -webkit-app-region: no-drag;
+            }
+            .container {
+              background: rgba(0, 0, 0, 0.9);
+              border: 3px solid #FF9800;
+              border-radius: 20px;
+              padding: 30px 50px;
+              text-align: center;
+              box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            }
+            .number {
+              font-size: 72px;
+              font-weight: bold;
+              color: #FF9800;
+              line-height: 1;
+            }
+            .label {
+              font-size: 18px;
+              color: white;
+              margin-top: 8px;
+            }
+            .badge {
+              display: inline-block;
+              background: #2196F3;
+              color: white;
+              font-size: 12px;
+              padding: 4px 10px;
+              border-radius: 10px;
+              margin-top: 8px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="number">${displayNumber}</div>
+            <div class="label">${label}</div>
+            ${isPrimary ? '<div class="badge">Primary (Control)</div>' : ''}
+          </div>
+        </body>
+        </html>
+      `;
+
+      identifyWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+      this.identifyWindows.push(identifyWindow);
+
+      log.debug(`Identify window created for display ${displayNumber}`);
+    });
+
+    // Close all identify windows after 3 seconds
+    this.identifyTimeout = setTimeout(() => {
+      this.closeIdentifyWindows();
+    }, 3000);
+  }
+
+  /**
+   * Close all identify overlay windows
+   */
+  private closeIdentifyWindows(): void {
+    // Clear the timeout if it exists
+    if (this.identifyTimeout) {
+      clearTimeout(this.identifyTimeout);
+      this.identifyTimeout = null;
+    }
+
+    // Close all identify windows
+    this.identifyWindows.forEach(win => {
+      if (!win.isDestroyed()) {
+        win.close();
+      }
+    });
+    this.identifyWindows = [];
+  }
+
+  /**
+   * Move the control window to a different display
+   */
+  moveControlWindow(targetDisplayId: number): boolean {
+    const targetDisplay = screen.getAllDisplays().find(d => d.id === targetDisplayId);
+    if (!targetDisplay) {
+      log.error(`Target display ${targetDisplayId} not found`);
+      return false;
+    }
+
+    // Get all windows and find the control window (the main window that's not a display window)
+    const allWindows = BrowserWindow.getAllWindows();
+
+    // Find the control window - it's the one that's not in our managed displays and not the OBS overlay
+    const controlWindow = allWindows.find(win => {
+      if (win.isDestroyed()) return false;
+
+      // Check if it's a managed display window
+      for (const managed of this.displays.values()) {
+        if (managed.window === win) return false;
+      }
+
+      // Check if it's the OBS overlay
+      if (this.obsOverlayWindow?.window === win) return false;
+
+      return true;
+    });
+
+    if (!controlWindow) {
+      log.error('Control window not found');
+      return false;
+    }
+
+    // Move the control window to the target display
+    const bounds = controlWindow.getBounds();
+    const newX = targetDisplay.bounds.x + Math.floor((targetDisplay.bounds.width - bounds.width) / 2);
+    const newY = targetDisplay.bounds.y + Math.floor((targetDisplay.bounds.height - bounds.height) / 2);
+
+    controlWindow.setBounds({
+      x: newX,
+      y: newY,
+      width: bounds.width,
+      height: bounds.height
+    });
+
+    log.debug(`Moved control window to display ${targetDisplayId}`);
+    return true;
+  }
+
+  /**
+   * Get the display where the control window is currently located
+   */
+  getControlWindowDisplay(): number | null {
+    const allWindows = BrowserWindow.getAllWindows();
+
+    // Find the control window
+    const controlWindow = allWindows.find(win => {
+      if (win.isDestroyed()) return false;
+
+      for (const managed of this.displays.values()) {
+        if (managed.window === win) return false;
+      }
+
+      if (this.obsOverlayWindow?.window === win) return false;
+
+      return true;
+    });
+
+    if (!controlWindow) return null;
+
+    const bounds = controlWindow.getBounds();
+    const centerX = bounds.x + bounds.width / 2;
+    const centerY = bounds.y + bounds.height / 2;
+
+    // Find which display contains the center of the control window
+    const allDisplays = screen.getAllDisplays();
+    for (const display of allDisplays) {
+      if (centerX >= display.bounds.x &&
+          centerX < display.bounds.x + display.bounds.width &&
+          centerY >= display.bounds.y &&
+          centerY < display.bounds.y + display.bounds.height) {
+        return display.id;
+      }
+    }
+
     return null;
   }
 }

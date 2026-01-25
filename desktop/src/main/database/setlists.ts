@@ -1,8 +1,8 @@
-import { getDb, saveDatabase, generateId, queryAll, queryOne } from './index';
+import { getDb, saveDatabase, generateId, queryAll, queryOne, createBackup } from './index';
 
 export interface SetlistItem {
   id: string;
-  type: 'song' | 'blank' | 'section' | 'countdown' | 'announcement' | 'messages' | 'media' | 'bible' | 'presentation';
+  type: 'song' | 'blank' | 'section' | 'countdown' | 'announcement' | 'messages' | 'media' | 'bible' | 'presentation' | 'youtube';
   // Song data (full song object for offline use)
   song?: {
     id: string;
@@ -19,7 +19,7 @@ export interface SetlistItem {
   // Announcement tool
   announcementText?: string;
   // Rotating messages tool
-  messagesItems?: string[];
+  messages?: string[];
   messagesInterval?: number;
   // Media (video/image/audio)
   mediaType?: 'video' | 'image' | 'audio';
@@ -40,6 +40,10 @@ export interface SetlistItem {
     verses?: any[];
   };
   displayMode?: 'bilingual' | 'original';
+  // YouTube data
+  youtubeVideoId?: string;
+  youtubeTitle?: string;
+  youtubeThumbnail?: string;
 }
 
 export interface Setlist {
@@ -47,8 +51,8 @@ export interface Setlist {
   name: string;
   venue?: string;
   items: SetlistItem[];
-  createdAt: number;
-  updatedAt: string;
+  createdAt: string;  // ISO timestamp string
+  updatedAt: string;  // ISO timestamp string
 }
 
 export interface SetlistData {
@@ -62,10 +66,40 @@ export interface SetlistData {
  */
 function parseSetlistRow(row: any): Setlist | null {
   if (!row) return null;
+
+  // Safely parse items JSON
+  let items: any[] = [];
+  if (typeof row.items === 'string') {
+    try {
+      items = JSON.parse(row.items);
+      if (!Array.isArray(items)) {
+        items = [];
+      }
+    } catch (error) {
+      console.error('Failed to parse setlist items JSON:', error);
+      items = [];
+    }
+  } else {
+    items = row.items || [];
+  }
+
+  // Safely parse createdAt date
+  let createdAt: string;
+  if (typeof row.createdAt === 'number') {
+    const date = new Date(row.createdAt);
+    createdAt = isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+  } else if (typeof row.createdAt === 'string' && row.createdAt) {
+    // Validate the string is a valid date
+    const date = new Date(row.createdAt);
+    createdAt = isNaN(date.getTime()) ? new Date().toISOString() : row.createdAt;
+  } else {
+    createdAt = new Date().toISOString();
+  }
+
   return {
     ...row,
-    items: typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []),
-    createdAt: typeof row.createdAt === 'string' ? new Date(row.createdAt).getTime() : row.createdAt
+    items,
+    createdAt
   };
 }
 
@@ -94,7 +128,7 @@ export async function createSetlist(data: SetlistData): Promise<Setlist | null> 
 
   const id = generateId();
   const now = new Date().toISOString();
-  const createdAt = Date.now();
+  const items = data.items || [];
 
   db.run(`
     INSERT INTO setlists (id, name, venue, items, createdAt, updatedAt)
@@ -103,13 +137,22 @@ export async function createSetlist(data: SetlistData): Promise<Setlist | null> 
     id,
     data.name,
     data.venue || null,
-    JSON.stringify(data.items || []),
-    createdAt,
+    JSON.stringify(items),
+    now,  // Use ISO string for createdAt
     now
   ]);
 
   saveDatabase();
-  return getSetlist(id);
+
+  // Return the created object directly instead of re-querying
+  return {
+    id,
+    name: data.name,
+    venue: data.venue,
+    items,
+    createdAt: now,
+    updatedAt: now
+  };
 }
 
 /**
@@ -124,28 +167,37 @@ export async function updateSetlist(id: string, data: Partial<SetlistData>): Pro
 
   const updates: string[] = [];
   const values: any[] = [];
+  const now = new Date().toISOString();
+
+  // Track updated values for return object
+  const updatedSetlist = { ...existing };
 
   if (data.name !== undefined) {
     updates.push('name = ?');
     values.push(data.name);
+    updatedSetlist.name = data.name;
   }
   if (data.venue !== undefined) {
     updates.push('venue = ?');
     values.push(data.venue);
+    updatedSetlist.venue = data.venue;
   }
   if (data.items !== undefined) {
     updates.push('items = ?');
     values.push(JSON.stringify(data.items));
+    updatedSetlist.items = data.items;
   }
 
   updates.push('updatedAt = ?');
-  values.push(new Date().toISOString());
+  values.push(now);
   values.push(id);
+  updatedSetlist.updatedAt = now;
 
   db.run(`UPDATE setlists SET ${updates.join(', ')} WHERE id = ?`, values);
   saveDatabase();
 
-  return getSetlist(id);
+  // Return the updated object directly instead of re-querying
+  return updatedSetlist;
 }
 
 /**
@@ -154,6 +206,12 @@ export async function updateSetlist(id: string, data: Partial<SetlistData>): Pro
 export async function deleteSetlist(id: string): Promise<boolean> {
   const db = getDb();
   if (!db) return false;
+
+  // Validate input
+  if (!id || typeof id !== 'string') return false;
+
+  // Create backup before destructive operation
+  createBackup('delete_setlist');
 
   db.run(`DELETE FROM setlists WHERE id = ?`, [id]);
   saveDatabase();

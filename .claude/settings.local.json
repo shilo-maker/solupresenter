@@ -30,7 +30,18 @@
       "Bash(dir /b \"C:\\Users\\shilo\\Documents\\solupresenter\\frontend\\src\\pages\")",
       "Bash(curl:*)",
       "Bash(dir backend*.db backend*.sqlite 2)",
-      "Bash(nul)"
+      "Bash(nul)",
+      "Bash(node fix-presenter-step2c.js:*)",
+      "Bash(node fix-presenter-step3.js:*)",
+      "Bash(node fix-presenter-ui.js:*)",
+      "WebSearch",
+      "Bash(powershell.exe -Command \"cd ''C:\\\\Users\\\\shilo\\\\Documents\\\\solupresenter\\\\desktop''; npm run package:win 2>&1\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem ''C:\\\\Users\\\\shilo\\\\Documents\\\\solupresenter\\\\desktop\\\\release'' -File | Select-Object Name, Length, @{N=''Size MB'';E={[math]::Round\\($_Length/1MB, 2\\)}}\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem ''C:\\\\Users\\\\shilo\\\\Documents\\\\solupresenter\\\\desktop\\\\release'' -File | Select-Object Name, Length\")",
+      "Bash(powershell -Command \"Stop-Process -Id 28352 -Force; Stop-Process -Id 24756 -Force\")",
+      "Bash(npm run build:*)",
+      "Bash(npm audit:*)",
+      "Bash(npx:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,4 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useLayoutEffect, useCallback, useMemo, memo } from 'react';
+import { createLogger } from '../utils/debug';
+
+// Create logger for this module
+const log = createLogger('SlideRenderer');
 
 /**
  * SlideRenderer - Unified rendering component for slides
@@ -20,6 +24,7 @@ interface SlideData {
   translationOverflow?: string;
   reference?: string;  // Bible verse reference (e.g., "Genesis 1:1") or Hebrew reference for prayer
   referenceTranslation?: string; // English reference for prayer
+  referenceEnglish?: string; // English reference for Bible themes (e.g., "Genesis 1:1")
   // Prayer/Sermon content fields
   title?: string;
   titleTranslation?: string;   // English title translation
@@ -47,6 +52,26 @@ interface PresentationTextBox {
   opacity: number;
   zIndex?: number;
   textDirection?: 'ltr' | 'rtl';
+  // Enhanced properties
+  fontWeight?: string;              // '300'-'800' (overrides bold when set)
+  backgroundOpacity?: number;       // 0-1 (separate from text opacity)
+  visible?: boolean;                // default true
+  // Per-side borders
+  borderTop?: number;
+  borderRight?: number;
+  borderBottom?: number;
+  borderLeft?: number;
+  borderColor?: string;
+  // Per-corner radius
+  borderRadiusTopLeft?: number;
+  borderRadiusTopRight?: number;
+  borderRadiusBottomRight?: number;
+  borderRadiusBottomLeft?: number;
+  // Per-side padding
+  paddingTop?: number;
+  paddingBottom?: number;
+  paddingLeft?: number;
+  paddingRight?: number;
 }
 
 interface PresentationImageBox {
@@ -60,6 +85,22 @@ interface PresentationImageBox {
   objectFit: 'contain' | 'cover' | 'fill';
   borderRadius: number;
   zIndex?: number;
+  visible?: boolean;
+}
+
+interface PresentationBackgroundBox {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+  opacity: number;
+  borderRadius: number;
+  texture?: TextureType;
+  textureOpacity?: number;
+  zIndex?: number;
+  visible?: boolean;
 }
 
 interface PresentationSlide {
@@ -67,7 +108,10 @@ interface PresentationSlide {
   order: number;
   textBoxes: PresentationTextBox[];
   imageBoxes?: PresentationImageBox[];
+  backgroundBoxes?: PresentationBackgroundBox[];
   backgroundColor?: string;
+  backgroundGradient?: string;
+  backgroundType?: 'color' | 'gradient' | 'transparent';
 }
 
 interface LinePosition {
@@ -77,8 +121,16 @@ interface LinePosition {
   height: number; // percentage
   paddingTop: number;
   paddingBottom: number;
+  paddingLeft?: number;
+  paddingRight?: number;
   alignH: 'left' | 'center' | 'right';
   alignV: 'top' | 'center' | 'bottom';
+  // Flow positioning properties
+  positionMode?: 'absolute' | 'flow';  // Default: 'absolute'
+  flowGap?: number;                     // Gap below box (percentage)
+  flowAnchor?: string;                  // Line type to position after (null = top of canvas)
+  // Auto-height properties
+  autoHeight?: boolean;                 // Height determined by content (default: false)
 }
 
 interface LineStyle {
@@ -87,7 +139,25 @@ interface LineStyle {
   color: string;
   opacity: number;
   visible: boolean;
+  // Background properties (optional) - for per-line backgrounds like OBS overlay
+  backgroundColor?: string;
+  backgroundOpacity?: number;
+  backgroundPadding?: string;  // CSS padding, e.g. "0.15em 0.6em"
+  // Border properties (optional)
+  borderTop?: number;
+  borderRight?: number;
+  borderBottom?: number;
+  borderLeft?: number;
+  borderColor?: string;
+  borderRadius?: number;
+  // Individual corner radii (optional)
+  borderRadiusTopLeft?: number;
+  borderRadiusTopRight?: number;
+  borderRadiusBottomRight?: number;
+  borderRadiusBottomLeft?: number;
 }
+
+type TextureType = 'none' | 'paper' | 'parchment' | 'linen' | 'canvas' | 'noise';
 
 interface BackgroundBox {
   id: string;
@@ -98,7 +168,34 @@ interface BackgroundBox {
   color: string;
   opacity: number;
   borderRadius: number;
+  texture?: TextureType;
+  textureOpacity?: number;
 }
+
+// CSS texture patterns - grayscale patterns that blend with any base color
+const texturePatterns: Record<TextureType, { pattern: string; size: string }> = {
+  none: { pattern: 'none', size: 'auto' },
+  paper: {
+    pattern: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23888'/%3E%3Ccircle cx='20' cy='30' r='3' fill='%23666'/%3E%3Ccircle cx='70' cy='15' r='2' fill='%23999'/%3E%3Ccircle cx='45' cy='60' r='4' fill='%23777'/%3E%3Ccircle cx='10' cy='80' r='2' fill='%23aaa'/%3E%3Ccircle cx='85' cy='70' r='3' fill='%23666'/%3E%3Ccircle cx='30' cy='90' r='2' fill='%23999'/%3E%3Ccircle cx='60' cy='40' r='2' fill='%23555'/%3E%3Ccircle cx='90' cy='50' r='3' fill='%23888'/%3E%3Ccircle cx='5' cy='45' r='2' fill='%23777'/%3E%3Ccircle cx='55' cy='85' r='3' fill='%23666'/%3E%3Ccircle cx='75' cy='35' r='2' fill='%23aaa'/%3E%3Ccircle cx='35' cy='10' r='2' fill='%23999'/%3E%3C/svg%3E")`,
+    size: '100px 100px'
+  },
+  parchment: {
+    pattern: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23888'/%3E%3Cpath d='M0 15 Q15 12 30 15 T60 15' stroke='%23666' stroke-width='1' fill='none'/%3E%3Cpath d='M0 35 Q15 38 30 35 T60 35' stroke='%23999' stroke-width='0.8' fill='none'/%3E%3Cpath d='M0 50 Q15 47 30 50 T60 50' stroke='%23777' stroke-width='0.6' fill='none'/%3E%3Ccircle cx='10' cy='10' r='4' fill='%23777'/%3E%3Ccircle cx='45' cy='25' r='5' fill='%23999'/%3E%3Ccircle cx='25' cy='45' r='3' fill='%23666'/%3E%3C/svg%3E")`,
+    size: '60px 60px'
+  },
+  linen: {
+    pattern: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Crect width='8' height='8' fill='%23888'/%3E%3Cpath d='M0 0L8 8M8 0L0 8' stroke='%23666' stroke-width='1'/%3E%3C/svg%3E")`,
+    size: '8px 8px'
+  },
+  canvas: {
+    pattern: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Crect width='12' height='12' fill='%23888'/%3E%3Crect x='0' y='0' width='6' height='6' fill='%23777'/%3E%3Crect x='6' y='6' width='6' height='6' fill='%23777'/%3E%3C/svg%3E")`,
+    size: '12px 12px'
+  },
+  noise: {
+    pattern: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%23808080'/%3E%3Crect x='2' y='3' width='2' height='2' fill='%23606060'/%3E%3Crect x='12' y='7' width='2' height='2' fill='%23a0a0a0'/%3E%3Crect x='25' y='2' width='2' height='2' fill='%23707070'/%3E%3Crect x='35' y='10' width='2' height='2' fill='%23909090'/%3E%3Crect x='8' y='18' width='2' height='2' fill='%23505050'/%3E%3Crect x='20' y='15' width='2' height='2' fill='%23b0b0b0'/%3E%3Crect x='32' y='22' width='2' height='2' fill='%23656565'/%3E%3Crect x='5' y='30' width='2' height='2' fill='%23959595'/%3E%3Crect x='18' y='28' width='2' height='2' fill='%23757575'/%3E%3Crect x='28' y='35' width='2' height='2' fill='%23858585'/%3E%3Crect x='38' y='32' width='2' height='2' fill='%23555555'/%3E%3Crect x='15' y='38' width='2' height='2' fill='%23a5a5a5'/%3E%3C/svg%3E")`,
+    size: '40px 40px'
+  }
+};
 
 interface CanvasDimensions {
   width: number;
@@ -117,6 +214,9 @@ interface Theme {
   referencePosition?: LinePosition;
   referenceTranslationStyle?: LineStyle;
   referenceTranslationPosition?: LinePosition;
+  // Bible theme English reference line (separate from prayer's referenceTranslation)
+  referenceEnglishStyle?: LineStyle;
+  referenceEnglishPosition?: LinePosition;
 }
 
 interface SlideRendererProps {
@@ -139,6 +239,9 @@ interface SlideRendererProps {
 
   // Presentation mode (renders textboxes with embedded styling instead of theme)
   presentationSlide?: PresentationSlide | null;
+
+  // Combined slides for original-only mode
+  combinedSlides?: SlideData[] | null;
 }
 
 const DEFAULT_SAMPLE_TEXT: Record<string, string> = {
@@ -158,6 +261,72 @@ const DEFAULT_SAMPLE_TEXT: Record<string, string> = {
 
 // Default text shadow for better readability against any background
 const DEFAULT_TEXT_SHADOW = '2px 2px 4px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.5)';
+
+// Display font - Heebo supports both Hebrew and Latin with consistent metrics
+const DISPLAY_FONT = "'Heebo', 'Segoe UI', sans-serif";
+
+/**
+ * Calculate how many lines a text needs at a given font size
+ */
+const calculateLinesNeeded = (
+  text: string,
+  fontSize: number,
+  boxWidthPx: number,
+  isHebrew: boolean
+): number => {
+  if (!text || fontSize <= 0 || boxWidthPx <= 0) return 1;
+
+  // Balanced character width estimates
+  const avgCharWidth = isHebrew ? 0.58 : 0.50;
+
+  // Use 90% of width
+  const effectiveWidth = boxWidthPx * 0.90;
+  const charsPerLine = Math.max(1, Math.floor(effectiveWidth / (fontSize * avgCharWidth)));
+
+  // Add 10% buffer for word-wrap
+  const linesNeeded = Math.ceil((text.length / charsPerLine) * 1.10);
+
+  return Math.max(1, linesNeeded);
+};
+
+/**
+ * Calculate optimal font size to fit text within a box
+ * Returns a scale factor to apply to the font size
+ */
+const calculateDynamicFontScale = (
+  text: string,
+  baseFontSize: number,
+  boxWidthPx: number,
+  boxHeightPx: number,
+  isRtl: boolean = false
+): number => {
+  if (!text || boxWidthPx <= 0 || boxHeightPx <= 0) return 1;
+
+  const isHebrew = (text.match(/[\u0590-\u05FF]/g) || []).length > text.length * 0.5;
+  const lineHeight = 1.35;
+
+  let minScale = 0.3;
+  let maxScale = 2.5;
+  let optimalScale = 1;
+
+  for (let i = 0; i < 15; i++) {
+    const testScale = (minScale + maxScale) / 2;
+    const testFontSize = baseFontSize * testScale;
+
+    const linesNeeded = calculateLinesNeeded(text, testFontSize, boxWidthPx, isHebrew);
+    const heightNeeded = linesNeeded * testFontSize * lineHeight;
+    const effectiveHeight = boxHeightPx * 0.85;
+
+    if (heightNeeded <= effectiveHeight) {
+      optimalScale = testScale;
+      minScale = testScale;
+    } else {
+      maxScale = testScale;
+    }
+  }
+
+  return Math.max(0.4, Math.min(2.5, optimalScale));
+};
 
 // Default line positions - matches Classic theme (NewDefault values)
 const DEFAULT_LINE_POSITIONS: Record<string, LinePosition> = {
@@ -224,26 +393,27 @@ const DEFAULT_LINE_POSITIONS: Record<string, LinePosition> = {
   }
 };
 
-// Default line styles - matches Classic theme (NewDefault values)
+// Default line styles - Updated to match new design spec
+// Base font at 1080p = 54px (fontSize 100), so: 86px=159, 64px=119
 const DEFAULT_LINE_STYLES: Record<string, LineStyle> = {
   original: {
-    fontSize: 187, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true
+    fontSize: 159, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true  // 86px bold white
   },
   transliteration: {
-    fontSize: 136, fontWeight: '400', color: '#e0e0e0', opacity: 0.9, visible: true
+    fontSize: 119, fontWeight: '300', color: '#ffffff', opacity: 1, visible: true  // 64px light white
   },
   translation: {
-    fontSize: 146, fontWeight: '400', color: '#b0b0b0', opacity: 0.85, visible: true
+    fontSize: 119, fontWeight: '300', color: '#b7b7b7', opacity: 1, visible: true  // 64px light #b7b7b7
   },
   translationOverflow: {
-    fontSize: 146, fontWeight: '400', color: '#b0b0b0', opacity: 0.85, visible: true
+    fontSize: 119, fontWeight: '300', color: '#b7b7b7', opacity: 1, visible: true  // 64px light #b7b7b7
   },
   // Prayer/Sermon default styles (NewClassicPrayer layout)
   title: {
-    fontSize: 130, fontWeight: '700', color: '#FF8C42', opacity: 1, visible: true
+    fontSize: 130, fontWeight: '700', color: '#06b6d4', opacity: 1, visible: true
   },
   titleTranslation: {
-    fontSize: 129, fontWeight: '700', color: '#FF8C42', opacity: 0.9, visible: true
+    fontSize: 129, fontWeight: '700', color: '#06b6d4', opacity: 0.9, visible: true
   },
   subtitle: {
     fontSize: 94, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true
@@ -276,18 +446,26 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
   fillContainer = false,
   editorMode = false,
   sampleText = DEFAULT_SAMPLE_TEXT,
-  presentationSlide
+  presentationSlide,
+  combinedSlides
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+
+  // For flow positioning: refs to measure actual heights and calculated positions
+  const lineRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [measuredHeights, setMeasuredHeights] = useState<Record<string, number>>({});
+  const [flowPositions, setFlowPositions] = useState<Record<string, number>>({});
 
   // Reference dimensions from theme or default to 1920x1080
   const refWidth = theme?.canvasDimensions?.width || 1920;
   const refHeight = theme?.canvasDimensions?.height || 1080;
   const aspectRatio = refHeight / refWidth;
 
-  // Calculate scale factor to fit container
+  // Calculate scale factor to fit container (throttled resize handler)
   useEffect(() => {
+    let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
+
     const calculateScale = () => {
       if (fillContainer) {
         // For viewer windows, fill the entire viewport
@@ -312,28 +490,143 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
       }
     };
 
+    // Throttled resize handler to prevent excessive recalculations
+    const handleResize = () => {
+      if (resizeTimeout) return;
+      resizeTimeout = setTimeout(() => {
+        calculateScale();
+        resizeTimeout = null;
+      }, 16); // ~60fps throttle
+    };
+
     calculateScale();
-    window.addEventListener('resize', calculateScale);
-    return () => window.removeEventListener('resize', calculateScale);
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (resizeTimeout) clearTimeout(resizeTimeout);
+    };
   }, [refWidth, refHeight, containerWidth, containerHeight, fillContainer]);
 
   // Get line order from theme (add translationOverflow after translation if not in theme)
-  const baseLineOrder = theme?.lineOrder || ['original', 'transliteration', 'translation'];
-  const lineOrder = baseLineOrder.includes('translationOverflow')
-    ? baseLineOrder
-    : [...baseLineOrder, 'translationOverflow'];
+  // Memoize to prevent infinite re-render loops in useLayoutEffect
+  const lineOrder = useMemo(() => {
+    const baseLineOrder = theme?.lineOrder || ['original', 'transliteration', 'translation'];
+    return baseLineOrder.includes('translationOverflow')
+      ? baseLineOrder
+      : [...baseLineOrder, 'translationOverflow'];
+  }, [theme?.lineOrder]);
 
-  // Always use absolute positioning with defaults if theme doesn't have positions
-  // This ensures Theme Editor, Preview, and Display all match
-  // Merge with defaults to ensure translationOverflow is always available
-  const effectiveLinePositions = {
+  // Merge line positions including reference positions for Bible/Prayer themes
+  // This needs to be calculated before flow position calculation
+  const mergedLinePositions: Record<string, LinePosition> = useMemo(() => ({
     ...DEFAULT_LINE_POSITIONS,
-    ...(theme?.linePositions || {})
-  };
-  const effectiveLineStyles = {
+    ...(theme?.linePositions || {}),
+    ...(theme?.referencePosition ? { reference: theme.referencePosition } : {}),
+    ...(theme?.referenceEnglishPosition ? { referenceEnglish: theme.referenceEnglishPosition } : {}),
+    ...(theme?.referenceTranslationPosition ? { referenceTranslation: theme.referenceTranslationPosition } : {})
+  }), [theme?.linePositions, theme?.referencePosition, theme?.referenceEnglishPosition, theme?.referenceTranslationPosition]);
+
+  // Calculate flow positions based on measured heights
+  useLayoutEffect(() => {
+    const positions = mergedLinePositions;
+    const newMeasuredHeights: Record<string, number> = {};
+    const newFlowPositions: Record<string, number> = {};
+
+    // First pass: measure all line heights
+    Object.entries(lineRefs.current).forEach(([lineType, ref]) => {
+      if (ref) {
+        const heightPx = ref.scrollHeight;
+        // Convert pixel height to percentage of reference height
+        const heightPercent = (heightPx / refHeight) * 100;
+        newMeasuredHeights[lineType] = heightPercent;
+      }
+    });
+
+    // Helper function to calculate flow position with dependency resolution
+    const calculateFlowY = (lineType: string, visited: Set<string>): number | null => {
+      const position = positions[lineType];
+      if (!position || position.positionMode !== 'flow') return null;
+
+      // Check for circular dependency
+      if (visited.has(lineType)) {
+        log.warn(`Circular flow dependency detected for: ${lineType}`);
+        return position.y || 0;
+      }
+      visited.add(lineType);
+
+      // If already calculated, return cached value
+      if (newFlowPositions[lineType] !== undefined) {
+        return newFlowPositions[lineType];
+      }
+
+      let calculatedY: number;
+
+      if (!position.flowAnchor) {
+        // No anchor - position at top of canvas (or use stored y as offset)
+        calculatedY = position.y || 0;
+      } else {
+        // Has anchor - position below the anchor
+        const anchorPosition = positions[position.flowAnchor];
+        if (!anchorPosition) {
+          // Anchor not found, warn and use stored position
+          log.warn(`Flow anchor '${position.flowAnchor}' not found for line '${lineType}'`);
+          calculatedY = position.y || 0;
+        } else {
+          // Recursively calculate anchor's Y position if it's also flow mode
+          let anchorY: number;
+          if (anchorPosition.positionMode === 'flow') {
+            const calculatedAnchorY = calculateFlowY(position.flowAnchor, visited);
+            anchorY = calculatedAnchorY ?? anchorPosition.y;
+          } else {
+            anchorY = anchorPosition.y;
+          }
+
+          // Get anchor's height - use measured if autoHeight enabled OR if measured height exists
+          // If autoHeight is enabled but no measured height exists, the anchor has no content (not rendered) - use 0
+          const hasMeasuredHeight = newMeasuredHeights[position.flowAnchor] !== undefined;
+          const useAutoHeight = anchorPosition.autoHeight === true || hasMeasuredHeight;
+          let anchorHeight: number;
+          if (useAutoHeight) {
+            // If autoHeight but no measured height, content is empty - treat as 0 height
+            anchorHeight = hasMeasuredHeight ? newMeasuredHeights[position.flowAnchor] : 0;
+          } else {
+            anchorHeight = anchorPosition.height;
+          }
+
+          // Calculate Y = anchor Y + anchor height + gap
+          const gap = position.flowGap ?? 0;
+          calculatedY = anchorY + anchorHeight + gap;
+        }
+      }
+
+      newFlowPositions[lineType] = calculatedY;
+      return calculatedY;
+    };
+
+    // Second pass: calculate flow positions with proper dependency resolution
+    lineOrder.forEach((lineType) => {
+      const position = positions[lineType];
+      if (position?.positionMode === 'flow') {
+        calculateFlowY(lineType, new Set());
+      }
+    });
+
+    setMeasuredHeights(newMeasuredHeights);
+    setFlowPositions(newFlowPositions);
+  }, [mergedLinePositions, lineOrder, refHeight, slideData, sampleText, editorMode]);
+
+  // Use the merged positions for rendering (already includes defaults and reference positions)
+  const effectiveLinePositions = mergedLinePositions;
+
+  // Memoize line styles to prevent unnecessary object recreation
+  const effectiveLineStyles: Record<string, LineStyle> = useMemo(() => ({
     ...DEFAULT_LINE_STYLES,
-    ...(theme?.lineStyles || {})
-  };
+    ...(theme?.lineStyles || {}),
+    // Include reference styles for Bible/Prayer themes
+    ...(theme?.referenceStyle ? { reference: theme.referenceStyle } : {}),
+    ...(theme?.referenceEnglishStyle ? { referenceEnglish: theme.referenceEnglishStyle } : {}),
+    ...(theme?.referenceTranslationStyle ? { referenceTranslation: theme.referenceTranslationStyle } : {})
+  }), [theme?.lineStyles, theme?.referenceStyle, theme?.referenceEnglishStyle, theme?.referenceTranslationStyle]);
 
   // Calculate base font size in pixels at reference resolution
   // Base: 5% of reference height at fontSize=100
@@ -360,6 +653,15 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
     switch (lineType) {
       case 'original':
       case 'hebrew':  // Bible theme compatibility
+        // In original-only mode with combined slides, show main slide + combined slides' original text
+        if (displayMode === 'original' && combinedSlides && combinedSlides.length > 0) {
+          const mainText = slideData.originalText || '';
+          const combinedText = combinedSlides
+            .map(slide => slide.originalText)
+            .filter(Boolean)
+            .join('\n');
+          return [mainText, combinedText].filter(Boolean).join('\n') || null;
+        }
         return slideData.originalText || null;
       case 'transliteration':
         return slideData.transliteration || null;
@@ -388,6 +690,8 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
         return slideData.descriptionTranslation || null;
       case 'reference':
         return slideData.reference || null;
+      case 'referenceEnglish':
+        return slideData.referenceEnglish || null;
       case 'referenceTranslation':
         return slideData.referenceTranslation || null;
       default:
@@ -425,6 +729,9 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
       case 'reference':
         // Reference (Hebrew) is always visible (controlled by its own style.visible)
         return true;
+      case 'referenceEnglish':
+        // English reference for Bible themes - visible in bilingual and translation modes
+        return displayMode === 'bilingual' || displayMode === 'translation';
       case 'referenceTranslation':
         // Reference translation visible only in bilingual mode (controlled by its own style.visible)
         return displayMode === 'bilingual';
@@ -449,19 +756,34 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
           backgroundColor: box.color,
           opacity: box.opacity,
           borderRadius: box.borderRadius,
-          zIndex: 1
+          zIndex: 1,
+          overflow: 'hidden'
         }}
-      />
+      >
+        {/* Texture overlay */}
+        {box.texture && box.texture !== 'none' && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage: texturePatterns[box.texture].pattern,
+              backgroundRepeat: 'repeat',
+              backgroundSize: texturePatterns[box.texture].size,
+              opacity: box.textureOpacity ?? 0.3,
+              pointerEvents: 'none',
+              mixBlendMode: 'overlay'
+            }}
+          />
+        )}
+      </div>
     ));
   };
 
   // Render lines with absolute positioning (always used - with defaults if no theme positions)
   const renderAbsoluteLines = () => {
     return lineOrder.map((lineType) => {
-      // Skip 'reference' if it will be handled by renderReferenceLine (Bible/Prayer themes)
-      if (lineType === 'reference' && theme?.referencePosition) return null;
-      // Skip 'referenceTranslation' if it will be handled by renderReferenceTranslationLine
-      if (lineType === 'referenceTranslation' && theme?.referenceTranslationPosition) return null;
+      // Note: references (reference, referenceEnglish, referenceTranslation) are now included
+      // in effectiveLinePositions/Styles and rendered in lineOrder for proper z-ordering
 
       const position = effectiveLinePositions[lineType];
       const style = effectiveLineStyles[lineType];
@@ -473,10 +795,22 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
       const content = getLineContent(lineType);
       if (!content && !editorMode) return null;
 
-      const fontSize = getFontSize(lineType);
-      // RTL for Hebrew content (songs: original/hebrew, prayer: title/subtitle/description)
-      const isRtl = lineType === 'original' || lineType === 'hebrew' ||
-                    lineType === 'title' || lineType === 'subtitle' || lineType === 'description';
+      // Use theme values directly - no hardcoded overrides
+      const baseFontSize = getBaseFontSize();
+      const fontSize = baseFontSize * ((style?.fontSize || 100) / 100);
+      const fontWeight = style?.fontWeight || '500';
+      const fontColor = style?.color || '#FFFFFF';
+
+      // RTL for Hebrew content - check actual content for Hebrew characters
+      const hasHebrewChars = (text: string | null) => {
+        if (!text) return false;
+        return /[\u0590-\u05FF\uFB1D-\uFB4F]/.test(text);
+      };
+      const contentHasHebrew = hasHebrewChars(content);
+      // Use content detection, or fall back to line type heuristics for Hebrew-typical lines
+      const isRtl = contentHasHebrew ||
+                    (lineType === 'original' || lineType === 'hebrew' ||
+                     lineType === 'title' || lineType === 'subtitle' || lineType === 'description');
 
       // Map alignment to CSS
       const justifyContent = position.alignH === 'left' ? 'flex-start' :
@@ -484,37 +818,65 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
       const alignItems = position.alignV === 'top' ? 'flex-start' :
                         position.alignV === 'bottom' ? 'flex-end' : 'center';
 
+      // Check for per-line background (OBS overlay style)
+      const hasLineBackground = !!style?.backgroundColor;
+
+      // Check if this is a combined slides scenario (original line with multiple slides)
+      const hasCombinedContent = (lineType === 'original' || lineType === 'hebrew') &&
+                                  combinedSlides && combinedSlides.length > 1;
+
+      // Determine Y position: use calculated flow position or stored position
+      const isFlowMode = position.positionMode === 'flow';
+      const isAutoHeight = position.autoHeight === true;
+      const effectiveY = isFlowMode && flowPositions[lineType] !== undefined
+        ? flowPositions[lineType]
+        : position.y;
+
+      // Determine if height should be auto (for combined content, flow mode, or auto-height mode)
+      const useAutoHeight = hasCombinedContent || isFlowMode || isAutoHeight;
+
       return (
         <div
           key={lineType}
+          ref={(el) => { lineRefs.current[lineType] = el; }}
           style={{
             position: 'absolute',
             left: `${position.x}%`,
-            top: `${position.y}%`,
+            top: `${effectiveY}%`,
             width: `${position.width}%`,
-            height: `${position.height}%`,
+            // For combined slides, flow mode, or auto-height, use auto height to fit content
+            height: useAutoHeight ? 'auto' : `${position.height}%`,
             display: 'flex',
             justifyContent,
             alignItems,
             paddingTop: `${position.paddingTop}%`,
             paddingBottom: `${position.paddingBottom}%`,
+            paddingLeft: `${position.paddingLeft ?? 0}px`,
+            paddingRight: `${position.paddingRight ?? 0}px`,
             boxSizing: 'border-box',
-            zIndex: 2
+            zIndex: 2,
+            overflow: useAutoHeight ? 'visible' : 'hidden'
           }}
         >
           <div
             style={{
-              width: '100%',
+              width: hasLineBackground ? 'auto' : '100%',
+              display: hasLineBackground ? 'inline-block' : 'block',
+              fontFamily: DISPLAY_FONT,
               fontSize: `${fontSize}px`,
-              fontWeight: style?.fontWeight || '500',
-              color: style?.color || '#FFFFFF',
-              opacity: style?.opacity ?? 1,
+              fontWeight: fontWeight,
+              color: fontColor,
+              opacity: style?.backgroundOpacity ?? style?.opacity ?? 1,
               direction: isRtl ? 'rtl' : 'ltr',
               textAlign: position.alignH,
-              lineHeight: lineType === 'translation' ? 1.15 : 1.4,
+              lineHeight: hasLineBackground ? 1.0 : 1.35,
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
-              textShadow: DEFAULT_TEXT_SHADOW
+              textShadow: hasLineBackground ? '0 2px 4px rgba(0, 0, 0, 0.3)' : DEFAULT_TEXT_SHADOW,
+              // Per-line background support
+              backgroundColor: style?.backgroundColor || 'transparent',
+              padding: style?.backgroundPadding || (hasLineBackground ? '0.15em 0.6em' : undefined),
+              borderRadius: hasLineBackground ? `${style?.borderRadius ?? 6}px` : undefined
             }}
           >
             {content}
@@ -544,6 +906,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
         <div
           key={lineType}
           style={{
+            fontFamily: DISPLAY_FONT,
             fontSize: `${fontSize}px`,
             fontWeight: style?.fontWeight || '500',
             color: style?.color || '#FFFFFF',
@@ -616,9 +979,9 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
 
     // Add gershayim (״) before last letter if more than one letter
     if (result.length > 1) {
-      result = result.slice(0, -1) + '"' + result.slice(-1);
+      result = result.slice(0, -1) + '״' + result.slice(-1);
     } else if (result.length === 1) {
-      result = result + "'";
+      result = result + '׳';
     }
 
     return result;
@@ -664,16 +1027,19 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
     return `${hebrewRef} | ${englishRef}`;
   };
 
-  // Render Bible/Prayer reference line (Hebrew reference for prayer, formatted reference for Bible)
+  // Render reference line using theme values
+  // Skip if reference is in lineOrder (it will be rendered by renderAbsoluteLines)
   const renderReferenceLine = () => {
+    // Skip if reference is in lineOrder - it will be rendered by renderAbsoluteLines
+    if (lineOrder.includes('reference')) return null;
     if (!slideData?.reference) return null;
     if (!theme?.referencePosition) return null;
 
     const position = theme.referencePosition;
-    const style = theme.referenceStyle || {
-      fontSize: 80,
+    const style = theme?.referenceStyle || {
+      fontSize: 70,
       fontWeight: '500',
-      color: '#FF8C42',
+      color: '#06b6d4',
       opacity: 0.9,
       visible: true
     };
@@ -681,18 +1047,27 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
     if (style.visible === false) return null;
 
     const baseFontSize = refHeight * 0.05;
-    const fontSize = baseFontSize * ((style.fontSize || 80) / 100);
+    const fontSize = baseFontSize * ((style.fontSize || 70) / 100);
 
     const justifyContent = position.alignH === 'left' ? 'flex-start' :
                           position.alignH === 'right' ? 'flex-end' : 'center';
     const alignItems = position.alignV === 'top' ? 'flex-start' :
                       position.alignV === 'bottom' ? 'flex-end' : 'center';
 
-    // For prayer themes (when referenceTranslation exists or referenceTranslationPosition is set),
-    // display reference as-is (it's already the Hebrew reference)
-    // For Bible themes, format the reference to show both Hebrew and English
-    const isPrayerTheme = slideData.referenceTranslation || theme.referenceTranslationPosition;
-    const formattedReference = isPrayerTheme ? slideData.reference : formatBibleReference(slideData.reference);
+    // Build border styles
+    const borderColor = style.borderColor || '#ffffff';
+    const borderStyles: React.CSSProperties = {};
+    if (style.borderTop) borderStyles.borderTop = `${style.borderTop}px solid ${borderColor}`;
+    if (style.borderRight) borderStyles.borderRight = `${style.borderRight}px solid ${borderColor}`;
+    if (style.borderBottom) borderStyles.borderBottom = `${style.borderBottom}px solid ${borderColor}`;
+    if (style.borderLeft) borderStyles.borderLeft = `${style.borderLeft}px solid ${borderColor}`;
+    // Apply individual corner radii or fallback to single borderRadius
+    const hasCornerRadii = style.borderRadiusTopLeft || style.borderRadiusTopRight || style.borderRadiusBottomRight || style.borderRadiusBottomLeft;
+    if (hasCornerRadii) {
+      borderStyles.borderRadius = `${style.borderRadiusTopLeft ?? 0}px ${style.borderRadiusTopRight ?? 0}px ${style.borderRadiusBottomRight ?? 0}px ${style.borderRadiusBottomLeft ?? 0}px`;
+    } else if (style.borderRadius) {
+      borderStyles.borderRadius = `${style.borderRadius}px`;
+    }
 
     return (
       <div
@@ -708,23 +1083,27 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
           alignItems,
           paddingTop: `${(position.paddingTop || 0) * refHeight / 100}px`,
           paddingBottom: `${(position.paddingBottom || 0) * refHeight / 100}px`,
+          paddingLeft: `${position.paddingLeft ?? 0}px`,
+          paddingRight: `${position.paddingRight ?? 0}px`,
           boxSizing: 'border-box',
-          zIndex: 10
+          zIndex: 10,
+          ...borderStyles
         }}
       >
         <div
           style={{
             width: '100%',
+            fontFamily: DISPLAY_FONT,
             fontSize: `${fontSize}px`,
             fontWeight: style.fontWeight || '500',
-            color: style.color || '#FF8C42',
+            color: style.color || '#06b6d4',
             opacity: style.opacity ?? 0.9,
             textAlign: position.alignH || 'center',
             lineHeight: 1.3,
             textShadow: DEFAULT_TEXT_SHADOW
           }}
         >
-          {formattedReference}
+          {slideData.reference}
         </div>
       </div>
     );
@@ -732,24 +1111,18 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
 
   // Render reference translation line (for Prayer themes - English reference)
   const renderReferenceTranslationLine = () => {
-    console.log('[SlideRenderer] renderReferenceTranslationLine - referenceTranslation:', slideData?.referenceTranslation);
-    console.log('[SlideRenderer] renderReferenceTranslationLine - reference:', slideData?.reference);
-    console.log('[SlideRenderer] renderReferenceTranslationLine - displayMode:', displayMode);
-    console.log('[SlideRenderer] renderReferenceTranslationLine - theme.referenceTranslationPosition:', theme?.referenceTranslationPosition);
-
+    // Skip if referenceTranslation is in lineOrder - it will be rendered by renderAbsoluteLines
+    if (lineOrder.includes('referenceTranslation')) return null;
     if (!slideData?.referenceTranslation) {
-      console.log('[SlideRenderer] renderReferenceTranslationLine - SKIPPED: no referenceTranslation');
       return null;
     }
     if (displayMode !== 'bilingual') {
-      console.log('[SlideRenderer] renderReferenceTranslationLine - SKIPPED: not bilingual mode');
       return null; // Only show in bilingual mode
     }
 
     // Use theme position if available, otherwise use defaults
     const position = theme?.referenceTranslationPosition || DEFAULT_LINE_POSITIONS.referenceTranslation;
     const style = theme?.referenceTranslationStyle || DEFAULT_LINE_STYLES.referenceTranslation;
-    console.log('[SlideRenderer] renderReferenceTranslationLine - RENDERING with position:', position, 'style:', style);
 
     if (style.visible === false) return null;
 
@@ -775,6 +1148,8 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
           alignItems,
           paddingTop: `${(position.paddingTop || 0) * refHeight / 100}px`,
           paddingBottom: `${(position.paddingBottom || 0) * refHeight / 100}px`,
+          paddingLeft: `${position.paddingLeft ?? 0}px`,
+          paddingRight: `${position.paddingRight ?? 0}px`,
           boxSizing: 'border-box',
           zIndex: 10
         }}
@@ -782,6 +1157,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
         <div
           style={{
             width: '100%',
+            fontFamily: DISPLAY_FONT,
             fontSize: `${fontSize}px`,
             fontWeight: style.fontWeight || '400',
             color: style.color || '#00d4ff',
@@ -792,6 +1168,91 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
           }}
         >
           {slideData.referenceTranslation}
+        </div>
+      </div>
+    );
+  };
+
+  // Render reference English line (for Bible themes - English reference like "Genesis 1:1")
+  const renderReferenceEnglishLine = () => {
+    // Skip if referenceEnglish is in lineOrder - it will be rendered by renderAbsoluteLines
+    if (lineOrder.includes('referenceEnglish')) return null;
+    if (!slideData?.referenceEnglish) {
+      return null;
+    }
+    if (displayMode !== 'bilingual') {
+      return null; // Only show in bilingual mode
+    }
+
+    // Use theme position if available
+    const position = theme?.referenceEnglishPosition;
+    const style = theme?.referenceEnglishStyle;
+
+    // If no specific referenceEnglish position, don't render (Bible theme not configured)
+    if (!position) {
+      return null;
+    }
+
+    if (style?.visible === false) return null;
+
+    const baseFontSize = refHeight * 0.05;
+    const fontSize = baseFontSize * ((style?.fontSize || 70) / 100);
+
+    const justifyContent = position.alignH === 'left' ? 'flex-start' :
+                          position.alignH === 'right' ? 'flex-end' : 'center';
+    const alignItems = position.alignV === 'top' ? 'flex-start' :
+                      position.alignV === 'bottom' ? 'flex-end' : 'center';
+
+    // Build border styles
+    const borderColor = style?.borderColor || '#ffffff';
+    const borderStyles: React.CSSProperties = {};
+    if (style?.borderTop) borderStyles.borderTop = `${style.borderTop}px solid ${borderColor}`;
+    if (style?.borderRight) borderStyles.borderRight = `${style.borderRight}px solid ${borderColor}`;
+    if (style?.borderBottom) borderStyles.borderBottom = `${style.borderBottom}px solid ${borderColor}`;
+    if (style?.borderLeft) borderStyles.borderLeft = `${style.borderLeft}px solid ${borderColor}`;
+    // Apply individual corner radii or fallback to single borderRadius
+    const hasCornerRadii = style?.borderRadiusTopLeft || style?.borderRadiusTopRight || style?.borderRadiusBottomRight || style?.borderRadiusBottomLeft;
+    if (hasCornerRadii) {
+      borderStyles.borderRadius = `${style?.borderRadiusTopLeft ?? 0}px ${style?.borderRadiusTopRight ?? 0}px ${style?.borderRadiusBottomRight ?? 0}px ${style?.borderRadiusBottomLeft ?? 0}px`;
+    } else if (style?.borderRadius) {
+      borderStyles.borderRadius = `${style.borderRadius}px`;
+    }
+
+    return (
+      <div
+        key="referenceEnglish"
+        style={{
+          position: 'absolute',
+          left: `${position.x}%`,
+          top: `${position.y}%`,
+          width: `${position.width}%`,
+          height: `${position.height}%`,
+          display: 'flex',
+          justifyContent,
+          alignItems,
+          paddingTop: `${(position.paddingTop || 0) * refHeight / 100}px`,
+          paddingBottom: `${(position.paddingBottom || 0) * refHeight / 100}px`,
+          paddingLeft: `${position.paddingLeft ?? 0}px`,
+          paddingRight: `${position.paddingRight ?? 0}px`,
+          boxSizing: 'border-box',
+          zIndex: 10,
+          ...borderStyles
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            fontFamily: DISPLAY_FONT,
+            fontSize: `${fontSize}px`,
+            fontWeight: style?.fontWeight || '400',
+            color: style?.color || '#06b6d4',
+            opacity: style?.opacity ?? 0.9,
+            textAlign: position.alignH || 'center',
+            lineHeight: 1.3,
+            textShadow: DEFAULT_TEXT_SHADOW
+          }}
+        >
+          {slideData.referenceEnglish}
         </div>
       </div>
     );
@@ -832,16 +1293,42 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
   const renderPresentationTextBoxes = () => {
     if (!presentationSlide?.textBoxes) return null;
 
-    return presentationSlide.textBoxes.map((textBox) => {
+    return presentationSlide.textBoxes
+      .filter((textBox) => textBox.visible !== false)
+      .map((textBox) => {
       // Calculate font size in pixels based on percentage (100 = 5% of height = 54px at 1080p)
       const baseFontSize = refHeight * 0.05;
       const fontSize = baseFontSize * (textBox.fontSize / 100);
 
-      // Map alignment to CSS flexbox
-      const justifyContent = textBox.textAlign === 'left' ? 'flex-start' :
-                            textBox.textAlign === 'right' ? 'flex-end' : 'center';
+      // Map vertical alignment to CSS flexbox (horizontal alignment uses textAlign on inner div)
       const alignItems = textBox.verticalAlign === 'top' ? 'flex-start' :
                         textBox.verticalAlign === 'bottom' ? 'flex-end' : 'center';
+
+      // Build per-side border styles
+      const borderColor = textBox.borderColor || '#ffffff';
+      const borderStyles: React.CSSProperties = {};
+      if (textBox.borderTop) borderStyles.borderTop = `${textBox.borderTop}px solid ${borderColor}`;
+      if (textBox.borderRight) borderStyles.borderRight = `${textBox.borderRight}px solid ${borderColor}`;
+      if (textBox.borderBottom) borderStyles.borderBottom = `${textBox.borderBottom}px solid ${borderColor}`;
+      if (textBox.borderLeft) borderStyles.borderLeft = `${textBox.borderLeft}px solid ${borderColor}`;
+
+      // Build per-corner border radius
+      const borderRadiusValue = `${textBox.borderRadiusTopLeft ?? 0}px ${textBox.borderRadiusTopRight ?? 0}px ${textBox.borderRadiusBottomRight ?? 0}px ${textBox.borderRadiusBottomLeft ?? 0}px`;
+
+      // Build per-side padding (in percentage)
+      const paddingValue = `${textBox.paddingTop ?? 0}% ${textBox.paddingRight ?? 0}% ${textBox.paddingBottom ?? 0}% ${textBox.paddingLeft ?? 0}%`;
+
+      // Calculate background color with separate opacity
+      let bgColor = textBox.backgroundColor || 'transparent';
+      if (bgColor !== 'transparent' && textBox.backgroundOpacity !== undefined && textBox.backgroundOpacity < 1) {
+        // Convert hex to rgba with backgroundOpacity
+        if (bgColor.startsWith('#') && bgColor.length >= 7) {
+          const r = parseInt(bgColor.slice(1, 3), 16);
+          const g = parseInt(bgColor.slice(3, 5), 16);
+          const b = parseInt(bgColor.slice(5, 7), 16);
+          bgColor = `rgba(${r}, ${g}, ${b}, ${textBox.backgroundOpacity})`;
+        }
+      }
 
       return (
         <div
@@ -853,23 +1340,25 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
             width: `${textBox.width}%`,
             height: `${textBox.height}%`,
             display: 'flex',
-            justifyContent,
             alignItems,
-            backgroundColor: textBox.backgroundColor || 'transparent',
-            opacity: textBox.opacity ?? 1,
+            backgroundColor: bgColor,
             boxSizing: 'border-box',
-            padding: '8px',
-            zIndex: textBox.zIndex ?? 0
+            padding: paddingValue,
+            zIndex: textBox.zIndex ?? 0,
+            borderRadius: borderRadiusValue,
+            ...borderStyles
           }}
         >
           <div
             dir={textBox.textDirection || 'ltr'}
             style={{
+              fontFamily: DISPLAY_FONT,
               fontSize: `${fontSize}px`,
-              fontWeight: textBox.bold ? '700' : '400',
+              fontWeight: textBox.fontWeight || (textBox.bold ? '700' : '400'),
               fontStyle: textBox.italic ? 'italic' : 'normal',
               textDecoration: textBox.underline ? 'underline' : 'none',
               color: textBox.color || '#FFFFFF',
+              opacity: textBox.opacity ?? 1,
               textAlign: textBox.textAlign,
               direction: textBox.textDirection || 'ltr',
               lineHeight: 1.4,
@@ -886,12 +1375,61 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
     });
   };
 
+  // Render presentation background boxes
+  const renderPresentationBackgroundBoxes = () => {
+    if (!presentationSlide?.backgroundBoxes || presentationSlide.backgroundBoxes.length === 0) return null;
+
+    return presentationSlide.backgroundBoxes
+      .filter((box) => box.visible !== false)
+      .map((box) => (
+      <div
+        key={box.id}
+        style={{
+          position: 'absolute',
+          left: `${box.x}%`,
+          top: `${box.y}%`,
+          width: `${box.width}%`,
+          height: `${box.height}%`,
+          backgroundColor: box.color,
+          opacity: box.opacity,
+          borderRadius: box.borderRadius,
+          zIndex: box.zIndex ?? 0,
+          overflow: 'hidden'
+        }}
+      >
+        {/* Texture overlay */}
+        {box.texture && box.texture !== 'none' && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage: texturePatterns[box.texture].pattern,
+              backgroundRepeat: 'repeat',
+              backgroundSize: texturePatterns[box.texture].size,
+              opacity: box.textureOpacity ?? 0.3,
+              pointerEvents: 'none',
+              mixBlendMode: 'overlay'
+            }}
+          />
+        )}
+      </div>
+    ));
+  };
+
   // Get presentation slide background (if any)
   const getPresentationBackgroundStyle = (): React.CSSProperties => {
-    const style: React.CSSProperties = {
-      backgroundColor: presentationSlide?.backgroundColor || '#000000'
-    };
-    return style;
+    if (!presentationSlide) {
+      return { backgroundColor: '#000000' };
+    }
+
+    // Handle different background types
+    if (presentationSlide.backgroundType === 'transparent') {
+      return { backgroundColor: 'transparent' };
+    } else if (presentationSlide.backgroundType === 'gradient' && presentationSlide.backgroundGradient) {
+      return { background: presentationSlide.backgroundGradient };
+    } else {
+      return { backgroundColor: presentationSlide.backgroundColor || '#000000' };
+    }
   };
 
   // Build background style
@@ -1016,8 +1554,9 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
           }}
         >
           {isPresentation ? (
-            /* Presentation mode - render image boxes and textboxes with embedded styling */
+            /* Presentation mode - render background boxes, image boxes and textboxes with embedded styling */
             <>
+              {renderPresentationBackgroundBoxes()}
               {renderPresentationImageBoxes()}
               {renderPresentationTextBoxes()}
             </>
@@ -1032,6 +1571,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
               {/* Bible/Prayer reference lines */}
               {renderReferenceLine()}
               {renderReferenceTranslationLine()}
+              {renderReferenceEnglishLine()}
             </>
           )}
         </div>
@@ -1040,4 +1580,4 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
   );
 };
 
-export default SlideRenderer;
+export default memo(SlideRenderer);

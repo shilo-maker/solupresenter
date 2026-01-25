@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { theme as appTheme } from '../styles/theme';
 import {
   ThemeCanvas,
   PropertiesPanel,
@@ -19,44 +20,66 @@ interface OBSBibleTheme {
   isBuiltIn: boolean;
   viewerBackground: ViewerBackground;
   canvasDimensions: CanvasDimensions;
-  lineOrder: ('hebrew' | 'english')[];
+  lineOrder: ('hebrew' | 'english' | 'reference' | 'referenceEnglish')[];
   linePositions: Record<string, LinePosition>;
   lineStyles: Record<string, LineStyle>;
   referenceStyle: LineStyle;
   referencePosition: LinePosition;
+  referenceEnglishStyle: LineStyle;
+  referenceEnglishPosition: LinePosition;
   backgroundBoxes: BackgroundBox[];
 }
 
+// Display names for layer types
+const LAYER_NAMES: Record<string, string> = {
+  hebrew: 'Hebrew',
+  english: 'English',
+  reference: 'Hebrew Reference',
+  referenceEnglish: 'English Reference'
+};
+
 const DEFAULT_LINE_POSITIONS: Record<string, LinePosition> = {
   hebrew: {
-    x: 0, y: 72, width: 100, height: 10,
-    paddingTop: 1, paddingBottom: 1,
-    alignH: 'center', alignV: 'center'
+    x: 2, y: 2, width: 96, height: 45,
+    paddingTop: 0, paddingBottom: 0,
+    alignH: 'right', alignV: 'top'
   },
   english: {
-    x: 0, y: 82, width: 100, height: 10,
-    paddingTop: 1, paddingBottom: 1,
-    alignH: 'center', alignV: 'center'
+    x: 2, y: 50, width: 96, height: 45,
+    paddingTop: 0, paddingBottom: 0,
+    alignH: 'left', alignV: 'top'
   }
 };
 
 const DEFAULT_LINE_STYLES: Record<string, LineStyle> = {
   hebrew: {
-    fontSize: 100, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true
+    fontSize: 83, fontWeight: '400', color: '#ffffff', opacity: 1, visible: true
   },
   english: {
-    fontSize: 80, fontWeight: '400', color: '#e0e0e0', opacity: 0.9, visible: true
+    fontSize: 78, fontWeight: '200', color: '#ffffff', opacity: 1, visible: true
   }
 };
 
+// Hebrew reference (bottom-left)
 const DEFAULT_REFERENCE_POSITION: LinePosition = {
-  x: 0, y: 92, width: 100, height: 6,
+  x: 2, y: 44, width: 50, height: 5,
   paddingTop: 0, paddingBottom: 0,
-  alignH: 'center', alignV: 'center'
+  alignH: 'left', alignV: 'center'
 };
 
 const DEFAULT_REFERENCE_STYLE: LineStyle = {
-  fontSize: 60, fontWeight: '500', color: '#FF8C42', opacity: 0.9, visible: true
+  fontSize: 50, fontWeight: '400', color: '#a0a0a0', opacity: 1, visible: true
+};
+
+// English reference (bottom-right)
+const DEFAULT_REFERENCE_ENGLISH_POSITION: LinePosition = {
+  x: 48, y: 90, width: 50, height: 8,
+  paddingTop: 0, paddingBottom: 0,
+  alignH: 'right', alignV: 'center'
+};
+
+const DEFAULT_REFERENCE_ENGLISH_STYLE: LineStyle = {
+  fontSize: 50, fontWeight: '400', color: '#a0a0a0', opacity: 1, visible: true
 };
 
 const OBSBibleThemeEditorPage: React.FC = () => {
@@ -71,15 +94,17 @@ const OBSBibleThemeEditorPage: React.FC = () => {
     isBuiltIn: false,
     viewerBackground: { type: 'transparent', color: null },
     canvasDimensions: { width: 1920, height: 1080 },
-    lineOrder: ['hebrew', 'english'],
+    lineOrder: ['hebrew', 'english', 'reference', 'referenceEnglish'],
     linePositions: DEFAULT_LINE_POSITIONS,
     lineStyles: DEFAULT_LINE_STYLES,
     referenceStyle: DEFAULT_REFERENCE_STYLE,
     referencePosition: DEFAULT_REFERENCE_POSITION,
-    backgroundBoxes: [{ id: 'default-box', x: 0, y: 70, width: 100, height: 30, color: '#000000', opacity: 0.7, borderRadius: 0 }]
+    referenceEnglishStyle: DEFAULT_REFERENCE_ENGLISH_STYLE,
+    referenceEnglishPosition: DEFAULT_REFERENCE_ENGLISH_POSITION,
+    backgroundBoxes: []
   });
 
-  const [selectedElement, setSelectedElement] = useState<{ type: 'line' | 'box' | 'reference'; id: string } | null>(null);
+  const [selectedElement, setSelectedElement] = useState<{ type: 'line' | 'box' | 'reference' | 'referenceEnglish'; id: string } | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [hasChanges, setHasChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<'layout' | 'background' | 'resolution'>('layout');
@@ -87,32 +112,91 @@ const OBSBibleThemeEditorPage: React.FC = () => {
   const [previewTexts, setPreviewTexts] = useState<Record<string, string>>({
     hebrew: 'בְּרֵאשִׁית בָּרָא אֱלֹהִים',
     english: 'In the beginning God created',
-    reference: 'Genesis 1:1'
+    reference: 'בראשית א:א',
+    referenceEnglish: 'Genesis 1:1'
   });
+
+  // Drag and drop state for layer reordering
+  const [draggedItem, setDraggedItem] = useState<{ type: 'line' | 'box'; id: string; index: number } | null>(null);
+  const [dragOverItem, setDragOverItem] = useState<{ type: 'line' | 'box'; index: number } | null>(null);
 
   const handlePreviewTextChange = useCallback((lineType: string, text: string) => {
     setPreviewTexts(prev => ({ ...prev, [lineType]: text }));
   }, []);
 
+  // Drag and drop handlers for layer reordering
+  const handleDragStart = useCallback((type: 'line' | 'box', id: string, index: number) => {
+    setDraggedItem({ type, id, index });
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, type: 'line' | 'box', index: number) => {
+    e.preventDefault();
+    if (draggedItem && draggedItem.type === type) {
+      setDragOverItem({ type, index });
+    }
+  }, [draggedItem]);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedItem(null);
+    setDragOverItem(null);
+  }, []);
+
+  const handleDrop = useCallback((type: 'line' | 'box', dropIndex: number) => {
+    if (!draggedItem || draggedItem.type !== type) return;
+
+    const dragIndex = draggedItem.index;
+    if (dragIndex === dropIndex) {
+      handleDragEnd();
+      return;
+    }
+
+    if (type === 'line') {
+      // Reorder line order
+      const newLineOrder = [...theme.lineOrder];
+      const [removed] = newLineOrder.splice(dragIndex, 1);
+      newLineOrder.splice(dropIndex, 0, removed);
+      setTheme(prev => ({ ...prev, lineOrder: newLineOrder as ('hebrew' | 'english' | 'reference' | 'referenceEnglish')[] }));
+    } else {
+      // Reorder background boxes
+      const newBoxes = [...theme.backgroundBoxes];
+      const [removed] = newBoxes.splice(dragIndex, 1);
+      newBoxes.splice(dropIndex, 0, removed);
+      setTheme(prev => ({ ...prev, backgroundBoxes: newBoxes }));
+    }
+
+    setHasChanges(true);
+    handleDragEnd();
+  }, [draggedItem, theme.lineOrder, theme.backgroundBoxes, handleDragEnd]);
+
   useEffect(() => {
     if (themeId) {
       window.electronAPI.getOBSTheme(themeId).then((loadedTheme: any) => {
         if (loadedTheme) {
+          // Ensure lineOrder includes all layer types for backward compatibility
+          let lineOrder = loadedTheme.lineOrder || ['hebrew', 'english'];
+          if (!lineOrder.includes('reference')) {
+            lineOrder = [...lineOrder, 'reference', 'referenceEnglish'];
+          }
+
           setTheme({
-            id: loadedTheme.id,
-            name: loadedTheme.name,
+            id: loadedTheme.id || '',
+            name: loadedTheme.name || 'Untitled Theme',
             type: 'bible',
-            isBuiltIn: loadedTheme.isBuiltIn,
+            isBuiltIn: loadedTheme.isBuiltIn ?? false,
             viewerBackground: loadedTheme.viewerBackground || { type: 'transparent', color: null },
             canvasDimensions: loadedTheme.canvasDimensions || { width: 1920, height: 1080 },
-            lineOrder: loadedTheme.lineOrder || ['hebrew', 'english'],
+            lineOrder: lineOrder as ('hebrew' | 'english' | 'reference' | 'referenceEnglish')[],
             linePositions: loadedTheme.linePositions || DEFAULT_LINE_POSITIONS,
             lineStyles: loadedTheme.lineStyles || DEFAULT_LINE_STYLES,
-            referenceStyle: loadedTheme.referenceStyle || DEFAULT_REFERENCE_STYLE,
-            referencePosition: loadedTheme.referencePosition || DEFAULT_REFERENCE_POSITION,
+            referenceStyle: { ...DEFAULT_REFERENCE_STYLE, ...loadedTheme.referenceStyle },
+            referencePosition: { ...DEFAULT_REFERENCE_POSITION, ...loadedTheme.referencePosition },
+            referenceEnglishStyle: { ...DEFAULT_REFERENCE_ENGLISH_STYLE, ...loadedTheme.referenceEnglishStyle },
+            referenceEnglishPosition: { ...DEFAULT_REFERENCE_ENGLISH_POSITION, ...loadedTheme.referenceEnglishPosition },
             backgroundBoxes: loadedTheme.backgroundBoxes || []
           });
         }
+      }).catch((error) => {
+        console.error('Failed to load OBS bible theme:', error);
       });
     }
   }, [themeId]);
@@ -120,6 +204,8 @@ const OBSBibleThemeEditorPage: React.FC = () => {
   const handleLinePositionChange = useCallback((lineType: string, position: LinePosition) => {
     if (lineType === 'reference') {
       setTheme(prev => ({ ...prev, referencePosition: position }));
+    } else if (lineType === 'referenceEnglish') {
+      setTheme(prev => ({ ...prev, referenceEnglishPosition: position }));
     } else {
       setTheme(prev => ({
         ...prev,
@@ -132,6 +218,8 @@ const OBSBibleThemeEditorPage: React.FC = () => {
   const handleLineStyleChange = useCallback((lineType: string, style: LineStyle) => {
     if (lineType === 'reference') {
       setTheme(prev => ({ ...prev, referenceStyle: style }));
+    } else if (lineType === 'referenceEnglish') {
+      setTheme(prev => ({ ...prev, referenceEnglishStyle: style }));
     } else {
       setTheme(prev => ({
         ...prev,
@@ -140,6 +228,13 @@ const OBSBibleThemeEditorPage: React.FC = () => {
     }
     setHasChanges(true);
   }, []);
+
+  // Helper to get style for any layer type
+  const getLayerStyle = useCallback((lineType: string): LineStyle | undefined => {
+    if (lineType === 'reference') return theme.referenceStyle;
+    if (lineType === 'referenceEnglish') return theme.referenceEnglishStyle;
+    return theme.lineStyles[lineType];
+  }, [theme.lineStyles, theme.referenceStyle, theme.referenceEnglishStyle]);
 
   const handleBoxUpdate = useCallback((updatedBox: BackgroundBox) => {
     setTheme(prev => ({
@@ -168,9 +263,9 @@ const OBSBibleThemeEditorPage: React.FC = () => {
     const newBox: BackgroundBox = {
       id: `box-${Date.now()}`,
       x: 10 + theme.backgroundBoxes.length * 5,
-      y: 70,
-      width: 80,
-      height: 25,
+      y: 10 + theme.backgroundBoxes.length * 5,
+      width: 30,
+      height: 30,
       color: '#1a1a2e',
       opacity: 0.8,
       borderRadius: 8
@@ -196,6 +291,8 @@ const OBSBibleThemeEditorPage: React.FC = () => {
         lineStyles: theme.lineStyles,
         referenceStyle: theme.referenceStyle,
         referencePosition: theme.referencePosition,
+        referenceEnglishStyle: theme.referenceEnglishStyle,
+        referenceEnglishPosition: theme.referenceEnglishPosition,
         backgroundBoxes: theme.backgroundBoxes
       };
 
@@ -229,31 +326,37 @@ const OBSBibleThemeEditorPage: React.FC = () => {
   };
 
   const selectedLineType = selectedElement?.type === 'line' ? selectedElement.id as 'hebrew' | 'english' :
-                           selectedElement?.type === 'reference' ? 'reference' : null;
+                           selectedElement?.type === 'reference' ? selectedElement.id as 'reference' | 'referenceEnglish' :
+                           selectedElement?.type === 'referenceEnglish' ? 'referenceEnglish' : null;
   const selectedBox = selectedElement?.type === 'box'
     ? theme.backgroundBoxes.find(b => b.id === selectedElement.id)
     : null;
 
   const getSelectedStyle = () => {
     if (selectedLineType === 'reference') return theme.referenceStyle;
+    if (selectedLineType === 'referenceEnglish') return theme.referenceEnglishStyle;
     if (selectedLineType) return theme.lineStyles[selectedLineType];
     return null;
   };
 
   const getSelectedPosition = () => {
     if (selectedLineType === 'reference') return theme.referencePosition;
+    if (selectedLineType === 'referenceEnglish') return theme.referenceEnglishPosition;
     if (selectedLineType) return theme.linePositions[selectedLineType];
     return null;
   };
 
+  // Build combined positions and styles including both references
   const allLinePositions = {
     ...theme.linePositions,
-    reference: theme.referencePosition
+    reference: theme.referencePosition,
+    referenceEnglish: theme.referenceEnglishPosition
   };
 
   const allLineStyles = {
     ...theme.lineStyles,
-    reference: theme.referenceStyle
+    reference: theme.referenceStyle,
+    referenceEnglish: theme.referenceEnglishStyle
   };
 
   return (
@@ -293,8 +396,8 @@ const OBSBibleThemeEditorPage: React.FC = () => {
           <div style={{
             padding: '4px 10px',
             borderRadius: '4px',
-            background: 'rgba(23, 162, 184, 0.3)',
-            color: '#5bc0de',
+            background: 'rgba(76, 175, 80, 0.3)',
+            color: '#81c784',
             fontSize: '12px',
             fontWeight: 600
           }}>
@@ -332,7 +435,7 @@ const OBSBibleThemeEditorPage: React.FC = () => {
                 padding: '10px 24px',
                 borderRadius: '6px',
                 border: 'none',
-                background: saveStatus === 'saved' ? '#28a745' : '#17a2b8',
+                background: saveStatus === 'saved' ? '#28a745' : '#4CAF50',
                 color: 'white',
                 cursor: saveStatus !== 'idle' ? 'not-allowed' : 'pointer',
                 fontWeight: 600,
@@ -362,7 +465,7 @@ const OBSBibleThemeEditorPage: React.FC = () => {
           <ThemeCanvas
             canvasDimensions={theme.canvasDimensions}
             viewerBackground={theme.viewerBackground}
-            lineOrder={[...theme.lineOrder, 'reference'] as any}
+            lineOrder={theme.lineOrder}
             linePositions={allLinePositions}
             lineStyles={allLineStyles}
             backgroundBoxes={theme.backgroundBoxes}
@@ -402,11 +505,11 @@ const OBSBibleThemeEditorPage: React.FC = () => {
                   flex: 1,
                   padding: '12px',
                   border: 'none',
-                  background: activeTab === tab.id ? 'rgba(23,162,184,0.15)' : 'transparent',
-                  color: activeTab === tab.id ? '#17a2b8' : 'rgba(255,255,255,0.6)',
+                  background: activeTab === tab.id ? 'rgba(76,175,80,0.15)' : 'transparent',
+                  color: activeTab === tab.id ? '#4CAF50' : 'rgba(255,255,255,0.6)',
                   cursor: 'pointer',
                   fontWeight: activeTab === tab.id ? 600 : 400,
-                  borderBottom: activeTab === tab.id ? '2px solid #17a2b8' : '2px solid transparent'
+                  borderBottom: activeTab === tab.id ? '2px solid #4CAF50' : '2px solid transparent'
                 }}
               >
                 {tab.label}
@@ -443,16 +546,32 @@ const OBSBibleThemeEditorPage: React.FC = () => {
                       marginBottom: '6px',
                       textTransform: 'uppercase'
                     }}>
-                      Text Lines
+                      Text Lines (drag to reorder)
                     </div>
-                    {(['hebrew', 'english'] as const).map((lineType) => {
-                      const style = theme.lineStyles[lineType];
-                      const isSelected = selectedElement?.type === 'line' && selectedElement.id === lineType;
+                    {theme.lineOrder.map((lineType, index) => {
+                      const style = getLayerStyle(lineType);
+                      const isReference = lineType === 'reference' || lineType === 'referenceEnglish';
+                      // Handle selection - ThemeCanvas may use type='reference' with id='reference',
+                      // or type='referenceEnglish' with id='referenceEnglish'
+                      const isSelected = isReference
+                        ? (selectedElement?.type === 'reference' && selectedElement.id === lineType) ||
+                          (selectedElement?.type === 'referenceEnglish' && lineType === 'referenceEnglish')
+                        : (selectedElement?.type === 'line' && selectedElement.id === lineType);
                       const isVisible = style?.visible !== false;
+                      const isDragging = draggedItem?.type === 'line' && draggedItem.id === lineType;
+                      const isDragOver = dragOverItem?.type === 'line' && dragOverItem.index === index;
                       return (
                         <div
                           key={lineType}
-                          onClick={() => setSelectedElement({ type: 'line', id: lineType })}
+                          draggable
+                          onDragStart={() => handleDragStart('line', lineType, index)}
+                          onDragOver={(e) => handleDragOver(e, 'line', index)}
+                          onDragEnd={handleDragEnd}
+                          onDrop={() => handleDrop('line', index)}
+                          onClick={() => setSelectedElement({
+                            type: lineType === 'referenceEnglish' ? 'referenceEnglish' : (isReference ? 'reference' : 'line'),
+                            id: lineType
+                          })}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -460,16 +579,36 @@ const OBSBibleThemeEditorPage: React.FC = () => {
                             padding: '8px 10px',
                             marginBottom: '4px',
                             borderRadius: '4px',
-                            background: isSelected ? 'rgba(23,162,184,0.2)' : 'rgba(255,255,255,0.05)',
-                            border: isSelected ? '1px solid rgba(23,162,184,0.5)' : '1px solid transparent',
-                            cursor: 'pointer',
-                            opacity: isVisible ? 1 : 0.5
+                            background: isSelected
+                              ? (isReference ? 'rgba(6,182,212,0.2)' : 'rgba(76,175,80,0.2)')
+                              : 'rgba(255,255,255,0.05)',
+                            border: isDragOver
+                              ? '2px dashed #4CAF50'
+                              : isSelected
+                                ? (isReference ? '1px solid rgba(6,182,212,0.5)' : '1px solid rgba(76,175,80,0.5)')
+                                : '1px solid transparent',
+                            cursor: 'grab',
+                            opacity: isDragging ? 0.5 : isVisible ? 1 : 0.5,
+                            transition: 'border 0.15s, opacity 0.15s'
                           }}
                         >
+                          {/* Drag Handle */}
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '2px',
+                            cursor: 'grab',
+                            padding: '2px'
+                          }}>
+                            <div style={{ width: '12px', height: '2px', background: 'rgba(255,255,255,0.3)', borderRadius: '1px' }} />
+                            <div style={{ width: '12px', height: '2px', background: 'rgba(255,255,255,0.3)', borderRadius: '1px' }} />
+                            <div style={{ width: '12px', height: '2px', background: 'rgba(255,255,255,0.3)', borderRadius: '1px' }} />
+                          </div>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleLineStyleChange(lineType, { ...style, visible: !isVisible });
+                              const currentStyle = style ?? { fontSize: 50, fontWeight: '400', color: '#ffffff', opacity: 1, visible: true };
+                              handleLineStyleChange(lineType, { ...currentStyle, visible: !isVisible });
                             }}
                             style={{
                               width: '24px',
@@ -490,60 +629,15 @@ const OBSBibleThemeEditorPage: React.FC = () => {
                           <span style={{
                             flex: 1,
                             fontSize: '12px',
-                            color: isVisible ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)',
-                            textTransform: 'capitalize'
+                            color: isVisible
+                              ? (isReference ? '#06b6d4' : 'rgba(255,255,255,0.9)')
+                              : 'rgba(255,255,255,0.4)'
                           }}>
-                            {lineType}
+                            {isReference ? '📖 ' : ''}{LAYER_NAMES[lineType] || lineType}
                           </span>
                         </div>
                       );
                     })}
-
-                    {/* Reference Line */}
-                    <div
-                      onClick={() => setSelectedElement({ type: 'reference', id: 'reference' })}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px 10px',
-                        marginBottom: '4px',
-                        borderRadius: '4px',
-                        background: selectedElement?.type === 'reference' ? 'rgba(255,140,66,0.2)' : 'rgba(255,255,255,0.05)',
-                        border: selectedElement?.type === 'reference' ? '1px solid rgba(255,140,66,0.5)' : '1px solid transparent',
-                        cursor: 'pointer',
-                        opacity: theme.referenceStyle?.visible !== false ? 1 : 0.5
-                      }}
-                    >
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleLineStyleChange('reference', { ...theme.referenceStyle, visible: !theme.referenceStyle?.visible });
-                        }}
-                        style={{
-                          width: '24px',
-                          height: '24px',
-                          border: 'none',
-                          background: 'transparent',
-                          cursor: 'pointer',
-                          padding: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '14px'
-                        }}
-                        title={theme.referenceStyle?.visible !== false ? 'Hide layer' : 'Show layer'}
-                      >
-                        {theme.referenceStyle?.visible !== false ? '👁️' : '👁️‍🗨️'}
-                      </button>
-                      <span style={{
-                        flex: 1,
-                        fontSize: '12px',
-                        color: theme.referenceStyle?.visible !== false ? '#FF8C42' : 'rgba(255,255,255,0.4)'
-                      }}>
-                        Reference
-                      </span>
-                    </div>
                   </div>
 
                   {/* Background Boxes */}
@@ -555,13 +649,20 @@ const OBSBibleThemeEditorPage: React.FC = () => {
                         marginBottom: '6px',
                         textTransform: 'uppercase'
                       }}>
-                        Background Boxes
+                        Background Boxes (drag to reorder)
                       </div>
                       {theme.backgroundBoxes.map((box, index) => {
                         const isSelected = selectedElement?.type === 'box' && selectedElement.id === box.id;
+                        const isDragging = draggedItem?.type === 'box' && draggedItem.id === box.id;
+                        const isDragOver = dragOverItem?.type === 'box' && dragOverItem.index === index;
                         return (
                           <div
                             key={box.id}
+                            draggable
+                            onDragStart={() => handleDragStart('box', box.id, index)}
+                            onDragOver={(e) => handleDragOver(e, 'box', index)}
+                            onDragEnd={handleDragEnd}
+                            onDrop={() => handleDrop('box', index)}
                             onClick={() => setSelectedElement({ type: 'box', id: box.id })}
                             style={{
                               display: 'flex',
@@ -570,11 +671,29 @@ const OBSBibleThemeEditorPage: React.FC = () => {
                               padding: '8px 10px',
                               marginBottom: '4px',
                               borderRadius: '4px',
-                              background: isSelected ? 'rgba(23,162,184,0.2)' : 'rgba(255,255,255,0.05)',
-                              border: isSelected ? '1px solid rgba(23,162,184,0.5)' : '1px solid transparent',
-                              cursor: 'pointer'
+                              background: isSelected ? 'rgba(76,175,80,0.2)' : 'rgba(255,255,255,0.05)',
+                              border: isDragOver
+                                ? '2px dashed #4CAF50'
+                                : isSelected
+                                  ? '1px solid rgba(76,175,80,0.5)'
+                                  : '1px solid transparent',
+                              cursor: 'grab',
+                              opacity: isDragging ? 0.5 : 1,
+                              transition: 'border 0.15s, opacity 0.15s'
                             }}
                           >
+                            {/* Drag Handle */}
+                            <div style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '2px',
+                              cursor: 'grab',
+                              padding: '2px'
+                            }}>
+                              <div style={{ width: '12px', height: '2px', background: 'rgba(255,255,255,0.3)', borderRadius: '1px' }} />
+                              <div style={{ width: '12px', height: '2px', background: 'rgba(255,255,255,0.3)', borderRadius: '1px' }} />
+                              <div style={{ width: '12px', height: '2px', background: 'rgba(255,255,255,0.3)', borderRadius: '1px' }} />
+                            </div>
                             <span style={{ fontSize: '14px' }}>◻️</span>
                             <span style={{
                               flex: 1,
@@ -616,6 +735,7 @@ const OBSBibleThemeEditorPage: React.FC = () => {
                     style={getSelectedStyle()!}
                     onPositionChange={(pos) => handleLinePositionChange(selectedLineType, pos)}
                     onStyleChange={(style) => handleLineStyleChange(selectedLineType, style)}
+                    availableLineTypes={[...theme.lineOrder, 'reference', 'referenceEnglish']}
                   />
                 )}
 

@@ -2,30 +2,66 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
 import * as crypto from 'crypto';
+import { createLogger } from '../utils/debug';
 
+// Create logger for this module
+const log = createLogger('MediaManager');
+
+/**
+ * Represents a registered media folder that is scanned for media files.
+ */
 export interface MediaFolder {
+  /** Unique identifier for the folder */
   id: string;
+  /** Absolute path to the folder */
   path: string;
+  /** Display name (usually the folder's basename) */
   name: string;
+  /** Type of media to scan for in this folder */
   type: 'images' | 'videos' | 'all';
+  /** Number of media files found in the folder */
   fileCount: number;
+  /** Timestamp of the last folder scan */
   lastScanned: Date;
 }
 
+/**
+ * Represents a media file (image or video) found in a registered folder.
+ */
 export interface MediaFile {
+  /** Unique identifier for the file */
   id: string;
+  /** Filename (not the full path) */
   name: string;
+  /** Absolute path to the file */
   path: string;
+  /** Type of media (image or video) */
   type: 'image' | 'video';
+  /** File size in bytes */
   size: number;
+  /** Last modification timestamp */
   modified: Date;
+  /** ID of the folder this file belongs to */
   folderId: string;
+  /** Optional base64 thumbnail data */
   thumbnail?: string;
 }
 
+/** Supported image file extensions */
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+/** Supported video file extensions */
 const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.wmv', '.m4v'];
 
+/**
+ * Manages media folders and files for the presentation system.
+ * Handles folder registration, file scanning, and media queries.
+ * Configuration is persisted to the user's app data folder.
+ *
+ * @example
+ * const manager = new MediaManager();
+ * await manager.addFolder('/path/to/images', 'images');
+ * const files = manager.getImages();
+ */
 export class MediaManager {
   private folders: Map<string, MediaFolder> = new Map();
   private files: Map<string, MediaFile[]> = new Map();
@@ -49,11 +85,11 @@ export class MediaManager {
             lastScanned: new Date(folder.lastScanned)
           });
           // Scan folder on load
-          this.scanFolder(folder.id).catch(console.error);
+          this.scanFolder(folder.id).catch(err => log.error('Scan folder failed:', err));
         }
       }
     } catch (error) {
-      console.error('Failed to load media config:', error);
+      log.error('Failed to load media config:', error);
     }
   }
 
@@ -67,19 +103,59 @@ export class MediaManager {
       };
       fs.writeFileSync(this.configPath, JSON.stringify(data, null, 2));
     } catch (error) {
-      console.error('Failed to save media config:', error);
+      log.error('Failed to save media config:', error);
     }
   }
 
   /**
-   * Add a new media folder
+   * Add a new media folder to be scanned for media files.
+   * Validates the path for security and immediately scans the folder.
+   *
+   * @param folderPath - Absolute path to the folder to add
+   * @param type - Type of media to scan for ('images', 'videos', or 'all')
+   * @returns The created MediaFolder object
+   * @throws Error if path is invalid, doesn't exist, or contains traversal attempts
    */
   async addFolder(folderPath: string, type: 'images' | 'videos' | 'all'): Promise<MediaFolder> {
+    // Validate inputs
+    if (!folderPath || typeof folderPath !== 'string') {
+      throw new Error('Invalid folder path');
+    }
+    if (!['images', 'videos', 'all'].includes(type)) {
+      throw new Error('Invalid folder type');
+    }
+
+    // Normalize and validate path
+    const normalizedPath = path.normalize(folderPath);
+
+    // Check for path traversal
+    if (normalizedPath.includes('..')) {
+      throw new Error('Path traversal not allowed');
+    }
+
+    // Ensure path is absolute
+    if (!path.isAbsolute(normalizedPath)) {
+      throw new Error('Path must be absolute');
+    }
+
+    // Check if folder exists and is a directory
+    try {
+      const stats = await fs.promises.stat(normalizedPath);
+      if (!stats.isDirectory()) {
+        throw new Error('Path is not a directory');
+      }
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        throw new Error('Folder does not exist');
+      }
+      throw error;
+    }
+
     const id = crypto.randomUUID();
     const folder: MediaFolder = {
       id,
-      path: folderPath,
-      name: path.basename(folderPath),
+      path: normalizedPath,
+      name: path.basename(normalizedPath),
       type,
       fileCount: 0,
       lastScanned: new Date()
@@ -96,6 +172,11 @@ export class MediaManager {
    * Remove a media folder
    */
   removeFolder(folderId: string): void {
+    // Validate input
+    if (!folderId || typeof folderId !== 'string') {
+      log.error('removeFolder: invalid folderId');
+      return;
+    }
     this.folders.delete(folderId);
     this.files.delete(folderId);
     this.saveConfig();
@@ -124,7 +205,7 @@ export class MediaManager {
       folder.lastScanned = new Date();
       this.saveConfig();
     } catch (error) {
-      console.error(`Failed to scan folder ${folder.path}:`, error);
+      log.error(`Failed to scan folder ${folder.path}:`, error);
     }
   }
 
@@ -157,6 +238,12 @@ export class MediaManager {
       for (const entry of entries) {
         const fullPath = path.join(dirPath, entry.name);
 
+        // Skip symlinks to prevent infinite loops and accessing files outside intended directories
+        if (entry.isSymbolicLink()) {
+          log.debug(`Skipping symlink: ${fullPath}`);
+          continue;
+        }
+
         if (entry.isDirectory()) {
           // Recursively scan subdirectories
           const subFiles = await this.scanDirectory(fullPath, type, folderId);
@@ -178,20 +265,23 @@ export class MediaManager {
                 folderId
               });
             } catch (err) {
-              console.error(`Failed to stat file ${fullPath}:`, err);
+              log.error(`Failed to stat file ${fullPath}:`, err);
             }
           }
         }
       }
     } catch (error) {
-      console.error(`Failed to read directory ${dirPath}:`, error);
+      log.error(`Failed to read directory ${dirPath}:`, error);
     }
 
     return mediaFiles;
   }
 
   /**
-   * Get files from a folder or all folders
+   * Get media files from a specific folder or all registered folders.
+   *
+   * @param folderId - Optional folder ID to filter by. If omitted, returns all files.
+   * @returns Array of MediaFile objects, sorted by modification date (newest first)
    */
   getFiles(folderId?: string): MediaFile[] {
     if (folderId) {
@@ -223,13 +313,25 @@ export class MediaManager {
   }
 
   /**
-   * Check if a path is within allowed folders
+   * Check if a file path is within one of the registered media folders.
+   * Used for security validation before serving files.
+   *
+   * @param filePath - The path to validate
+   * @returns true if the path is within a registered folder, false otherwise
    */
   isPathAllowed(filePath: string): boolean {
+    // Validate input
+    if (!filePath || typeof filePath !== 'string') {
+      return false;
+    }
     const normalizedPath = path.normalize(filePath);
+    // Check for path traversal
+    if (normalizedPath.includes('..')) {
+      return false;
+    }
     for (const folder of this.folders.values()) {
       const normalizedFolder = path.normalize(folder.path);
-      if (normalizedPath.startsWith(normalizedFolder)) {
+      if (normalizedPath.startsWith(normalizedFolder + path.sep) || normalizedPath === normalizedFolder) {
         return true;
       }
     }
@@ -240,6 +342,10 @@ export class MediaManager {
    * Get a file by its path
    */
   getFileByPath(filePath: string): MediaFile | undefined {
+    // Validate input
+    if (!filePath || typeof filePath !== 'string') {
+      return undefined;
+    }
     for (const files of this.files.values()) {
       const file = files.find((f) => f.path === filePath);
       if (file) return file;

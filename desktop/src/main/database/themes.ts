@@ -1,4 +1,4 @@
-import { getDb, saveDatabase, generateId, queryAll, queryOne, CLASSIC_THEME_ID } from './index';
+import { getDb, saveDatabase, generateId, queryAll, queryOne, CLASSIC_THEME_ID, createBackup } from './index';
 
 export interface ThemeData {
   name: string;
@@ -53,26 +53,53 @@ export async function createTheme(data: ThemeData): Promise<any> {
     translation: { fontSize: 90, fontWeight: '400', color: '#FFFFFF', opacity: 0.95, visible: true }
   };
 
+  // Prepare all values for return
+  const lineOrder = data.lineOrder || ['original', 'transliteration', 'translation'];
+  const lineStyles = data.lineStyles || defaultStyles;
+  const positioning = data.positioning || { vertical: 'center', horizontal: 'center' };
+  const container = data.container || { maxWidth: '100%', padding: '2vh 6vw', backgroundColor: 'transparent', borderRadius: '0px' };
+  const viewerBackground = data.viewerBackground || { type: 'inherit', color: null };
+  const linePositions = data.linePositions || null;
+  const canvasDimensions = data.canvasDimensions || { width: 1920, height: 1080 };
+  const backgroundBoxes = data.backgroundBoxes || null;
+
   db.run(`
     INSERT INTO viewer_themes (id, name, isBuiltIn, isDefault, lineOrder, lineStyles, positioning, container, viewerBackground, linePositions, canvasDimensions, backgroundBoxes, createdAt, updatedAt)
     VALUES (?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     id,
     data.name,
-    JSON.stringify(data.lineOrder || ['original', 'transliteration', 'translation']),
-    JSON.stringify(data.lineStyles || defaultStyles),
-    JSON.stringify(data.positioning || { vertical: 'center', horizontal: 'center' }),
-    JSON.stringify(data.container || { maxWidth: '100%', padding: '2vh 6vw', backgroundColor: 'transparent', borderRadius: '0px' }),
-    JSON.stringify(data.viewerBackground || { type: 'inherit', color: null }),
-    data.linePositions ? JSON.stringify(data.linePositions) : null,
-    JSON.stringify(data.canvasDimensions || { width: 1920, height: 1080 }),
-    data.backgroundBoxes ? JSON.stringify(data.backgroundBoxes) : null,
+    JSON.stringify(lineOrder),
+    JSON.stringify(lineStyles),
+    JSON.stringify(positioning),
+    JSON.stringify(container),
+    JSON.stringify(viewerBackground),
+    linePositions ? JSON.stringify(linePositions) : null,
+    JSON.stringify(canvasDimensions),
+    backgroundBoxes ? JSON.stringify(backgroundBoxes) : null,
     now,
     now
   ]);
 
   saveDatabase();
-  return getTheme(id);
+
+  // Return the created object directly instead of re-querying
+  return {
+    id,
+    name: data.name,
+    isBuiltIn: 0,
+    isDefault: 0,
+    lineOrder,
+    lineStyles,
+    positioning,
+    container,
+    viewerBackground,
+    linePositions,
+    canvasDimensions,
+    backgroundBoxes,
+    createdAt: now,
+    updatedAt: now
+  };
 }
 
 /**
@@ -92,52 +119,67 @@ export async function updateTheme(id: string, data: Partial<ThemeData>): Promise
 
   const updates: string[] = [];
   const values: any[] = [];
+  const now = new Date().toISOString();
+
+  // Track updated values for return object
+  const updatedTheme = { ...existing };
 
   if (data.name !== undefined) {
     updates.push('name = ?');
     values.push(data.name);
+    updatedTheme.name = data.name;
   }
   if (data.lineOrder !== undefined) {
     updates.push('lineOrder = ?');
     values.push(JSON.stringify(data.lineOrder));
+    updatedTheme.lineOrder = data.lineOrder;
   }
   if (data.lineStyles !== undefined) {
     updates.push('lineStyles = ?');
     values.push(JSON.stringify(data.lineStyles));
+    updatedTheme.lineStyles = data.lineStyles;
   }
   if (data.positioning !== undefined) {
     updates.push('positioning = ?');
     values.push(JSON.stringify(data.positioning));
+    updatedTheme.positioning = data.positioning;
   }
   if (data.container !== undefined) {
     updates.push('container = ?');
     values.push(JSON.stringify(data.container));
+    updatedTheme.container = data.container;
   }
   if (data.viewerBackground !== undefined) {
     updates.push('viewerBackground = ?');
     values.push(JSON.stringify(data.viewerBackground));
+    updatedTheme.viewerBackground = data.viewerBackground;
   }
   if (data.linePositions !== undefined) {
     updates.push('linePositions = ?');
     values.push(data.linePositions ? JSON.stringify(data.linePositions) : null);
+    updatedTheme.linePositions = data.linePositions;
   }
   if (data.canvasDimensions !== undefined) {
     updates.push('canvasDimensions = ?');
     values.push(JSON.stringify(data.canvasDimensions));
+    updatedTheme.canvasDimensions = data.canvasDimensions;
   }
   if (data.backgroundBoxes !== undefined) {
     updates.push('backgroundBoxes = ?');
     values.push(data.backgroundBoxes ? JSON.stringify(data.backgroundBoxes) : null);
+    updatedTheme.backgroundBoxes = data.backgroundBoxes;
   }
 
   updates.push('updatedAt = ?');
-  values.push(new Date().toISOString());
+  values.push(now);
   values.push(id);
+  updatedTheme.updatedAt = now;
 
   db.run(`UPDATE viewer_themes SET ${updates.join(', ')} WHERE id = ?`, values);
   saveDatabase();
 
-  return getTheme(id);
+  // Return the updated object directly instead of re-querying
+  return updatedTheme;
 }
 
 /**
@@ -147,6 +189,9 @@ export async function deleteTheme(id: string): Promise<boolean> {
   const db = getDb();
   if (!db) return false;
 
+  // Validate input
+  if (!id || typeof id !== 'string') return false;
+
   const existing = await getTheme(id);
   if (!existing) return false;
 
@@ -155,7 +200,15 @@ export async function deleteTheme(id: string): Promise<boolean> {
     throw new Error('Cannot delete built-in theme');
   }
 
-  db.run(`DELETE FROM viewer_themes WHERE id = ?`, [id]);
-  saveDatabase();
-  return true;
+  // Create backup before destructive operation
+  createBackup('delete_theme');
+
+  try {
+    db.run(`DELETE FROM viewer_themes WHERE id = ?`, [id]);
+    saveDatabase();
+    return true;
+  } catch (error) {
+    console.error('[themes] deleteTheme error:', error);
+    throw new Error(`Failed to delete theme: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }

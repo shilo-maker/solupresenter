@@ -100,16 +100,18 @@ const StageMonitorEditorPage: React.FC = () => {
       window.electronAPI.getStageTheme(themeId).then((loadedTheme: any) => {
         if (loadedTheme) {
           setTheme({
-            id: loadedTheme.id,
-            name: loadedTheme.name,
-            isBuiltIn: loadedTheme.isBuiltIn,
-            isDefault: loadedTheme.isDefault,
+            id: loadedTheme.id || '',
+            name: loadedTheme.name || 'Untitled Theme',
+            isBuiltIn: loadedTheme.isBuiltIn ?? false,
+            isDefault: loadedTheme.isDefault ?? false,
             canvasDimensions: loadedTheme.canvasDimensions || { width: 1920, height: 1080 },
             colors: loadedTheme.colors || DEFAULT_THEME.colors,
             elements: loadedTheme.elements || DEFAULT_THEME.elements,
             currentSlideText: loadedTheme.currentSlideText || DEFAULT_THEME.currentSlideText
           });
         }
+      }).catch((error) => {
+        console.error('Failed to load stage theme:', error);
       });
     }
   }, [themeId]);

@@ -28,6 +28,7 @@
     "clear": "נקה",
     "stop": "עצור",
     "start": "התחל",
+    "copy": "העתק",
     "pause": "השהה",
     "play": "נגן",
     "settings": "הגדרות",
@@ -35,7 +36,9 @@
     "export": "ייצא",
     "new": "חדש",
     "duplicate": "שכפל",
-    "rename": "שנה שם"
+    "rename": "שנה שם",
+    "playing": "מנגן",
+    "showing": "מציג"
   },
   "nav": {
     "songs": "שירים",
@@ -102,7 +105,18 @@
     "exportSettings": "ייצא הגדרות",
     "youtubeApiKey": "מפתח API של יוטיוב",
     "youtubeApiKeyDesc": "נדרש לחיפוש יוטיוב. ניתן להשיג דרך Google Cloud Console.",
-    "apiKeyConfigured": "מפתח API מוגדר"
+    "apiKeyConfigured": "מפתח API מוגדר",
+    "remoteControl": "שלט רחוק",
+    "remoteControlDescription": "שלוט ב-SoluPresenter מהנייד ברשת המקומית.",
+    "startRemoteControl": "הפעל שלט רחוק",
+    "stopRemoteControl": "כבה שלט רחוק",
+    "remoteControlRunning": "פעיל",
+    "connected": "מחובר",
+    "url": "כתובת",
+    "pin": "קוד PIN",
+    "uiScale": "גודל ממשק",
+    "uiScaleDescription": "התאם את גודל הכפתורים, הטקסט והפקדים",
+    "resetToDefault": "אפס ל-100%"
   },
   "songs": {
     "title": "שירים",
@@ -143,7 +157,9 @@
     "youtubeApiKeyInvalid": "מפתח API לא תקין או חריגה ממכסה",
     "youtubeSearchFailed": "חיפוש יוטיוב נכשל",
     "searchYoutube": "חפש ביוטיוב",
-    "searchYoutubeHint": "הקלד שאילתת חיפוש למעלה למציאת סרטונים"
+    "searchYoutubeHint": "הקלד שאילתת חיפוש למעלה למציאת סרטונים",
+    "moveToFolder": "העבר לתיקייה",
+    "noFolder": "ללא תיקייה (שורש)"
   },
   "tools": {
     "title": "כלים",
@@ -151,7 +167,7 @@
     "countdown": "ספירה לאחור",
     "clock": "שעון",
     "stopwatch": "שעון עצר",
-    "announce": "הכרזה",
+    "announce": "התראות",
     "announcement": "הכרזה",
     "messages": "הודעות",
     "hours": "שעות",
@@ -181,6 +197,9 @@
     "broadcast": "שדר",
     "broadcastClock": "שדר שעון",
     "broadcastStopwatch": "שדר סטופר",
+    "broadcastCountdown": "שדר",
+    "broadcastAnnouncement": "שדר",
+    "broadcastMessages": "שדר",
     "hide": "הסתר",
     "start": "התחל",
     "resume": "המשך",
@@ -301,7 +320,10 @@
     "generating": "יוצר...",
     "preview": "תצוגה מקדימה",
     "addToSetlist": "הוסף לרשימה",
-    "generateTranslation": "צור תרגום"
+    "generateTranslation": "צור תרגום",
+    "sermonLabel": "דרשה",
+    "prayerLabel": "תפילה",
+    "announcementsLabel": "הודעות"
   },
   "shortcuts": {
     "title": "קיצורי מקלדת",
@@ -356,11 +378,22 @@
   },
   "controlPanel": {
     "connectedDisplays": "מסכים מחוברים",
+    "identify": "זיהוי",
+    "identifyDisplays": "הצג מספרי מסך על כל מסך",
+    "controlScreen": "מסך בקרה",
     "primary": "ראשי",
     "viewer": "צופים",
     "stage": "במה",
     "viewerThemes": "ערכות נושא לצופים",
     "stageMonitorThemes": "ערכות נושא לבמה",
+    "songsTheme": "ערכת שירים",
+    "stageMonitorTheme": "מוניטור במה",
+    "bibleTheme": "תנ\"ך",
+    "prayerTheme": "תפילה/דרשה",
+    "obsSongsTheme": "OBS שירים",
+    "obsBibleTheme": "OBS תנ\"ך",
+    "obsPrayerTheme": "OBS תפילה",
+    "obsBrowserSource": "מקור דפדפן OBS",
     "noThemesAvailable": "אין ערכות נושא זמינות",
     "noStageMonitorThemes": "אין ערכות נושא לבמה",
     "stopCountdown": "עצור ספירה לאחור",
@@ -372,6 +405,13 @@
     "slidePreview": "תצוגה מקדימה של שקופית",
     "backgrounds": "רקעים",
     "addSection": "הוסף מקטע",
+    "sectionWorship": "הלל",
+    "sectionSermon": "דרשה",
+    "sectionPrayer": "תפילה",
+    "sectionAnnouncements": "הודעות",
+    "sectionReading": "קריאה",
+    "sectionOffering": "תרומה",
+    "sectionClosing": "סיום",
     "saveSetlist": "שמור רשימת שירים",
     "loadSetlist": "טען רשימת שירים",
     "noSavedSetlists": "אין רשימות שמורות",
@@ -459,6 +499,7 @@
     "edit": "ערוך",
     "delete": "מחק",
     "addToSetlist": "הוסף לרשימה",
+    "removeFromSetlist": "הסר מהרשימה",
     "searchPresentations": "חפש מצגות..."
   }
 }

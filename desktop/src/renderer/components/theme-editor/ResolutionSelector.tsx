@@ -46,7 +46,7 @@ const ResolutionSelector: React.FC<ResolutionSelectorProps> = ({
     padding: '8px 12px',
     borderRadius: '6px',
     border: isActive ? '2px solid #00d4ff' : '1px solid rgba(255,255,255,0.2)',
-    background: isActive ? 'rgba(0,212,255,0.15)' : 'rgba(0,0,0,0.3)',
+    background: isActive ? 'transparent' : 'rgba(0,0,0,0.3)',
     color: isActive ? '#00d4ff' : 'rgba(255,255,255,0.8)',
     cursor: 'pointer',
     textAlign: 'left' as const,
@@ -107,9 +107,9 @@ const ResolutionSelector: React.FC<ResolutionSelectorProps> = ({
           width: '100%',
           padding: '10px',
           borderRadius: '6px',
-          border: isCustom ? '2px solid #667eea' : '1px solid rgba(255,255,255,0.2)',
-          background: isCustom ? 'rgba(102,126,234,0.15)' : 'rgba(0,0,0,0.3)',
-          color: isCustom ? '#667eea' : 'rgba(255,255,255,0.7)',
+          border: isCustom ? '2px solid #06b6d4' : '1px solid rgba(255,255,255,0.2)',
+          background: isCustom ? 'transparent' : 'rgba(0,0,0,0.3)',
+          color: isCustom ? '#06b6d4' : 'rgba(255,255,255,0.7)',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
@@ -176,7 +176,7 @@ const ResolutionSelector: React.FC<ResolutionSelectorProps> = ({
                 padding: '8px 16px',
                 borderRadius: '6px',
                 border: 'none',
-                background: '#667eea',
+                background: '#06b6d4',
                 color: 'white',
                 cursor: 'pointer',
                 fontWeight: 600,
@@ -194,7 +194,7 @@ const ResolutionSelector: React.FC<ResolutionSelectorProps> = ({
             fontSize: '11px',
             color: 'rgba(255,255,255,0.5)'
           }}>
-            Aspect Ratio: {(customWidth / customHeight).toFixed(2)}:1
+            Aspect Ratio: {(customWidth / Math.max(customHeight, 1)).toFixed(2)}:1
           </div>
         </div>
       )}
@@ -209,7 +209,7 @@ const ResolutionSelector: React.FC<ResolutionSelectorProps> = ({
         fontSize: '11px',
         color: 'rgba(255,255,255,0.5)'
       }}>
-        Current: {dimensions.width} × {dimensions.height} ({(dimensions.width / dimensions.height).toFixed(2)}:1)
+        Current: {dimensions.width} × {dimensions.height} ({(dimensions.width / Math.max(dimensions.height, 1)).toFixed(2)}:1)
       </div>
     </div>
   );

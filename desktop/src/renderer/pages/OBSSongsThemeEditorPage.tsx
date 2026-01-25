@@ -73,7 +73,7 @@ const OBSSongsThemeEditorPage: React.FC = () => {
     backgroundBoxes: [{ id: 'default-box', x: 0, y: 68, width: 100, height: 32, color: '#000000', opacity: 0.7, borderRadius: 0 }]
   });
 
-  const [selectedElement, setSelectedElement] = useState<{ type: 'line' | 'box' | 'reference'; id: string } | null>(null);
+  const [selectedElement, setSelectedElement] = useState<{ type: 'line' | 'box' | 'reference' | 'referenceTranslation' | 'referenceEnglish'; id: string } | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [hasChanges, setHasChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<'layout' | 'background' | 'resolution'>('layout');
@@ -89,10 +89,10 @@ const OBSSongsThemeEditorPage: React.FC = () => {
       window.electronAPI.getOBSTheme(themeId).then((loadedTheme: any) => {
         if (loadedTheme) {
           setTheme({
-            id: loadedTheme.id,
-            name: loadedTheme.name,
+            id: loadedTheme.id || '',
+            name: loadedTheme.name || 'Untitled Theme',
             type: 'songs',
-            isBuiltIn: loadedTheme.isBuiltIn,
+            isBuiltIn: loadedTheme.isBuiltIn ?? false,
             viewerBackground: loadedTheme.viewerBackground || { type: 'transparent', color: null },
             canvasDimensions: loadedTheme.canvasDimensions || { width: 1920, height: 1080 },
             lineOrder: loadedTheme.lineOrder || ['original', 'transliteration', 'translation'],
@@ -101,6 +101,8 @@ const OBSSongsThemeEditorPage: React.FC = () => {
             backgroundBoxes: loadedTheme.backgroundBoxes || []
           });
         }
+      }).catch((error) => {
+        console.error('Failed to load OBS songs theme:', error);
       });
     }
   }, [themeId]);
@@ -525,6 +527,7 @@ const OBSSongsThemeEditorPage: React.FC = () => {
                     style={theme.lineStyles[selectedLineType]}
                     onPositionChange={(pos) => handleLinePositionChange(selectedLineType, pos)}
                     onStyleChange={(style) => handleLineStyleChange(selectedLineType, style)}
+                    availableLineTypes={theme.lineOrder}
                   />
                 )}
 

@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
+import { createLogger } from '../utils/debug';
+
+// Create logger for this module
+const log = createLogger('ControlPanel');
 
 // YouTube IFrame API types
 declare global {
@@ -27,6 +31,9 @@ import BroadcastSelector from '../components/BroadcastSelector';
 import MediaGrid from '../components/MediaGrid';
 import SlidePreview from '../components/SlidePreview';
 import ThemeSelectionPanel from '../components/control-panel/ThemeSelectionPanel';
+import SlideGridItem from '../components/control-panel/SlideGridItem';
+import CombinedSlideGridItem from '../components/control-panel/CombinedSlideGridItem';
+import AudioPlayerBar from '../components/control-panel/AudioPlayerBar';
 import { gradientPresets } from '../utils/gradients';
 import {
   colors,
@@ -64,9 +71,15 @@ interface Song {
   author?: string;
 }
 
+interface AudioPlaylistTrack {
+  path: string;
+  name: string;
+  duration?: number | null;
+}
+
 interface SetlistItem {
   id: string;
-  type: 'song' | 'blank' | 'section' | 'countdown' | 'announcement' | 'messages' | 'media' | 'bible' | 'presentation' | 'youtube';
+  type: 'song' | 'blank' | 'section' | 'countdown' | 'announcement' | 'messages' | 'media' | 'bible' | 'presentation' | 'youtube' | 'clock' | 'stopwatch' | 'audioPlaylist';
   song?: Song;
   title?: string;
   // Tool-specific data
@@ -80,6 +93,13 @@ interface SetlistItem {
   mediaPath?: string;
   mediaDuration?: number | null;
   mediaName?: string;
+  thumbnailPath?: string | null;
+  // Audio playlist data
+  audioPlaylist?: {
+    tracks: AudioPlaylistTrack[];
+    shuffle: boolean;
+    name: string;
+  };
   // Presentation data
   presentation?: Presentation;
   // Bible data
@@ -100,7 +120,7 @@ interface SavedSetlist {
   name: string;
   venue?: string;
   items: SetlistItem[];
-  createdAt: number;
+  createdAt: string;  // ISO timestamp string
   updatedAt?: string;
 }
 
@@ -128,7 +148,10 @@ interface Presentation {
     textBoxes: any[];
     imageBoxes?: any[];
     backgroundColor?: string;
+    backgroundType?: 'color' | 'gradient' | 'transparent';
+    backgroundGradient?: string;
   }>;
+  canvasDimensions?: { width: number; height: number };
   createdAt: string;
   updatedAt: string;
   quickModeData?: QuickModeMetadata;
@@ -209,24 +232,29 @@ function createCombinedSlides(slides: Song['slides']): CombinedSlidesResult {
       groupEnd++;
     }
 
-    // Pair slides within this group (2-by-2)
+    // Pair slides within this group (2-by-2, max 4 slides per combined group for readability)
+    const MAX_COMBINED_SLIDES = 4;
     let j = i;
     while (j < groupEnd) {
       const combinedIndex = combinedSlides.length;
+      const remainingInGroup = groupEnd - j;
 
-      if (j + 1 < groupEnd) {
-        // Can pair: combine slides j and j+1
+      // Combine up to MAX_COMBINED_SLIDES at a time
+      const slidesToCombine = Math.min(2, remainingInGroup, MAX_COMBINED_SLIDES);
+
+      if (slidesToCombine >= 2) {
+        // Can pair: combine slides
+        const indices = Array.from({ length: slidesToCombine }, (_, k) => j + k);
         combinedSlides.push({
           type: 'combined',
-          originalIndices: [j, j + 1],
-          slides: [slides[j], slides[j + 1]],
-          label: `${j + 1}-${j + 2}`,
+          originalIndices: indices,
+          slides: indices.map(idx => slides[idx]),
+          label: `${j + 1}-${j + slidesToCombine}`,
           verseType: currentType
         });
-        originalToCombined.set(j, combinedIndex);
-        originalToCombined.set(j + 1, combinedIndex);
-        combinedToOriginal.set(combinedIndex, [j, j + 1]);
-        j += 2;
+        indices.forEach(idx => originalToCombined.set(idx, combinedIndex));
+        combinedToOriginal.set(combinedIndex, indices);
+        j += slidesToCombine;
       } else {
         // Last slide in group with odd count: stays single
         combinedSlides.push({
@@ -284,8 +312,8 @@ const SongItem = memo<SongItemProps>(({
   const containerStyle = useMemo(() => ({
     padding: '10px 12px',
     cursor: 'grab' as const,
-    background: isSelected ? 'rgba(255,140,66,0.2)' : 'transparent',
-    borderLeft: isSelected ? `3px solid ${colors.button.orange}` : '3px solid transparent',
+    background: isSelected ? 'rgba(6,182,212,0.2)' : 'transparent',
+    borderLeft: isSelected ? `3px solid ${colors.button.accent}` : '3px solid transparent',
     borderBottom: `1px solid ${colors.border.light}`,
     opacity: isDragged ? 0.5 : 1,
     display: 'flex' as const,
@@ -359,7 +387,7 @@ const SongItem = memo<SongItemProps>(({
                 onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FF8C42" strokeWidth="2">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2">
                   <line x1="12" y1="5" x2="12" y2="19" />
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
@@ -399,6 +427,159 @@ const SongItem = memo<SongItemProps>(({
 });
 
 SongItem.displayName = 'SongItem';
+
+// Presentation Item Component with hover menu
+interface PresentationItemProps {
+  presentation: any;
+  isSelected: boolean;
+  onSelect: (pres: any) => void;
+  onDoubleClick: (pres: any) => void;
+  onEdit: (pres: any) => void;
+  onDelete: (pres: any) => void;
+  onDragStart: (e: React.DragEvent, pres: any) => void;
+}
+
+const PresentationItem = memo<PresentationItemProps>(({
+  presentation,
+  isSelected,
+  onSelect,
+  onDoubleClick,
+  onEdit,
+  onDelete,
+  onDragStart
+}) => {
+  const { t, i18n } = useTranslation();
+  const isRTL = i18n.language === 'he';
+  const [isHovered, setIsHovered] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+
+  const containerStyle = useMemo(() => ({
+    display: 'flex' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    padding: '10px 12px',
+    cursor: 'pointer' as const,
+    background: isSelected ? 'rgba(0, 212, 255, 0.2)' : 'transparent',
+    borderLeft: isSelected ? '3px solid #00d4ff' : '3px solid transparent',
+    borderBottom: '1px solid rgba(255,255,255,0.05)'
+  }), [isSelected]);
+
+  const menuButtonStyle = useMemo(() => ({
+    padding: '4px 6px',
+    borderRadius: '4px',
+    border: 'none',
+    background: colors.background.cardHover,
+    cursor: 'pointer' as const,
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    gap: '2px',
+    alignItems: 'center' as const
+  }), []);
+
+  const dropdownStyle = useMemo(() => ({
+    position: 'absolute' as const,
+    right: isRTL ? 'auto' : 0,
+    left: isRTL ? 0 : 'auto',
+    top: '100%',
+    marginTop: '4px',
+    background: colors.background.dropdown,
+    borderRadius: '6px',
+    border: `1px solid ${colors.border.medium}`,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+    zIndex: 100,
+    padding: '4px',
+    minWidth: '100px',
+    overflow: 'hidden'
+  }), [isRTL]);
+
+  const menuItemStyle = useMemo(() => ({
+    width: '100%',
+    padding: '6px 10px',
+    border: 'none',
+    background: 'transparent',
+    color: 'white',
+    cursor: 'pointer' as const,
+    fontSize: '0.8rem',
+    textAlign: (isRTL ? 'right' : 'left') as const,
+    display: 'flex' as const,
+    alignItems: 'center' as const,
+    gap: '8px',
+    borderRadius: '4px'
+  }), [isRTL]);
+
+  return (
+    <div
+      draggable
+      onDragStart={(e) => onDragStart(e, presentation)}
+      onClick={() => onSelect(presentation)}
+      onDoubleClick={() => onDoubleClick(presentation)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => { setIsHovered(false); setShowMenu(false); }}
+      style={containerStyle}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: '0.85rem', fontWeight: 500, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {presentation.title}
+        </div>
+      </div>
+      {(isHovered || showMenu) && (
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+            style={menuButtonStyle}
+          >
+            <span style={{ width: '3px', height: '3px', background: colors.text.secondary, borderRadius: '50%' }} />
+            <span style={{ width: '3px', height: '3px', background: colors.text.secondary, borderRadius: '50%' }} />
+            <span style={{ width: '3px', height: '3px', background: colors.text.secondary, borderRadius: '50%' }} />
+          </button>
+          {showMenu && (
+            <div onClick={(e) => e.stopPropagation()} style={dropdownStyle}>
+              <button
+                onClick={(e) => { e.stopPropagation(); onDoubleClick(presentation); setShowMenu(false); }}
+                style={menuItemStyle}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                {t('controlPanel.addToSetlist')}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(presentation); setShowMenu(false); }}
+                style={menuItemStyle}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                {t('controlPanel.edit')}
+              </button>
+              <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(presentation); setShowMenu(false); }}
+                style={{ ...menuItemStyle, color: '#dc3545' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                {t('controlPanel.delete')}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
+
+PresentationItem.displayName = 'PresentationItem';
 
 // Theme Item Component with hover menu
 interface ThemeItemProps {
@@ -530,6 +711,302 @@ const ThemeItem = memo<ThemeItemProps>(({
 
 ThemeItem.displayName = 'ThemeItem';
 
+// ========== Quick Mode Presentation Types & Helpers ==========
+
+// TextBox interface for Quick Mode slides (matches database TextBox type)
+interface QuickModeTextBox {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fontSize: number;
+  color: string;
+  backgroundColor: string;
+  textAlign: 'left' | 'center' | 'right';
+  verticalAlign: 'top' | 'center' | 'bottom';
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  opacity: number;
+  zIndex?: number;
+  textDirection?: 'ltr' | 'rtl';
+  // Enhanced properties (all optional for backward compatibility)
+  fontWeight?: string;
+  backgroundOpacity?: number;
+  visible?: boolean;
+  // Per-side borders
+  borderTop?: number;
+  borderRight?: number;
+  borderBottom?: number;
+  borderLeft?: number;
+  borderColor?: string;
+  // Per-corner radius
+  borderRadiusTopLeft?: number;
+  borderRadiusTopRight?: number;
+  borderRadiusBottomRight?: number;
+  borderRadiusBottomLeft?: number;
+  // Per-side padding
+  paddingTop?: number;
+  paddingBottom?: number;
+  paddingLeft?: number;
+  paddingRight?: number;
+  // Flow positioning
+  positionMode?: 'absolute' | 'flow';
+  flowAnchor?: string;
+  flowGap?: number;
+  autoHeight?: boolean;
+  growDirection?: 'up' | 'down';
+}
+
+interface QuickModeSlide {
+  id: string;
+  order: number;
+  textBoxes: QuickModeTextBox[];
+  imageBoxes: any[];
+  backgroundBoxes?: any[];
+  backgroundColor: string;
+  backgroundGradient?: string;
+  backgroundType?: 'color' | 'gradient' | 'transparent';
+}
+
+interface QuickModeDataForSlides {
+  type: 'sermon' | 'prayer' | 'announcements';
+  title: string;
+  name?: string;  // Presentation name (derived from type + title if not provided)
+  titleTranslation?: string;
+  subtitles: Array<{
+    subtitle: string;
+    subtitleTranslation?: string;
+    description: string;
+    descriptionTranslation?: string;
+    bibleRef?: {
+      book: string;
+      chapter: number;
+      verseStart: number;
+      verseEnd?: number;
+      hebrewText: string;
+      englishText: string;
+      reference: string;
+      hebrewReference: string;
+      useHebrew: boolean;
+    };
+  }>;
+  generateTranslation?: boolean;
+}
+
+// Generate unique ID with counter for guaranteed uniqueness
+let quickModeIdCounter = 0;
+const generateQuickModeId = (): string => {
+  quickModeIdCounter++;
+  return `qm_${Date.now()}_${quickModeIdCounter}_${Math.random().toString(36).substring(2, 11)}`;
+};
+
+// Check if text contains Hebrew characters
+const containsHebrew = (text: string): boolean => /[\u0590-\u05FF]/.test(text);
+
+// Generate slides from Quick Mode data with bilingual template support
+const createQuickModeSlides = (data: QuickModeDataForSlides): QuickModeSlide[] => {
+  const backgroundColor = data.type === 'sermon' ? '#1a1a2e' :
+                          data.type === 'prayer' ? '#000000' : '#2d1f3d';
+
+  const isBilingual = data.generateTranslation || false;
+
+  return data.subtitles.map((item, index) => {
+    const subtitlePrefix = data.type === 'sermon' ? `${index + 1}. ` :
+                           data.type === 'prayer' ? '• ' : '';
+
+    const hasBibleRef = !!item.bibleRef;
+    const textBoxes: QuickModeTextBox[] = [];
+
+    const subtitleIsHebrew = containsHebrew(item.subtitle);
+    const titleIsHebrew = containsHebrew(data.title);
+
+    if (isBilingual) {
+      // ========== BILINGUAL LAYOUT ==========
+      const titleY = 4;
+      const subtitleY = 14;
+      const bibleRefY = 24;
+      const bibleTextY = 32;
+
+      // === LEFT SIDE (ENGLISH) ===
+      textBoxes.push({
+        id: generateQuickModeId(),
+        text: titleIsHebrew ? (data.titleTranslation || '[Title Translation]') : data.title,
+        x: 2, y: titleY, width: 46, height: 10, fontSize: 120,
+        color: '#ffffff', backgroundColor: 'transparent',
+        textAlign: 'left', verticalAlign: 'center',
+        bold: true, italic: false, underline: false, opacity: 1, zIndex: 10, textDirection: 'ltr'
+      });
+
+      textBoxes.push({
+        id: generateQuickModeId(),
+        text: subtitleIsHebrew
+          ? (item.subtitleTranslation || `${subtitlePrefix}[Translation]`)
+          : `${subtitlePrefix}${item.subtitle}`,
+        x: 2, y: subtitleY, width: 46, height: 8, fontSize: 90,
+        color: '#ffffff', backgroundColor: 'transparent',
+        textAlign: 'left', verticalAlign: 'center',
+        bold: false, italic: false, underline: false, opacity: 1, zIndex: 9, textDirection: 'ltr'
+      });
+
+      if (hasBibleRef && item.bibleRef) {
+        textBoxes.push({
+          id: generateQuickModeId(),
+          text: `\u{1F4D6} ${item.bibleRef.reference}`,
+          x: 2, y: bibleRefY, width: 46, height: 5, fontSize: 55,
+          color: '#00d4ff', backgroundColor: 'transparent',
+          textAlign: 'left', verticalAlign: 'center',
+          bold: true, italic: false, underline: false, opacity: 1, zIndex: 8, textDirection: 'ltr'
+        });
+
+        textBoxes.push({
+          id: generateQuickModeId(),
+          text: item.bibleRef.englishText || item.bibleRef.hebrewText || '',
+          x: 2, y: bibleTextY, width: 46, height: 60, fontSize: 55,
+          color: 'rgba(255,255,255,0.9)', backgroundColor: 'transparent',
+          textAlign: 'left', verticalAlign: 'top',
+          bold: false, italic: true, underline: false, opacity: 1, zIndex: 7, textDirection: 'ltr'
+        });
+      }
+
+      // === RIGHT SIDE (HEBREW) ===
+      textBoxes.push({
+        id: generateQuickModeId(),
+        text: data.title,
+        x: 52, y: titleY, width: 46, height: 10, fontSize: 120,
+        color: '#ffffff', backgroundColor: 'transparent',
+        textAlign: 'right', verticalAlign: 'center',
+        bold: true, italic: false, underline: false, opacity: 1, zIndex: 10, textDirection: 'rtl'
+      });
+
+      textBoxes.push({
+        id: generateQuickModeId(),
+        text: subtitleIsHebrew
+          ? `${subtitlePrefix}${item.subtitle}`
+          : (item.subtitleTranslation || `${subtitlePrefix}${item.subtitle}`),
+        x: 52, y: subtitleY, width: 46, height: 8, fontSize: 90,
+        color: '#ffffff', backgroundColor: 'transparent',
+        textAlign: 'right', verticalAlign: 'center',
+        bold: false, italic: false, underline: false, opacity: 1, zIndex: 9, textDirection: 'rtl'
+      });
+
+      if (hasBibleRef && item.bibleRef) {
+        textBoxes.push({
+          id: generateQuickModeId(),
+          text: `\u{1F4D6} ${item.bibleRef.hebrewReference || item.bibleRef.reference}`,
+          x: 52, y: bibleRefY, width: 46, height: 5, fontSize: 55,
+          color: '#00d4ff', backgroundColor: 'transparent',
+          textAlign: 'right', verticalAlign: 'center',
+          bold: true, italic: false, underline: false, opacity: 1, zIndex: 8, textDirection: 'rtl'
+        });
+
+        textBoxes.push({
+          id: generateQuickModeId(),
+          text: item.bibleRef.hebrewText || item.bibleRef.englishText || '',
+          x: 52, y: bibleTextY, width: 46, height: 60, fontSize: 55,
+          color: 'rgba(255,255,255,0.9)', backgroundColor: 'transparent',
+          textAlign: 'right', verticalAlign: 'top',
+          bold: false, italic: false, underline: false, opacity: 1, zIndex: 7, textDirection: 'rtl'
+        });
+      }
+    } else {
+      // ========== SINGLE LANGUAGE LAYOUT ==========
+      const hasDescription = item.description.trim().length > 0;
+      let subtitleY = 30;
+      let descriptionY = 55;
+      let bibleRefY = hasDescription ? 75 : 55;
+      let bibleTextY = hasDescription ? 82 : 62;
+
+      if (!hasDescription && hasBibleRef) {
+        bibleRefY = 50;
+        bibleTextY = 58;
+      }
+
+      const useRTL = subtitleIsHebrew;
+
+      // Main title
+      textBoxes.push({
+        id: generateQuickModeId(),
+        text: data.title,
+        x: 5, y: 5, width: 90, height: 15, fontSize: 140,
+        color: '#ffffff', backgroundColor: 'transparent',
+        textAlign: useRTL ? 'right' : 'left', verticalAlign: 'center',
+        bold: true, italic: false, underline: false, opacity: 1, zIndex: 5,
+        textDirection: useRTL ? 'rtl' : 'ltr'
+      });
+
+      // Subtitle
+      textBoxes.push({
+        id: generateQuickModeId(),
+        text: `${subtitlePrefix}${item.subtitle}`,
+        x: 5, y: subtitleY, width: 90, height: 18, fontSize: 110,
+        color: '#ffffff', backgroundColor: 'transparent',
+        textAlign: useRTL ? 'right' : (data.type === 'announcements' ? 'center' : 'left'),
+        verticalAlign: 'center',
+        bold: false, italic: false, underline: false, opacity: 1, zIndex: 4,
+        textDirection: useRTL ? 'rtl' : 'ltr'
+      });
+
+      // Description
+      if (hasDescription) {
+        textBoxes.push({
+          id: generateQuickModeId(),
+          text: item.description,
+          x: 5, y: descriptionY, width: 90, height: hasBibleRef ? 18 : 35, fontSize: 80,
+          color: 'rgba(255,255,255,0.85)', backgroundColor: 'transparent',
+          textAlign: useRTL ? 'right' : (data.type === 'announcements' ? 'center' : 'left'),
+          verticalAlign: 'top',
+          bold: false, italic: false, underline: false, opacity: 1, zIndex: 3,
+          textDirection: useRTL ? 'rtl' : 'ltr'
+        });
+      }
+
+      // Bible reference
+      if (hasBibleRef && item.bibleRef) {
+        const bibleUseHebrew = item.bibleRef.useHebrew || false;
+        const displayText = bibleUseHebrew
+          ? (item.bibleRef.hebrewText || item.bibleRef.englishText || '')
+          : (item.bibleRef.englishText || item.bibleRef.hebrewText || '');
+        const displayReference = bibleUseHebrew
+          ? (item.bibleRef.hebrewReference || item.bibleRef.reference)
+          : item.bibleRef.reference;
+
+        textBoxes.push({
+          id: generateQuickModeId(),
+          text: `\u{1F4D6} ${displayReference}`,
+          x: 5, y: bibleRefY, width: 90, height: 6, fontSize: 60,
+          color: '#00d4ff', backgroundColor: 'transparent',
+          textAlign: bibleUseHebrew ? 'right' : 'left', verticalAlign: 'center',
+          bold: true, italic: false, underline: false, opacity: 1, zIndex: 2,
+          textDirection: bibleUseHebrew ? 'rtl' : 'ltr'
+        });
+
+        textBoxes.push({
+          id: generateQuickModeId(),
+          text: displayText,
+          x: 5, y: bibleTextY, width: 90, height: 18, fontSize: 65,
+          color: 'rgba(255,255,255,0.9)', backgroundColor: 'transparent',
+          textAlign: bibleUseHebrew ? 'right' : 'left', verticalAlign: 'top',
+          bold: false, italic: !bibleUseHebrew, underline: false, opacity: 1, zIndex: 1,
+          textDirection: bibleUseHebrew ? 'rtl' : 'ltr'
+        });
+      }
+    }
+
+    return {
+      id: generateQuickModeId(),
+      order: index,
+      textBoxes,
+      imageBoxes: [],
+      backgroundColor
+    };
+  });
+};
+
+// ========== End Quick Mode Presentation Helpers ==========
+
 const ControlPanel: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -554,17 +1031,31 @@ const ControlPanel: React.FC = () => {
 
   // Display state
   const [displays, setDisplays] = useState<Display[]>([]);
+  const [controlDisplayId, setControlDisplayId] = useState<number | null>(null);
 
   // Content state
   const [songs, setSongs] = useState<Song[]>([]);
   const [presentations, setPresentations] = useState<Presentation[]>([]);
   const [presentationSearchQuery, setPresentationSearchQuery] = useState('');
-  const [hoveredPresentationId, setHoveredPresentationId] = useState<string | null>(null);
-  const [openPresentationMenuId, setOpenPresentationMenuId] = useState<string | null>(null);
+  const presentationSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [selectedPresentation, setSelectedPresentation] = useState<Presentation | null>(null);
   const [currentPresentationSlideIndex, setCurrentPresentationSlideIndex] = useState(0);
+  // Track what's actually "on air" for the live preview (separate from selected/staged content)
+  // Combined into single object for atomic updates to prevent multiple re-renders
+  const [liveState, setLiveState] = useState<{
+    slideData: any;
+    contentType: 'song' | 'bible' | 'prayer' | 'presentation' | null;
+    songId: string | null;
+    slideIndex: number;
+  }>({ slideData: null, contentType: null, songId: null, slideIndex: 0 });
+  // Destructure for easier access (these are derived, not separate state)
+  const { slideData: liveSlideData, contentType: liveContentType, songId: liveSongId, slideIndex: liveSlideIndex } = liveState;
+  // Auto-play state for presentations
+  const [autoPlayActive, setAutoPlayActive] = useState(false);
+  const [autoPlayInterval, setAutoPlayInterval] = useState(5); // seconds
+  const autoPlayTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // setlist state is now from SetlistContext
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [displayMode, setDisplayMode] = useState<DisplayMode>('bilingual');
@@ -582,12 +1073,57 @@ const ControlPanel: React.FC = () => {
   }>({ isAuthenticated: false, user: null, serverUrl: 'https://solupresenter.onrender.com' });
   const [showAuthModal, setShowAuthModal] = useState(false);
 
+  // Panel resize state (percentages) with safe localStorage access
+  const [leftPanelWidth, setLeftPanelWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('controlPanel_leftWidth');
+      if (saved) {
+        const parsed = parseFloat(saved);
+        return !isNaN(parsed) && parsed > 0 && parsed < 100 ? parsed : 25;
+      }
+    } catch (error) {
+      console.error('[ControlPanel] Failed to read leftPanelWidth from localStorage:', error);
+    }
+    return 25;
+  });
+  const [setlistPanelWidth, setSetlistPanelWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('controlPanel_setlistWidth');
+      if (saved) {
+        const parsed = parseFloat(saved);
+        return !isNaN(parsed) && parsed > 0 && parsed < 100 ? parsed : 25;
+      }
+    } catch (error) {
+      console.error('[ControlPanel] Failed to read setlistPanelWidth from localStorage:', error);
+    }
+    return 25;
+  });
+  const [topRowHeight, setTopRowHeight] = useState(() => {
+    try {
+      const saved = localStorage.getItem('controlPanel_topRowHeight');
+      if (saved) {
+        const parsed = parseFloat(saved);
+        return !isNaN(parsed) && parsed > 0 && parsed < 100 ? parsed : 50;
+      }
+    } catch (error) {
+      console.error('[ControlPanel] Failed to read topRowHeight from localStorage:', error);
+    }
+    return 50;
+  });
+  const [isResizing, setIsResizing] = useState<'left' | 'setlist' | 'row' | null>(null);
+  const resizeStartRef = useRef<{ x: number; y: number; startValue: number }>({ x: 0, y: 0, startValue: 0 });
+  const mainContentRef = useRef<HTMLDivElement>(null);
+
   // UI state
   const [activeResourcePanel, setActiveResourcePanel] = useState<ResourcePanel>('songs');
+  // Search uses debouncing for performance - input is uncontrolled for instant response
   const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isBlank, setIsBlank] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const importStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showDisplayPanel, setShowDisplayPanel] = useState(false);
   const [obsServerRunning, setObsServerRunning] = useState(false);
   const [obsServerUrl, setObsServerUrl] = useState<string | null>(null);
@@ -603,6 +1139,9 @@ const ControlPanel: React.FC = () => {
   const [selectedBibleTheme, setSelectedBibleTheme] = useState<any | null>(null);
   const [selectedPrayerTheme, setSelectedPrayerTheme] = useState<any | null>(null);
   const [selectedOBSTheme, setSelectedOBSTheme] = useState<any | null>(null);
+  const [selectedOBSSongsTheme, setSelectedOBSSongsTheme] = useState<any | null>(null);
+  const [selectedOBSBibleTheme, setSelectedOBSBibleTheme] = useState<any | null>(null);
+  const [selectedOBSPrayerTheme, setSelectedOBSPrayerTheme] = useState<any | null>(null);
   const [currentContentType, setCurrentContentType] = useState<'song' | 'bible' | 'prayer'>('song');
   const [showThemeEditor, setShowThemeEditor] = useState(false);
   const [editingTheme, setEditingTheme] = useState<{
@@ -627,6 +1166,11 @@ const ControlPanel: React.FC = () => {
   const [songEditorExpressText, setSongEditorExpressText] = useState('');
   const [songTagInput, setSongTagInput] = useState('');
 
+  // Prayer/Sermon express editor state
+  const [showPrayerEditor, setShowPrayerEditor] = useState(false);
+  const [editingPrayerPresentation, setEditingPrayerPresentation] = useState<Presentation | null>(null);
+  const [prayerExpressText, setPrayerExpressText] = useState('');
+
   // Language options
   const songLanguages = [
     { code: 'he', name: 'Hebrew (עברית)' },
@@ -643,14 +1187,20 @@ const ControlPanel: React.FC = () => {
   const isTransliterationLanguage = editingSong?.originalLanguage === 'he' || editingSong?.originalLanguage === 'ar';
 
   // Tools state
-  const [activeToolsTab, setActiveToolsTab] = useState<'countdown' | 'announce' | 'messages' | 'clock' | 'stopwatch'>('countdown');
+  const [activeToolsTab, setActiveToolsTab] = useState<'countdown' | 'announce' | 'clock' | 'stopwatch'>('countdown');
   const [countdownTargetTime, setCountdownTargetTime] = useState('');
   const [countdownRemaining, setCountdownRemaining] = useState<string>('');
   const [countdownMessage, setCountdownMessage] = useState('');
+  const [countdownMessageTranslation, setCountdownMessageTranslation] = useState('');
   const [isCountdownActive, setIsCountdownActive] = useState(false);
   const [announcementText, setAnnouncementText] = useState('');
   const [isAnnouncementActive, setIsAnnouncementActive] = useState(false);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Refs to access current message values in interval callback
+  const countdownMessageRef = useRef(countdownMessage);
+  const countdownMessageTranslationRef = useRef(countdownMessageTranslation);
+  countdownMessageRef.current = countdownMessage;
+  countdownMessageTranslationRef.current = countdownMessageTranslation;
 
   // Clock state
   const [clockFormat, setClockFormat] = useState<'12h' | '24h'>('12h');
@@ -694,6 +1244,13 @@ const ControlPanel: React.FC = () => {
 
   // Fullscreen media state (takes over from slides when active)
   const [activeMedia, setActiveMedia] = useState<{ type: 'image' | 'video'; url: string } | null>(null);
+  const [hoveredMediaStopId, setHoveredMediaStopId] = useState<string | null>(null);
+  const [selectedSetlistMediaId, setSelectedSetlistMediaId] = useState<string | null>(null);
+  const [hoveredSetlistItemId, setHoveredSetlistItemId] = useState<string | null>(null);
+  const [setlistMenuOpen, setSetlistMenuOpen] = useState<string | null>(null);
+  const [setlistContextMenu, setSetlistContextMenu] = useState<{ x: number; y: number; item: SetlistItem } | null>(null);
+  const [selectedYoutubeItemId, setSelectedYoutubeItemId] = useState<string | null>(null);
+  const [visibleSongsCount, setVisibleSongsCount] = useState(50); // Limit initial render for performance
 
   // Video playback control state
   const [videoStatus, setVideoStatus] = useState<{ currentTime: number; duration: number; isPlaying: boolean }>({
@@ -701,20 +1258,38 @@ const ControlPanel: React.FC = () => {
     duration: 0,
     isPlaying: false
   });
+  const [videoVolume, setVideoVolume] = useState(1); // 0-1 range
   const previewVideoRef = useRef<HTMLVideoElement>(null);
 
   // Audio (background music) state - plays only in control panel, not on displays
   const [activeAudio, setActiveAudio] = useState<{ url: string; name: string } | null>(null);
+  const [activeAudioSetlistId, setActiveAudioSetlistId] = useState<string | null>(null); // Track which setlist item is playing
   const [audioStatus, setAudioStatus] = useState<{ currentTime: number; duration: number; isPlaying: boolean }>({
     currentTime: 0,
     duration: 0,
     isPlaying: false
   });
   const audioRef = useRef<HTMLAudioElement>(null);
+  // Audio playlist state
+  const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null); // Which playlist setlist item is playing
+  const [activePlaylistIndex, setActivePlaylistIndex] = useState<number>(0); // Current track index
+  const [activePlaylistOrder, setActivePlaylistOrder] = useState<number[]>([]); // Track order (shuffled or sequential)
+  // Playlist editing state
+  const [editingPlaylistItemId, setEditingPlaylistItemId] = useState<string | null>(null);
+  const [editingPlaylistTracks, setEditingPlaylistTracks] = useState<AudioPlaylistTrack[]>([]);
+  const [editingPlaylistName, setEditingPlaylistName] = useState('');
+  const [editingPlaylistShuffle, setEditingPlaylistShuffle] = useState(false);
+  const [editPlaylistDraggedIndex, setEditPlaylistDraggedIndex] = useState<number | null>(null);
+  const [editPlaylistDropTargetIndex, setEditPlaylistDropTargetIndex] = useState<number | null>(null);
+  const [expandedPlaylistIds, setExpandedPlaylistIds] = useState<Set<string>>(new Set()); // Track which playlists are expanded in setlist
   const [audioTargetVolume, setAudioTargetVolume] = useState(1);
   const audioFadeRef = useRef<NodeJS.Timeout | null>(null);
   const audioEndFadingRef = useRef(false); // Track if we're fading out at end
   const audioNeedsInitialPlay = useRef(false); // Track if we need to start playing on canplay
+  // Throttle refs for time updates (prevents excessive re-renders)
+  const lastAudioTimeUpdateRef = useRef<number>(0);
+  const lastVideoTimeUpdateRef = useRef<number>(0);
+  const TIME_UPDATE_THROTTLE_MS = 500; // Update UI at most twice per second
 
   // YouTube Links state
   interface YouTubeVideo {
@@ -756,12 +1331,14 @@ const ControlPanel: React.FC = () => {
   const [bibleLoading, setBibleLoading] = useState(false);
   const [biblePassage, setBiblePassage] = useState<Song | null>(null);
   const [bibleSearchQuery, setBibleSearchQuery] = useState('');
+  const bibleSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Setlist persistence state
   const [savedSetlists, setSavedSetlists] = useState<SavedSetlist[]>([]);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showLoadModal, setShowLoadModal] = useState(false);
   const [showSetlistMenu, setShowSetlistMenu] = useState(false);
+  const [setlistMenuHover, setSetlistMenuHover] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNewThemeModal, setShowNewThemeModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -805,6 +1382,7 @@ const ControlPanel: React.FC = () => {
   const quickModeTitleInputRef = useRef<HTMLInputElement>(null); // Ref for title input focus
   const [quickModeGenerateTranslation, setQuickModeGenerateTranslation] = useState(false); // Generate English translation for Hebrew text
   const [quickModeTranslationLoading, setQuickModeTranslationLoading] = useState(false);
+  const [quickModeCreating, setQuickModeCreating] = useState(false); // Creating presentation directly without opening editor
   // currentSetlistId, currentSetlistName, hasUnsavedChanges, lastSavedSetlistRef are now from SetlistContext
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
   const [pendingAction, setPendingAction] = useState<{ type: 'load' | 'clear' | 'new'; setlist?: SavedSetlist } | null>(null);
@@ -822,12 +1400,115 @@ const ControlPanel: React.FC = () => {
   // Combined slides state (for original mode)
   const [selectedCombinedIndex, setSelectedCombinedIndex] = useState(0);
 
+  // Handle panel resize
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing || !mainContentRef.current) return;
+
+      const rect = mainContentRef.current.getBoundingClientRect();
+      const { x: startX, y: startY, startValue } = resizeStartRef.current;
+
+      // In RTL mode, horizontal drag direction is inverted
+      const rtlMultiplier = isRTL ? -1 : 1;
+
+      if (isResizing === 'left') {
+        const deltaX = (e.clientX - startX) * rtlMultiplier;
+        const deltaPercent = (deltaX / rect.width) * 100;
+        const newWidth = Math.min(Math.max(startValue + deltaPercent, 15), 40);
+        setLeftPanelWidth(newWidth);
+      } else if (isResizing === 'setlist') {
+        const deltaX = (e.clientX - startX) * rtlMultiplier;
+        const deltaPercent = (deltaX / rect.width) * 100;
+        const newWidth = Math.min(Math.max(startValue + deltaPercent, 15), 40);
+        setSetlistPanelWidth(newWidth);
+      } else if (isResizing === 'row') {
+        const deltaY = e.clientY - startY;
+        const deltaPercent = (deltaY / rect.height) * 100;
+        const newHeight = Math.min(Math.max(startValue + deltaPercent, 30), 70);
+        setTopRowHeight(newHeight);
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (isResizing) {
+        // Save to localStorage with error handling
+        try {
+          localStorage.setItem('controlPanel_leftWidth', leftPanelWidth.toString());
+          localStorage.setItem('controlPanel_setlistWidth', setlistPanelWidth.toString());
+          localStorage.setItem('controlPanel_topRowHeight', topRowHeight.toString());
+        } catch (error) {
+          console.error('[ControlPanel] Failed to save panel sizes to localStorage:', error);
+        }
+        setIsResizing(null);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, leftPanelWidth, setlistPanelWidth, topRowHeight, isRTL]);
+
+  const startResize = useCallback((type: 'left' | 'setlist' | 'row', e: React.MouseEvent) => {
+    e.preventDefault();
+    const startValue = type === 'left' ? leftPanelWidth : type === 'setlist' ? setlistPanelWidth : topRowHeight;
+    resizeStartRef.current = { x: e.clientX, y: e.clientY, startValue };
+    setIsResizing(type);
+    document.body.style.cursor = type === 'row' ? 'row-resize' : 'col-resize';
+  }, [leftPanelWidth, setlistPanelWidth, topRowHeight]);
+
   // Handle navigation state (e.g., returning from presentation editor)
   useEffect(() => {
-    const state = location.state as { activeTab?: ResourcePanel } | null;
+    const state = location.state as { activeTab?: ResourcePanel; editedPresentationId?: string } | null;
     if (state?.activeTab) {
       setActiveResourcePanel(state.activeTab);
-      // Clear the state so it doesn't persist on refresh
+    }
+
+    // If returning from editing a presentation, refresh and select it
+    if (state?.editedPresentationId) {
+      const refreshAndSelect = async () => {
+        try {
+          // Reload presentations to get updated data
+          const presentationList = await window.electronAPI.getPresentations();
+          setPresentations(presentationList || []);
+
+          // Find the edited presentation
+          const editedPresentation = (presentationList || []).find(
+            (p: Presentation) => p.id === state.editedPresentationId
+          );
+
+          if (editedPresentation) {
+            // Select the presentation to show its slides
+            setSelectedPresentation(editedPresentation);
+            setSelectedSong(null);
+            setCurrentContentType('presentation');
+            setCurrentPresentationSlideIndex(0);
+
+            // Also update the presentation in any setlist items that reference it
+            setSetlist(prev => prev.map(item => {
+              if (item.type === 'presentation' && item.presentation?.id === state.editedPresentationId) {
+                return { ...item, presentation: editedPresentation };
+              }
+              return item;
+            }));
+          }
+        } catch (error) {
+          console.error('Failed to refresh presentations:', error);
+        }
+      };
+      refreshAndSelect();
+    }
+
+    // Clear the state so it doesn't persist on refresh
+    if (state?.activeTab || state?.editedPresentationId) {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
@@ -872,14 +1553,36 @@ const ControlPanel: React.FC = () => {
       cleanup();
       onlineCleanup();
       viewerCleanup();
+      // Centralized interval cleanup - clear ALL interval refs
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
       }
       if (clockIntervalRef.current) {
         clearInterval(clockIntervalRef.current);
+        clockIntervalRef.current = null;
       }
       if (stopwatchIntervalRef.current) {
         clearInterval(stopwatchIntervalRef.current);
+        stopwatchIntervalRef.current = null;
+      }
+      if (youtubeSyncIntervalRef.current) {
+        clearInterval(youtubeSyncIntervalRef.current);
+        youtubeSyncIntervalRef.current = null;
+      }
+      if (audioFadeRef.current) {
+        clearInterval(audioFadeRef.current);
+        audioFadeRef.current = null;
+      }
+      if (importStatusTimeoutRef.current) {
+        clearTimeout(importStatusTimeoutRef.current);
+        importStatusTimeoutRef.current = null;
+      }
+      // Cleanup audio element to prevent memory leaks and stop playback
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        audioRef.current.load(); // Reset the audio element
       }
     };
   }, []);
@@ -909,11 +1612,24 @@ const ControlPanel: React.FC = () => {
       if (youtubeSyncIntervalRef.current) {
         clearInterval(youtubeSyncIntervalRef.current);
       }
+      // Restore original callback on cleanup
+      if (originalCallback) {
+        (window as any).onYouTubeIframeAPIReady = originalCallback;
+      } else {
+        delete (window as any).onYouTubeIframeAPIReady;
+      }
     };
   }, []);
 
   // Create/destroy YouTube player when video changes
   useEffect(() => {
+    // Track player instance locally to avoid stale closure issues
+    let currentPlayer: any = null;
+    let createPlayerTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    let isCleanedUp = false;
+    let retryCount = 0;
+    const MAX_RETRIES = 50; // 5 seconds max wait for YouTube API
+
     if (!youtubeOnDisplay || !activeYoutubeVideo || !youtubeContainerRef.current) {
       // Cleanup player when not displaying
       if (youtubePlayerRef) {
@@ -933,8 +1649,15 @@ const ControlPanel: React.FC = () => {
 
     // Wait for API to be ready
     const createPlayer = () => {
+      // Don't create if already cleaned up
+      if (isCleanedUp) return;
+
       if (!window.YT || !window.YT.Player || !youtubeContainerRef.current) {
-        setTimeout(createPlayer, 100);
+        if (retryCount++ >= MAX_RETRIES) {
+          console.error('YouTube API failed to load after maximum retries');
+          return;
+        }
+        createPlayerTimeoutId = setTimeout(createPlayer, 100);
         return;
       }
 
@@ -953,21 +1676,28 @@ const ControlPanel: React.FC = () => {
         },
         events: {
           onReady: (event: any) => {
+            if (isCleanedUp) return;
             setYoutubeDuration(event.target.getDuration());
             // Start sync interval - sync every 200ms for tighter sync
             youtubeSyncIntervalRef.current = setInterval(() => {
+              if (isCleanedUp) return;
               if (player && player.getCurrentTime) {
-                const currentTime = player.getCurrentTime();
-                const playerState = player.getPlayerState();
-                const isPlaying = playerState === window.YT.PlayerState.PLAYING;
-                setYoutubeCurrentTime(currentTime);
-                setYoutubePlaying(isPlaying);
-                // Sync to connected display
-                window.electronAPI.youtubeSync(currentTime, isPlaying);
+                try {
+                  const currentTime = player.getCurrentTime();
+                  const playerState = player.getPlayerState();
+                  const isPlaying = playerState === window.YT.PlayerState.PLAYING;
+                  setYoutubeCurrentTime(currentTime);
+                  setYoutubePlaying(isPlaying);
+                  // Sync to connected display
+                  window.electronAPI.youtubeSync(currentTime, isPlaying);
+                } catch (e) {
+                  // Player may have been destroyed
+                }
               }
             }, 200);
           },
           onStateChange: (event: any) => {
+            if (isCleanedUp) return;
             const isPlaying = event.data === window.YT.PlayerState.PLAYING;
             setYoutubePlaying(isPlaying);
             if (event.data === window.YT.PlayerState.PLAYING) {
@@ -977,20 +1707,53 @@ const ControlPanel: React.FC = () => {
               const currentTime = player.getCurrentTime();
               window.electronAPI.youtubePause(currentTime);
             }
+          },
+          onError: (event: any) => {
+            const errorCodes: Record<number, string> = {
+              2: 'Invalid video ID',
+              5: 'Video cannot be played in HTML5 player',
+              100: 'Video not found or removed',
+              101: 'Video not allowed for embedded playback',
+              150: 'Video not allowed for embedded playback'
+            };
+            const errorMessage = errorCodes[event.data] || `Unknown error (code: ${event.data})`;
+            console.error('[YouTube] Player error:', errorMessage);
           }
         }
       });
 
+      currentPlayer = player;
       setYoutubePlayerRef(player);
     };
 
     createPlayer();
 
     return () => {
+      isCleanedUp = true;
+
+      // Cancel pending createPlayer timeout
+      if (createPlayerTimeoutId) {
+        clearTimeout(createPlayerTimeoutId);
+        createPlayerTimeoutId = null;
+      }
+
+      // Clear sync interval
       if (youtubeSyncIntervalRef.current) {
         clearInterval(youtubeSyncIntervalRef.current);
         youtubeSyncIntervalRef.current = null;
       }
+
+      // Clean up player - use local reference to avoid stale closure
+      const playerToDestroy = currentPlayer || youtubePlayerRef;
+      if (playerToDestroy) {
+        try {
+          playerToDestroy.destroy();
+        } catch (e) {
+          // Ignore errors during cleanup
+        }
+      }
+      currentPlayer = null;
+      setYoutubePlayerRef(null);
     };
   }, [youtubeOnDisplay, activeYoutubeVideo?.videoId]);
 
@@ -1078,76 +1841,67 @@ const ControlPanel: React.FC = () => {
       setVideoStatus(prev => ({ ...prev, isPlaying: false, currentTime: 0 }));
     });
 
+    // Listen for synchronized video start (when display is ready)
+    const syncStartCleanup = window.electronAPI.onVideoSyncStart(() => {
+      console.log('[ControlPanel] Video sync start received');
+      setVideoStatus(prev => ({ ...prev, isPlaying: true, currentTime: 0 }));
+      // Start preview video from beginning
+      if (previewVideoRef.current) {
+        previewVideoRef.current.currentTime = 0;
+        previewVideoRef.current.play().catch(err => console.error('Preview video play failed:', err));
+      }
+    });
+
     return () => {
       statusCleanup();
       playingCleanup();
       endedCleanup();
+      syncStartCleanup();
     };
   }, []);
 
-  // Keyboard shortcuts
+  // Auto-play effect for presentation slides
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in an input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
+    // Clear any existing timer
+    if (autoPlayTimerRef.current) {
+      clearInterval(autoPlayTimerRef.current);
+      autoPlayTimerRef.current = null;
+    }
 
-      // ? or F1 for help
-      if (e.key === '?' || e.key === 'F1') {
-        e.preventDefault();
-        setShowKeyboardHelp(true);
-        return;
-      }
+    // Only run if auto-play is active and we have a free-form presentation selected
+    if (autoPlayActive && selectedPresentation && !selectedPresentation.quickModeData && selectedPresentation.slides.length > 1) {
+      autoPlayTimerRef.current = setInterval(() => {
+        setCurrentPresentationSlideIndex(prevIndex => {
+          const nextIndex = (prevIndex + 1) % selectedPresentation.slides.length;
+          const slide = selectedPresentation.slides[nextIndex];
 
-      // Escape to close modals
-      if (e.key === 'Escape') {
-        setShowKeyboardHelp(false);
-        setShowQuickSlideModal(false);
-        return;
-      }
+          // Send the slide to the display
+          window.electronAPI.sendSlide({
+            songId: selectedPresentation.id,
+            slideIndex: nextIndex,
+            displayMode: 'bilingual',
+            isBlank: false,
+            songTitle: selectedPresentation.title,
+            presentationSlide: slide
+          });
 
-      // Arrow keys for slide navigation
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        nextSlide();
-        return;
-      }
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        prevSlide();
-        return;
-      }
+          return nextIndex;
+        });
+      }, autoPlayInterval * 1000);
+    }
 
-      // B for blank
-      if (e.key === 'b' || e.key === 'B') {
-        e.preventDefault();
-        toggleBlank();
-        return;
-      }
-
-      // Q for quick slide
-      if (e.key === 'q' || e.key === 'Q') {
-        e.preventDefault();
-        setShowQuickSlideModal(true);
-        return;
-      }
-
-      // Space to toggle display mode
-      if (e.key === ' ') {
-        e.preventDefault();
-        const newMode = displayMode === 'bilingual' ? 'original' : 'bilingual';
-        setDisplayMode(newMode);
-        if (selectedSong && currentSlideIndex >= 0) {
-          sendCurrentSlide(selectedSong, currentSlideIndex, newMode, undefined, currentContentType);
-        }
-        return;
+    return () => {
+      if (autoPlayTimerRef.current) {
+        clearInterval(autoPlayTimerRef.current);
+        autoPlayTimerRef.current = null;
       }
     };
+  }, [autoPlayActive, autoPlayInterval, selectedPresentation]);
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedSong, currentSlideIndex, displayMode, isBlank]);
+  // Stop auto-play when presentation changes or is deselected
+  useEffect(() => {
+    setAutoPlayActive(false);
+  }, [selectedPresentation?.id]);
 
   // Close dropdown panels when clicking outside
   useEffect(() => {
@@ -1160,15 +1914,26 @@ const ControlPanel: React.FC = () => {
       if (showBackgroundDropdown && !target.closest('[data-panel="background"]')) {
         setShowBackgroundDropdown(false);
       }
+      // Collapse expanded playlists when clicking outside
+      if (expandedPlaylistIds.size > 0) {
+        const isInsidePlaylistArea = target.closest('[data-playlist-expanded]');
+        const isInsideAudioPlayer = target.closest('[data-audio-player]');
+        if (!isInsidePlaylistArea && !isInsideAudioPlayer) {
+          setExpandedPlaylistIds(new Set());
+        }
+      }
     };
 
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
-  }, [showDisplayPanel, showBackgroundDropdown]);
+  }, [showDisplayPanel, showBackgroundDropdown, expandedPlaylistIds.size]);
 
   const loadDisplays = async () => {
     const displayList = await window.electronAPI.getDisplays();
     setDisplays(displayList);
+    // Get current control window display
+    const currentControlDisplay = await window.electronAPI.getControlWindowDisplay();
+    setControlDisplayId(currentControlDisplay);
     // Check OBS server state
     const isRunning = await window.electronAPI.isOBSServerRunning();
     setObsServerRunning(isRunning);
@@ -1179,13 +1944,23 @@ const ControlPanel: React.FC = () => {
   };
 
   const loadSongs = useCallback(async () => {
-    const songList = await window.electronAPI.getSongs();
-    setSongs(songList);
+    try {
+      const songList = await window.electronAPI.getSongs();
+      setSongs(songList || []);
+    } catch (error) {
+      console.error('Failed to load songs:', error);
+      setSongs([]);
+    }
   }, []);
 
   const loadPresentations = useCallback(async () => {
-    const presentationList = await window.electronAPI.getPresentations();
-    setPresentations(presentationList);
+    try {
+      const presentationList = await window.electronAPI.getPresentations();
+      setPresentations(presentationList || []);
+    } catch (error) {
+      console.error('Failed to load presentations:', error);
+      setPresentations([]);
+    }
   }, []);
 
   const loadSavedSetlists = async () => {
@@ -1202,7 +1977,6 @@ const ControlPanel: React.FC = () => {
     try {
       // Load saved theme selections
       const savedThemeIds = await window.electronAPI.getSelectedThemeIds();
-      console.log('[loadThemes] Saved theme IDs:', savedThemeIds);
 
       // Load songs (viewer) themes
       const themeList = await window.electronAPI.getThemes();
@@ -1236,7 +2010,6 @@ const ControlPanel: React.FC = () => {
 
       // Load Bible themes
       const bibleThemeList = await window.electronAPI.getBibleThemes();
-      console.log('[loadThemes] Bible themes loaded:', bibleThemeList?.length, bibleThemeList);
       setBibleThemes(bibleThemeList || []);
       if (bibleThemeList && bibleThemeList.length > 0 && !selectedBibleTheme) {
         let themeToSelect = savedThemeIds.bibleThemeId
@@ -1246,25 +2019,62 @@ const ControlPanel: React.FC = () => {
           themeToSelect = bibleThemeList.find((t: any) => t.isDefault) || bibleThemeList[0];
         }
         setSelectedBibleTheme(themeToSelect);
+        // Broadcast to display manager so displays have the bible theme ready
+        window.electronAPI.applyBibleTheme(themeToSelect);
       }
 
       // Load OBS themes
       const obsThemeList = await window.electronAPI.getOBSThemes();
-      console.log('[loadThemes] OBS themes loaded:', obsThemeList?.length, obsThemeList);
       setObsThemes(obsThemeList || []);
-      if (obsThemeList && obsThemeList.length > 0 && !selectedOBSTheme) {
-        let themeToSelect = savedThemeIds.obsThemeId
-          ? obsThemeList.find((t: any) => t.id === savedThemeIds.obsThemeId)
-          : null;
-        if (!themeToSelect) {
-          themeToSelect = obsThemeList.find((t: any) => t.isDefault) || obsThemeList[0];
+      if (obsThemeList && obsThemeList.length > 0) {
+        // Filter by type
+        const obsSongsThemes = obsThemeList.filter((t: any) => t.type === 'songs');
+        const obsBibleThemes = obsThemeList.filter((t: any) => t.type === 'bible');
+        const obsPrayerThemes = obsThemeList.filter((t: any) => t.type === 'prayer');
+
+        // Load OBS Songs theme
+        if (obsSongsThemes.length > 0 && !selectedOBSSongsTheme) {
+          let songsTheme = savedThemeIds.obsThemeId
+            ? obsSongsThemes.find((t: any) => t.id === savedThemeIds.obsThemeId)
+            : null;
+          if (!songsTheme) {
+            songsTheme = obsSongsThemes.find((t: any) => t.isDefault) || obsSongsThemes[0];
+          }
+          setSelectedOBSSongsTheme(songsTheme);
+          if (!selectedOBSTheme) setSelectedOBSTheme(songsTheme);
+          // Apply to OBS server on load
+          window.electronAPI.applyOBSTheme(songsTheme);
         }
-        setSelectedOBSTheme(themeToSelect);
+
+        // Load OBS Bible theme
+        if (obsBibleThemes.length > 0 && !selectedOBSBibleTheme) {
+          let bibleTheme = savedThemeIds.obsBibleThemeId
+            ? obsBibleThemes.find((t: any) => t.id === savedThemeIds.obsBibleThemeId)
+            : null;
+          if (!bibleTheme) {
+            bibleTheme = obsBibleThemes.find((t: any) => t.isDefault) || obsBibleThemes[0];
+          }
+          setSelectedOBSBibleTheme(bibleTheme);
+          // Apply to OBS server on load
+          window.electronAPI.applyOBSTheme(bibleTheme);
+        }
+
+        // Load OBS Prayer theme
+        if (obsPrayerThemes.length > 0 && !selectedOBSPrayerTheme) {
+          let prayerTheme = savedThemeIds.obsPrayerThemeId
+            ? obsPrayerThemes.find((t: any) => t.id === savedThemeIds.obsPrayerThemeId)
+            : null;
+          if (!prayerTheme) {
+            prayerTheme = obsPrayerThemes.find((t: any) => t.isDefault) || obsPrayerThemes[0];
+          }
+          setSelectedOBSPrayerTheme(prayerTheme);
+          // Apply to OBS server on load
+          window.electronAPI.applyOBSTheme(prayerTheme);
+        }
       }
 
       // Load Prayer themes
       const prayerThemeList = await window.electronAPI.getPrayerThemes();
-      console.log('[loadThemes] Prayer themes loaded:', prayerThemeList?.length, prayerThemeList);
       setPrayerThemes(prayerThemeList || []);
       if (prayerThemeList && prayerThemeList.length > 0 && !selectedPrayerTheme) {
         let themeToSelect = savedThemeIds.prayerThemeId
@@ -1274,6 +2084,8 @@ const ControlPanel: React.FC = () => {
           themeToSelect = prayerThemeList.find((t: any) => t.isDefault) || prayerThemeList[0];
         }
         setSelectedPrayerTheme(themeToSelect);
+        // Broadcast to display manager so displays have the prayer theme ready
+        window.electronAPI.applyPrayerTheme(themeToSelect);
       }
     } catch (error) {
       console.error('Failed to load themes:', error);
@@ -1282,7 +2094,6 @@ const ControlPanel: React.FC = () => {
 
   const applyThemeToViewer = useCallback((theme: any) => {
     if (!theme) return;
-    console.log('[applyThemeToViewer] theme:', theme.name, 'linePositions:', theme.linePositions, 'type:', typeof theme.linePositions);
     window.electronAPI.applyTheme(theme);
     setSelectedTheme(theme);
     // Persist selection
@@ -1291,15 +2102,18 @@ const ControlPanel: React.FC = () => {
 
   const applyStageThemeToMonitor = useCallback((theme: any) => {
     if (!theme) return;
-    console.log('[applyStageThemeToMonitor] theme:', theme.name);
-    // Parse JSON fields if needed
-    const colors = typeof theme.colors === 'string' ? JSON.parse(theme.colors) : theme.colors;
-    const elements = typeof theme.elements === 'string' ? JSON.parse(theme.elements) : theme.elements;
-    const currentSlideText = typeof theme.currentSlideText === 'string' ? JSON.parse(theme.currentSlideText) : theme.currentSlideText;
-    window.electronAPI.applyStageTheme({ colors, elements, currentSlideText });
-    setSelectedStageTheme(theme);
-    // Persist selection
-    window.electronAPI.saveSelectedThemeId('stage', theme.id);
+    try {
+      // Parse JSON fields if needed (with try-catch for safety)
+      const colors = typeof theme.colors === 'string' ? JSON.parse(theme.colors) : theme.colors;
+      const elements = typeof theme.elements === 'string' ? JSON.parse(theme.elements) : theme.elements;
+      const currentSlideText = typeof theme.currentSlideText === 'string' ? JSON.parse(theme.currentSlideText) : theme.currentSlideText;
+      window.electronAPI.applyStageTheme({ colors, elements, currentSlideText });
+      setSelectedStageTheme(theme);
+      // Persist selection
+      window.electronAPI.saveSelectedThemeId('stage', theme.id);
+    } catch (error) {
+      console.error('Failed to parse stage theme data:', error);
+    }
   }, []);
 
   const applyBibleThemeCallback = useCallback((theme: any) => {
@@ -1311,9 +2125,18 @@ const ControlPanel: React.FC = () => {
 
   const applyOBSThemeCallback = useCallback((theme: any) => {
     setSelectedOBSTheme(theme);
+    // Set the appropriate separate state based on theme type
+    if (theme.type === 'songs') {
+      setSelectedOBSSongsTheme(theme);
+    } else if (theme.type === 'bible') {
+      setSelectedOBSBibleTheme(theme);
+    } else if (theme.type === 'prayer') {
+      setSelectedOBSPrayerTheme(theme);
+    }
     window.electronAPI.applyOBSTheme(theme);
-    // Persist selection
-    window.electronAPI.saveSelectedThemeId('obs', theme.id);
+    // Persist selection based on type
+    const themeKey = theme.type === 'bible' ? 'obsBible' : theme.type === 'prayer' ? 'obsPrayer' : 'obs';
+    window.electronAPI.saveSelectedThemeId(themeKey, theme.id);
   }, []);
 
   const applyPrayerThemeCallback = useCallback((theme: any) => {
@@ -1539,6 +2362,14 @@ const ControlPanel: React.FC = () => {
       };
       if (editingSong.id) {
         await window.electronAPI.updateSong(editingSong.id, songData);
+        // If the edited song is currently selected, update selectedSong with the new data
+        if (selectedSong?.id === editingSong.id) {
+          setSelectedSong({
+            ...selectedSong,
+            ...songData,
+            id: editingSong.id
+          });
+        }
       } else {
         await window.electronAPI.createSong(songData);
       }
@@ -1646,6 +2477,167 @@ const ControlPanel: React.FC = () => {
     setEditingSong({ ...editingSong, tags: editingSong.tags.filter(tag => tag !== tagToRemove) });
   };
 
+  // Prayer/Sermon express editor functions
+  const closePrayerEditor = useCallback(() => {
+    setShowPrayerEditor(false);
+    setEditingPrayerPresentation(null);
+    setPrayerExpressText('');
+  }, []);
+
+  const startEditingPrayerPresentation = useCallback((presentation: Presentation) => {
+    if (!presentation.quickModeData) return;
+
+    const qmd = presentation.quickModeData;
+    // Convert to express text format
+    // Format: Each point separated by blank line
+    // Line 1: Hebrew subtitle
+    // Line 2: ~English subtitle translation (optional, prefix with ~)
+    // Line 3: --- (separator for description)
+    // Line 4: Hebrew description
+    // Line 5: ~~English description translation (optional, prefix with ~~)
+    // Line 6: @hebrewReference | englishReference (if exists)
+    const expressText = qmd.subtitles.map(subtitle => {
+      const lines: string[] = [];
+      if (subtitle.subtitle) lines.push(subtitle.subtitle);
+      if (subtitle.subtitleTranslation) lines.push('~' + subtitle.subtitleTranslation);
+      if (subtitle.description && subtitle.description !== subtitle.subtitle) {
+        lines.push('---');
+        lines.push(subtitle.description);
+        if (subtitle.descriptionTranslation) lines.push('~~' + subtitle.descriptionTranslation);
+      }
+      if (subtitle.bibleRef?.reference || subtitle.bibleRef?.hebrewReference) {
+        const refParts: string[] = [];
+        if (subtitle.bibleRef.hebrewReference) refParts.push(subtitle.bibleRef.hebrewReference);
+        if (subtitle.bibleRef.reference) refParts.push(subtitle.bibleRef.reference);
+        lines.push('@' + refParts.join(' | '));
+      }
+      return lines.join('\n');
+    }).join('\n\n');
+
+    setPrayerExpressText(expressText);
+    setEditingPrayerPresentation(presentation);
+    setShowPrayerEditor(true);
+  }, []);
+
+  const parsePrayerExpressText = useCallback(() => {
+    // Parse express text back to subtitles array
+    // Format:
+    // Line starting with ~ is subtitle translation
+    // Line starting with ~~ is description translation
+    // Line starting with @ is bible reference
+    // --- separates subtitle from description
+    // Normalize line endings (Windows \r\n to Unix \n)
+    const normalizedText = prayerExpressText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const pointBlocks = normalizedText.split(/\n\s*\n/);
+    const subtitles: QuickModeMetadata['subtitles'] = [];
+
+    for (const block of pointBlocks) {
+      const lines = block.split('\n').map(line => line.trim()).filter(line => line);
+      if (lines.length === 0) continue;
+
+      let subtitle = '';
+      let subtitleTranslation = '';
+      let description = '';
+      let descriptionTranslation = '';
+      let bibleRef: { reference: string; hebrewReference?: string } | undefined;
+      let inDescription = false;
+
+      for (const line of lines) {
+        // Check for separator (allow some flexibility with dashes)
+        if (line === '---' || line === '---' || /^-{3,}$/.test(line)) {
+          inDescription = true;
+          continue;
+        }
+        if (line.startsWith('@')) {
+          // Parse reference: @hebrewRef | englishRef or just @ref
+          const refText = line.slice(1).trim();
+          const refParts = refText.split('|').map(p => p.trim());
+          if (refParts.length >= 2) {
+            bibleRef = { hebrewReference: refParts[0], reference: refParts[1] };
+          } else if (refParts.length === 1) {
+            bibleRef = { reference: refParts[0] };
+          }
+          continue;
+        }
+        // Check for translation lines (~ prefix for subtitle, ~~ prefix for description)
+        if (line.startsWith('~~')) {
+          descriptionTranslation = descriptionTranslation
+            ? descriptionTranslation + '\n' + line.slice(2).trim()
+            : line.slice(2).trim();
+          continue;
+        }
+        if (line.startsWith('~')) {
+          if (inDescription) {
+            // Single ~ in description section is still description translation
+            descriptionTranslation = descriptionTranslation
+              ? descriptionTranslation + '\n' + line.slice(1).trim()
+              : line.slice(1).trim();
+          } else {
+            subtitleTranslation = subtitleTranslation
+              ? subtitleTranslation + '\n' + line.slice(1).trim()
+              : line.slice(1).trim();
+          }
+          continue;
+        }
+        if (inDescription) {
+          description = description ? description + '\n' + line : line;
+        } else {
+          subtitle = subtitle ? subtitle + '\n' + line : line;
+        }
+      }
+
+      if (subtitle) {
+        subtitles.push({
+          subtitle,
+          subtitleTranslation: subtitleTranslation || undefined,
+          description: description || subtitle,
+          descriptionTranslation: descriptionTranslation || undefined,
+          bibleRef
+        });
+      }
+    }
+
+    return subtitles;
+  }, [prayerExpressText]);
+
+  const savePrayerPresentation = useCallback(async () => {
+    if (!editingPrayerPresentation?.quickModeData) return;
+
+    const subtitles = parsePrayerExpressText();
+    if (subtitles.length === 0) {
+      alert('Please add at least one point');
+      return;
+    }
+
+    try {
+      const updatedQuickModeData = {
+        ...editingPrayerPresentation.quickModeData,
+        subtitles
+      };
+
+      await window.electronAPI.updatePresentation(editingPrayerPresentation.id, {
+        quickModeData: updatedQuickModeData
+      });
+
+      // Reload presentations and update selectedPresentation to reflect changes
+      const presentationList = await window.electronAPI.getPresentations();
+      setPresentations(presentationList || []);
+
+      // Update selectedPresentation if it was the one being edited
+      if (selectedPresentation?.id === editingPrayerPresentation.id) {
+        const updated = presentationList?.find((p: Presentation) => p.id === editingPrayerPresentation.id);
+        if (updated) {
+          setSelectedPresentation(updated);
+        }
+      }
+
+      closePrayerEditor();
+    } catch (error) {
+      console.error('Failed to save prayer presentation:', error);
+      alert('Failed to save changes. Please try again.');
+    }
+  }, [editingPrayerPresentation, parsePrayerExpressText, closePrayerEditor, selectedPresentation]);
+
   // Memoized deleteSongById
   const deleteSongById = useCallback(async (songId: string) => {
     if (!confirm('Are you sure you want to delete this song?')) return;
@@ -1683,10 +2675,24 @@ const ControlPanel: React.FC = () => {
   }, []);
 
   const fetchYouTubeMetadata = useCallback(async (videoId: string): Promise<YouTubeVideo | null> => {
+    const fallback = {
+      videoId,
+      title: `Video ${videoId}`,
+      thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+    };
+
     try {
       const response = await fetch(`https://www.youtube.com/oembed?url=https://youtube.com/watch?v=${videoId}&format=json`);
-      if (!response.ok) return null;
-      const data = await response.json();
+      if (!response.ok) return fallback;
+
+      let data: any;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error('Failed to parse YouTube metadata response:', parseError);
+        return fallback;
+      }
+
       return {
         videoId,
         title: data.title || `Video ${videoId}`,
@@ -1694,11 +2700,7 @@ const ControlPanel: React.FC = () => {
       };
     } catch (error) {
       console.error('Failed to fetch YouTube metadata:', error);
-      return {
-        videoId,
-        title: `Video ${videoId}`,
-        thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
-      };
+      return fallback;
     }
   }, []);
 
@@ -1774,7 +2776,9 @@ const ControlPanel: React.FC = () => {
     setShowYoutubeSearchResults(true);
 
     try {
-      const result = await window.electronAPI.youtubeSearch(query);
+      // Pass configurable timeout from settings (converted to milliseconds)
+      const searchTimeoutMs = (settings.youtubeSearchTimeout || 15) * 1000;
+      const result = await window.electronAPI.youtubeSearch(query, searchTimeoutMs);
 
       if (result.success && result.results) {
         setYoutubeSearchResults(result.results);
@@ -1790,7 +2794,7 @@ const ControlPanel: React.FC = () => {
     } finally {
       setYoutubeSearchLoading(false);
     }
-  }, [t]);
+  }, [t, settings.youtubeSearchTimeout]);
 
   // Add video from search results
   const addVideoFromSearch = useCallback((result: YouTubeSearchResult) => {
@@ -1852,6 +2856,7 @@ const ControlPanel: React.FC = () => {
   // Display fullscreen media (takes over from slides)
   const handleDisplayMedia = useCallback(async (type: 'image' | 'video', path: string) => {
     // Encode the path for media:// protocol (for display windows)
+    // Use triple-slash format (media://file/path) to avoid hostname issues in child windows
     const encodedPath = path
       .replace(/\\/g, '/')
       .split('/')
@@ -1859,9 +2864,9 @@ const ControlPanel: React.FC = () => {
       .join('/');
     const mediaUrl = `media://file/${encodedPath}`;
 
-    // Reset video status when starting new video
+    // Reset video status when starting new video (paused until display is ready)
     if (type === 'video') {
-      setVideoStatus({ currentTime: 0, duration: 0, isPlaying: true });
+      setVideoStatus({ currentTime: 0, duration: 0, isPlaying: false });
     }
 
     // Use media:// protocol which uses net.fetch for proper range request support
@@ -1878,6 +2883,7 @@ const ControlPanel: React.FC = () => {
   // Play background audio (only in control panel, not on displays)
   const handlePlayAudio = useCallback((path: string, name: string) => {
     // Encode the path for media:// protocol
+    // Use triple-slash format (media://file/path) for consistency
     const encodedPath = path
       .replace(/\\/g, '/')
       .split('/')
@@ -1910,7 +2916,9 @@ const ControlPanel: React.FC = () => {
     const stepTime = AUDIO_FADE_DURATION / AUDIO_FADE_STEPS;
     const volumeStep = audioTargetVolume / AUDIO_FADE_STEPS;
     audioRef.current.volume = 0;
-    audioRef.current.play();
+    audioRef.current.play().catch(err => {
+      console.error('Audio play error:', err);
+    });
 
     let currentStep = 0;
     audioFadeRef.current = setInterval(() => {
@@ -1962,9 +2970,191 @@ const ControlPanel: React.FC = () => {
         audioRef.current.currentTime = 0;
       }
       setActiveAudio(null);
+      setActiveAudioSetlistId(null); // Clear setlist tracking on manual stop
+      setActivePlaylistId(null); // Clear playlist tracking
+      setActivePlaylistIndex(0);
+      setActivePlaylistOrder([]);
       setAudioStatus({ currentTime: 0, duration: 0, isPlaying: false });
     });
   }, [fadeOutAudio]);
+
+  // Stable callbacks for memoized AudioPlayerBar
+  const handleAudioPlayPause = useCallback(() => {
+    if (audioRef.current) {
+      if (audioRef.current.paused) {
+        // Immediately update UI to show playing state
+        setAudioStatus(prev => ({ ...prev, isPlaying: true }));
+        fadeInAudio();
+      } else {
+        // Immediately update UI to show paused state (icon changes instantly)
+        setAudioStatus(prev => ({ ...prev, isPlaying: false }));
+        fadeOutAudio(() => {
+          if (audioRef.current) {
+            audioRef.current.pause();
+          }
+        });
+      }
+    }
+  }, [fadeInAudio, fadeOutAudio]);
+
+  const handleAudioSeek = useCallback((time: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = time;
+    }
+  }, []);
+
+  const handleAudioVolumeChange = useCallback((newVolume: number) => {
+    setAudioTargetVolume(newVolume);
+    if (audioRef.current && !audioFadeRef.current) {
+      audioRef.current.volume = newVolume;
+    }
+  }, []);
+
+  // Start playing an audio playlist (optionally from a specific track index)
+  const startPlaylist = useCallback((playlistItem: SetlistItem, startFromTrackIndex?: number) => {
+    if (!playlistItem.audioPlaylist || playlistItem.audioPlaylist.tracks.length === 0) return;
+
+    const tracks = playlistItem.audioPlaylist.tracks;
+    const shuffle = playlistItem.audioPlaylist.shuffle;
+
+    // Create track order (shuffled or sequential)
+    let order = tracks.map((_, idx) => idx);
+    if (shuffle && startFromTrackIndex === undefined) {
+      // Only shuffle if not starting from a specific track
+      // Fisher-Yates shuffle
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+    } else if (startFromTrackIndex !== undefined) {
+      // If starting from a specific track, reorder to start from that track
+      // Put the selected track first, then continue sequentially
+      order = [startFromTrackIndex, ...tracks.map((_, idx) => idx).filter(idx => idx !== startFromTrackIndex)];
+    }
+
+    setActivePlaylistId(playlistItem.id);
+    setActivePlaylistOrder(order);
+    setActivePlaylistIndex(0);
+    setActiveAudioSetlistId(null); // Clear single-audio setlist tracking
+
+    // Play the first track in order (which is the selected track if specified)
+    const firstTrackIdx = order[0];
+    const firstTrack = tracks[firstTrackIdx];
+    handlePlayAudio(firstTrack.path, firstTrack.name);
+  }, [handlePlayAudio]);
+
+  // Play next track in playlist (called when current track ends)
+  const playNextPlaylistTrack = useCallback(() => {
+    if (!activePlaylistId) return false;
+
+    const playlistItem = setlist.find(item => item.id === activePlaylistId);
+    if (!playlistItem?.audioPlaylist) return false;
+
+    const tracks = playlistItem.audioPlaylist.tracks;
+    const nextIndex = activePlaylistIndex + 1;
+
+    if (nextIndex >= activePlaylistOrder.length) {
+      // Playlist finished
+      setActivePlaylistId(null);
+      setActivePlaylistIndex(0);
+      setActivePlaylistOrder([]);
+      return false;
+    }
+
+    // Play next track
+    setActivePlaylistIndex(nextIndex);
+    const nextTrackIdx = activePlaylistOrder[nextIndex];
+    const nextTrack = tracks[nextTrackIdx];
+    handlePlayAudio(nextTrack.path, nextTrack.name);
+    return true;
+  }, [activePlaylistId, activePlaylistIndex, activePlaylistOrder, setlist, handlePlayAudio]);
+
+  // Open edit playlist modal
+  const openEditPlaylistModal = useCallback((item: SetlistItem) => {
+    if (!item.audioPlaylist) return;
+    setEditingPlaylistItemId(item.id);
+    setEditingPlaylistTracks([...item.audioPlaylist.tracks]);
+    setEditingPlaylistName(item.audioPlaylist.name);
+    setEditingPlaylistShuffle(item.audioPlaylist.shuffle);
+  }, []);
+
+  // Close edit playlist modal
+  const closeEditPlaylistModal = useCallback(() => {
+    setEditingPlaylistItemId(null);
+    setEditingPlaylistTracks([]);
+    setEditingPlaylistName('');
+    setEditingPlaylistShuffle(false);
+    setEditPlaylistDraggedIndex(null);
+    setEditPlaylistDropTargetIndex(null);
+  }, []);
+
+  // Save edited playlist to setlist item
+  const saveEditedPlaylist = useCallback(() => {
+    if (!editingPlaylistItemId || editingPlaylistTracks.length === 0) return;
+
+    setSetlist(prev => prev.map(item => {
+      if (item.id === editingPlaylistItemId && item.audioPlaylist) {
+        return {
+          ...item,
+          audioPlaylist: {
+            ...item.audioPlaylist,
+            tracks: editingPlaylistTracks,
+            name: editingPlaylistName || item.audioPlaylist.name,
+            shuffle: editingPlaylistShuffle
+          }
+        };
+      }
+      return item;
+    }));
+
+    closeEditPlaylistModal();
+  }, [editingPlaylistItemId, editingPlaylistTracks, editingPlaylistName, editingPlaylistShuffle, closeEditPlaylistModal]);
+
+  // Save edited playlist to database
+  const saveEditedPlaylistToDatabase = useCallback(async () => {
+    if (editingPlaylistTracks.length === 0) return;
+
+    const name = editingPlaylistName.trim() || `Playlist (${editingPlaylistTracks.length} tracks)`;
+
+    try {
+      await window.electronAPI.createAudioPlaylist({
+        name,
+        tracks: editingPlaylistTracks,
+        shuffle: editingPlaylistShuffle
+      });
+      log.info('Playlist saved to database');
+    } catch (error) {
+      log.error('Failed to save playlist to database:', error);
+    }
+  }, [editingPlaylistTracks, editingPlaylistName, editingPlaylistShuffle]);
+
+  // Handle track reordering in edit modal
+  const handleEditPlaylistTrackDragStart = useCallback((index: number) => {
+    setEditPlaylistDraggedIndex(index);
+  }, []);
+
+  const handleEditPlaylistTrackDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    setEditPlaylistDropTargetIndex(index);
+  }, []);
+
+  const handleEditPlaylistTrackDragEnd = useCallback(() => {
+    if (editPlaylistDraggedIndex !== null && editPlaylistDropTargetIndex !== null && editPlaylistDraggedIndex !== editPlaylistDropTargetIndex) {
+      setEditingPlaylistTracks(prev => {
+        const newTracks = [...prev];
+        const [removed] = newTracks.splice(editPlaylistDraggedIndex, 1);
+        const insertIndex = editPlaylistDropTargetIndex > editPlaylistDraggedIndex ? editPlaylistDropTargetIndex - 1 : editPlaylistDropTargetIndex;
+        newTracks.splice(insertIndex, 0, removed);
+        return newTracks;
+      });
+    }
+    setEditPlaylistDraggedIndex(null);
+    setEditPlaylistDropTargetIndex(null);
+  }, [editPlaylistDraggedIndex, editPlaylistDropTargetIndex]);
+
+  const removeEditPlaylistTrack = useCallback((index: number) => {
+    setEditingPlaylistTracks(prev => prev.filter((_, i) => i !== index));
+  }, []);
 
   const sendCurrentSlide = useCallback((song: Song | null, slideIndex: number, mode: DisplayMode, combinedIndices?: number[], contentType: 'song' | 'bible' | 'prayer' = 'song') => {
     if (!song || !song.slides[slideIndex]) {
@@ -1976,11 +3166,12 @@ const ControlPanel: React.FC = () => {
     const nextSlide = song.slides[slideIndex + 1] || null;
 
     // If in original mode with combined slides, include both slides' data
-    const combinedSlides = mode === 'original' && combinedIndices && combinedIndices.length > 1
+    // Check length AFTER filtering to ensure we actually have multiple valid slides
+    const combinedSlidesRaw = mode === 'original' && combinedIndices && combinedIndices.length > 1
       ? combinedIndices.map(i => song.slides[i]).filter(Boolean)
       : null;
+    const combinedSlides = combinedSlidesRaw && combinedSlidesRaw.length > 1 ? combinedSlidesRaw : null;
 
-    console.log('[sendCurrentSlide] selectedBackground:', selectedBackground, 'contentType:', contentType);
     window.electronAPI.sendSlide({
       songId: song.id,
       slideIndex,
@@ -1989,38 +3180,62 @@ const ControlPanel: React.FC = () => {
       songTitle: song.title,
       contentType, // 'song', 'bible', or 'prayer' - determines which theme to apply
       backgroundImage: selectedBackground || undefined, // Include current background (omit if empty to preserve viewer state)
-      slideData: {
-        originalText: slide.originalText,
-        transliteration: slide.transliteration,
-        translation: slide.translation,
-        translationOverflow: slide.translationOverflow,
-        verseType: slide.verseType,
-        // Prayer/Sermon theme fields (mapped from slide structure when available)
-        title: (slide as any).title,
-        titleTranslation: (slide as any).titleTranslation,
-        subtitle: (slide as any).subtitle || slide.originalText,
-        subtitleTranslation: (slide as any).subtitleTranslation || slide.translation,
-        description: (slide as any).description,
-        descriptionTranslation: (slide as any).descriptionTranslation,
-        reference: (slide as any).reference,
-        referenceTranslation: (slide as any).referenceTranslation
-      },
+      slideData: (() => {
+        const refHebrew = contentType === 'bible' ? (slide as any).hebrewReference : (slide as any).reference;
+        const refEnglish = contentType === 'bible' ? (slide as any).reference : undefined;
+        return {
+          originalText: slide.originalText,
+          transliteration: slide.transliteration,
+          translation: slide.translation,
+          translationOverflow: slide.translationOverflow,
+          verseType: slide.verseType,
+          // Prayer/Sermon theme fields (mapped from slide structure when available)
+          title: (slide as any).title,
+          titleTranslation: (slide as any).titleTranslation,
+          subtitle: (slide as any).subtitle || slide.originalText,
+          subtitleTranslation: (slide as any).subtitleTranslation || slide.translation,
+          description: (slide as any).description,
+          descriptionTranslation: (slide as any).descriptionTranslation,
+          // Reference fields - for Bible content: hebrewReference goes to 'reference', English to 'referenceEnglish'
+          reference: refHebrew,
+          referenceTranslation: (slide as any).referenceTranslation,
+          referenceEnglish: refEnglish
+        };
+      })(),
       nextSlideData: nextSlide ? {
         originalText: nextSlide.originalText,
         transliteration: nextSlide.transliteration,
         translation: nextSlide.translation,
         translationOverflow: nextSlide.translationOverflow,
-        verseType: nextSlide.verseType
+        verseType: nextSlide.verseType,
+        // Prayer/Sermon content fields
+        title: (nextSlide as any).title,
+        titleTranslation: (nextSlide as any).titleTranslation,
+        subtitle: (nextSlide as any).subtitle,
+        subtitleTranslation: (nextSlide as any).subtitleTranslation,
+        description: (nextSlide as any).description,
+        descriptionTranslation: (nextSlide as any).descriptionTranslation,
+        reference: (nextSlide as any).reference,
+        referenceTranslation: (nextSlide as any).referenceTranslation
       } : null,
       combinedSlides: combinedSlides?.map(s => ({
         originalText: s.originalText,
         transliteration: s.transliteration,
         translation: s.translation,
         translationOverflow: s.translationOverflow,
-        verseType: s.verseType
+        verseType: s.verseType,
+        // Prayer/Sermon content fields
+        title: (s as any).title,
+        titleTranslation: (s as any).titleTranslation,
+        subtitle: (s as any).subtitle,
+        subtitleTranslation: (s as any).subtitleTranslation,
+        description: (s as any).description,
+        descriptionTranslation: (s as any).descriptionTranslation,
+        reference: (s as any).reference,
+        referenceTranslation: (s as any).referenceTranslation
       })) || null
     });
-  }, [selectedBackground]);
+  }, [selectedBackground, selectedBibleTheme, selectedPrayerTheme]);
 
   // Send prayer/sermon presentation slide using prayer theme instead of textbox rendering
   const sendPrayerPresentationSlide = useCallback((
@@ -2028,27 +3243,32 @@ const ControlPanel: React.FC = () => {
     slideIndex: number,
     mode: DisplayMode
   ) => {
-    console.log('[sendPrayerPresentationSlide] Called with:', presentation.title, 'slideIndex:', slideIndex, 'quickModeData:', presentation.quickModeData);
     if (!presentation.quickModeData) {
-      console.log('[sendPrayerPresentationSlide] No quickModeData, returning');
       return;
     }
 
     const qmd = presentation.quickModeData;
     const subtitle = qmd.subtitles[slideIndex];
-    console.log('[sendPrayerPresentationSlide] subtitle:', subtitle, 'selectedPrayerTheme:', selectedPrayerTheme?.name);
     if (!subtitle) return;
-
-    // Debug: log bibleRef data
-    console.log('[sendPrayerPresentationSlide] bibleRef:', subtitle.bibleRef);
-    console.log('[sendPrayerPresentationSlide] hebrewReference:', subtitle.bibleRef?.hebrewReference);
-    console.log('[sendPrayerPresentationSlide] reference:', subtitle.bibleRef?.reference);
 
     const hebrewRef = subtitle.bibleRef?.hebrewReference;
     const englishRef = subtitle.bibleRef?.reference;
 
-    console.log('[sendPrayerPresentationSlide] Sending - reference (Hebrew):', hebrewRef || englishRef, 'referenceTranslation (English):', englishRef);
+    const slideData = {
+      title: qmd.title,
+      titleTranslation: (qmd as any).titleTranslation,
+      subtitle: subtitle.subtitle,
+      subtitleTranslation: subtitle.subtitleTranslation,
+      description: subtitle.description,
+      descriptionTranslation: subtitle.descriptionTranslation,
+      reference: hebrewRef || englishRef,
+      referenceTranslation: englishRef
+    };
 
+    // Update live preview state FIRST for immediate UI response (atomic update)
+    setLiveState({ slideData, contentType: 'prayer', songId: presentation.id, slideIndex });
+
+    // Send to display (fire and forget)
     window.electronAPI.sendSlide({
       songId: presentation.id,
       slideIndex,
@@ -2057,19 +3277,17 @@ const ControlPanel: React.FC = () => {
       songTitle: presentation.title,
       contentType: 'prayer',
       backgroundImage: selectedBackground || undefined,
-      activeTheme: selectedPrayerTheme,  // Include prayer theme for rendering
-      slideData: {
-        title: qmd.title,
-        titleTranslation: (qmd as any).titleTranslation,
-        subtitle: subtitle.subtitle,
-        subtitleTranslation: subtitle.subtitleTranslation,
-        description: subtitle.description,
-        descriptionTranslation: subtitle.descriptionTranslation,
-        reference: hebrewRef || englishRef,
-        referenceTranslation: englishRef
-      }
+      activeTheme: selectedPrayerTheme,
+      slideData
     });
   }, [selectedBackground, selectedPrayerTheme]);
+
+  // Combined slides for original-only mode (pairs consecutive same-verseType slides)
+  // NOTE: This must be defined before handleClearMedia which depends on it
+  const combinedSlidesData = useMemo(() => {
+    if (displayMode !== 'original' || !selectedSong?.slides) return null;
+    return createCombinedSlides(selectedSong.slides);
+  }, [displayMode, selectedSong?.slides]);
 
   // Clear fullscreen media and restore slides
   const handleClearMedia = useCallback(async () => {
@@ -2082,12 +3300,20 @@ const ControlPanel: React.FC = () => {
 
       // Re-send the current slide to restore display
       if (selectedSong && currentSlideIndex >= 0) {
-        sendCurrentSlide(selectedSong, currentSlideIndex, displayMode, undefined, currentContentType);
+        // If in original mode, get the combined indices for the current slide
+        let combinedIndices: number[] | undefined;
+        if (displayMode === 'original' && combinedSlidesData) {
+          const combinedIdx = combinedSlidesData.originalToCombined.get(currentSlideIndex);
+          if (combinedIdx !== undefined) {
+            combinedIndices = combinedSlidesData.combinedToOriginal.get(combinedIdx);
+          }
+        }
+        sendCurrentSlide(selectedSong, currentSlideIndex, displayMode, combinedIndices, currentContentType);
       }
     } catch (error) {
       console.error('Failed to clear media:', error);
     }
-  }, [selectedSong, currentSlideIndex, displayMode, sendCurrentSlide, currentContentType]);
+  }, [selectedSong, currentSlideIndex, displayMode, sendCurrentSlide, currentContentType, combinedSlidesData]);
 
   // Video playback control handlers
   const handleVideoPlayPause = useCallback(async () => {
@@ -2108,22 +3334,41 @@ const ControlPanel: React.FC = () => {
   }, [videoStatus.isPlaying]);
 
   const handleVideoSeek = useCallback((time: number) => {
-    // Seek preview video first (sync operation)
+    if (isNaN(time) || time < 0) return;
+
+    // Pause both first for sync
     const video = previewVideoRef.current;
-    if (video && !isNaN(time) && time >= 0) {
-      // Debug seekable ranges
-      const seekable = video.seekable;
-      console.log('[Seek] Seekable ranges:', seekable.length);
-      for (let i = 0; i < seekable.length; i++) {
-        console.log('[Seek] Range', i, ':', seekable.start(i), '-', seekable.end(i));
-      }
-      console.log('[Seek] Setting currentTime to:', time, 'current:', video.currentTime);
-      video.currentTime = time;
-      console.log('[Seek] After set, currentTime is:', video.currentTime);
+    const wasPlaying = videoStatus.isPlaying;
+
+    // Pause preview
+    if (video) {
+      video.pause();
     }
-    // Also send command to display windows (async, don't await)
-    window.electronAPI.seekVideo(time);
-  }, []);
+    // Pause display
+    window.electronAPI.pauseVideo();
+    setVideoStatus(prev => ({ ...prev, isPlaying: false }));
+
+    // Small delay to ensure pause takes effect
+    setTimeout(() => {
+      // Seek preview
+      if (video) {
+        video.currentTime = time;
+      }
+      // Seek display
+      window.electronAPI.seekVideo(time);
+
+      // Resume after another small delay if was playing
+      if (wasPlaying) {
+        setTimeout(() => {
+          if (video) {
+            video.play().catch(() => {});
+          }
+          window.electronAPI.resumeVideo();
+          setVideoStatus(prev => ({ ...prev, isPlaying: true }));
+        }, 150);
+      }
+    }, 50);
+  }, [videoStatus.isPlaying]);
 
   const formatTime = (seconds: number): string => {
     if (!seconds || isNaN(seconds)) return '0:00';
@@ -2182,12 +3427,6 @@ const ControlPanel: React.FC = () => {
 
   // Note: Unsaved changes tracking is now handled by SetlistContext
 
-  // Combined slides for original-only mode (pairs consecutive same-verseType slides)
-  const combinedSlidesData = useMemo(() => {
-    if (displayMode !== 'original' || !selectedSong?.slides) return null;
-    return createCombinedSlides(selectedSong.slides);
-  }, [displayMode, selectedSong?.slides]);
-
   // Sync selectedCombinedIndex when mode changes or song changes
   useEffect(() => {
     if (combinedSlidesData && currentSlideIndex !== null) {
@@ -2197,6 +3436,29 @@ const ControlPanel: React.FC = () => {
       }
     }
   }, [combinedSlidesData, currentSlideIndex]);
+
+  // Re-send current slide with combined data when combinedSlidesData becomes available
+  // This handles cases where a song is selected in original mode - the initial send
+  // doesn't have combined indices, but once computed, we re-send with proper data
+  const prevCombinedSlidesDataRef = useRef<typeof combinedSlidesData>(null);
+  useEffect(() => {
+    // Only trigger when combinedSlidesData becomes available (was null, now has data)
+    const wasNull = prevCombinedSlidesDataRef.current === null;
+    const isNowAvailable = combinedSlidesData !== null;
+    prevCombinedSlidesDataRef.current = combinedSlidesData;
+
+    if (wasNull && isNowAvailable && selectedSong && !isBlank && currentSlideIndex !== null) {
+      // Get the combined index for the current slide
+      const combinedIdx = combinedSlidesData.originalToCombined.get(currentSlideIndex);
+      if (combinedIdx !== undefined) {
+        const combinedIndices = combinedSlidesData.combinedToOriginal.get(combinedIdx);
+        if (combinedIndices && combinedIndices.length > 1) {
+          // Re-send with combined data
+          sendCurrentSlide(selectedSong, currentSlideIndex, displayMode, combinedIndices, currentContentType);
+        }
+      }
+    }
+  }, [combinedSlidesData, selectedSong, isBlank, currentSlideIndex, displayMode, currentContentType, sendCurrentSlide]);
 
   const openDisplay = async (displayId: number, type: 'viewer' | 'stage') => {
     await window.electronAPI.openDisplayWindow(displayId, type);
@@ -2209,29 +3471,78 @@ const ControlPanel: React.FC = () => {
   };
 
   // Memoized selectSong to prevent recreation on every render
-  const selectSong = useCallback((song: Song, contentType: 'song' | 'bible' = 'song') => {
+  const selectSong = useCallback((song: Song, contentType: 'song' | 'bible' | 'prayer' = 'song', sendToDisplay: boolean = true) => {
     setSelectedSong(song);
-    setCurrentSlideIndex(0);
+    // If selecting the song that's currently live, restore to the live slide index
+    // Otherwise reset to 0
+    if (song.id === liveSongId) {
+      setCurrentSlideIndex(liveSlideIndex);
+    } else {
+      setCurrentSlideIndex(0);
+    }
     setSelectedPresentation(null); // Clear presentation selection
     setCurrentPresentationSlideIndex(0);
-    setIsBlank(false);
     setCurrentContentType(contentType);
-    sendCurrentSlide(song, 0, displayMode, undefined, contentType);
-  }, [sendCurrentSlide, displayMode]);
 
-  // Memoized goToSlide
+    // Only send to display if requested
+    if (sendToDisplay) {
+      setIsBlank(false);
+
+      // Apply the appropriate OBS theme based on content type
+      if (contentType === 'bible' && selectedOBSBibleTheme) {
+        window.electronAPI.applyOBSTheme(selectedOBSBibleTheme);
+      } else if (contentType === 'prayer' && selectedOBSPrayerTheme) {
+        window.electronAPI.applyOBSTheme(selectedOBSPrayerTheme);
+      } else if (contentType === 'song' && selectedOBSSongsTheme) {
+        window.electronAPI.applyOBSTheme(selectedOBSSongsTheme);
+      }
+
+      // Update live preview data (atomic update)
+      const slide = song.slides[0];
+      const slideData = contentType === 'bible' ? {
+        ...slide,
+        reference: (slide as any).hebrewReference || song.title,
+        referenceEnglish: (slide as any).reference
+      } : slide;
+      setLiveState({ slideData, contentType, songId: song.id, slideIndex: 0 });
+
+      sendCurrentSlide(song, 0, displayMode, undefined, contentType);
+    }
+  }, [sendCurrentSlide, displayMode, selectedOBSBibleTheme, selectedOBSSongsTheme, selectedOBSPrayerTheme, liveSongId, liveSlideIndex]);
+
+  // Memoized goToSlide - always sends to display when clicking on a slide card
   const goToSlide = useCallback((index: number, combinedIndices?: number[]) => {
     if (!selectedSong) return;
     const newIndex = Math.max(0, Math.min(index, selectedSong.slides.length - 1));
     setCurrentSlideIndex(newIndex);
-    if (!isBlank) {
-      sendCurrentSlide(selectedSong, newIndex, displayMode, combinedIndices, currentContentType);
+    setIsBlank(false); // Always show when clicking on a slide
+
+    // Apply the appropriate OBS theme based on content type
+    if (currentContentType === 'bible' && selectedOBSBibleTheme) {
+      window.electronAPI.applyOBSTheme(selectedOBSBibleTheme);
+    } else if (currentContentType === 'prayer' && selectedOBSPrayerTheme) {
+      window.electronAPI.applyOBSTheme(selectedOBSPrayerTheme);
+    } else if (currentContentType === 'song' && selectedOBSSongsTheme) {
+      window.electronAPI.applyOBSTheme(selectedOBSSongsTheme);
     }
-  }, [selectedSong, isBlank, sendCurrentSlide, displayMode, currentContentType]);
+
+    // Update live preview data (atomic update)
+    const slide = selectedSong.slides[newIndex];
+    const slideData = currentContentType === 'bible' ? {
+      ...slide,
+      reference: (slide as any).hebrewReference || selectedSong.title,
+      referenceEnglish: (slide as any).reference
+    } : slide;
+    setLiveState({ slideData, contentType: currentContentType, songId: selectedSong.id, slideIndex: newIndex });
+
+    sendCurrentSlide(selectedSong, newIndex, displayMode, combinedIndices, currentContentType);
+  }, [selectedSong, sendCurrentSlide, displayMode, currentContentType, selectedOBSBibleTheme, selectedOBSSongsTheme, selectedOBSPrayerTheme]);
 
   // Memoized selectCombinedSlide (for original-only mode)
   const selectCombinedSlide = useCallback((combinedIndex: number) => {
-    if (!combinedSlidesData || !selectedSong) return;
+    if (!combinedSlidesData || !selectedSong) {
+      return;
+    }
 
     setSelectedCombinedIndex(combinedIndex);
     setIsBlank(false);
@@ -2241,6 +3552,15 @@ const ControlPanel: React.FC = () => {
 
     const firstOriginalIndex = originalIndices[0];
     setCurrentSlideIndex(firstOriginalIndex);
+
+    // Update live state for immediate UI response (sets liveSongId for selection highlighting)
+    const slide = selectedSong.slides[firstOriginalIndex];
+    const slideData = currentContentType === 'bible' ? {
+      ...slide,
+      reference: (slide as any).hebrewReference || selectedSong.title,
+      referenceEnglish: (slide as any).reference
+    } : slide;
+    setLiveState({ slideData, contentType: currentContentType, songId: selectedSong.id, slideIndex: firstOriginalIndex });
 
     // Send slide with combined indices
     sendCurrentSlide(selectedSong, firstOriginalIndex, displayMode, originalIndices, currentContentType);
@@ -2293,15 +3613,542 @@ const ControlPanel: React.FC = () => {
     goToSlide(index);
   }, [selectedSong, displayMode, combinedSlidesData, selectCombinedSlide, goToSlide]);
 
-  const toggleBlank = () => {
-    const newBlankState = !isBlank;
-    setIsBlank(newBlankState);
-    if (newBlankState) {
-      window.electronAPI.sendBlank();
+  const toggleBlank = useCallback(() => {
+    setIsBlank(prevBlank => {
+      const newBlankState = !prevBlank;
+      if (newBlankState) {
+        window.electronAPI.sendBlank();
+        setLiveState({ slideData: null, contentType: null, songId: null, slideIndex: 0 });
+      } else if (selectedSong) {
+        // Update live preview data (atomic update)
+        const slide = selectedSong.slides[currentSlideIndex];
+        const slideData = currentContentType === 'bible' ? {
+          ...slide,
+          reference: (slide as any).hebrewReference || selectedSong.title,
+          referenceEnglish: (slide as any).reference
+        } : slide;
+        setLiveState({ slideData, contentType: currentContentType, songId: selectedSong.id, slideIndex: currentSlideIndex });
+        sendCurrentSlide(selectedSong, currentSlideIndex, displayMode, undefined, currentContentType);
+      }
+      return newBlankState;
+    });
+  }, [selectedSong, currentSlideIndex, displayMode, currentContentType, sendCurrentSlide]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      // ? or F1 for help
+      if (e.key === '?' || e.key === 'F1') {
+        e.preventDefault();
+        setShowKeyboardHelp(true);
+        return;
+      }
+
+      // Escape to close modals
+      if (e.key === 'Escape') {
+        setShowKeyboardHelp(false);
+        setShowQuickSlideModal(false);
+        return;
+      }
+
+      // Arrow keys for slide navigation
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        nextSlide();
+        return;
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        prevSlide();
+        return;
+      }
+
+      // B for blank
+      if (e.key === 'b' || e.key === 'B') {
+        e.preventDefault();
+        toggleBlank();
+        return;
+      }
+
+      // Q for quick slide
+      if (e.key === 'q' || e.key === 'Q') {
+        e.preventDefault();
+        setShowQuickSlideModal(true);
+        return;
+      }
+
+      // Space to toggle display mode
+      if (e.key === ' ') {
+        e.preventDefault();
+        const newMode = displayMode === 'bilingual' ? 'original' : 'bilingual';
+        setDisplayMode(newMode);
+        // Clear the screen when switching display modes
+        setIsBlank(true);
+        setLiveState({ slideData: null, contentType: null, songId: null, slideIndex: 0 });
+        window.electronAPI.sendBlank();
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedSong, selectedPresentation, currentSlideIndex, currentPresentationSlideIndex, displayMode, currentContentType, nextSlide, prevSlide, toggleBlank, sendCurrentSlide, sendPrayerPresentationSlide]);
+
+  // Remote Control: Sync state to remote control server
+  useEffect(() => {
+    // Get current item info
+    let currentItem = null;
+    let totalSlides = 0;
+    let slideIndex = currentSlideIndex;
+    let slides: Array<{ index: number; preview: string; verseType?: string }> = [];
+
+    if (selectedPresentation) {
+      currentItem = {
+        id: selectedPresentation.id,
+        type: 'presentation',
+        title: selectedPresentation.title || 'Untitled',
+        slideCount: selectedPresentation.slides?.length || 0
+      };
+      totalSlides = selectedPresentation.slides?.length || 0;
+      slideIndex = currentPresentationSlideIndex;
+      // Build slides preview for presentations
+      slides = (selectedPresentation.slides || []).map((slide, idx) => {
+        // Get preview text from text boxes
+        const textBoxes = slide.textBoxes || [];
+        const previewText = textBoxes.map((tb: any) => tb.text || '').filter(Boolean).join(' ').slice(0, 60);
+        return {
+          index: idx,
+          preview: previewText || `Slide ${idx + 1}`,
+          verseType: `Slide ${idx + 1}`
+        };
+      });
     } else if (selectedSong) {
-      sendCurrentSlide(selectedSong, currentSlideIndex, displayMode, undefined, currentContentType);
+      currentItem = {
+        id: selectedSong.id,
+        type: currentContentType,
+        title: selectedSong.title || 'Untitled',
+        slideCount: selectedSong.slides?.length || 0
+      };
+
+      // Use combined slides when in original mode
+      if (displayMode === 'original' && combinedSlidesData) {
+        totalSlides = combinedSlidesData.combinedSlides.length;
+        slideIndex = selectedCombinedIndex;
+        slides = combinedSlidesData.combinedSlides.map((item, idx) => {
+          if (item.type === 'combined' && item.slides) {
+            // Combined slide - show both slides' text
+            const preview = item.slides.map(s => s.originalText || '').join(' / ').slice(0, 80);
+            return {
+              index: idx,
+              preview: preview,
+              verseType: item.verseType || item.label,
+              isCombined: true
+            };
+          } else {
+            // Single slide
+            const slide = item.slide;
+            return {
+              index: idx,
+              preview: (slide?.originalText || '').slice(0, 60),
+              verseType: item.verseType || item.label
+            };
+          }
+        });
+      } else {
+        totalSlides = selectedSong.slides?.length || 0;
+        // Build slides preview for songs/bible (bilingual/translation mode)
+        slides = (selectedSong.slides || []).map((slide, idx) => ({
+          index: idx,
+          preview: (slide.originalText || slide.translation || '').slice(0, 60),
+          verseType: slide.verseType || `Slide ${idx + 1}`
+        }));
+      }
     }
-  };
+
+    // Build setlist summary for remote
+    const setlistSummary = setlist.map(item => ({
+      id: item.id,
+      type: item.type,
+      title: item.song?.title || item.presentation?.title || item.title || item.type
+    }));
+
+    // Collect active tools
+    const activeTools: string[] = [];
+    setlist.forEach(item => {
+      if (item.type === 'countdown' || item.type === 'announcement' || item.type === 'clock' || item.type === 'stopwatch') {
+        activeTools.push(item.type);
+      }
+    });
+
+    // Update remote control state
+    window.electronAPI.remoteControl.updateState({
+      currentItem,
+      currentSlideIndex: slideIndex,
+      totalSlides,
+      displayMode,
+      isBlank,
+      setlist: setlistSummary,
+      slides,
+      activeTools,
+      onlineViewerCount: viewerCount,
+      activeMedia: activeMedia ? { type: activeMedia.type, name: activeMedia.url.split('/').pop() || 'Media' } : null,
+      activeAudio: activeAudio ? {
+        name: activeAudio.name,
+        isPlaying: audioStatus.isPlaying,
+        currentTime: audioStatus.currentTime,
+        duration: audioStatus.duration,
+        volume: audioTargetVolume
+      } : null,
+      activeVideo: (activeMedia && activeMedia.type === 'video') ? {
+        name: decodeURIComponent(activeMedia.url.split('/').pop() || 'Video'),
+        isPlaying: videoStatus.isPlaying,
+        currentTime: videoStatus.currentTime,
+        duration: videoStatus.duration,
+        volume: videoVolume
+      } : null,
+      activeYoutube: (youtubeOnDisplay && activeYoutubeVideo) ? {
+        videoId: activeYoutubeVideo.videoId,
+        title: activeYoutubeVideo.title || 'YouTube Video',
+        isPlaying: youtubePlaying,
+        currentTime: youtubeCurrentTime,
+        duration: youtubeDuration
+      } : null
+    });
+  }, [selectedSong, selectedPresentation, currentSlideIndex, currentPresentationSlideIndex, displayMode, isBlank, setlist, currentContentType, viewerCount, combinedSlidesData, selectedCombinedIndex, activeMedia, activeAudio, audioStatus, audioTargetVolume, videoStatus, videoVolume, youtubeOnDisplay, activeYoutubeVideo, youtubePlaying, youtubeCurrentTime, youtubeDuration]);
+
+  // Remote Control: Listen for commands from mobile remote
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.remoteControl.onCommand((command) => {
+      switch (command.type) {
+        case 'slide:next':
+          nextSlide();
+          break;
+        case 'slide:prev':
+          prevSlide();
+          break;
+        case 'slide:goto':
+          if (command.payload?.index !== undefined) {
+            if (displayMode === 'original' && combinedSlidesData) {
+              selectCombinedSlide(command.payload.index);
+            } else {
+              goToSlide(command.payload.index);
+            }
+          }
+          break;
+        case 'slide:blank':
+          toggleBlank();
+          break;
+        case 'setlist:select':
+          if (command.payload?.id) {
+            // Find the item in the setlist and select it
+            const item = setlist.find(s => s.id === command.payload.id);
+            if (item) {
+              if (item.type === 'song' && item.song) {
+                setSelectedPresentation(null);
+                setSelectedSong(item.song);
+                setCurrentSlideIndex(0);
+                setCurrentContentType('song');
+                setIsBlank(false);
+              } else if (item.type === 'bible' && item.song) {
+                setSelectedPresentation(null);
+                setSelectedSong(item.song);
+                setCurrentSlideIndex(0);
+                setCurrentContentType('bible');
+                setIsBlank(false);
+              } else if (item.type === 'presentation' && item.presentation) {
+                setSelectedSong(null);
+                setSelectedPresentation(item.presentation);
+                setCurrentPresentationSlideIndex(0);
+                if (item.presentation.quickModeData?.type === 'prayer' || item.presentation.quickModeData?.type === 'sermon') {
+                  setCurrentContentType('prayer');
+                } else {
+                  setCurrentContentType('song');
+                }
+                setIsBlank(false);
+              } else if (item.type === 'media' && item.mediaPath && item.mediaType) {
+                if (item.mediaType === 'audio') {
+                  // Audio: play in background audio player (not on display)
+                  handlePlayAudio(item.mediaPath, item.mediaName || item.title || 'Audio');
+                  setActiveAudioSetlistId(item.id);
+                } else {
+                  // Image/Video: display on screen
+                  // Convert file path to media:// protocol
+                  const encodedPath = item.mediaPath
+                    .replace(/\\/g, '/')
+                    .split('/')
+                    .map(segment => encodeURIComponent(segment))
+                    .join('/');
+                  const mediaUrl = `media://file/${encodedPath}`;
+
+                  setSelectedSong(null);
+                  setSelectedPresentation(null);
+                  setActiveMedia({ type: item.mediaType as 'image' | 'video', url: mediaUrl });
+                  setIsBlank(false);
+                  window.electronAPI.displayMedia({ type: item.mediaType, url: mediaUrl });
+                }
+              }
+            }
+          }
+          break;
+        case 'mode:set':
+          if (command.payload?.mode) {
+            const newMode = command.payload.mode as DisplayMode;
+            setDisplayMode(newMode);
+            // Clear the screen when switching display modes
+            setIsBlank(true);
+            setLiveState({ slideData: null, contentType: null, songId: null, slideIndex: 0 });
+            window.electronAPI.sendBlank();
+          }
+          break;
+        case 'library:addSong':
+          if (command.payload?.songId) {
+            const song = songs.find(s => s.id === command.payload.songId);
+            if (song) {
+              setSetlist(prev => [...prev, { id: crypto.randomUUID(), type: 'song', song }]);
+            }
+          }
+          break;
+        case 'library:selectSong':
+          if (command.payload?.songId) {
+            const song = songs.find(s => s.id === command.payload.songId);
+            if (song) {
+              setSelectedPresentation(null);
+              setSelectedSong(song);
+              setCurrentSlideIndex(0);
+              setCurrentContentType('song');
+              setIsBlank(false);
+              sendCurrentSlide(song, 0, displayMode, undefined, 'song');
+            }
+          }
+          break;
+        case 'library:addBible':
+          if (command.payload?.book && command.payload?.chapter) {
+            // Fetch Bible chapter and add to setlist
+            window.electronAPI.getBibleVerses(command.payload.book, command.payload.chapter).then((result: any) => {
+              if (result && result.slides && result.slides.length > 0) {
+                // Filter slides if verse range is specified
+                let filteredSlides = result.slides;
+                const verseStart = command.payload.verseStart;
+                const verseEnd = command.payload.verseEnd || verseStart;
+                if (verseStart) {
+                  filteredSlides = result.slides.filter((s: any) => {
+                    // Extract verse number from verseType like "Genesis 1:5"
+                    const verseMatch = s.verseType?.match(/:(\d+)$/);
+                    const verseNum = verseMatch ? parseInt(verseMatch[1]) : 0;
+                    return verseNum >= verseStart && verseNum <= (verseEnd || verseStart);
+                  });
+                }
+
+                // Build title with verse range if specified
+                let title = `${command.payload.book} ${command.payload.chapter}`;
+                if (verseStart) {
+                  title += `:${verseStart}`;
+                  if (verseEnd && verseEnd > verseStart) {
+                    title += `-${verseEnd}`;
+                  }
+                }
+
+                const biblePassage: Song = {
+                  id: crypto.randomUUID(),
+                  title: title,
+                  slides: filteredSlides
+                };
+                setSetlist(prev => [...prev, { id: crypto.randomUUID(), type: 'bible', song: biblePassage, title: biblePassage.title }]);
+              }
+            }).catch((err: any) => {
+              console.error('[ControlPanel] Error adding Bible from remote:', err);
+            });
+          }
+          break;
+        case 'library:selectBible':
+          if (command.payload?.book && command.payload?.chapter) {
+            window.electronAPI.getBibleVerses(command.payload.book, command.payload.chapter).then((result: any) => {
+              if (result && result.slides && result.slides.length > 0) {
+                const biblePassage: Song = {
+                  id: crypto.randomUUID(),
+                  title: `${command.payload.book} ${command.payload.chapter}`,
+                  slides: result.slides
+                };
+                setSelectedPresentation(null);
+                setSelectedSong(biblePassage);
+                setCurrentSlideIndex(0);
+                setCurrentContentType('bible');
+                setIsBlank(false);
+                sendCurrentSlide(biblePassage, 0, displayMode, undefined, 'bible');
+              }
+            }).catch((err: any) => {
+              console.error('[ControlPanel] Error selecting Bible from remote:', err);
+            });
+          }
+          break;
+        case 'library:addMedia':
+          if (command.payload?.mediaId) {
+            window.electronAPI.getMediaLibraryItem(command.payload.mediaId).then((media: any) => {
+              if (media) {
+                setSetlist(prev => [...prev, {
+                  id: crypto.randomUUID(),
+                  type: 'media',
+                  mediaType: media.type,
+                  mediaPath: media.processedPath || media.originalPath,
+                  mediaDuration: media.duration,
+                  mediaName: media.name,
+                  thumbnailPath: media.thumbnailPath,
+                  title: media.name
+                }]);
+              }
+            }).catch((err: any) => {
+              console.error('[ControlPanel] Error adding media from remote:', err);
+            });
+          }
+          break;
+        case 'library:selectMedia':
+          if (command.payload?.mediaId) {
+            window.electronAPI.getMediaLibraryItem(command.payload.mediaId).then((media: any) => {
+              if (media) {
+                // Display the media directly - convert to media:// protocol
+                const filePath = media.processedPath || media.originalPath;
+                const encodedPath = filePath
+                  .replace(/\\/g, '/')
+                  .split('/')
+                  .map((segment: string) => encodeURIComponent(segment))
+                  .join('/');
+                const mediaUrl = `media://file/${encodedPath}`;
+
+                setSelectedSong(null);
+                setSelectedPresentation(null);
+                setActiveMedia({ type: media.type as 'image' | 'video', url: mediaUrl });
+                setIsBlank(false);
+                window.electronAPI.displayMedia({ type: media.type, url: mediaUrl });
+              }
+            }).catch((err: any) => {
+              console.error('[ControlPanel] Error selecting media from remote:', err);
+            });
+          }
+          break;
+        case 'media:stop':
+          // Stop displaying media and clear the active media state
+          setActiveMedia(null);
+          setIsBlank(true);
+          setLiveState({ slideData: null, contentType: null, songId: null, slideIndex: 0 });
+          window.electronAPI.sendBlank();
+          break;
+        case 'audio:play':
+          if (audioRef.current && activeAudio) {
+            audioRef.current.volume = audioTargetVolume;
+            audioRef.current.play().catch(err => console.error('Failed to play audio:', err));
+          }
+          break;
+        case 'audio:pause':
+          if (audioRef.current) {
+            audioRef.current.pause();
+          }
+          break;
+        case 'audio:stop':
+          if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+          }
+          setActiveAudio(null);
+          setActiveAudioSetlistId(null);
+          setAudioStatus({ currentTime: 0, duration: 0, isPlaying: false });
+          break;
+        case 'audio:volume':
+          if (command.payload?.volume !== undefined) {
+            const newVolume = Math.max(0, Math.min(1, command.payload.volume));
+            setAudioTargetVolume(newVolume);
+            if (audioRef.current) {
+              audioRef.current.volume = newVolume;
+            }
+          }
+          break;
+        case 'audio:seek':
+          if (command.payload?.time !== undefined && audioRef.current) {
+            audioRef.current.currentTime = command.payload.time;
+          }
+          break;
+        case 'video:play':
+          setVideoStatus(prev => ({ ...prev, isPlaying: true }));
+          window.electronAPI.resumeVideo();
+          if (previewVideoRef.current) {
+            previewVideoRef.current.play().catch(() => {});
+          }
+          break;
+        case 'video:pause':
+          setVideoStatus(prev => ({ ...prev, isPlaying: false }));
+          window.electronAPI.pauseVideo();
+          if (previewVideoRef.current) {
+            previewVideoRef.current.pause();
+          }
+          break;
+        case 'video:stop':
+          window.electronAPI.stopVideo();
+          setActiveMedia(null);
+          setVideoStatus({ currentTime: 0, duration: 0, isPlaying: false });
+          setIsBlank(true);
+          setLiveState({ slideData: null, contentType: null, songId: null, slideIndex: 0 });
+          window.electronAPI.sendBlank();
+          break;
+        case 'video:seek':
+          if (command.payload?.time !== undefined) {
+            window.electronAPI.seekVideo(command.payload.time);
+            if (previewVideoRef.current) {
+              previewVideoRef.current.currentTime = command.payload.time;
+            }
+          }
+          break;
+        case 'video:volume':
+          if (command.payload?.volume !== undefined) {
+            const vol = Math.max(0, Math.min(1, command.payload.volume));
+            setVideoVolume(vol);
+            window.electronAPI.setVideoVolume(vol);
+            // Also set preview video volume if exists
+            if (previewVideoRef.current) {
+              previewVideoRef.current.volume = vol;
+            }
+          }
+          break;
+        // YouTube controls
+        case 'youtube:play':
+          if (youtubeOnDisplay) {
+            setYoutubePlaying(true);
+            window.electronAPI.youtubePlay(youtubeCurrentTime);
+          }
+          break;
+        case 'youtube:pause':
+          if (youtubeOnDisplay) {
+            setYoutubePlaying(false);
+            window.electronAPI.youtubePause(youtubeCurrentTime);
+          }
+          break;
+        case 'youtube:stop':
+          if (youtubeOnDisplay) {
+            setYoutubePlaying(false);
+            setYoutubeOnDisplay(false);
+            setActiveYoutubeVideo(null);
+            setYoutubeCurrentTime(0);
+            setYoutubeDuration(0);
+            window.electronAPI.youtubeStop();
+          }
+          break;
+        case 'youtube:seek':
+          if (youtubeOnDisplay && command.payload?.time !== undefined) {
+            const seekTime = command.payload.time;
+            setYoutubeCurrentTime(seekTime);
+            window.electronAPI.youtubeSync(seekTime, youtubePlaying);
+          }
+          break;
+        default:
+          console.log('[ControlPanel] Unknown remote command:', command.type);
+      }
+    });
+
+    return unsubscribe;
+  }, [nextSlide, prevSlide, goToSlide, toggleBlank, setlist, songs, selectedSong, selectedPresentation, currentSlideIndex, currentPresentationSlideIndex, displayMode, currentContentType, sendCurrentSlide, sendPrayerPresentationSlide, selectCombinedSlide, combinedSlidesData, handlePlayAudio, activeAudio, audioTargetVolume, activeMedia, youtubeOnDisplay, youtubeCurrentTime, youtubePlaying, activeYoutubeVideo]);
 
   // Memoized addToSetlist to prevent unnecessary re-renders
   const addToSetlist = useCallback((song: Song) => {
@@ -2311,6 +4158,47 @@ const ControlPanel: React.FC = () => {
   // Add Bible passage to setlist
   const addBibleToSetlist = useCallback((passage: Song) => {
     setSetlist(prev => [...prev, { id: crypto.randomUUID(), type: 'bible', song: passage, title: passage.title }]);
+  }, []);
+
+  // Add presentation to setlist
+  const addPresentationToSetlist = useCallback((presentation: Presentation) => {
+    setSetlist(prev => [...prev, { id: crypto.randomUUID(), type: 'presentation', presentation }]);
+  }, []);
+
+  // Presentation item callbacks for memoized PresentationItem component
+  // Just loads the presentation into preview - doesn't send to display until user clicks a slide
+  const handlePresentationSelect = useCallback((pres: any) => {
+    setSelectedSong(null);
+    setSelectedPresentation(pres);
+    setCurrentPresentationSlideIndex(0);
+    // Set the content type but don't send to display yet
+    if (pres.quickModeData?.type === 'prayer' || pres.quickModeData?.type === 'sermon') {
+      setCurrentContentType('prayer');
+    } else {
+      setCurrentContentType('presentation');
+    }
+  }, []);
+
+  const handlePresentationEdit = useCallback((pres: any) => {
+    if (pres.quickModeData?.type === 'prayer' || pres.quickModeData?.type === 'sermon') {
+      startEditingPrayerPresentation(pres);
+    } else {
+      navigate(`/presentation-editor?id=${pres.id}`);
+    }
+  }, [navigate, startEditingPrayerPresentation]);
+
+  const handlePresentationDelete = useCallback(async (pres: any) => {
+    if (confirm(`Delete "${pres.title}"?`)) {
+      await window.electronAPI.deletePresentation(pres.id);
+      loadPresentations();
+    }
+  }, [loadPresentations]);
+
+  const handlePresentationDragStart = useCallback((e: React.DragEvent, pres: any) => {
+    e.dataTransfer.setData('application/json', JSON.stringify({
+      type: 'presentation',
+      presentation: pres
+    }));
   }, []);
 
   const addSectionHeader = () => {
@@ -2338,6 +4226,7 @@ const ControlPanel: React.FC = () => {
       if (activeAudio.url === itemAudioUrl) {
         // Stop the audio player
         setActiveAudio(null);
+        setActiveAudioSetlistId(null); // Clear setlist tracking
         setAudioStatus({ currentTime: 0, duration: 0, isPlaying: false });
       }
     }
@@ -2362,16 +4251,21 @@ const ControlPanel: React.FC = () => {
   };
 
   const importSongsFromServer = async () => {
+    // Clear any existing timeout
+    if (importStatusTimeoutRef.current) {
+      clearTimeout(importStatusTimeoutRef.current);
+      importStatusTimeoutRef.current = null;
+    }
     setIsImporting(true);
     setImportStatus('Connecting to server...');
     try {
       const result = await window.electronAPI.importSongs('https://solupresenter-backend-4rn5.onrender.com');
       setImportStatus(`Imported ${result.imported}, Updated ${result.updated}${result.errors > 0 ? `, Errors: ${result.errors}` : ''}`);
       await loadSongs();
-      setTimeout(() => setImportStatus(null), 5000);
+      importStatusTimeoutRef.current = setTimeout(() => setImportStatus(null), 5000);
     } catch (err: any) {
       setImportStatus(`Error: ${err.message || 'Failed to import'}`);
-      setTimeout(() => setImportStatus(null), 5000);
+      importStatusTimeoutRef.current = setTimeout(() => setImportStatus(null), 5000);
     }
     setIsImporting(false);
   };
@@ -2512,7 +4406,7 @@ const ControlPanel: React.FC = () => {
         setCountdownRemaining('00:00');
         setIsCountdownActive(false);
         if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-        window.electronAPI.sendTool({ type: 'countdown', active: false, remaining: '00:00', message: countdownMessage });
+        window.electronAPI.sendTool({ type: 'countdown', active: false, remaining: '00:00', message: countdownMessageRef.current, messageTranslation: countdownMessageTranslationRef.current });
         return;
       }
       const hrs = Math.floor(diff / 3600000);
@@ -2522,7 +4416,7 @@ const ControlPanel: React.FC = () => {
         ? `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
         : `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
       setCountdownRemaining(remaining);
-      window.electronAPI.sendTool({ type: 'countdown', active: true, remaining, message: countdownMessage });
+      window.electronAPI.sendTool({ type: 'countdown', active: true, remaining, message: countdownMessageRef.current, messageTranslation: countdownMessageTranslationRef.current });
     };
 
     updateCountdown();
@@ -2544,6 +4438,7 @@ const ControlPanel: React.FC = () => {
 
   const showAnnouncement = () => {
     if (!announcementText.trim()) return;
+    stopAllTools();
     setIsAnnouncementActive(true);
     window.electronAPI.sendTool({ type: 'announcement', active: true, text: announcementText });
   };
@@ -2569,7 +4464,7 @@ const ControlPanel: React.FC = () => {
   const addCustomMessage = () => {
     if (!customMessageInput.trim()) return;
     const newMessage = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       text: customMessageInput.trim(),
       textHe: customMessageInput.trim(),
       enabled: true,
@@ -2586,6 +4481,8 @@ const ControlPanel: React.FC = () => {
   const broadcastRotatingMessages = () => {
     const enabledMessages = rotatingMessages.filter(m => m.enabled).map(m => m.text);
     if (enabledMessages.length === 0) return;
+    stopAllTools();
+    setIsRotatingMessagesActive(true); // Track that rotating messages are now active
     window.electronAPI.sendTool({
       type: 'rotatingMessages',
       active: true,
@@ -2696,7 +4593,7 @@ const ControlPanel: React.FC = () => {
           setIsCountdownActive(false);
           setActiveToolId(null);
           if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-          window.electronAPI.sendTool({ type: 'countdown', active: false, remaining: '00:00', message: item.countdownMessage || '' });
+          window.electronAPI.sendTool({ type: 'countdown', active: false, remaining: '00:00', message: countdownMessageRef.current, messageTranslation: countdownMessageTranslationRef.current });
           return;
         }
         const hrs = Math.floor(diff / 3600000);
@@ -2706,7 +4603,7 @@ const ControlPanel: React.FC = () => {
           ? `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
           : `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         setCountdownRemaining(remaining);
-        window.electronAPI.sendTool({ type: 'countdown', active: true, remaining, message: item.countdownMessage || '' });
+        window.electronAPI.sendTool({ type: 'countdown', active: true, remaining, message: countdownMessageRef.current, messageTranslation: countdownMessageTranslationRef.current });
       };
       updateCountdown();
       countdownIntervalRef.current = setInterval(updateCountdown, 1000);
@@ -2836,17 +4733,21 @@ const ControlPanel: React.FC = () => {
           originalText: slide.originalText,
           transliteration: '',
           translation: slide.translation,
-          verseType: `${idx + 1}`
+          verseType: `${idx + 1}`,
+          // Keep reference fields for Bible theme display
+          reference: slide.reference, // English reference (e.g., "Genesis 1:1")
+          hebrewReference: slide.hebrewReference // Hebrew reference (e.g., "בראשית א:א")
         }))
       };
 
       setBibleSlides(response.slides);
       setBiblePassage(passage);
 
-      // Auto-select this passage
+      // Auto-select this passage with bible content type
       setSelectedSong(passage);
       setCurrentSlideIndex(0);
       setIsBlank(false);
+      setCurrentContentType('bible');
     } catch (error) {
       console.error('Error fetching Bible verses:', error);
     } finally {
@@ -2855,12 +4756,24 @@ const ControlPanel: React.FC = () => {
   };
 
   // Load Bible books when switching to Bible panel
-  const handleResourcePanelChange = (panel: ResourcePanel) => {
+  const handleResourcePanelChange = useCallback((panel: ResourcePanel) => {
+    // Direct state update for instant tab switch
     setActiveResourcePanel(panel);
-    if (panel === 'bible' && bibleBooks.length === 0) {
+  }, []);
+
+  // Side effects after tab change - runs after render, doesn't block tab switch
+  useEffect(() => {
+    if (activeResourcePanel === 'bible' && bibleBooks.length === 0) {
       fetchBibleBooks();
     }
-  };
+    if (activeResourcePanel === 'media' && !isCountdownActive) {
+      const now = new Date();
+      now.setMinutes(now.getMinutes() + 10);
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      setCountdownTargetTime(`${hours}:${minutes}`);
+    }
+  }, [activeResourcePanel, bibleBooks.length, isCountdownActive]);
 
   // Fetch verses when book and chapter are selected
   useEffect(() => {
@@ -3297,6 +5210,7 @@ const ControlPanel: React.FC = () => {
     setQuickModeBibleIsHebrew(false);
     setQuickModeGenerateTranslation(false);
     setQuickModeTranslationLoading(false);
+    setQuickModeCreating(false);
     setShowQuickModeWizard(showAfterReset);
     // Ensure window has focus when opening the wizard (Electron fix)
     if (showAfterReset) {
@@ -3331,7 +5245,11 @@ const ControlPanel: React.FC = () => {
   }, [songs, searchQuery]);
 
   const currentSlide = selectedSong?.slides[currentSlideIndex];
-  const currentPresentationSlide = selectedPresentation?.slides[currentPresentationSlideIndex] || null;
+
+  // Memoize to avoid recalculating on every render
+  const currentPresentationSlide = useMemo(() => {
+    return selectedPresentation?.slides[currentPresentationSlideIndex] || null;
+  }, [selectedPresentation?.slides, currentPresentationSlideIndex]);
 
   // Compute prayer slide data for live preview
   const currentPrayerSlideData = useMemo(() => {
@@ -3351,6 +5269,23 @@ const ControlPanel: React.FC = () => {
       referenceTranslation: subtitle.bibleRef?.reference
     };
   }, [selectedPresentation, currentPresentationSlideIndex]);
+
+  // Memoize slideData for SlidePreview to prevent unnecessary re-renders
+  const memoizedSlideData = useMemo(() => {
+    if (currentContentType === 'prayer') {
+      return currentPrayerSlideData;
+    }
+    if (!currentSlide) return null;
+    if (currentContentType === 'bible') {
+      // For Bible content: reference = Hebrew reference, referenceEnglish = English reference
+      return {
+        ...currentSlide,
+        reference: (currentSlide as any).hebrewReference || selectedSong?.title,
+        referenceEnglish: (currentSlide as any).reference
+      };
+    }
+    return currentSlide;
+  }, [currentContentType, currentPrayerSlideData, currentSlide, selectedSong?.title]);
 
   // Format clock time
   const formatClockTime = (date: Date, format: '12h' | '24h') => {
@@ -3374,22 +5309,77 @@ const ControlPanel: React.FC = () => {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${tenths}`;
   };
 
+  // Memoize tools object for SlidePreview to prevent unnecessary re-renders
+  const memoizedTools = useMemo(() => ({
+    countdown: isCountdownActive ? { active: true, remaining: countdownRemaining, message: countdownMessage, messageTranslation: countdownMessageTranslation } : undefined,
+    announcement: isAnnouncementActive ? { active: true, text: announcementText } : undefined,
+    clock: isClockActive ? { active: true, time: formatClockTime(currentTime, clockFormat), date: clockShowDate ? formatClockDate(currentTime) : '' } : undefined,
+    stopwatch: isStopwatchActive ? { active: true, time: formatStopwatchTime(stopwatchTime), running: isStopwatchRunning } : undefined
+  }), [isCountdownActive, countdownRemaining, countdownMessage, countdownMessageTranslation, isAnnouncementActive, announcementText, isClockActive, currentTime, clockFormat, clockShowDate, isStopwatchActive, stopwatchTime, isStopwatchRunning]);
+
+  // Memoize theme for SlidePreview based on content type (for staged/selected content)
+  const memoizedPreviewTheme = useMemo(() => {
+    if (currentContentType === 'bible') return selectedBibleTheme;
+    if (currentContentType === 'prayer') return selectedPrayerTheme;
+    return selectedTheme;
+  }, [currentContentType, selectedBibleTheme, selectedPrayerTheme, selectedTheme]);
+
+  // Memoize theme for live preview based on what's actually on air
+  const memoizedLivePreviewTheme = useMemo(() => {
+    if (liveContentType === 'bible') return selectedBibleTheme;
+    if (liveContentType === 'prayer') return selectedPrayerTheme;
+    return selectedTheme;
+  }, [liveContentType, selectedBibleTheme, selectedPrayerTheme, selectedTheme]);
+
+  // Memoize presentationSlide for SlidePreview
+  // For the live preview, use liveSlideData when content type is 'presentation'
+  // Prayer/sermon presentations use theme-based rendering (liveSlideData contains prayer data, not presentationSlide)
+  const memoizedPresentationSlide = useMemo(() => {
+    if (liveContentType === 'presentation' && liveSlideData) {
+      return liveSlideData;
+    }
+    return null;
+  }, [liveContentType, liveSlideData]);
+
+  // Memoize resource panel tabs to prevent recreation of SVG icons on every render
+  const resourceTabs = useMemo(() => [
+    { id: 'songs', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M9 13c0 1.105-1.12 2-2.5 2S4 14.105 4 13s1.12-2 2.5-2 2.5.895 2.5 2z"/><path fillRule="evenodd" d="M9 3v10H8V3h1z"/><path d="M8 2.82a1 1 0 0 1 .804-.98l3-.6A1 1 0 0 1 13 2.22V4L8 5V2.82z"/></svg>, label: t('nav.songs') },
+    { id: 'bible', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.828c.885-.37 2.154-.769 3.388-.893 1.33-.134 2.458.063 3.112.752v9.746c-.935-.53-2.12-.603-3.213-.493-1.18.12-2.37.461-3.287.811V2.828zm7.5-.141c.654-.689 1.782-.886 3.112-.752 1.234.124 2.503.523 3.388.893v9.923c-.918-.35-2.107-.692-3.287-.81-1.094-.111-2.278-.039-3.213.492V2.687zM8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 0 0 0 2.5v11a.5.5 0 0 0 .707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 0 0 .78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5.5 0 0 0 16 13.5v-11a.5.5 0 0 0-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.809 8.985.936 8 1.783z"/></svg>, label: t('nav.bible') },
+    { id: 'media', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V1zm4 0v6h8V1H4zm8 8H4v6h8V9z"/></svg>, label: t('nav.media') },
+    { id: 'presentations', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm5 3a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm3 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm3 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/><path d="M2 13h12v1H2v-1z"/></svg>, label: t('nav.presentations') },
+    { id: 'tools', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1 0 0 1l2.2 3.081a1 1 0 0 0 .815.419h.07a1 1 0 0 1 .708.293l2.675 2.675-2.617 2.654A3.003 3.003 0 0 0 0 13a3 3 0 1 0 5.878-.851l2.654-2.617.968.968-.305.914a1 1 0 0 0 .242 1.023l3.27 3.27a.997.997 0 0 0 1.414 0l1.586-1.586a.997.997 0 0 0 0-1.414l-3.27-3.27a1 1 0 0 0-1.023-.242L10.5 9.5l-.96-.96 2.68-2.643A3.005 3.005 0 0 0 16 3q0-.405-.102-.777l-2.14 2.141L12 4l-.364-1.757L13.777.102a3 3 0 0 0-3.675 3.68L7.462 6.46 4.793 3.793a1 1 0 0 1-.293-.707v-.071a1 1 0 0 0-.419-.814z"/></svg>, label: t('nav.tools') }
+  ], [t]);
+
+  // Memoize tools tabs to prevent recreation on every render
+  const toolsTabs = useMemo(() => [
+    { key: 'countdown', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3L2 6"/><path d="M22 6l-3-3"/></svg>, label: t('tools.timer') },
+    { key: 'clock', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>, label: t('tools.clock') },
+    { key: 'stopwatch', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4"/><path d="M10 2h4"/><path d="M12 2v2"/></svg>, label: t('tools.stopwatch') },
+    { key: 'announce', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>, label: t('tools.announce') }
+  ], [t]);
+
   // Clock control functions
   const startClock = () => {
-    setIsClockActive(true);
     stopAllTools();
+    setIsClockActive(true);
   };
 
   const stopClock = () => {
     setIsClockActive(false);
     window.electronAPI.sendTool({ type: 'clock', active: false });
+    // Clear activeToolId if a clock was active from setlist (for future setlist support)
+    setActiveToolId(prev => {
+      const activeItem = setlist.find(item => item.id === prev);
+      if (activeItem?.type === 'clock') return null;
+      return prev;
+    });
   };
 
   // Stopwatch control functions
   const startStopwatch = () => {
+    stopAllTools();
     setIsStopwatchRunning(true);
     setIsStopwatchActive(true);
-    stopAllTools();
   };
 
   const pauseStopwatch = () => {
@@ -3404,11 +5394,17 @@ const ControlPanel: React.FC = () => {
   const stopStopwatchBroadcast = () => {
     setIsStopwatchActive(false);
     window.electronAPI.sendTool({ type: 'stopwatch', active: false });
+    // Clear activeToolId if a stopwatch was active from setlist (for future setlist support)
+    setActiveToolId(prev => {
+      const activeItem = setlist.find(item => item.id === prev);
+      if (activeItem?.type === 'stopwatch') return null;
+      return prev;
+    });
   };
 
   const getVerseTypeColor = (verseType?: string) => {
     switch (verseType?.toLowerCase()) {
-      case 'chorus': return '#FF8C42';
+      case 'chorus': return '#06b6d4';
       case 'verse1': case 'verse2': case 'verse3': case 'verse4': return '#54A0FF';
       case 'bridge': return '#1DD1A1';
       case 'prechorus': return '#FFA502';
@@ -3420,7 +5416,7 @@ const ControlPanel: React.FC = () => {
   const assignedDisplays = displays.filter(d => d.isAssigned);
 
   return (
-    <div className="control-panel" style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: colors.background.primary }}>
+    <div className="control-panel" style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: colors.background.base }}>
       {/* Header - like web app */}
       <header style={{
         padding: '12px 20px',
@@ -3486,36 +5482,123 @@ const ControlPanel: React.FC = () => {
               boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
             }}>
               <h4 style={{ margin: '0 0 12px 0', color: 'white', fontSize: '0.9rem' }}>{t('controlPanel.connectedDisplays')}</h4>
-              {displays.map((display) => (
-                <div key={display.id} style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px',
-                  background: 'rgba(255,255,255,0.05)',
-                  borderRadius: '8px',
-                  marginBottom: '8px'
-                }}>
-                  <div>
-                    <div style={{ color: 'white', fontWeight: 500 }}>
-                      {display.label}
-                      {display.isPrimary && <span style={{ marginLeft: '8px', fontSize: '0.7rem', background: colors.button.info, padding: '2px 6px', borderRadius: '4px' }}>{t('controlPanel.primary')}</span>}
-                      {display.isAssigned && <span style={{ marginLeft: '8px', fontSize: '0.7rem', background: '#28a745', padding: '2px 6px', borderRadius: '4px' }}>{display.assignedType}</span>}
+
+              {/* Control Screen Selector */}
+              <div style={{
+                padding: '10px',
+                background: 'rgba(33, 150, 243, 0.1)',
+                borderRadius: '8px',
+                marginBottom: '12px',
+                border: '1px solid rgba(33, 150, 243, 0.3)'
+              }}>
+                <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', marginBottom: '6px' }}>
+                  {t('controlPanel.controlScreen', 'Control Screen')}
+                </div>
+                <select
+                  value={controlDisplayId ?? ''}
+                  onChange={async (e) => {
+                    const displayId = parseInt(e.target.value);
+                    if (!isNaN(displayId)) {
+                      const success = await window.electronAPI.moveControlWindow(displayId);
+                      if (success) {
+                        setControlDisplayId(displayId);
+                      }
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '6px',
+                    padding: '8px',
+                    color: 'white',
+                    fontSize: '0.85rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {displays.map((display, index) => (
+                    <option key={display.id} value={display.id} style={{ background: '#1e1e32', color: 'white' }}>
+                      {index + 1}. {display.label} - {display.bounds.width}x{display.bounds.height}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Display List */}
+              {displays.map((display, index) => (
+                <div
+                  key={display.id}
+                  className="display-row"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px',
+                    background: 'rgba(255,255,255,0.05)',
+                    borderRadius: '8px',
+                    marginBottom: '8px',
+                    position: 'relative'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {/* Display Number - Click to Identify */}
+                    <button
+                      onClick={async () => {
+                        try {
+                          await window.electronAPI.identifyDisplays(display.id);
+                        } catch (err) {
+                          console.error('Failed to identify display:', err);
+                        }
+                      }}
+                      title={t('controlPanel.identifyDisplays', 'Click to identify this display')}
+                      style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '6px',
+                        background: 'rgba(255, 152, 0, 0.2)',
+                        border: '1px solid rgba(255, 152, 0, 0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#FF9800',
+                        fontWeight: 'bold',
+                        fontSize: '0.85rem',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 152, 0, 0.4)';
+                        e.currentTarget.style.transform = 'scale(1.1)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 152, 0, 0.2)';
+                        e.currentTarget.style.transform = 'scale(1)';
+                      }}
+                    >
+                      {index + 1}
+                    </button>
+                    <div>
+                      <div style={{ color: 'white', fontWeight: 500 }}>
+                        {display.label}
+                                                {display.isAssigned && <span style={{ marginLeft: '8px', fontSize: '0.7rem', background: '#28a745', padding: '2px 6px', borderRadius: '4px' }}>{display.assignedType}</span>}
+                      </div>
+                      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>{display.bounds.width}x{display.bounds.height}</div>
                     </div>
-                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>{display.bounds.width}x{display.bounds.height}</div>
                   </div>
-                  {!display.isPrimary && (
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      {display.isAssigned ? (
-                        <button onClick={() => closeDisplay(display.id)} style={{ background: colors.button.danger, border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}>{t('common.close')}</button>
-                      ) : (
-                        <>
-                          <button onClick={() => openDisplay(display.id, 'viewer')} style={{ background: colors.button.info, border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}>{t('controlPanel.viewer')}</button>
-                          <button onClick={() => openDisplay(display.id, 'stage')} style={{ background: colors.button.secondary, border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}>{t('controlPanel.stage')}</button>
-                        </>
-                      )}
-                    </div>
-                  )}
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    {display.id === controlDisplayId ? (
+                      <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontStyle: 'italic' }}>
+                        {t('controlPanel.controlScreen', 'Control Screen')}
+                      </span>
+                    ) : display.isAssigned ? (
+                      <button onClick={() => closeDisplay(display.id)} style={{ background: colors.button.danger, border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}>{t('common.close')}</button>
+                    ) : (
+                      <>
+                        <button onClick={() => openDisplay(display.id, 'viewer')} style={{ background: colors.button.info, border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}>{t('controlPanel.viewer')}</button>
+                        <button onClick={() => openDisplay(display.id, 'stage')} style={{ background: colors.button.secondary, border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}>{t('controlPanel.stage')}</button>
+                      </>
+                    )}
+                  </div>
                 </div>
               ))}
 
@@ -3531,6 +5614,9 @@ const ControlPanel: React.FC = () => {
                 selectedBibleTheme={selectedBibleTheme}
                 selectedPrayerTheme={selectedPrayerTheme}
                 selectedOBSTheme={selectedOBSTheme}
+                selectedOBSSongsTheme={selectedOBSSongsTheme}
+                selectedOBSBibleTheme={selectedOBSBibleTheme}
+                selectedOBSPrayerTheme={selectedOBSPrayerTheme}
                 isRTL={isRTL}
                 onApplyViewerTheme={applyThemeToViewer}
                 onApplyStageTheme={applyStageThemeToMonitor}
@@ -3572,7 +5658,7 @@ const ControlPanel: React.FC = () => {
                             const result = await window.electronAPI.startOBSServer();
                             if (result.success) {
                               setObsServerRunning(true);
-                              setObsServerUrl(result.url);
+                              setObsServerUrl(result.url ?? null);
                             }
                           }
                         } catch (err) {
@@ -3767,6 +5853,28 @@ const ControlPanel: React.FC = () => {
             </button>
           )}
 
+          {/* Settings Button - always visible */}
+          <button
+            onClick={() => navigate('/settings')}
+            title={t('nav.settings')}
+            style={{
+              background: 'rgba(255,255,255,0.1)',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              color: 'white',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
+
           <button
             onClick={() => setShowKeyboardHelp(true)}
             title="Keyboard Shortcuts (? or F1)"
@@ -3793,27 +5901,21 @@ const ControlPanel: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Content - Two Row Layout (50/50 split) */}
-      <main style={{ flex: 1, display: 'grid', gridTemplateRows: '1fr 1fr', gap: '12px', overflow: 'hidden', padding: '12px' }}>
-        {/* Top Row - Three Column Layout: 25% Songs | 25% Setlist | 50% Preview */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: '12px', overflow: 'hidden', minHeight: 0 }}>
+      {/* Main Content - Two Row Layout with resizable panels */}
+      <main ref={mainContentRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '12px', gap: '0' }}>
+        {/* Top Row - Three Column Layout with resizable widths */}
+        <div style={{ display: 'flex', height: `${topRowHeight}%`, overflow: 'hidden', minHeight: 0 }}>
           {/* Left Column - Resource Panel (Songs/Media/Tools) */}
-          <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', overflow: 'hidden' }}>
+          <div style={{ width: `${leftPanelWidth}%`, flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', overflow: 'hidden' }}>
             {/* Resource Tabs */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderBottom: activeResourcePanel === 'songs' ? 'none' : '1px solid rgba(255,255,255,0.1)' }}>
               <div style={{ display: 'flex', gap: '4px' }}>
-                {[
-                  { id: 'songs', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M9 13c0 1.105-1.12 2-2.5 2S4 14.105 4 13s1.12-2 2.5-2 2.5.895 2.5 2z"/><path fillRule="evenodd" d="M9 3v10H8V3h1z"/><path d="M8 2.82a1 1 0 0 1 .804-.98l3-.6A1 1 0 0 1 13 2.22V4L8 5V2.82z"/></svg>, label: t('nav.songs') },
-                  { id: 'bible', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.828c.885-.37 2.154-.769 3.388-.893 1.33-.134 2.458.063 3.112.752v9.746c-.935-.53-2.12-.603-3.213-.493-1.18.12-2.37.461-3.287.811V2.828zm7.5-.141c.654-.689 1.782-.886 3.112-.752 1.234.124 2.503.523 3.388.893v9.923c-.918-.35-2.107-.692-3.287-.81-1.094-.111-2.278-.039-3.213.492V2.687zM8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 0 0 0 2.5v11a.5.5 0 0 0 .707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 0 0 .78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5.5 0 0 0 16 13.5v-11a.5.5 0 0 0-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.809 8.985.936 8 1.783z"/></svg>, label: t('nav.bible') },
-                  { id: 'media', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V1zm4 0v6h8V1H4zm8 8H4v6h8V9z"/></svg>, label: t('nav.media') },
-                  { id: 'tools', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1 0 0 1l2.2 3.081a1 1 0 0 0 .815.419h.07a1 1 0 0 1 .708.293l2.675 2.675-2.617 2.654A3.003 3.003 0 0 0 0 13a3 3 0 1 0 5.878-.851l2.654-2.617.968.968-.305.914a1 1 0 0 0 .242 1.023l3.27 3.27a.997.997 0 0 0 1.414 0l1.586-1.586a.997.997 0 0 0 0-1.414l-3.27-3.27a1 1 0 0 0-1.023-.242L10.5 9.5l-.96-.96 2.68-2.643A3.005 3.005 0 0 0 16 3q0-.405-.102-.777l-2.14 2.141L12 4l-.364-1.757L13.777.102a3 3 0 0 0-3.675 3.68L7.462 6.46 4.793 3.793a1 1 0 0 1-.293-.707v-.071a1 1 0 0 0-.419-.814z"/></svg>, label: t('nav.tools') },
-                  { id: 'presentations', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm5 3a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm3 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm3 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/><path d="M2 13h12v1H2v-1z"/></svg>, label: t('nav.presentations') }
-                ].map((tab) => (
+                {resourceTabs.map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => handleResourcePanelChange(tab.id as ResourcePanel)}
                     style={{
-                      background: activeResourcePanel === tab.id ? '#FF8C42' : 'rgba(255,255,255,0.1)',
+                      background: activeResourcePanel === tab.id ? '#06b6d4' : 'rgba(255,255,255,0.1)',
                       border: 'none',
                       borderRadius: '6px',
                       padding: '8px 12px',
@@ -3839,10 +5941,21 @@ const ControlPanel: React.FC = () => {
                     <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
                   </svg>
                   <input
+                    ref={searchInputRef}
                     type="text"
                     placeholder={t('controlPanel.searchSongs')}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    defaultValue={searchQuery}
+                    onChange={(e) => {
+                      // Debounce search updates for performance
+                      if (searchDebounceRef.current) {
+                        clearTimeout(searchDebounceRef.current);
+                      }
+                      const value = e.target.value;
+                      searchDebounceRef.current = setTimeout(() => {
+                        setSearchQuery(value);
+                        setVisibleSongsCount(50);
+                      }, 150); // 150ms debounce
+                    }}
                     style={{
                       width: '100%',
                       background: 'rgba(255,255,255,0.08)',
@@ -3888,15 +6001,16 @@ const ControlPanel: React.FC = () => {
 
             {/* Resource Content */}
             <div style={{ flex: 1, overflow: 'auto' }}>
+              {/* Songs Panel */}
               {activeResourcePanel === 'songs' && (
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {filteredSongs.map((song) => (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {filteredSongs.slice(0, visibleSongsCount).map((song) => (
                     <SongItem
                       key={song.id}
                       song={song}
                       isSelected={selectedSong?.id === song.id}
                       isDragged={draggedSong?.id === song.id}
-                      onSelect={selectSong}
+                      onSelect={(s) => selectSong(s, 'song', false)}
                       onDoubleClick={addToSetlist}
                       onEdit={startEditingSong}
                       onDelete={deleteSongById}
@@ -3904,11 +6018,29 @@ const ControlPanel: React.FC = () => {
                       onDragEnd={handleSongDragEnd}
                     />
                   ))}
+                  {filteredSongs.length > visibleSongsCount && (
+                    <button
+                      onClick={() => setVisibleSongsCount(prev => prev + 50)}
+                      style={{
+                        padding: '10px',
+                        margin: '8px 12px',
+                        background: 'rgba(6, 182, 212, 0.15)',
+                        border: '1px solid rgba(6, 182, 212, 0.3)',
+                        borderRadius: '6px',
+                        color: '#06b6d4',
+                        fontSize: '0.8rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Load more ({filteredSongs.length - visibleSongsCount} remaining)
+                    </button>
+                  )}
                 </div>
               )}
 
+              {/* Media Panel */}
               {activeResourcePanel === 'media' && (
-                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                   {/* Media Sub-tabs */}
                   <div style={{
                     display: 'flex',
@@ -3922,10 +6054,10 @@ const ControlPanel: React.FC = () => {
                       style={{
                         flex: 1,
                         padding: '8px 12px',
-                        background: activeMediaSubTab === 'library' ? 'rgba(255, 140, 66, 0.2)' : 'transparent',
-                        border: activeMediaSubTab === 'library' ? '1px solid rgba(255, 140, 66, 0.4)' : '1px solid rgba(255,255,255,0.1)',
+                        background: activeMediaSubTab === 'library' ? 'rgba(6, 182, 212, 0.2)' : 'transparent',
+                        border: activeMediaSubTab === 'library' ? '1px solid rgba(6, 182, 212, 0.4)' : '1px solid rgba(255,255,255,0.1)',
                         borderRadius: '6px',
-                        color: activeMediaSubTab === 'library' ? '#FF8C42' : 'rgba(255,255,255,0.6)',
+                        color: activeMediaSubTab === 'library' ? '#06b6d4' : 'rgba(255,255,255,0.6)',
                         fontSize: '0.8rem',
                         fontWeight: activeMediaSubTab === 'library' ? 600 : 400,
                         cursor: 'pointer',
@@ -3985,7 +6117,17 @@ const ControlPanel: React.FC = () => {
                             mediaPath: media.path,
                             mediaName: media.name,
                             mediaDuration: media.duration,
+                            thumbnailPath: media.thumbnailPath,
                             title: media.name
+                          };
+                          setSetlist(prev => [...prev, newItem]);
+                        }}
+                        onAddPlaylistToSetlist={(playlist) => {
+                          const newItem: SetlistItem = {
+                            id: crypto.randomUUID(),
+                            type: 'audioPlaylist',
+                            title: playlist.name,
+                            audioPlaylist: playlist
                           };
                           setSetlist(prev => [...prev, newItem]);
                         }}
@@ -4195,17 +6337,12 @@ const ControlPanel: React.FC = () => {
                 </div>
               )}
 
+              {/* Tools Panel */}
               {activeResourcePanel === 'tools' && (
-                <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', padding: '12px', flexDirection: 'column', gap: '12px' }}>
                   {/* Tools Tab Selector */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px' }}>
-                    {[
-                      { key: 'countdown', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3L2 6"/><path d="M22 6l-3-3"/></svg>, label: t('tools.timer') },
-                      { key: 'clock', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>, label: t('tools.clock') },
-                      { key: 'stopwatch', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4"/><path d="M10 2h4"/><path d="M12 2v2"/></svg>, label: t('tools.stopwatch') },
-                      { key: 'announce', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>, label: t('tools.announce') },
-                      { key: 'messages', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, label: t('tools.messages') }
-                    ].map((tab) => (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px' }}>
+                    {toolsTabs.map((tab) => (
                       <div
                         key={tab.key}
                         onClick={() => setActiveToolsTab(tab.key as typeof activeToolsTab)}
@@ -4236,14 +6373,33 @@ const ControlPanel: React.FC = () => {
                   {activeToolsTab === 'countdown' && (
                     <div>
                       {isCountdownActive ? (
-                        <div style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '2rem', fontWeight: 700, color: '#FF8C42', marginBottom: '8px' }}>{countdownRemaining}</div>
-                          <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', marginBottom: '12px' }}>{countdownMessage}</div>
+                        <div>
+                          <div style={{ textAlign: 'center', marginBottom: '12px' }}>
+                            <div style={{ fontSize: '2rem', fontWeight: 700, color: '#06b6d4', marginBottom: '4px' }}>{countdownRemaining}</div>
+                          </div>
+                          {/* Editable message fields while countdown is running */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                            <input
+                              type="text"
+                              placeholder="הודעה (עברית)"
+                              value={countdownMessage}
+                              onChange={(e) => setCountdownMessage(e.target.value)}
+                              dir="rtl"
+                              style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '8px', color: 'white', fontSize: '0.85rem' }}
+                            />
+                            <input
+                              type="text"
+                              placeholder="Message (English)"
+                              value={countdownMessageTranslation}
+                              onChange={(e) => setCountdownMessageTranslation(e.target.value)}
+                              style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '8px', color: 'white', fontSize: '0.85rem' }}
+                            />
+                          </div>
                           <button onClick={stopCountdown} style={{ background: colors.button.danger, border: 'none', borderRadius: '8px', padding: '10px 20px', color: 'white', cursor: 'pointer', width: '100%', fontSize: '0.9rem' }}>{t('controlPanel.stopCountdown')}</button>
                         </div>
                       ) : (
                         <>
-                          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                             <input
                               type="time"
                               value={countdownTargetTime}
@@ -4252,28 +6408,56 @@ const ControlPanel: React.FC = () => {
                             />
                             <input
                               type="text"
-                              placeholder={t('tools.countdownMessage')}
+                              placeholder="הודעה (עברית)"
                               value={countdownMessage}
                               onChange={(e) => setCountdownMessage(e.target.value)}
+                              dir="rtl"
                               style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '8px', color: 'white', fontSize: '0.85rem' }}
                             />
                           </div>
-                          <button
-                            onClick={addCountdownToSetlist}
-                            disabled={!countdownTargetTime}
-                            style={{
-                              width: '100%',
-                              background: countdownTargetTime ? '#28a745' : 'rgba(255,255,255,0.1)',
-                              border: 'none',
-                              borderRadius: '8px',
-                              padding: '10px 20px',
-                              color: 'white',
-                              cursor: countdownTargetTime ? 'pointer' : 'not-allowed',
-                              fontSize: '0.9rem'
-                            }}
-                          >
-                            {t('tools.addToSetlist')}
-                          </button>
+                          <div style={{ marginBottom: '12px' }}>
+                            <input
+                              type="text"
+                              placeholder="Message (English)"
+                              value={countdownMessageTranslation}
+                              onChange={(e) => setCountdownMessageTranslation(e.target.value)}
+                              style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '8px', color: 'white', fontSize: '0.85rem' }}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                              onClick={startCountdownFromTime}
+                              disabled={!countdownTargetTime}
+                              style={{
+                                flex: 1,
+                                background: countdownTargetTime ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'rgba(255,255,255,0.1)',
+                                border: 'none',
+                                borderRadius: '8px',
+                                padding: '10px 20px',
+                                color: 'white',
+                                cursor: countdownTargetTime ? 'pointer' : 'not-allowed',
+                                fontSize: '0.9rem'
+                              }}
+                            >
+                              {t('tools.broadcastCountdown')}
+                            </button>
+                            <button
+                              onClick={addCountdownToSetlist}
+                              disabled={!countdownTargetTime}
+                              style={{
+                                flex: 1,
+                                background: countdownTargetTime ? '#28a745' : 'rgba(255,255,255,0.1)',
+                                border: 'none',
+                                borderRadius: '8px',
+                                padding: '10px 20px',
+                                color: 'white',
+                                cursor: countdownTargetTime ? 'pointer' : 'not-allowed',
+                                fontSize: '0.9rem'
+                              }}
+                            >
+                              {t('tools.addToSetlist')}
+                            </button>
+                          </div>
                         </>
                       )}
                     </div>
@@ -4317,113 +6501,58 @@ const ControlPanel: React.FC = () => {
                         style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '10px', color: 'white', fontSize: '0.85rem', marginBottom: '12px' }}
                       />
 
-                      <button
-                        onClick={addAnnouncementToSetlist}
-                        disabled={!announcementText.trim()}
-                        style={{
-                          width: '100%',
-                          background: announcementText.trim() ? '#28a745' : 'rgba(255,255,255,0.1)',
-                          border: 'none',
-                          borderRadius: '8px',
-                          padding: '10px 20px',
-                          color: 'white',
-                          cursor: announcementText.trim() ? 'pointer' : 'not-allowed',
-                          fontSize: '0.9rem'
-                        }}
-                      >
-                        {t('tools.addToSetlist')}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Messages Tab */}
-                  {activeToolsTab === 'messages' && (
-                    <div>
-                      {/* Message list with checkboxes */}
-                      <div style={{ maxHeight: '100px', overflowY: 'auto', marginBottom: '12px' }}>
-                        {rotatingMessages.map((msg) => (
-                          <div
-                            key={msg.id}
-                            onClick={() => toggleMessageEnabled(msg.id)}
+                      {isAnnouncementActive ? (
+                        <button
+                          onClick={hideAnnouncement}
+                          style={{
+                            width: '100%',
+                            background: colors.button.danger,
+                            border: 'none',
+                            borderRadius: '8px',
+                            padding: '10px 20px',
+                            color: 'white',
+                            cursor: 'pointer',
+                            fontSize: '0.9rem'
+                          }}
+                        >
+                          {t('controlPanel.stopBroadcasting')}
+                        </button>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            onClick={showAnnouncement}
+                            disabled={!announcementText.trim()}
                             style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              padding: '6px 8px',
-                              background: msg.enabled ? 'rgba(255,255,255,0.1)' : 'transparent',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              marginBottom: '4px'
+                              flex: 1,
+                              background: announcementText.trim() ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'rgba(255,255,255,0.1)',
+                              border: 'none',
+                              borderRadius: '8px',
+                              padding: '10px 20px',
+                              color: 'white',
+                              cursor: announcementText.trim() ? 'pointer' : 'not-allowed',
+                              fontSize: '0.9rem'
                             }}
                           >
-                            <input
-                              type="checkbox"
-                              checked={msg.enabled}
-                              onChange={() => {}}
-                              style={{ cursor: 'pointer' }}
-                            />
-                            <span style={{ flex: 1, fontSize: '0.8rem', color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {msg.text}
-                            </span>
-                            {!msg.isPreset && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); removeCustomMessage(msg.id); }}
-                                style={{ background: 'transparent', border: 'none', color: '#dc3545', cursor: 'pointer', fontSize: '0.8rem', padding: '0 4px' }}
-                              >
-                                ✕
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Add custom message */}
-                      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
-                        <input
-                          type="text"
-                          placeholder={t('tools.addCustomMessage')}
-                          value={customMessageInput}
-                          onChange={(e) => setCustomMessageInput(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && addCustomMessage()}
-                          style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '8px', color: 'white', fontSize: '0.8rem' }}
-                        />
-                        <button
-                          onClick={addCustomMessage}
-                          disabled={!customMessageInput.trim()}
-                          style={{ background: customMessageInput.trim() ? '#28a745' : 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '6px', padding: '8px 12px', color: 'white', cursor: customMessageInput.trim() ? 'pointer' : 'not-allowed' }}
-                        >
-                          +
-                        </button>
-                      </div>
-
-                      {/* Interval toggle */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                        <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)' }}>{t('tools.rotationIntervalLabel')}</span>
-                        <button
-                          onClick={() => setRotatingInterval(rotatingInterval === 5 ? 10 : 5)}
-                          style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '4px 12px', color: 'white', cursor: 'pointer', fontSize: '0.8rem' }}
-                        >
-                          {rotatingInterval}s
-                        </button>
-                      </div>
-
-                      {/* Add to Setlist button */}
-                      <button
-                        onClick={addMessagesToSetlist}
-                        disabled={rotatingMessages.filter(m => m.enabled).length === 0}
-                        style={{
-                          width: '100%',
-                          background: rotatingMessages.filter(m => m.enabled).length > 0 ? '#28a745' : 'rgba(255,255,255,0.1)',
-                          border: 'none',
-                          borderRadius: '8px',
-                          padding: '10px 20px',
-                          color: 'white',
-                          cursor: rotatingMessages.filter(m => m.enabled).length > 0 ? 'pointer' : 'not-allowed',
-                          fontSize: '0.9rem'
-                        }}
-                      >
-                        {t('tools.addToSetlist')}
-                      </button>
+                            {t('tools.broadcastAnnouncement')}
+                          </button>
+                          <button
+                            onClick={addAnnouncementToSetlist}
+                            disabled={!announcementText.trim()}
+                            style={{
+                              flex: 1,
+                              background: announcementText.trim() ? '#28a745' : 'rgba(255,255,255,0.1)',
+                              border: 'none',
+                              borderRadius: '8px',
+                              padding: '10px 20px',
+                              color: 'white',
+                              cursor: announcementText.trim() ? 'pointer' : 'not-allowed',
+                              fontSize: '0.9rem'
+                            }}
+                          >
+                            {t('tools.addToSetlist')}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -4617,7 +6746,7 @@ const ControlPanel: React.FC = () => {
                         </button>
                       ) : (
                         <button
-                          onClick={() => { setIsStopwatchActive(true); }}
+                          onClick={startStopwatch}
                           style={{
                             width: '100%',
                             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -4637,8 +6766,9 @@ const ControlPanel: React.FC = () => {
                 </div>
               )}
 
+              {/* Bible Panel */}
               {activeResourcePanel === 'bible' && (
-                <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', padding: '12px', flexDirection: 'column', gap: '12px' }}>
                   {/* Search Input */}
                   <div style={{ position: 'relative' }}>
                     <svg width="14" height="14" fill="rgba(255,255,255,0.5)" viewBox="0 0 16 16" style={{ position: 'absolute', left: isRTL ? 'auto' : '10px', right: isRTL ? '10px' : 'auto', top: '50%', transform: 'translateY(-50%)' }}>
@@ -4647,8 +6777,17 @@ const ControlPanel: React.FC = () => {
                     <input
                       type="text"
                       placeholder="תהילים כ״ג or Psalms 23..."
-                      value={bibleSearchQuery}
-                      onChange={(e) => handleBibleSearch(e.target.value)}
+                      defaultValue={bibleSearchQuery}
+                      onChange={(e) => {
+                        // Debounce search updates for performance
+                        if (bibleSearchDebounceRef.current) {
+                          clearTimeout(bibleSearchDebounceRef.current);
+                        }
+                        const value = e.target.value;
+                        bibleSearchDebounceRef.current = setTimeout(() => {
+                          handleBibleSearch(value);
+                        }, 150);
+                      }}
                       style={{
                         width: '100%',
                         background: 'rgba(255,255,255,0.08)',
@@ -4759,8 +6898,9 @@ const ControlPanel: React.FC = () => {
                 </div>
               )}
 
+              {/* Presentations Panel */}
               {activeResourcePanel === 'presentations' && (
-                <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', padding: '12px', flexDirection: 'column', gap: '12px' }}>
                   {/* Search and New Button Row */}
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <div style={{ position: 'relative', flex: 1 }}>
@@ -4770,8 +6910,17 @@ const ControlPanel: React.FC = () => {
                       <input
                         type="text"
                         placeholder={t('controlPanel.searchPresentations')}
-                        value={presentationSearchQuery}
-                        onChange={(e) => setPresentationSearchQuery(e.target.value)}
+                        defaultValue={presentationSearchQuery}
+                        onChange={(e) => {
+                          // Debounce search updates for performance
+                          if (presentationSearchDebounceRef.current) {
+                            clearTimeout(presentationSearchDebounceRef.current);
+                          }
+                          const value = e.target.value;
+                          presentationSearchDebounceRef.current = setTimeout(() => {
+                            setPresentationSearchQuery(value);
+                          }, 150);
+                        }}
                         style={{
                           width: '100%',
                           background: 'rgba(255,255,255,0.08)',
@@ -4788,7 +6937,7 @@ const ControlPanel: React.FC = () => {
                       onClick={() => setShowTemplateModal(true)}
                       title="New Presentation"
                       style={{
-                        background: '#FF8C42',
+                        background: '#06b6d4',
                         border: 'none',
                         borderRadius: '8px',
                         width: '34px',
@@ -4823,185 +6972,21 @@ const ControlPanel: React.FC = () => {
                       <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>{t('controlPanel.createFirstPresentation')}</div>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
                       {presentations.filter(p =>
                         !presentationSearchQuery ||
                         p.title.toLowerCase().includes(presentationSearchQuery.toLowerCase())
                       ).map((pres) => (
-                        <div
+                        <PresentationItem
                           key={pres.id}
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData('application/json', JSON.stringify({
-                              type: 'presentation',
-                              presentation: pres
-                            }));
-                          }}
-                          onClick={() => {
-                            // Select presentation and show in slide preview
-                            setSelectedSong(null);
-                            setSelectedPresentation(pres);
-                            setCurrentPresentationSlideIndex(0);
-                            setIsBlank(false);
-                            // Debug: check quickModeData
-                            console.log('[ControlPanel] Presentation clicked:', pres.title, 'quickModeData:', pres.quickModeData);
-                            // Send the first slide to the display
-                            if (pres.quickModeData?.type === 'prayer' || pres.quickModeData?.type === 'sermon') {
-                              // Use prayer theme rendering - set content type so live preview uses correct theme
-                              setCurrentContentType('prayer');
-                              console.log('[ControlPanel] Using prayer theme for presentation');
-                              sendPrayerPresentationSlide(pres, 0, 'bilingual');
-                            } else if (pres.slides.length > 0) {
-                              const slide = pres.slides[0];
-                              window.electronAPI.sendSlide({
-                                songId: pres.id,
-                                slideIndex: 0,
-                                displayMode: 'bilingual',
-                                isBlank: false,
-                                songTitle: pres.title,
-                                presentationSlide: slide
-                              });
-                            }
-                          }}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '10px 12px',
-                            borderRadius: '8px',
-                            background: selectedPresentation?.id === pres.id ? 'rgba(0, 212, 255, 0.2)' : 'rgba(255,255,255,0.05)',
-                            border: selectedPresentation?.id === pres.id ? '1px solid rgba(0, 212, 255, 0.5)' : '1px solid transparent',
-                            cursor: 'pointer',
-                            transition: 'background 0.15s'
-                          }}
-                          onMouseEnter={(e) => {
-                            setHoveredPresentationId(pres.id);
-                            if (selectedPresentation?.id !== pres.id) {
-                              e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            setHoveredPresentationId(null);
-                            setOpenPresentationMenuId(null);
-                            if (selectedPresentation?.id !== pres.id) {
-                              e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                            }
-                          }}
-                        >
-                          <div style={{
-                            width: '32px',
-                            height: '24px',
-                            background: pres.slides[0]?.backgroundColor || '#1a1a2e',
-                            borderRadius: '4px',
-                            border: '1px solid rgba(255,255,255,0.2)'
-                          }} />
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: '0.9rem', fontWeight: 500, color: 'white' }}>{pres.title}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>
-                              {pres.slides.length} slide{pres.slides.length !== 1 ? 's' : ''}
-                            </div>
-                          </div>
-                          {(hoveredPresentationId === pres.id || openPresentationMenuId === pres.id) && (
-                            <div style={{ position: 'relative' }}>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenPresentationMenuId(openPresentationMenuId === pres.id ? null : pres.id);
-                                }}
-                                style={{
-                                  padding: '4px 6px',
-                                  borderRadius: '4px',
-                                  border: 'none',
-                                  background: 'transparent',
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  gap: '2px',
-                                  alignItems: 'center'
-                                }}
-                              >
-                                <span style={{ width: '3px', height: '3px', background: 'rgba(255,255,255,0.5)', borderRadius: '50%' }} />
-                                <span style={{ width: '3px', height: '3px', background: 'rgba(255,255,255,0.5)', borderRadius: '50%' }} />
-                                <span style={{ width: '3px', height: '3px', background: 'rgba(255,255,255,0.5)', borderRadius: '50%' }} />
-                              </button>
-                              {openPresentationMenuId === pres.id && (
-                                <div
-                                  onClick={(e) => e.stopPropagation()}
-                                  style={{
-                                    position: 'absolute',
-                                    right: isRTL ? 'auto' : 0,
-                                    left: isRTL ? 0 : 'auto',
-                                    top: '100%',
-                                    marginTop: '4px',
-                                    background: '#2a2a3e',
-                                    borderRadius: '6px',
-                                    border: '1px solid rgba(255,255,255,0.15)',
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                                    zIndex: 100,
-                                    padding: '4px',
-                                    minWidth: '100px',
-                                    overflow: 'hidden'
-                                  }}
-                                >
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setOpenPresentationMenuId(null);
-                                      navigate(`/presentation-editor?id=${pres.id}`);
-                                    }}
-                                    style={{
-                                      width: '100%',
-                                      padding: '6px 10px',
-                                      border: 'none',
-                                      background: 'transparent',
-                                      color: 'white',
-                                      cursor: 'pointer',
-                                      fontSize: '0.8rem',
-                                      textAlign: isRTL ? 'right' : 'left',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '8px',
-                                      borderRadius: '4px'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                                  >
-                                    <span>✏️</span> {t('controlPanel.edit')}
-                                  </button>
-                                  <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
-                                  <button
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      setOpenPresentationMenuId(null);
-                                      if (confirm(`Delete "${pres.title}"?`)) {
-                                        await window.electronAPI.deletePresentation(pres.id);
-                                        loadPresentations();
-                                      }
-                                    }}
-                                    style={{
-                                      width: '100%',
-                                      padding: '6px 10px',
-                                      border: 'none',
-                                      background: 'transparent',
-                                      color: '#ff6b6b',
-                                      cursor: 'pointer',
-                                      fontSize: '0.8rem',
-                                      textAlign: isRTL ? 'right' : 'left',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '8px',
-                                      borderRadius: '4px'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,100,100,0.1)'}
-                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                                  >
-                                    <span>🗑️</span> {t('controlPanel.delete')}
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                          presentation={pres}
+                          isSelected={selectedPresentation?.id === pres.id}
+                          onSelect={handlePresentationSelect}
+                          onDoubleClick={addPresentationToSetlist}
+                          onEdit={handlePresentationEdit}
+                          onDelete={handlePresentationDelete}
+                          onDragStart={handlePresentationDragStart}
+                        />
                       ))}
                     </div>
                   )}
@@ -5010,9 +6995,28 @@ const ControlPanel: React.FC = () => {
             </div>
           </div>
 
-          {/* Right Column - Setlist */}
-          <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+          {/* Resize Handle - Left/Setlist */}
+          <div
+            onMouseDown={(e) => startResize('left', e)}
+            className="resize-handle-vertical"
+            style={{
+              width: '12px',
+              cursor: 'col-resize',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}
+          >
+            <div style={{ width: '3px', height: '40px', background: isResizing === 'left' ? '#06b6d4' : 'rgba(255,255,255,0.15)', borderRadius: '2px', transition: 'background 0.15s, width 0.15s' }} />
+          </div>
+
+          {/* Middle Column - Setlist */}
+          <div style={{ width: `${setlistPanelWidth}%`, flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', overflow: 'hidden' }}>
+            <div
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)', cursor: 'context-menu' }}
+              onContextMenu={(e) => { e.preventDefault(); setShowSetlistMenu(true); }}
+            >
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ color: 'white', fontWeight: 600 }}>{currentSetlistId ? currentSetlistName : t('controlPanel.setlist')}</span>
                 {hasUnsavedChanges && setlist.length > 0 && (
@@ -5023,23 +7027,39 @@ const ControlPanel: React.FC = () => {
               <div style={{ position: 'relative' }}>
                 <button
                   onClick={() => setShowSetlistMenu(!showSetlistMenu)}
+                  onMouseEnter={() => setSetlistMenuHover(true)}
+                  onMouseLeave={() => setSetlistMenuHover(false)}
                   style={{
-                    background: hasUnsavedChanges && setlist.length > 0 ? '#ffc107' : 'rgba(255,255,255,0.1)',
+                    background: setlistMenuHover ? 'rgba(255,255,255,0.15)' : 'transparent',
                     border: 'none',
                     borderRadius: '6px',
                     padding: '6px 8px',
-                    color: hasUnsavedChanges && setlist.length > 0 ? '#000' : 'white',
+                    color: 'rgba(255,255,255,0.6)',
                     cursor: 'pointer',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '2px',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    transition: 'background 0.15s ease',
+                    position: 'relative'
                   }}
                 >
                   <span style={{ width: '14px', height: '2px', background: 'currentColor', borderRadius: '1px' }} />
                   <span style={{ width: '14px', height: '2px', background: 'currentColor', borderRadius: '1px' }} />
                   <span style={{ width: '14px', height: '2px', background: 'currentColor', borderRadius: '1px' }} />
+                  {/* Subtle unsaved indicator dot */}
+                  {hasUnsavedChanges && setlist.length > 0 && (
+                    <span style={{
+                      position: 'absolute',
+                      top: '2px',
+                      right: '2px',
+                      width: '6px',
+                      height: '6px',
+                      background: '#ffc107',
+                      borderRadius: '50%'
+                    }} />
+                  )}
                 </button>
                 {showSetlistMenu && (
                   <>
@@ -5050,7 +7070,7 @@ const ControlPanel: React.FC = () => {
                     <div style={{
                       position: 'absolute',
                       top: '100%',
-                      right: 0,
+                      left: 0,
                       marginTop: '4px',
                       background: 'rgba(30,30,50,0.98)',
                       borderRadius: '8px',
@@ -5062,36 +7082,40 @@ const ControlPanel: React.FC = () => {
                     }}>
                       <button
                         onClick={() => { tryClearSetlist(); setShowSetlistMenu(false); }}
-                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: 'white', cursor: 'pointer', fontSize: '0.85rem', textAlign: 'left' }}
+                        style={{ width: '100%', display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: 'white', cursor: 'pointer', fontSize: '0.85rem', textAlign: isRTL ? 'right' : 'left' }}
                         onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                       >
-                        <span>✨</span> {t('controlPanel.newSetlist')}
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2Z"/></svg>
+                        {t('controlPanel.newSetlist')}
                       </button>
                       <button
                         onClick={() => { setShowLoadModal(true); setShowSetlistMenu(false); }}
-                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: 'white', cursor: 'pointer', fontSize: '0.85rem', textAlign: 'left' }}
+                        style={{ width: '100%', display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: 'white', cursor: 'pointer', fontSize: '0.85rem', textAlign: isRTL ? 'right' : 'left' }}
                         onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                       >
-                        <span>📂</span> {t('controlPanel.loadSetlist')}
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h2.764c.958 0 1.76.56 2.311 1.184C7.985 3.648 8.48 4 9 4h4.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9zM2.5 3a.5.5 0 0 0-.5.5V6h12v-.5a.5.5 0 0 0-.5-.5H9c-.964 0-1.71-.629-2.174-1.154C6.374 3.334 5.82 3 5.264 3H2.5zM14 7H2v5.5a.5.5 0 0 0 .5.5h11a.5.5 0 0 0 .5-.5V7z"/></svg>
+                        {t('controlPanel.loadSetlist')}
                       </button>
                       <button
                         onClick={() => { setShowSaveModal(true); setShowSetlistMenu(false); }}
-                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: hasUnsavedChanges && setlist.length > 0 ? '#ffc107' : 'white', cursor: 'pointer', fontSize: '0.85rem', textAlign: 'left' }}
+                        style={{ width: '100%', display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: hasUnsavedChanges && setlist.length > 0 ? '#ffc107' : 'white', cursor: 'pointer', fontSize: '0.85rem', textAlign: isRTL ? 'right' : 'left' }}
                         onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                       >
-                        <span>💾</span> {t('controlPanel.saveSetlist')}
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H9.5a1 1 0 0 0-1 1v7.293l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 9.293V2a2 2 0 0 1 2-2H14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h2.5a.5.5 0 0 1 0 1H2z"/></svg>
+                        {t('controlPanel.saveSetlist')}
                       </button>
                       <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
                       <button
                         onClick={() => { addSectionHeader(); setShowSetlistMenu(false); }}
-                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: 'white', cursor: 'pointer', fontSize: '0.85rem', textAlign: 'left' }}
+                        style={{ width: '100%', display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: 'white', cursor: 'pointer', fontSize: '0.85rem', textAlign: isRTL ? 'right' : 'left' }}
                         onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                       >
-                        <span style={{ color: '#FF8C42' }}>§</span> Add Section
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path fillRule="evenodd" d="M2 3.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5zm0 4a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5zm0 4a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/></svg>
+                        {t('controlPanel.addSection')}
                       </button>
                     </div>
                   </>
@@ -5102,7 +7126,7 @@ const ControlPanel: React.FC = () => {
               style={{
                 flex: 1,
                 overflow: 'auto',
-                background: draggedSong ? 'rgba(255,140,66,0.05)' : isDraggingMedia ? 'rgba(50,200,100,0.08)' : 'transparent',
+                background: draggedSong ? 'rgba(6,182,212,0.05)' : isDraggingMedia ? 'rgba(50,200,100,0.08)' : 'transparent',
                 transition: 'background 0.2s'
               }}
               onDragOver={(e) => {
@@ -5169,7 +7193,9 @@ const ControlPanel: React.FC = () => {
                           title: data.name,
                           mediaType: data.type,
                           mediaPath: data.path,
-                          mediaDuration: data.duration
+                          mediaName: data.name,
+                          mediaDuration: data.duration,
+                          thumbnailPath: data.thumbnailPath
                         };
                         if (dropTargetIndex !== null) {
                           const newSetlist = [...setlist];
@@ -5225,8 +7251,10 @@ const ControlPanel: React.FC = () => {
                     })() : 0;
                     const isCollapsed = item.type === 'section' && collapsedSections.has(item.id);
                     return (
+                    <React.Fragment key={item.id}>
                   <div
-                    key={item.id}
+                    className="setlist-row"
+                    {...(item.type === 'audioPlaylist' && expandedPlaylistIds.has(item.id) ? { 'data-playlist-expanded': true } : {})}
                     draggable
                     onDragStart={(e) => {
                       setDraggedSetlistIndex(index);
@@ -5241,6 +7269,13 @@ const ControlPanel: React.FC = () => {
                       e.stopPropagation();
                       setDropTargetIndex(index);
                     }}
+                    onMouseLeave={() => {
+                      if (setlistMenuOpen === item.id) setSetlistMenuOpen(null);
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setSetlistContextMenu({ x: e.clientX, y: e.clientY, item });
+                    }}
                     onClick={() => {
                       if (item.type === 'section') {
                         // Toggle section collapse
@@ -5254,47 +7289,45 @@ const ControlPanel: React.FC = () => {
                           return next;
                         });
                       } else if (item.type === 'song' && item.song) {
-                        selectSong(item.song, 'song');
+                        stopAllTools(); // Stop any active tools
+                        setActiveMedia(null); // Clear active media
+                        selectSong(item.song, 'song', false); // Load to preview only, don't send to display
                       } else if (item.type === 'bible' && item.song) {
-                        // Bible passages use the same song structure
-                        selectSong(item.song, 'bible');
+                        stopAllTools(); // Stop any active tools
+                        setActiveMedia(null); // Clear active media
+                        selectSong(item.song, 'bible', false); // Load to preview only, don't send to display
                       } else if (item.type === 'countdown' || item.type === 'announcement' || item.type === 'messages') {
                         broadcastToolFromSetlist(item);
                       } else if (item.type === 'media' && item.mediaPath && item.mediaType) {
-                        if (item.mediaType === 'audio') {
-                          // Audio plays in the bottom player without affecting the display
-                          handlePlayAudio(item.mediaPath, item.mediaName || item.title || 'Audio');
-                        } else {
-                          handleDisplayMedia(item.mediaType, item.mediaPath);
-                        }
+                        // Toggle selection for all media types - don't play immediately
+                        setSelectedSetlistMediaId(selectedSetlistMediaId === item.id ? null : item.id);
                       } else if (item.type === 'presentation' && item.presentation) {
-                        // Select presentation directly (preserving textbox styling)
+                        stopAllTools(); // Stop any active tools
+                        setActiveMedia(null); // Clear active media
+                        // Select presentation - load to preview only, don't send to display
                         setSelectedSong(null); // Clear song selection
                         setSelectedPresentation(item.presentation);
                         setCurrentPresentationSlideIndex(0);
-                        setIsBlank(false);
-                        // Send the first slide to the display
+                        // Set content type based on presentation type
                         if (item.presentation.quickModeData?.type === 'prayer' || item.presentation.quickModeData?.type === 'sermon') {
-                          // Use prayer theme rendering
-                          sendPrayerPresentationSlide(item.presentation, 0, 'bilingual');
-                        } else if (item.presentation.slides.length > 0) {
-                          const slide = item.presentation.slides[0];
-                          window.electronAPI.sendSlide({
-                            songId: item.presentation.id,
-                            slideIndex: 0,
-                            displayMode: 'bilingual',
-                            isBlank: false,
-                            songTitle: item.presentation.title,
-                            presentationSlide: slide
-                          });
+                          setCurrentContentType('prayer');
+                        } else {
+                          setCurrentContentType('presentation');
                         }
                       } else if (item.type === 'youtube' && item.youtubeVideoId) {
-                        // Display YouTube video
-                        handleYoutubeDisplay({
-                          videoId: item.youtubeVideoId,
-                          title: item.youtubeTitle || 'YouTube Video',
-                          thumbnail: item.youtubeThumbnail || `https://img.youtube.com/vi/${item.youtubeVideoId}/mqdefault.jpg`
-                        });
+                        // Just select the YouTube item, don't play immediately
+                        setSelectedYoutubeItemId(selectedYoutubeItemId === item.id ? null : item.id);
+                      } else if (item.type === 'audioPlaylist' && item.audioPlaylist) {
+                        // Start playing the playlist
+                        startPlaylist(item);
+                      } else if (item.type === 'blank') {
+                        stopAllTools(); // Stop any active tools
+                        setActiveMedia(null); // Clear active media
+                        setSelectedSong(null);
+                        setSelectedPresentation(null);
+                        setIsBlank(true);
+                        setLiveState({ slideData: null, contentType: null, songId: null, slideIndex: 0 }); // Clear live preview
+                        window.electronAPI.sendBlank();
                       }
                     }}
                     onDoubleClick={() => removeFromSetlist(item.id)}
@@ -5308,13 +7341,17 @@ const ControlPanel: React.FC = () => {
                         : activeToolId === item.id
                         ? 'rgba(102, 126, 234, 0.4)'
                         : item.type === 'song' && selectedSong?.id === item.song?.id
-                        ? 'rgba(255,140,66,0.2)'
+                        ? 'rgba(6,182,212,0.2)'
                         : item.type === 'bible' && selectedSong?.id === item.song?.id
                         ? 'rgba(230, 184, 0, 0.2)'
                         : item.type === 'media' && item.mediaPath && activeMedia && activeMedia.url.includes(encodeURIComponent(item.mediaPath.split(/[/\\]/).pop() || ''))
                         ? 'rgba(50, 200, 100, 0.3)'
+                        : item.type === 'media' && item.mediaType === 'audio' && item.mediaPath && activeAudio && activeAudio.url.includes(encodeURIComponent(item.mediaPath.split(/[/\\]/).pop() || ''))
+                        ? 'rgba(156, 39, 176, 0.3)'
+                        : item.type === 'media' && selectedSetlistMediaId === item.id
+                        ? 'rgba(6, 182, 212, 0.2)'
                         : item.type === 'section'
-                        ? 'rgba(255,140,66,0.15)'
+                        ? 'rgba(6,182,212,0.15)'
                         : (item.type === 'countdown' || item.type === 'announcement' || item.type === 'messages')
                         ? 'rgba(102, 126, 234, 0.1)'
                         : item.type === 'media'
@@ -5323,19 +7360,29 @@ const ControlPanel: React.FC = () => {
                         ? 'rgba(156, 39, 176, 0.1)'
                         : item.type === 'youtube' && youtubeOnDisplay && activeYoutubeVideo?.videoId === item.youtubeVideoId
                         ? 'rgba(255, 0, 0, 0.3)'
+                        : item.type === 'youtube' && selectedYoutubeItemId === item.id
+                        ? 'rgba(255, 0, 0, 0.2)'
                         : item.type === 'youtube'
                         ? 'rgba(255, 0, 0, 0.1)'
+                        : item.type === 'audioPlaylist' && activePlaylistId === item.id
+                        ? 'rgba(255, 152, 0, 0.3)'
+                        : item.type === 'audioPlaylist'
+                        ? 'rgba(255, 152, 0, 0.1)'
                         : 'transparent',
                       borderLeft: item.type === 'section'
-                        ? '3px solid #FF8C42'
+                        ? '3px solid #06b6d4'
                         : activeToolId === item.id
                         ? '3px solid #00d4ff'
                         : item.type === 'song' && selectedSong?.id === item.song?.id
-                        ? '3px solid #FF8C42'
+                        ? '3px solid #06b6d4'
                         : item.type === 'bible' && selectedSong?.id === item.song?.id
                         ? '3px solid #e6b800'
                         : item.type === 'media' && item.mediaPath && activeMedia && activeMedia.url.includes(encodeURIComponent(item.mediaPath.split(/[/\\]/).pop() || ''))
                         ? '3px solid #32c864'
+                        : item.type === 'media' && item.mediaType === 'audio' && item.mediaPath && activeAudio && activeAudio.url.includes(encodeURIComponent(item.mediaPath.split(/[/\\]/).pop() || ''))
+                        ? '3px solid #9C27B0'
+                        : item.type === 'media' && selectedSetlistMediaId === item.id
+                        ? '3px solid #06b6d4'
                         : (item.type === 'countdown' || item.type === 'announcement' || item.type === 'messages')
                         ? '3px solid #667eea'
                         : item.type === 'media'
@@ -5344,7 +7391,13 @@ const ControlPanel: React.FC = () => {
                         ? '3px solid #9C27B0'
                         : item.type === 'youtube' && youtubeOnDisplay && activeYoutubeVideo?.videoId === item.youtubeVideoId
                         ? '3px solid #FF0000'
+                        : item.type === 'youtube' && selectedYoutubeItemId === item.id
+                        ? '3px solid #FF0000'
                         : item.type === 'youtube'
+                        ? '3px solid transparent'
+                        : item.type === 'audioPlaylist' && activePlaylistId === item.id
+                        ? '3px solid #FF9800'
+                        : item.type === 'audioPlaylist'
                         ? '3px solid transparent'
                         : '3px solid transparent',
                       borderBottom: '1px solid rgba(255,255,255,0.05)',
@@ -5359,7 +7412,7 @@ const ControlPanel: React.FC = () => {
                         height="12"
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="#FF8C42"
+                        stroke="#06b6d4"
                         strokeWidth="2"
                         style={{
                           marginRight: '8px',
@@ -5378,7 +7431,7 @@ const ControlPanel: React.FC = () => {
                     {/* Item type icon */}
                     <span style={{ marginRight: '8px', display: 'flex', alignItems: 'center' }}>
                       {item.type === 'song' && (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF8C42" strokeWidth="2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2">
                           <path d="M9 18V5l12-2v13" />
                           <circle cx="6" cy="18" r="3" />
                           <circle cx="18" cy="16" r="3" />
@@ -5401,16 +7454,55 @@ const ControlPanel: React.FC = () => {
                         </svg>
                       )}
                       {item.type === 'media' && item.mediaType === 'video' && (
+                        item.thumbnailPath ? (
+                          <img
+                            src={`media://file/${encodeURIComponent(item.thumbnailPath)}`}
+                            alt=""
+                            style={{
+                              width: '28px',
+                              height: '28px',
+                              objectFit: 'cover',
+                              borderRadius: '4px',
+                              border: '1px solid rgba(50, 200, 100, 0.5)'
+                            }}
+                            onError={(e) => {
+                              // Fallback to icon if thumbnail fails to load
+                              e.currentTarget.style.display = 'none';
+                              const svgFallback = e.currentTarget.nextElementSibling as HTMLElement;
+                              if (svgFallback) svgFallback.style.display = 'block';
+                            }}
+                          />
+                        ) : null
+                      )}
+                      {item.type === 'media' && item.mediaType === 'video' && !item.thumbnailPath && (
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#32c864" strokeWidth="2">
                           <polygon points="5 3 19 12 5 21 5 3" />
                         </svg>
                       )}
                       {item.type === 'media' && item.mediaType === 'image' && (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#32c864" strokeWidth="2">
-                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                          <circle cx="8.5" cy="8.5" r="1.5"/>
-                          <polyline points="21 15 16 10 5 21"/>
-                        </svg>
+                        item.thumbnailPath || item.mediaPath ? (
+                          <img
+                            src={`media://file/${encodeURIComponent(item.thumbnailPath || item.mediaPath || '')}`}
+                            alt=""
+                            style={{
+                              width: '28px',
+                              height: '28px',
+                              objectFit: 'cover',
+                              borderRadius: '4px',
+                              border: '1px solid rgba(50, 200, 100, 0.5)'
+                            }}
+                            onError={(e) => {
+                              // Fallback to icon if image fails to load
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#32c864" strokeWidth="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <polyline points="21 15 16 10 5 21"/>
+                          </svg>
+                        )
                       )}
                       {item.type === 'media' && item.mediaType === 'audio' && (
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9C27B0" strokeWidth="2">
@@ -5440,6 +7532,55 @@ const ControlPanel: React.FC = () => {
                           <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                         </svg>
                       )}
+                      {item.type === 'audioPlaylist' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedPlaylistIds(prev => {
+                                const newSet = new Set(prev);
+                                if (newSet.has(item.id)) {
+                                  newSet.delete(item.id);
+                                } else {
+                                  newSet.add(item.id);
+                                }
+                                return newSet;
+                              });
+                            }}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '2px',
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
+                          >
+                            <svg
+                              width="12"
+                              height="12"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="#FF9800"
+                              strokeWidth="2"
+                              style={{
+                                transform: expandedPlaylistIds.has(item.id) ? 'rotate(90deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.15s'
+                              }}
+                            >
+                              <polyline points="9 6 15 12 9 18" />
+                            </svg>
+                          </button>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF9800" strokeWidth="2">
+                            <line x1="8" y1="6" x2="21" y2="6" />
+                            <line x1="8" y1="12" x2="21" y2="12" />
+                            <line x1="8" y1="18" x2="21" y2="18" />
+                            <circle cx="4" cy="6" r="2" fill="#FF9800" />
+                            <circle cx="4" cy="12" r="2" fill="#FF9800" />
+                            <circle cx="4" cy="18" r="2" fill="#FF9800" />
+                          </svg>
+                        </div>
+                      )}
                     </span>
                     <span style={{
                       flex: 1,
@@ -5453,16 +7594,20 @@ const ControlPanel: React.FC = () => {
                       {item.type === 'song' ? item.song?.title :
                        item.type === 'section' ? item.title :
                        item.type === 'bible' ? item.song?.title || item.title :
-                       item.type === 'media' ? (item.mediaName || item.title || 'Media') :
+                       item.type === 'media' ? (() => {
+                         const name = item.mediaName || item.title || 'Media';
+                         return name.length > 30 ? name.slice(0, 30) + '...' : name;
+                       })() :
                        item.type === 'presentation' ? (item.presentation?.title || item.title || 'Presentation') :
                        item.type === 'youtube' ? (item.youtubeTitle || item.title || 'YouTube Video') :
+                       item.type === 'audioPlaylist' ? (item.audioPlaylist?.name || item.title || 'Playlist') :
                        item.title}
                     </span>
                     {/* Section item count badge */}
                     {item.type === 'section' && sectionItemCount > 0 && (
                       <span style={{
-                        background: 'rgba(255,140,66,0.3)',
-                        color: '#FF8C42',
+                        background: 'rgba(6,182,212,0.3)',
+                        color: '#06b6d4',
                         fontSize: '0.65rem',
                         fontWeight: 600,
                         padding: '1px 6px',
@@ -5472,19 +7617,11 @@ const ControlPanel: React.FC = () => {
                         {sectionItemCount}
                       </span>
                     )}
-                    {/* Audio playing indicator */}
-                    {item.type === 'media' && item.mediaType === 'audio' && activeAudio && (() => {
-                      const encodedPath = (item.mediaPath || '')
-                        .replace(/\\/g, '/')
-                        .split('/')
-                        .map(segment => encodeURIComponent(segment))
-                        .join('/');
-                      const itemAudioUrl = `media://file/${encodedPath}`;
-                      return activeAudio.url === itemAudioUrl;
-                    })() && (
+                    {/* Auto-play cycling indicator for presentations */}
+                    {item.type === 'presentation' && autoPlayActive && selectedPresentation?.id === item.presentation?.id && (
                       <span style={{
-                        background: audioStatus.isPlaying ? '#9C27B0' : 'rgba(156, 39, 176, 0.5)',
-                        color: 'white',
+                        background: '#00d4ff',
+                        color: '#000',
                         fontSize: '0.6rem',
                         fontWeight: 700,
                         padding: '2px 6px',
@@ -5492,16 +7629,415 @@ const ControlPanel: React.FC = () => {
                         marginLeft: '8px',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '4px'
+                        gap: '4px',
+                        animation: 'pulse 1.5s ease-in-out infinite'
                       }}>
-                        {audioStatus.isPlaying ? (
-                          <>
-                            <span style={{ animation: 'pulse 1s ease-in-out infinite' }}>♪</span>
-                            PLAYING
-                          </>
-                        ) : 'PAUSED'}
+                        <span>🔄</span>
+                        {currentPresentationSlideIndex + 1}/{selectedPresentation?.slides?.length || 0} • {autoPlayInterval}s
                       </span>
                     )}
+                    {/* Audio Playlist: Track count badge and playback controls */}
+                    {item.type === 'audioPlaylist' && item.audioPlaylist && (() => {
+                      const isPlaying = activePlaylistId === item.id;
+                      const trackCount = item.audioPlaylist.tracks.length;
+                      const currentTrackIndex = isPlaying ? activePlaylistIndex + 1 : 0;
+
+                      if (isPlaying) {
+                        return (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '8px' }}>
+                            <span style={{
+                              background: 'rgba(255, 152, 0, 0.3)',
+                              color: '#FF9800',
+                              fontSize: '0.6rem',
+                              fontWeight: 600,
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}>
+                              <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" style={{ animation: 'pulse 1s ease-in-out infinite' }}>
+                                <polygon points="5 3 19 12 5 21 5 3" />
+                              </svg>
+                              {currentTrackIndex}/{trackCount}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveAudio(null);
+                                setActivePlaylistId(null);
+                                setActivePlaylistIndex(0);
+                                setActivePlaylistOrder([]);
+                              }}
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.9)',
+                                color: 'white',
+                                fontSize: '0.6rem',
+                                fontWeight: 600,
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '3px'
+                              }}
+                            >
+                              <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="6" y="6" width="12" height="12" />
+                              </svg>
+                              {t('common.stop')}
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '8px' }}>
+                          <span style={{
+                            background: 'rgba(255, 152, 0, 0.2)',
+                            color: '#FF9800',
+                            fontSize: '0.65rem',
+                            fontWeight: 600,
+                            padding: '1px 6px',
+                            borderRadius: '10px'
+                          }}>
+                            {trackCount} {item.audioPlaylist.shuffle ? '🔀' : ''}
+                          </span>
+                          {/* Edit button - visible on hover */}
+                          <button
+                            className={`setlist-hover-menu ${selectedSetlistMediaId === item.id ? 'menu-open' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditPlaylistModal(item);
+                            }}
+                            style={{
+                              background: 'rgba(102, 126, 234, 0.3)',
+                              color: '#667eea',
+                              fontSize: '0.6rem',
+                              fontWeight: 600,
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              border: '1px solid rgba(102, 126, 234, 0.5)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '3px'
+                            }}
+                            title="Edit playlist"
+                          >
+                            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                            Edit
+                          </button>
+                        </div>
+                      );
+                    })()}
+                    {/* Audio: Play button when selected or hovered (not playing) / Playing indicator with stop */}
+                    {item.type === 'media' && item.mediaType === 'audio' && (() => {
+                      const encodedPath = (item.mediaPath || '')
+                        .replace(/\\/g, '/')
+                        .split('/')
+                        .map(segment => encodeURIComponent(segment))
+                        .join('/');
+                      const itemAudioUrl = `media://file/${encodedPath}`;
+                      const isPlaying = activeAudio && activeAudio.url === itemAudioUrl;
+                      const isSelected = selectedSetlistMediaId === item.id;
+
+                      // Show Play button when selected/hovered and NOT playing
+                      if (!isPlaying) {
+                        return (
+                          <button
+                            className={`setlist-hover-menu ${isSelected ? 'menu-open' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePlayAudio(item.mediaPath!, item.mediaName || item.title || 'Audio');
+                              setActiveAudioSetlistId(item.id); // Track which setlist item is playing
+                              setSelectedSetlistMediaId(null);
+                            }}
+                            style={{
+                              background: 'rgba(156, 39, 176, 0.9)',
+                              color: 'white',
+                              fontSize: '0.65rem',
+                              fontWeight: 600,
+                              padding: '3px 10px',
+                              borderRadius: '4px',
+                              marginLeft: '8px',
+                              border: 'none',
+                              cursor: 'pointer',
+                              alignItems: 'center',
+                              gap: '4px',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                              <polygon points="5 3 19 12 5 21 5 3" />
+                            </svg>
+                            {t('common.play')}
+                          </button>
+                        );
+                      }
+
+                      // Show Playing indicator when playing (with hover-to-stop)
+                      if (isPlaying) {
+                        const isStopHovered = hoveredMediaStopId === item.id;
+                        return (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveAudio(null);
+                              setActiveAudioSetlistId(null); // Clear setlist tracking on manual stop
+                            }}
+                            onMouseEnter={() => setHoveredMediaStopId(item.id)}
+                            onMouseLeave={() => setHoveredMediaStopId(null)}
+                            style={{
+                              background: isStopHovered ? '#dc3545' : (audioStatus.isPlaying ? '#9C27B0' : 'rgba(156, 39, 176, 0.5)'),
+                              color: 'white',
+                              fontSize: '0.6rem',
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              marginLeft: '8px',
+                              border: 'none',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              transition: 'background 0.15s'
+                            }}
+                          >
+                            {isStopHovered ? (
+                              <>
+                                <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                                  <rect x="4" y="4" width="16" height="16" rx="2" />
+                                </svg>
+                                {t('common.stop').toUpperCase()}
+                              </>
+                            ) : audioStatus.isPlaying ? (
+                              <>
+                                <span style={{ animation: 'pulse 1s ease-in-out infinite' }}>♪</span>
+                                {t('common.playing').toUpperCase()}
+                              </>
+                            ) : (
+                              t('common.pause').toUpperCase()
+                            )}
+                          </button>
+                        );
+                      }
+
+                      return null;
+                    })()}
+                    {/* Video/Image: Play/Display button when selected or hovered (not active) */}
+                    {item.type === 'media' && (item.mediaType === 'video' || item.mediaType === 'image') && (() => {
+                      const encodedPath = (item.mediaPath || '')
+                        .replace(/\\/g, '/')
+                        .split('/')
+                        .map(segment => encodeURIComponent(segment))
+                        .join('/');
+                      const itemMediaUrl = `media://file/${encodedPath}`;
+                      const isActive = activeMedia && activeMedia.url === itemMediaUrl;
+                      const isVideo = item.mediaType === 'video';
+                      const isSelected = selectedSetlistMediaId === item.id;
+
+                      // Show Play/Display button when selected/hovered and NOT active
+                      if (!isActive) {
+                        return (
+                          <button
+                            className={`setlist-hover-menu ${isSelected ? 'menu-open' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              stopAllTools();
+                              handleDisplayMedia(item.mediaType as 'video' | 'image', item.mediaPath!);
+                              setSelectedSetlistMediaId(null);
+                            }}
+                            style={{
+                              background: isVideo ? 'rgba(6, 182, 212, 0.9)' : 'rgba(76, 175, 80, 0.9)',
+                              color: 'white',
+                              fontSize: '0.65rem',
+                              fontWeight: 600,
+                              padding: '3px 10px',
+                              borderRadius: '4px',
+                              marginLeft: '8px',
+                              border: 'none',
+                              cursor: 'pointer',
+                              alignItems: 'center',
+                              gap: '4px',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {isVideo ? (
+                              <>
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                                  <polygon points="5 3 19 12 5 21 5 3" />
+                                </svg>
+                                {t('common.play')}
+                              </>
+                            ) : (
+                              <>
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                                  <polyline points="21 15 16 10 5 21"/>
+                                </svg>
+                                {t('media.display')}
+                              </>
+                            )}
+                          </button>
+                        );
+                      }
+
+                      // Show Playing/Showing indicator when active (with hover-to-stop)
+                      if (isActive) {
+                        const isStopHovered = hoveredMediaStopId === item.id;
+                        return (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMedia(null);
+                              window.electronAPI.clearMedia();
+                            }}
+                            onMouseEnter={() => setHoveredMediaStopId(item.id)}
+                            onMouseLeave={() => setHoveredMediaStopId(null)}
+                            style={{
+                              background: isStopHovered ? '#dc3545' : (isVideo ? '#32c864' : '#4CAF50'),
+                              color: 'white',
+                              fontSize: '0.6rem',
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              marginLeft: '8px',
+                              border: 'none',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              animation: isStopHovered ? 'none' : 'pulse 1.5s ease-in-out infinite',
+                              transition: 'background 0.15s'
+                            }}
+                          >
+                            {isStopHovered ? (
+                              <>
+                                <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                                  <rect x="4" y="4" width="16" height="16" rx="2" />
+                                </svg>
+                                {t('common.stop').toUpperCase()}
+                              </>
+                            ) : isVideo ? (
+                              <>
+                                <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                                  <polygon points="5 3 19 12 5 21 5 3" />
+                                </svg>
+                                {t('common.playing').toUpperCase()}
+                              </>
+                            ) : (
+                              <>
+                                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                </svg>
+                                {t('common.showing').toUpperCase()}
+                              </>
+                            )}
+                          </button>
+                        );
+                      }
+
+                      return null;
+                    })()}
+                    {/* YouTube: Play button when selected or hovered (not playing) / Playing indicator with stop */}
+                    {item.type === 'youtube' && item.youtubeVideoId && (() => {
+                      const isPlaying = youtubeOnDisplay && activeYoutubeVideo?.videoId === item.youtubeVideoId;
+                      const isSelected = selectedYoutubeItemId === item.id;
+
+                      // Show Play button when selected/hovered and NOT playing
+                      if (!isPlaying) {
+                        return (
+                          <button
+                            className={`setlist-hover-menu ${isSelected ? 'menu-open' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              stopAllTools();
+                              setActiveAudio(null);
+                              setActiveAudioSetlistId(null); // Clear audio setlist tracking
+                              handleYoutubeDisplay({
+                                videoId: item.youtubeVideoId!,
+                                title: item.youtubeTitle || 'YouTube Video',
+                                thumbnail: item.youtubeThumbnail || `https://img.youtube.com/vi/${item.youtubeVideoId}/mqdefault.jpg`
+                              });
+                              setSelectedYoutubeItemId(null);
+                            }}
+                            style={{
+                              background: 'rgba(255, 0, 0, 0.9)',
+                              color: 'white',
+                              fontSize: '0.65rem',
+                              fontWeight: 600,
+                              padding: '3px 10px',
+                              borderRadius: '4px',
+                              marginLeft: '8px',
+                              border: 'none',
+                              cursor: 'pointer',
+                              alignItems: 'center',
+                              gap: '4px',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                              <polygon points="5 3 19 12 5 21 5 3" />
+                            </svg>
+                            {t('common.play')}
+                          </button>
+                        );
+                      }
+
+                      // Show Playing indicator when playing (with hover-to-stop)
+                      if (isPlaying) {
+                        const isStopHovered = hoveredMediaStopId === item.id;
+                        return (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleYoutubeStop();
+                            }}
+                            onMouseEnter={() => setHoveredMediaStopId(item.id)}
+                            onMouseLeave={() => setHoveredMediaStopId(null)}
+                            style={{
+                              background: isStopHovered ? '#dc3545' : '#FF0000',
+                              color: 'white',
+                              fontSize: '0.6rem',
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              marginLeft: '8px',
+                              border: 'none',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              transition: 'background 0.15s'
+                            }}
+                          >
+                            {isStopHovered ? (
+                              <>
+                                <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                                  <rect x="4" y="4" width="16" height="16" rx="2" />
+                                </svg>
+                                {t('common.stop').toUpperCase()}
+                              </>
+                            ) : (
+                              <>
+                                <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                                  <polygon points="5 3 19 12 5 21 5 3" />
+                                </svg>
+                                {t('common.playing').toUpperCase()}
+                              </>
+                            )}
+                          </button>
+                        );
+                      }
+
+                      return null;
+                    })()}
                     {activeToolId === item.id && (
                       <span style={{
                         background: '#00d4ff',
@@ -5516,7 +8052,178 @@ const ControlPanel: React.FC = () => {
                         ACTIVE
                       </span>
                     )}
+                    {/* 3-dot menu for song and bible items - uses CSS hover for instant response */}
+                    {(item.type === 'song' || item.type === 'bible') && (
+                      <div
+                        className={`setlist-hover-menu ${setlistMenuOpen === item.id ? 'menu-open' : ''}`}
+                        style={{ position: 'relative', marginLeft: '8px' }}
+                      >
+                        <button
+                          className={`setlist-menu-btn ${setlistMenuOpen === item.id ? 'active' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSetlistMenuOpen(setlistMenuOpen === item.id ? null : item.id);
+                          }}
+                        >
+                          <span className="setlist-menu-dot" />
+                          <span className="setlist-menu-dot" />
+                          <span className="setlist-menu-dot" />
+                        </button>
+                        {setlistMenuOpen === item.id && (
+                          <div
+                            className="setlist-menu-dropdown"
+                            onClick={(e) => e.stopPropagation()}
+                            dir={isRTL ? 'rtl' : 'ltr'}
+                          >
+                            {/* Edit button - only for songs */}
+                            {item.type === 'song' && item.song && (
+                              <button
+                                className="setlist-menu-item"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditingSong(item.song);
+                                  setSetlistMenuOpen(null);
+                                }}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                                {t('controlPanel.edit')}
+                              </button>
+                            )}
+                            {/* Divider - only show if edit button exists */}
+                            {item.type === 'song' && item.song && (
+                              <div className="setlist-menu-divider" />
+                            )}
+                            {/* Remove button */}
+                            <button
+                              className="setlist-menu-item danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeFromSetlist(item.id);
+                                setSetlistMenuOpen(null);
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                              </svg>
+                              {t('controlPanel.removeFromSetlist')}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
+                  {/* Expanded track list for audio playlists */}
+                  {item.type === 'audioPlaylist' && item.audioPlaylist && expandedPlaylistIds.has(item.id) && (
+                    <div
+                      data-playlist-expanded
+                      style={{
+                      marginLeft: '30px',
+                      borderLeft: '2px solid rgba(255, 152, 0, 0.3)',
+                      background: 'rgba(0,0,0,0.2)'
+                    }}>
+                      {item.audioPlaylist.tracks.map((track, trackIndex) => {
+                        const isCurrentTrack = activePlaylistId === item.id &&
+                          activePlaylistOrder[activePlaylistIndex] === trackIndex;
+                        return (
+                          <div
+                            key={trackIndex}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startPlaylist(item, trackIndex);
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              padding: '8px 12px',
+                              cursor: 'pointer',
+                              background: isCurrentTrack ? 'rgba(255, 152, 0, 0.2)' : 'transparent',
+                              borderBottom: '1px solid rgba(255,255,255,0.05)',
+                              borderLeft: isCurrentTrack ? '3px solid #FF9800' : '3px solid transparent',
+                              transition: 'background 0.15s'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isCurrentTrack) {
+                                e.currentTarget.style.background = 'rgba(255, 152, 0, 0.1)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isCurrentTrack) {
+                                e.currentTarget.style.background = 'transparent';
+                              }
+                            }}
+                          >
+                            {/* Track number */}
+                            <span style={{
+                              color: isCurrentTrack ? '#FF9800' : 'rgba(255,255,255,0.4)',
+                              fontSize: '0.7rem',
+                              minWidth: '24px',
+                              marginRight: '8px'
+                            }}>
+                              {trackIndex + 1}
+                            </span>
+                            {/* Music note icon */}
+                            <svg
+                              width="12"
+                              height="12"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke={isCurrentTrack ? '#FF9800' : 'rgba(255,255,255,0.5)'}
+                              strokeWidth="2"
+                              style={{ marginRight: '8px', flexShrink: 0 }}
+                            >
+                              <path d="M9 18V5l12-2v13" />
+                              <circle cx="6" cy="18" r="3" />
+                              <circle cx="18" cy="16" r="3" />
+                            </svg>
+                            {/* Track name */}
+                            <span style={{
+                              flex: 1,
+                              color: isCurrentTrack ? '#FF9800' : 'white',
+                              fontSize: '0.8rem',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              fontWeight: isCurrentTrack ? 600 : 400
+                            }}>
+                              {track.name}
+                            </span>
+                            {/* Playing indicator */}
+                            {isCurrentTrack && (
+                              <span style={{
+                                color: '#FF9800',
+                                fontSize: '0.65rem',
+                                fontWeight: 600,
+                                marginLeft: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}>
+                                <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" style={{ animation: 'pulse 1s ease-in-out infinite' }}>
+                                  <polygon points="5 3 19 12 5 21 5 3" />
+                                </svg>
+                                Playing
+                              </span>
+                            )}
+                            {/* Duration if available */}
+                            {track.duration && (
+                              <span style={{
+                                color: 'rgba(255,255,255,0.4)',
+                                fontSize: '0.7rem',
+                                marginLeft: '8px'
+                              }}>
+                                {Math.floor(track.duration / 60)}:{String(Math.floor(track.duration % 60)).padStart(2, '0')}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                    </React.Fragment>
                     );
                   })
                 })()
@@ -5524,8 +8231,24 @@ const ControlPanel: React.FC = () => {
             </div>
           </div>
 
-          {/* Right Column - Live Preview (50%) */}
-        <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', overflow: 'hidden' }}>
+          {/* Resize Handle - Setlist/Preview */}
+          <div
+            onMouseDown={(e) => startResize('setlist', e)}
+            className="resize-handle-vertical"
+            style={{
+              width: '12px',
+              cursor: 'col-resize',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}
+          >
+            <div style={{ width: '3px', height: '40px', background: isResizing === 'setlist' ? '#06b6d4' : 'rgba(255,255,255,0.15)', borderRadius: '2px', transition: 'background 0.15s, width 0.15s' }} />
+          </div>
+
+          {/* Right Column - Live Preview (remaining space) */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', overflow: 'hidden', minWidth: 0 }}>
           {/* Live Preview Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -5567,7 +8290,7 @@ const ControlPanel: React.FC = () => {
                 position: 'absolute',
                 top: '8px',
                 right: '10px',
-                background: activeMedia ? '#FF8C42' : (currentSlide || isBlank ? '#28a745' : (onlineConnected ? '#28a745' : '#6c757d')),
+                background: activeMedia ? '#06b6d4' : (youtubeOnDisplay || selectedYoutubeItemId) ? '#FF0000' : (selectedPresentation || currentSlide || isBlank) ? '#28a745' : (onlineConnected ? '#28a745' : '#6c757d'),
                 color: 'white',
                 fontSize: '10px',
                 fontWeight: 700,
@@ -5576,7 +8299,12 @@ const ControlPanel: React.FC = () => {
                 letterSpacing: '1px',
                 zIndex: 10
               }}>
-                {activeMedia ? 'MEDIA' : (currentSlide || isBlank ? 'PREVIEW' : (onlineConnected ? 'ONLINE' : 'NO CONTENT'))}
+                {activeMedia ? 'MEDIA' :
+                  youtubeOnDisplay ? 'YOUTUBE' :
+                  selectedYoutubeItemId ? 'YOUTUBE' :
+                  selectedPresentation ? 'PRESENTATION' :
+                  (currentSlide || isBlank) ? (currentContentType === 'song' ? 'SONG' : currentContentType === 'bible' ? 'BIBLE' : 'CONTENT') :
+                  onlineConnected ? 'ONLINE' : 'NO CONTENT'}
               </div>
 
               {/* YouTube display */}
@@ -5652,7 +8380,8 @@ const ControlPanel: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: '#000'
+                  backgroundColor: '#000',
+                  direction: 'ltr' // Always left-to-right for media controls
                 }}>
                   {activeMedia.type === 'image' ? (
                     <img
@@ -5677,11 +8406,16 @@ const ControlPanel: React.FC = () => {
                       controls
                       onTimeUpdate={(e) => {
                         const video = e.currentTarget;
-                        setVideoStatus(prev => ({
-                          ...prev,
-                          currentTime: video.currentTime,
-                          duration: video.duration || 0
-                        }));
+                        const now = Date.now();
+                        // Throttle state updates to reduce re-renders
+                        if (now - lastVideoTimeUpdateRef.current >= TIME_UPDATE_THROTTLE_MS) {
+                          lastVideoTimeUpdateRef.current = now;
+                          setVideoStatus(prev => ({
+                            ...prev,
+                            currentTime: video.currentTime,
+                            duration: video.duration || 0
+                          }));
+                        }
                       }}
                       onPlay={() => {
                         setVideoStatus(prev => ({ ...prev, isPlaying: true }));
@@ -5732,27 +8466,29 @@ const ControlPanel: React.FC = () => {
                 </div>
               ) : (
                 /* Local slide preview - renders slide content directly without screen capture */
+                /* Uses liveSlideData to only show what's actually being displayed, not staged content */
                 <SlidePreview
-                  slideData={
-                    currentContentType === 'prayer' ? currentPrayerSlideData :
-                    currentSlide ? {
-                      ...currentSlide,
-                      reference: currentContentType === 'bible' ? selectedSong?.title : undefined
-                    } : null
-                  }
+                  slideData={liveSlideData}
                   displayMode={displayMode}
                   isBlank={isBlank}
                   backgroundImage={selectedBackground}
-                  theme={currentContentType === 'bible' ? selectedBibleTheme : currentContentType === 'prayer' ? selectedPrayerTheme : selectedTheme}
-                  tools={{
-                    countdown: isCountdownActive ? { active: true, remaining: countdownRemaining, message: countdownMessage } : undefined,
-                    announcement: isAnnouncementActive ? { active: true, text: announcementText } : undefined,
-                    clock: isClockActive ? { active: true, time: formatClockTime(currentTime, clockFormat), date: clockShowDate ? formatClockDate(currentTime) : '' } : undefined,
-                    stopwatch: isStopwatchActive ? { active: true, time: formatStopwatchTime(stopwatchTime), running: isStopwatchRunning } : undefined
-                  }}
+                  theme={memoizedLivePreviewTheme}
+                  tools={memoizedTools}
                   activeMedia={null}
                   showBadge={false}
-                  presentationSlide={currentContentType === 'prayer' ? null : currentPresentationSlide}
+                  presentationSlide={memoizedPresentationSlide}
+                  combinedSlides={displayMode === 'original' && combinedSlidesData ? (() => {
+                    // Get the combined slide for the currently selected combined index
+                    const currentCombined = combinedSlidesData.combinedSlides[selectedCombinedIndex];
+                    if (!currentCombined || !('originalIndices' in currentCombined) || !Array.isArray(currentCombined.originalIndices) || currentCombined.originalIndices.length <= 1) {
+                      return undefined;
+                    }
+                    // Return the second line(s) from the combined slide
+                    return currentCombined.originalIndices.slice(1).map(idx => {
+                      const slide = selectedSong?.slides?.[idx];
+                      return slide ? { originalText: slide.originalText || '' } : null;
+                    }).filter((s): s is { originalText: string } => s !== null);
+                  })() : undefined}
                 />
               )}
             </div>
@@ -5762,8 +8498,25 @@ const ControlPanel: React.FC = () => {
         </div>
         </div>{/* End of Top Row */}
 
+        {/* Horizontal Resize Handle - Top/Bottom Rows */}
+        <div
+          onMouseDown={(e) => startResize('row', e)}
+          className="resize-handle-horizontal"
+          style={{
+            height: '12px',
+            cursor: 'row-resize',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}
+        >
+          <div style={{ width: '40px', height: '3px', background: isResizing === 'row' ? '#06b6d4' : 'rgba(255,255,255,0.15)', borderRadius: '2px', transition: 'background 0.15s, height 0.15s' }} />
+        </div>
+
         {/* Bottom Row - Slides Grid */}
         <div style={{
+          flex: 1,
           background: 'rgba(255,255,255,0.03)',
           borderRadius: '12px',
           padding: '12px',
@@ -5787,7 +8540,7 @@ const ControlPanel: React.FC = () => {
               <span style={{ color: 'white', fontWeight: 600, fontSize: '0.9rem', flexShrink: 0 }}>{t('controlPanel.slidePreview')}</span>
               {selectedSong && (
                 <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {selectedSong.title} — {selectedSong.slides.length} slides
+                  {selectedSong.title} — {selectedSong.slides?.length ?? 0} slides
                 </span>
               )}
             </div>
@@ -5891,21 +8644,10 @@ const ControlPanel: React.FC = () => {
                 onClick={() => {
                   const newMode = displayMode === 'bilingual' ? 'original' : 'bilingual';
                   setDisplayMode(newMode);
-                  if (selectedSong && currentSlideIndex >= 0) {
-                    // When switching to original mode, compute combined indices on the fly
-                    if (newMode === 'original') {
-                      const tempCombined = createCombinedSlides(selectedSong.slides);
-                      const combinedIdx = tempCombined.originalToCombined.get(currentSlideIndex);
-                      if (combinedIdx !== undefined) {
-                        const indices = tempCombined.combinedToOriginal.get(combinedIdx);
-                        sendCurrentSlide(selectedSong, currentSlideIndex, newMode, indices, currentContentType);
-                      } else {
-                        sendCurrentSlide(selectedSong, currentSlideIndex, newMode, undefined, currentContentType);
-                      }
-                    } else {
-                      sendCurrentSlide(selectedSong, currentSlideIndex, newMode, undefined, currentContentType);
-                    }
-                  }
+                  // Clear the screen when switching display modes
+                  setIsBlank(true);
+                  setLiveState({ slideData: null, contentType: null, songId: null, slideIndex: 0 });
+                  window.electronAPI.sendBlank();
                 }}
                 style={{
                   background: colors.button.info,
@@ -6000,11 +8742,11 @@ const ControlPanel: React.FC = () => {
                             borderRadius: '6px',
                             cursor: 'pointer',
                             border: selectedBackground === gradient.value
-                              ? '2px solid #FF8C42'
+                              ? '2px solid #06b6d4'
                               : '2px solid transparent',
                             transition: 'all 0.15s ease',
                             boxShadow: selectedBackground === gradient.value
-                              ? '0 0 8px rgba(255, 140, 66, 0.4)'
+                              ? '0 0 8px rgba(6, 182, 212, 0.4)'
                               : 'none'
                           }}
                         />
@@ -6027,138 +8769,21 @@ const ControlPanel: React.FC = () => {
               flex: 1,
               alignContent: 'start'
             }}>
-              {selectedPresentation.slides.map((slide, idx) => {
-                const isSelected = idx === currentPresentationSlideIndex;
-                return (
-                  <div
-                    key={slide.id}
-                    onClick={() => {
-                      setCurrentPresentationSlideIndex(idx);
-                      setIsBlank(false);
-                      // Send the slide to the display
-                      if (selectedPresentation.quickModeData?.type === 'prayer' || selectedPresentation.quickModeData?.type === 'sermon') {
-                        // Use prayer theme rendering
-                        sendPrayerPresentationSlide(selectedPresentation, idx, 'bilingual');
-                      } else {
-                        window.electronAPI.sendSlide({
-                          songId: selectedPresentation.id,
-                          slideIndex: idx,
-                          displayMode: 'bilingual',
-                          isBlank: false,
-                          songTitle: selectedPresentation.title,
-                          presentationSlide: slide
-                        });
-                      }
-                    }}
-                    style={{
-                      position: 'relative',
-                      border: isSelected ? '3px solid #00d4ff' : '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '6px',
-                      padding: '8px 10px',
-                      cursor: 'pointer',
-                      backgroundColor: slide.backgroundColor || (isSelected ? 'rgba(0, 212, 255, 0.2)' : 'rgba(0,0,0,0.3)'),
-                      boxShadow: isSelected ? '0 0 10px rgba(0, 212, 255, 0.5)' : 'none',
-                      minHeight: '80px',
-                      overflow: 'hidden'
-                    }}
-                  >
-                    {/* Slide header */}
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      color: isSelected ? '#00d4ff' : 'rgba(255,255,255,0.6)',
-                      fontWeight: 'bold',
-                      marginBottom: '6px',
-                      fontSize: '0.7rem'
-                    }}>
-                      {isSelected && <span>▶</span>}
-                      Slide {idx + 1}
-                    </div>
-                    {/* Mini preview of image and text boxes */}
-                    <div style={{
-                      position: 'relative',
-                      width: '100%',
-                      aspectRatio: '16 / 9',
-                      backgroundColor: slide.backgroundColor || '#000',
-                      borderRadius: '4px',
-                      overflow: 'hidden'
-                    }}>
-                      {/* Image boxes */}
-                      {slide.imageBoxes?.map((imageBox: any) => (
-                        <img
-                          key={imageBox.id}
-                          src={imageBox.src}
-                          alt=""
-                          style={{
-                            position: 'absolute',
-                            left: `${imageBox.x}%`,
-                            top: `${imageBox.y}%`,
-                            width: `${imageBox.width}%`,
-                            height: `${imageBox.height}%`,
-                            objectFit: imageBox.objectFit || 'contain',
-                            opacity: imageBox.opacity ?? 1,
-                            borderRadius: `${imageBox.borderRadius || 0}px`,
-                            zIndex: imageBox.zIndex ?? 0
-                          }}
-                        />
-                      ))}
-                      {/* Text boxes */}
-                      {slide.textBoxes.map((textBox: any) => (
-                        <div
-                          key={textBox.id}
-                          dir={textBox.textDirection || 'ltr'}
-                          style={{
-                            position: 'absolute',
-                            left: `${textBox.x}%`,
-                            top: `${textBox.y}%`,
-                            width: `${textBox.width}%`,
-                            height: `${textBox.height}%`,
-                            fontSize: '6px',
-                            color: textBox.color || '#fff',
-                            backgroundColor: textBox.backgroundColor || 'transparent',
-                            opacity: textBox.opacity ?? 1,
-                            fontWeight: textBox.bold ? '700' : '400',
-                            fontStyle: textBox.italic ? 'italic' : 'normal',
-                            display: 'flex',
-                            alignItems: textBox.verticalAlign === 'top' ? 'flex-start' : textBox.verticalAlign === 'bottom' ? 'flex-end' : 'center',
-                            justifyContent: textBox.textAlign === 'left' ? 'flex-start' : textBox.textAlign === 'right' ? 'flex-end' : 'center',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            padding: '1px',
-                            zIndex: textBox.zIndex ?? 0,
-                            direction: textBox.textDirection || 'ltr'
-                          }}
-                        >
-                          {textBox.text}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : selectedSong ? (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-              gap: '8px',
-              overflow: 'auto',
-              flex: 1,
-              alignContent: 'start'
-            }}>
-              {/* Combined slides view for original-only mode */}
-              {displayMode === 'original' && combinedSlidesData ? (
-                combinedSlidesData.combinedSlides.map((item, combinedIndex) => {
-                  const isSelected = selectedCombinedIndex === combinedIndex;
-                  const verseType = item.verseType || '';
-
-                  const bgColor = getVerseTypeColor(verseType);
+              {/* Wizard presentations (prayer/sermon) - show text lines like songs */}
+              {(selectedPresentation.quickModeData?.type === 'prayer' || selectedPresentation.quickModeData?.type === 'sermon') ? (
+                selectedPresentation.quickModeData.subtitles?.map((subtitle: any, idx: number) => {
+                  const isSelected = liveSongId === selectedPresentation.id && liveSlideIndex === idx;
                   return (
                     <div
-                      key={combinedIndex}
-                      onClick={() => selectCombinedSlide(combinedIndex)}
+                      key={idx}
+                      onClick={() => {
+                        setIsBlank(false);
+                        sendPrayerPresentationSlide(selectedPresentation, idx, displayMode);
+                        // Update staged state in transition (lower priority)
+                        startTransition(() => {
+                          setCurrentPresentationSlideIndex(idx);
+                        });
+                      }}
                       style={{
                         position: 'relative',
                         border: isSelected ? '3px solid #00d4ff' : '1px solid rgba(255,255,255,0.1)',
@@ -6166,9 +8791,7 @@ const ControlPanel: React.FC = () => {
                         padding: '8px 10px',
                         paddingLeft: isSelected ? '14px' : '10px',
                         cursor: 'pointer',
-                        backgroundColor: bgColor && bgColor !== 'transparent'
-                          ? (isSelected ? bgColor : `${bgColor}99`) // Full color when selected, 60% opacity otherwise
-                          : (isSelected ? 'rgba(0, 212, 255, 0.2)' : 'rgba(0,0,0,0.3)'),
+                        backgroundColor: isSelected ? 'rgba(0, 212, 255, 0.2)' : 'rgba(0,0,0,0.3)',
                         boxShadow: isSelected ? '0 0 12px rgba(0, 212, 255, 0.6)' : 'none'
                       }}
                     >
@@ -6195,35 +8818,48 @@ const ControlPanel: React.FC = () => {
                         fontSize: '0.75rem'
                       }}>
                         {isSelected && <span style={{ fontSize: '0.7rem' }}>▶</span>}
-                        {/* Show label like "Verse 1-2" or "3-4" */}
-                        {item.type === 'combined' ? (
-                          <span>
-                            {verseType ? `${verseType} ` : ''}{item.label}
-                            <span style={{ marginLeft: '4px', fontSize: '0.65rem', opacity: 0.7 }}>●●</span>
-                          </span>
-                        ) : (
-                          <span>{verseType ? `${verseType} ` : ''}{item.label}</span>
-                        )}
+                        <span>Point {idx + 1}</span>
                       </div>
-                      {/* Slide content */}
+                      {/* Slide content - show text lines like songs */}
                       <div style={{ fontSize: '0.85rem', lineHeight: '1.3', color: 'white' }}>
-                        {item.type === 'combined' && item.slides ? (
-                          <>
-                            <div style={{ marginBottom: '4px', textAlign: 'right', direction: 'rtl' }}>
-                              {item.slides[0].originalText}
-                            </div>
-                            <div style={{
-                              paddingTop: '4px',
-                              borderTop: '1px dashed rgba(255,255,255,0.3)',
-                              textAlign: 'right',
-                              direction: 'rtl'
-                            }}>
-                              {item.slides[1].originalText}
-                            </div>
-                          </>
-                        ) : (
+                        {/* Original/Hebrew text */}
+                        {subtitle.subtitle && (
                           <div style={{ textAlign: 'right', direction: 'rtl' }}>
-                            {item.slide?.originalText}
+                            {subtitle.subtitle}
+                          </div>
+                        )}
+                        {/* Description in Hebrew */}
+                        {subtitle.description && subtitle.description !== subtitle.subtitle && (
+                          <div style={{
+                            marginTop: '4px',
+                            paddingTop: '4px',
+                            borderTop: '1px dashed rgba(255,255,255,0.2)',
+                            color: 'rgba(255,255,255,0.6)',
+                            fontSize: '0.75rem',
+                            textAlign: 'right',
+                            direction: 'rtl'
+                          }}>
+                            {subtitle.description}
+                          </div>
+                        )}
+                        {/* Bible reference */}
+                        {(subtitle.bibleRef?.hebrewReference || subtitle.bibleRef?.reference) && (
+                          <div style={{
+                            marginTop: '6px',
+                            paddingTop: '4px',
+                            borderTop: '1px solid rgba(6,182,212,0.3)',
+                            color: '#06b6d4',
+                            fontSize: '0.7rem',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            gap: '8px'
+                          }}>
+                            {subtitle.bibleRef?.hebrewReference && (
+                              <span style={{ direction: 'rtl' }}>{subtitle.bibleRef.hebrewReference}</span>
+                            )}
+                            {subtitle.bibleRef?.reference && (
+                              <span style={{ direction: 'ltr', opacity: 0.8 }}>{subtitle.bibleRef.reference}</span>
+                            )}
                           </div>
                         )}
                       </div>
@@ -6231,24 +8867,104 @@ const ControlPanel: React.FC = () => {
                   );
                 })
               ) : (
-                /* Regular single-slide view for bilingual mode */
-                selectedSong.slides.map((slide, idx) => {
-                  const isSelected = idx === currentSlideIndex;
-                  const bgColor = getVerseTypeColor(slide.verseType);
+                /* Free-form presentations - show thumbnails */
+                <>
+                  {/* Auto-play controls - only show if more than 1 slide */}
+                  {selectedPresentation.slides.length > 1 && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 12px',
+                      marginBottom: '8px',
+                      backgroundColor: 'rgba(0,0,0,0.3)',
+                      borderRadius: '6px',
+                      border: autoPlayActive ? '1px solid #00d4ff' : '1px solid rgba(255,255,255,0.1)'
+                    }}>
+                      <button
+                        onClick={() => setAutoPlayActive(!autoPlayActive)}
+                        style={{
+                          padding: '6px 12px',
+                          backgroundColor: autoPlayActive ? '#00d4ff' : 'rgba(255,255,255,0.1)',
+                          color: autoPlayActive ? '#000' : '#fff',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '0.75rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        {autoPlayActive ? '⏸ Stop' : '▶ Auto'}
+                      </button>
+                      <select
+                        value={autoPlayInterval}
+                        onChange={(e) => setAutoPlayInterval(Number(e.target.value))}
+                        style={{
+                          padding: '5px 8px',
+                          backgroundColor: '#2a2a2a',
+                          color: '#fff',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          borderRadius: '4px',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <option value={2} style={{ backgroundColor: '#2a2a2a', color: '#fff' }}>2s</option>
+                        <option value={3} style={{ backgroundColor: '#2a2a2a', color: '#fff' }}>3s</option>
+                        <option value={5} style={{ backgroundColor: '#2a2a2a', color: '#fff' }}>5s</option>
+                        <option value={7} style={{ backgroundColor: '#2a2a2a', color: '#fff' }}>7s</option>
+                        <option value={10} style={{ backgroundColor: '#2a2a2a', color: '#fff' }}>10s</option>
+                        <option value={15} style={{ backgroundColor: '#2a2a2a', color: '#fff' }}>15s</option>
+                        <option value={20} style={{ backgroundColor: '#2a2a2a', color: '#fff' }}>20s</option>
+                        <option value={30} style={{ backgroundColor: '#2a2a2a', color: '#fff' }}>30s</option>
+                      </select>
+                      {autoPlayActive && (
+                        <span style={{
+                          color: '#00d4ff',
+                          fontSize: '0.7rem',
+                          marginLeft: 'auto'
+                        }}>
+                          {currentPresentationSlideIndex + 1}/{selectedPresentation.slides.length}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {selectedPresentation.slides.map((slide, idx) => {
+                  const isSelected = liveSongId === selectedPresentation.id && liveSlideIndex === idx;
                   return (
                     <div
-                      key={idx}
-                      onClick={() => goToSlide(idx)}
+                      key={slide.id}
+                      onClick={() => {
+                        // Update live state first for immediate preview update (atomic update)
+                        setLiveState({ slideData: slide, contentType: 'presentation', songId: selectedPresentation.id, slideIndex: idx });
+                        setIsBlank(false);
+                        // Update staged state in transition (lower priority)
+                        startTransition(() => {
+                          setCurrentPresentationSlideIndex(idx);
+                        });
+                        // Send to display
+                        window.electronAPI.sendSlide({
+                          songId: selectedPresentation.id,
+                          slideIndex: idx,
+                          displayMode: 'bilingual',
+                          isBlank: false,
+                          songTitle: selectedPresentation.title,
+                          presentationSlide: slide
+                        });
+                      }}
                       style={{
                         position: 'relative',
                         border: isSelected ? '3px solid #00d4ff' : '1px solid rgba(255,255,255,0.1)',
                         borderRadius: '6px',
                         padding: '8px 10px',
                         cursor: 'pointer',
-                        backgroundColor: bgColor && bgColor !== 'transparent'
-                          ? (isSelected ? bgColor : `${bgColor}99`) // Full color when selected, 60% opacity otherwise
-                          : (isSelected ? 'rgba(0, 212, 255, 0.2)' : 'rgba(0,0,0,0.3)'),
-                        boxShadow: isSelected ? '0 0 10px rgba(0, 212, 255, 0.5)' : 'none'
+                        backgroundColor: isSelected ? 'rgba(0, 212, 255, 0.2)' : 'rgba(0,0,0,0.3)',
+                        boxShadow: isSelected ? '0 0 10px rgba(0, 212, 255, 0.5)' : 'none',
+                        minHeight: '80px',
+                        overflow: 'hidden'
                       }}
                     >
                       {/* Slide header */}
@@ -6262,29 +8978,121 @@ const ControlPanel: React.FC = () => {
                         fontSize: '0.7rem'
                       }}>
                         {isSelected && <span>▶</span>}
-                        {slide.verseType || `Slide ${idx + 1}`}
+                        Slide {idx + 1}
                       </div>
-                      {/* Slide content - respects displayMode */}
-                      <div style={{ fontSize: '0.8rem', lineHeight: '1.4', color: 'white', textAlign: 'left' }}>
-                        {slide.originalText && (
-                          <div style={{ marginBottom: displayMode === 'bilingual' ? '3px' : 0, fontWeight: 500 }}>
-                            {slide.originalText}
+                      {/* Mini preview of image and text boxes */}
+                      <div style={{
+                        position: 'relative',
+                        width: '100%',
+                        aspectRatio: '16 / 9',
+                        background: slide.backgroundType === 'gradient' && slide.backgroundGradient
+                          ? slide.backgroundGradient
+                          : slide.backgroundType === 'transparent'
+                          ? 'repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%) 50% / 16px 16px'
+                          : slide.backgroundColor || '#000',
+                        borderRadius: '4px',
+                        overflow: 'hidden'
+                      }}>
+                        {/* Image boxes */}
+                        {slide.imageBoxes?.map((imageBox: any) => (
+                          <img
+                            key={imageBox.id}
+                            src={imageBox.src}
+                            alt=""
+                            style={{
+                              position: 'absolute',
+                              left: `${imageBox.x}%`,
+                              top: `${imageBox.y}%`,
+                              width: `${imageBox.width}%`,
+                              height: `${imageBox.height}%`,
+                              objectFit: imageBox.objectFit || 'contain',
+                              opacity: imageBox.opacity ?? 1,
+                              borderRadius: `${imageBox.borderRadius || 0}px`,
+                              zIndex: imageBox.zIndex ?? 0
+                            }}
+                          />
+                        ))}
+                        {/* Text boxes */}
+                        {slide.textBoxes.map((textBox: any) => (
+                          <div
+                            key={textBox.id}
+                            style={{
+                              position: 'absolute',
+                              left: `${textBox.x}%`,
+                              top: `${textBox.y}%`,
+                              width: `${textBox.width}%`,
+                              height: `${textBox.height}%`,
+                              backgroundColor: textBox.backgroundColor || 'transparent',
+                              display: 'flex',
+                              alignItems: textBox.verticalAlign === 'top' ? 'flex-start' : textBox.verticalAlign === 'bottom' ? 'flex-end' : 'center',
+                              overflow: 'hidden',
+                              padding: '1px',
+                              zIndex: textBox.zIndex ?? 0
+                            }}
+                          >
+                            <span
+                              dir={textBox.textDirection || 'ltr'}
+                              style={{
+                                width: '100%',
+                                fontSize: '6px',
+                                color: textBox.color || '#fff',
+                                opacity: textBox.opacity ?? 1,
+                                fontWeight: textBox.bold ? '700' : '400',
+                                fontStyle: textBox.italic ? 'italic' : 'normal',
+                                textAlign: textBox.textAlign,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                direction: textBox.textDirection || 'ltr'
+                              }}
+                            >
+                              {textBox.text}
+                            </span>
                           </div>
-                        )}
-                        {displayMode === 'bilingual' && slide.transliteration && (
-                          <div style={{ marginBottom: '3px', color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', fontStyle: 'italic' }}>
-                            {slide.transliteration}
-                          </div>
-                        )}
-                        {displayMode === 'bilingual' && slide.translation && (
-                          <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem' }}>
-                            {slide.translation}
-                          </div>
-                        )}
+                        ))}
                       </div>
                     </div>
                   );
-                })
+                })}
+                </>
+              )}
+            </div>
+          ) : selectedSong ? (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+              gap: '8px',
+              overflow: 'auto',
+              flex: 1,
+              alignContent: 'start'
+            }}>
+              {/* Combined slides view for original-only mode */}
+              {/* Only show a slide as selected if it's on air and matches the current song */}
+              {displayMode === 'original' && combinedSlidesData ? (
+                combinedSlidesData.combinedSlides.map((item, combinedIndex) => (
+                  <CombinedSlideGridItem
+                    key={combinedIndex}
+                    item={item}
+                    combinedIndex={combinedIndex}
+                    isSelected={selectedCombinedIndex === combinedIndex && !isBlank && liveSongId === selectedSong?.id}
+                    bgColor={getVerseTypeColor(item.verseType || '')}
+                    onSelect={selectCombinedSlide}
+                  />
+                ))
+              ) : (
+                /* Regular single-slide view for bilingual mode - using memoized SlideGridItem */
+                /* Only show a slide as selected if it's on air and matches the current song */
+                selectedSong.slides.map((slide, idx) => (
+                  <SlideGridItem
+                    key={idx}
+                    slide={slide}
+                    index={idx}
+                    isSelected={idx === currentSlideIndex && !isBlank && liveSongId === selectedSong.id}
+                    displayMode={displayMode}
+                    bgColor={getVerseTypeColor(slide.verseType)}
+                    onSelect={goToSlide}
+                  />
+                ))
               )}
             </div>
           ) : (
@@ -6310,26 +9118,34 @@ const ControlPanel: React.FC = () => {
             <h3 style={{ color: 'white', marginBottom: '16px' }}>{t('controlPanel.addSection')}</h3>
             {/* Quick section buttons */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
-              {['Worship', 'Sermon', 'Prayer', 'Announcements', 'Reading', 'Offering', 'Closing'].map((section) => (
+              {[
+                { key: 'Worship', label: t('controlPanel.sectionWorship') },
+                { key: 'Sermon', label: t('controlPanel.sectionSermon') },
+                { key: 'Prayer', label: t('controlPanel.sectionPrayer') },
+                { key: 'Announcements', label: t('controlPanel.sectionAnnouncements') },
+                { key: 'Reading', label: t('controlPanel.sectionReading') },
+                { key: 'Offering', label: t('controlPanel.sectionOffering') },
+                { key: 'Closing', label: t('controlPanel.sectionClosing') }
+              ].map((section) => (
                 <button
-                  key={section}
+                  key={section.key}
                   onClick={() => {
                     if (sectionTitleRef.current) {
-                      sectionTitleRef.current.value = section;
+                      sectionTitleRef.current.value = section.label;
                       sectionTitleRef.current.focus();
                     }
                   }}
                   style={{
-                    background: 'rgba(255,140,66,0.2)',
-                    border: '1px solid rgba(255,140,66,0.4)',
+                    background: 'rgba(6,182,212,0.2)',
+                    border: '1px solid rgba(6,182,212,0.4)',
                     borderRadius: '6px',
                     padding: '6px 12px',
-                    color: '#FF8C42',
+                    color: '#06b6d4',
                     cursor: 'pointer',
                     fontSize: '0.85rem'
                   }}
                 >
-                  {section}
+                  {section.label}
                 </button>
               ))}
             </div>
@@ -6347,7 +9163,7 @@ const ControlPanel: React.FC = () => {
             />
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
               <button onClick={() => setShowSectionModal(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', padding: '10px 20px', color: 'white', cursor: 'pointer' }}>{t('common.cancel')}</button>
-              <button onClick={confirmAddSection} style={{ background: '#FF8C42', border: 'none', borderRadius: '8px', padding: '10px 20px', color: 'white', cursor: 'pointer' }}>{t('common.add')}</button>
+              <button onClick={confirmAddSection} style={{ background: '#06b6d4', border: 'none', borderRadius: '8px', padding: '10px 20px', color: 'white', cursor: 'pointer' }}>{t('common.add')}</button>
             </div>
           </div>
         </div>
@@ -6390,7 +9206,7 @@ const ControlPanel: React.FC = () => {
             {savedSetlists.length === 0 ? (
               <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>{t('controlPanel.noSavedSetlists')}</p>
             ) : (
-              savedSetlists.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map((saved) => {
+              savedSetlists.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).map((saved) => {
                 const dateStr = saved.createdAt
                   ? new Date(saved.createdAt).toLocaleDateString()
                   : saved.updatedAt
@@ -6641,7 +9457,7 @@ const ControlPanel: React.FC = () => {
                   navigate('/prayer-theme-editor');
                 }}
                 style={{
-                  background: 'linear-gradient(135deg, #FF8C42, #E65100)',
+                  background: 'linear-gradient(135deg, #06b6d4, #0891b2)',
                   border: 'none',
                   borderRadius: '12px',
                   padding: '16px 20px',
@@ -6654,7 +9470,7 @@ const ControlPanel: React.FC = () => {
                   minWidth: '120px',
                   transition: 'transform 0.2s, box-shadow 0.2s'
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(255, 140, 66, 0.4)'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(6, 182, 212, 0.4)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
               >
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -6726,6 +9542,34 @@ const ControlPanel: React.FC = () => {
                     <path d="M8 12h8M12 8v8" />
                   </svg>
                   <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>{t('controlPanel.obsBible', 'OBS Bible')}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowNewThemeModal(false);
+                    navigate('/obs-prayer-theme-editor');
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, #06b6d4, #0891b2)',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '14px 18px',
+                    color: 'white',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    minWidth: '110px',
+                    transition: 'transform 0.2s, box-shadow 0.2s'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(6, 182, 212, 0.4)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 6v6M12 14v.01" />
+                  </svg>
+                  <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>{t('controlPanel.obsPrayer', 'OBS Prayer')}</span>
                 </button>
               </div>
             </div>
@@ -6799,7 +9643,7 @@ const ControlPanel: React.FC = () => {
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-                  e.currentTarget.style.borderColor = 'rgba(255,140,66,0.5)';
+                  e.currentTarget.style.borderColor = 'rgba(6,182,212,0.5)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
@@ -6832,7 +9676,7 @@ const ControlPanel: React.FC = () => {
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-                  e.currentTarget.style.borderColor = 'rgba(255,140,66,0.5)';
+                  e.currentTarget.style.borderColor = 'rgba(6,182,212,0.5)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
@@ -6865,7 +9709,7 @@ const ControlPanel: React.FC = () => {
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-                  e.currentTarget.style.borderColor = 'rgba(255,140,66,0.5)';
+                  e.currentTarget.style.borderColor = 'rgba(6,182,212,0.5)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
@@ -6898,7 +9742,7 @@ const ControlPanel: React.FC = () => {
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-                  e.currentTarget.style.borderColor = 'rgba(255,140,66,0.5)';
+                  e.currentTarget.style.borderColor = 'rgba(6,182,212,0.5)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
@@ -7223,7 +10067,7 @@ const ControlPanel: React.FC = () => {
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                             <span style={{ color: '#00d4ff', fontSize: '0.8rem', fontWeight: 600, direction: item.bibleRef.useHebrew ? 'rtl' : 'ltr' }}>
-                              📖 {item.bibleRef.useHebrew ? (item.bibleRef.hebrewReference || item.bibleRef.reference) : item.bibleRef.reference}
+                              {'\u{1F4D6}'} {item.bibleRef.useHebrew ? (item.bibleRef.hebrewReference || item.bibleRef.reference) : item.bibleRef.reference}
                             </span>
                             <button
                               onClick={() => removeBibleRefFromSubtitle(index)}
@@ -7579,43 +10423,142 @@ const ControlPanel: React.FC = () => {
                     Back
                   </button>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       // Filter out empty subtitles
                       const validSubtitles = quickModeSubtitles.filter(s => s.subtitle.trim());
                       if (validSubtitles.length === 0 || !quickModeType || !quickModeTitle.trim()) return;
 
-                      // Generate presentation name
-                      const typeLabel = quickModeType === 'sermon' ? 'Sermon' : quickModeType === 'prayer' ? 'Prayer' : 'Announcements';
-                      const presentationName = `${typeLabel}: ${quickModeTitle}`;
+                      // Set creating state
+                      setQuickModeCreating(true);
 
-                      setShowQuickModeWizard(false);
-                      navigate('/presentation-editor', {
-                        state: {
-                          template: 'quickMode',
-                          quickModeData: {
-                            type: quickModeType,
-                            title: quickModeTitle.trim(),
-                            subtitles: validSubtitles,
-                            name: presentationName,
-                            generateTranslation: quickModeGenerateTranslation
+                      try {
+                        // Generate presentation name with translated label
+                        const typeLabel = quickModeType === 'sermon' ? t('quickMode.sermonLabel') : quickModeType === 'prayer' ? t('quickMode.prayerLabel') : t('quickMode.announcementsLabel');
+                        const presentationName = `${typeLabel}: ${quickModeTitle}`;
+
+                        // Prepare subtitles with translations if needed
+                        let translatedSubtitles = validSubtitles.map(s => ({
+                          subtitle: s.subtitle,
+                          subtitleTranslation: s.subtitleTranslation,
+                          description: s.description,
+                          descriptionTranslation: s.descriptionTranslation,
+                          bibleRef: s.bibleRef
+                        }));
+                        let titleTranslation: string | undefined;
+
+                        // Generate translations if enabled
+                        let translationFailures = 0;
+                        if (quickModeGenerateTranslation) {
+                          // Translate title if Hebrew
+                          if (containsHebrew(quickModeTitle.trim())) {
+                            try {
+                              const translation = await window.electronAPI.translate(quickModeTitle.trim());
+                              if (translation && translation !== quickModeTitle.trim()) {
+                                titleTranslation = translation;
+                              }
+                            } catch (err) {
+                              console.error('Failed to translate title:', err);
+                              translationFailures++;
+                            }
+                          }
+
+                          // Translate each subtitle and description if Hebrew
+                          translatedSubtitles = await Promise.all(
+                            validSubtitles.map(async (item) => {
+                              let subtitleTranslation: string | undefined = item.subtitleTranslation;
+                              let descriptionTranslation: string | undefined = item.descriptionTranslation;
+
+                              if (containsHebrew(item.subtitle) && !item.subtitleTranslation) {
+                                try {
+                                  const translation = await window.electronAPI.translate(item.subtitle);
+                                  if (translation && translation !== item.subtitle) {
+                                    subtitleTranslation = translation;
+                                  }
+                                } catch (err) {
+                                  console.error('Failed to translate subtitle:', err);
+                                  translationFailures++;
+                                }
+                              }
+
+                              if (item.description && containsHebrew(item.description) && !item.descriptionTranslation) {
+                                try {
+                                  const translation = await window.electronAPI.translate(item.description);
+                                  if (translation && translation !== item.description) {
+                                    descriptionTranslation = translation;
+                                  }
+                                } catch (err) {
+                                  console.error('Failed to translate description:', err);
+                                  translationFailures++;
+                                }
+                              }
+
+                              return {
+                                subtitle: item.subtitle,
+                                subtitleTranslation,
+                                description: item.description,
+                                descriptionTranslation,
+                                bibleRef: item.bibleRef
+                              };
+                            })
+                          );
+
+                          // Notify user if some translations failed
+                          if (translationFailures > 0) {
+                            alert(`${translationFailures} translation(s) failed. The presentation was created with placeholder text where translations could not be generated.`);
                           }
                         }
-                      });
+
+                        // Build Quick Mode data with translations
+                        const quickModeData: QuickModeDataForSlides = {
+                          type: quickModeType,
+                          title: quickModeTitle.trim(),
+                          titleTranslation,
+                          subtitles: translatedSubtitles,
+                          generateTranslation: quickModeGenerateTranslation
+                        };
+
+                        // Create slides
+                        const slides = createQuickModeSlides(quickModeData);
+
+                        // Save presentation directly to database
+                        const presentationData = {
+                          title: presentationName,
+                          slides: slides,
+                          canvasDimensions: { width: 1920, height: 1080 },
+                          quickModeData: {
+                            type: quickModeData.type,
+                            title: quickModeData.title,
+                            titleTranslation: quickModeData.titleTranslation,
+                            generateTranslation: quickModeGenerateTranslation,
+                            subtitles: translatedSubtitles
+                          }
+                        };
+
+                        await window.electronAPI.createPresentation(presentationData);
+
+                        // Close modal and reset wizard (reset state first to prevent stuck button)
+                        setQuickModeCreating(false);
+                        resetQuickModeWizard();
+
+                      } catch (error) {
+                        console.error('Failed to create presentation:', error);
+                        setQuickModeCreating(false);
+                      }
                     }}
-                    disabled={!quickModeSubtitles.some(s => s.subtitle.trim())}
+                    disabled={!quickModeSubtitles.some(s => s.subtitle.trim()) || quickModeCreating}
                     style={{
                       flex: 1,
                       padding: '12px',
-                      background: quickModeSubtitles.some(s => s.subtitle.trim()) ? '#00d4ff' : 'rgba(0,212,255,0.3)',
+                      background: (!quickModeSubtitles.some(s => s.subtitle.trim()) || quickModeCreating) ? 'rgba(0,212,255,0.3)' : '#00d4ff',
                       border: 'none',
                       borderRadius: '8px',
-                      color: quickModeSubtitles.some(s => s.subtitle.trim()) ? 'black' : 'rgba(0,0,0,0.5)',
-                      cursor: quickModeSubtitles.some(s => s.subtitle.trim()) ? 'pointer' : 'not-allowed',
+                      color: (!quickModeSubtitles.some(s => s.subtitle.trim()) || quickModeCreating) ? 'rgba(0,0,0,0.5)' : 'black',
+                      cursor: (!quickModeSubtitles.some(s => s.subtitle.trim()) || quickModeCreating) ? 'not-allowed' : 'pointer',
                       fontSize: '0.9rem',
                       fontWeight: 600
                     }}
                   >
-                    Create Presentation ({quickModeSubtitles.filter(s => s.subtitle.trim()).length} slides)
+                    {quickModeCreating ? 'Creating...' : `Create Presentation (${quickModeSubtitles.filter(s => s.subtitle.trim()).length} slides)`}
                   </button>
                 </div>
               </>
@@ -8301,6 +11244,132 @@ const ControlPanel: React.FC = () => {
         </div>
       )}
 
+      {/* Prayer/Sermon Express Editor Modal */}
+      {showPrayerEditor && editingPrayerPresentation && (
+        <div
+          onClick={closePrayerEditor}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(135deg, rgba(30,30,50,0.98), rgba(20,20,40,0.98))',
+              borderRadius: '16px',
+              padding: '24px',
+              width: '650px',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              border: '1px solid rgba(6,182,212,0.3)',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <h3 style={{ color: 'white', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>⚡</span> Edit {editingPrayerPresentation.quickModeData?.type === 'sermon' ? 'Sermon' : 'Prayer'} Points
+              </h3>
+              <button
+                onClick={closePrayerEditor}
+                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '6px', padding: '4px 8px', color: 'white', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Title display */}
+            <div style={{
+              padding: '12px',
+              background: 'rgba(6,182,212,0.1)',
+              borderRadius: '8px',
+              marginBottom: '12px',
+              border: '1px solid rgba(6,182,212,0.3)'
+            }}>
+              <div style={{ color: '#06b6d4', fontSize: '0.85rem', fontWeight: 600 }}>
+                {editingPrayerPresentation.title}
+              </div>
+            </div>
+
+            {/* Instructions */}
+            <div style={{
+              padding: '12px',
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: '8px',
+              marginBottom: '12px',
+              border: '1px solid rgba(255,255,255,0.1)'
+            }}>
+              <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.8rem', fontWeight: 600, marginBottom: '6px' }}>Express Mode Instructions</div>
+              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', lineHeight: 1.5 }}>
+                • Separate points with a blank line<br/>
+                • Hebrew/original text (main line)<br/>
+                • ~English translation (prefix with ~)<br/>
+                • --- then description text<br/>
+                • @hebrewRef | englishRef for Bible reference
+              </div>
+            </div>
+
+            {/* Text area */}
+            <textarea
+              value={prayerExpressText}
+              onChange={(e) => setPrayerExpressText(e.target.value)}
+              placeholder={"נקודה ראשונה בעברית\n~First point in English\n---\nתיאור נוסף\n@ישעיהו מ:לא | Isaiah 40:31\n\nנקודה שנייה\n~Second point\n---\nתיאור\n@תהילים כג:א | Psalm 23:1"}
+              style={{
+                flex: 1,
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '8px',
+                padding: '12px',
+                color: 'white',
+                fontSize: '0.95rem',
+                fontFamily: 'monospace',
+                resize: 'none',
+                direction: 'rtl',
+                minHeight: '250px'
+              }}
+            />
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <button
+                onClick={closePrayerEditor}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  padding: '10px 20px',
+                  color: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={savePrayerPresentation}
+                style={{
+                  background: 'linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '10px 24px',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontWeight: 600
+                }}
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Unsaved Changes Warning Modal */}
       {showUnsavedWarning && (
         <div
@@ -8524,11 +11593,18 @@ const ControlPanel: React.FC = () => {
             const audio = e.currentTarget;
             const duration = audio.duration || 0;
             const currentTime = audio.currentTime;
-            setAudioStatus(prev => ({
-              ...prev,
-              currentTime,
-              duration
-            }));
+
+            // Throttle state updates to reduce re-renders (but always check for end fade)
+            const now = Date.now();
+            if (now - lastAudioTimeUpdateRef.current >= TIME_UPDATE_THROTTLE_MS) {
+              lastAudioTimeUpdateRef.current = now;
+              setAudioStatus(prev => ({
+                ...prev,
+                currentTime,
+                duration
+              }));
+            }
+
             // Fade out when approaching end (last 0.5 seconds) - only trigger once
             if (duration > 0 && currentTime >= duration - 0.5 && !audioEndFadingRef.current) {
               audioEndFadingRef.current = true;
@@ -8537,7 +11613,39 @@ const ControlPanel: React.FC = () => {
                   audioRef.current.pause();
                   audioRef.current.currentTime = 0;
                 }
+
+                // Check if there's a playlist playing - play next track
+                if (activePlaylistId) {
+                  const playedNext = playNextPlaylistTrack();
+                  if (playedNext) {
+                    audioEndFadingRef.current = false;
+                    return; // Continue playlist playback
+                  }
+                  // Playlist finished, clear playlist state
+                  setActivePlaylistId(null);
+                  setActivePlaylistIndex(0);
+                  setActivePlaylistOrder([]);
+                }
+
+                // Check if there's a next audio item in the setlist to auto-play
+                if (activeAudioSetlistId) {
+                  const currentIndex = setlist.findIndex(item => item.id === activeAudioSetlistId);
+                  if (currentIndex !== -1 && currentIndex < setlist.length - 1) {
+                    const nextItem = setlist[currentIndex + 1];
+                    // Auto-play if next item is also an audio file
+                    if (nextItem.type === 'media' && nextItem.mediaType === 'audio' && nextItem.mediaPath) {
+                      // Play next audio
+                      handlePlayAudio(nextItem.mediaPath, nextItem.mediaName || nextItem.title || 'Audio');
+                      setActiveAudioSetlistId(nextItem.id);
+                      audioEndFadingRef.current = false;
+                      return; // Don't clear audio state, we're continuing playback
+                    }
+                  }
+                }
+
+                // No next audio item, stop playback
                 setActiveAudio(null);
+                setActiveAudioSetlistId(null);
                 setAudioStatus({ currentTime: 0, duration: 0, isPlaying: false });
                 audioEndFadingRef.current = false;
               });
@@ -8549,162 +11657,502 @@ const ControlPanel: React.FC = () => {
         />
       )}
 
-      {/* Audio player bar - shown when audio is playing */}
+      {/* Audio player bar - memoized component */}
       {activeAudio && (
-        <div style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '48px',
-          background: 'linear-gradient(to right, rgba(156, 39, 176, 0.95), rgba(103, 58, 183, 0.95))',
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 16px',
-          gap: '12px',
-          boxShadow: '0 -2px 10px rgba(0,0,0,0.3)',
-          zIndex: 1000
-        }}>
-          {/* Music icon */}
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-            <path d="M9 18V5l12-2v13" />
-            <circle cx="6" cy="18" r="3" />
-            <circle cx="18" cy="16" r="3" />
-          </svg>
+        <AudioPlayerBar
+          name={activeAudio.name}
+          isPlaying={audioStatus.isPlaying}
+          currentTime={audioStatus.currentTime}
+          duration={audioStatus.duration}
+          volume={audioTargetVolume}
+          onPlayPause={handleAudioPlayPause}
+          onSeek={handleAudioSeek}
+          onVolumeChange={handleAudioVolumeChange}
+          onStop={handleClearAudio}
+        />
+      )}
 
-          {/* Song name */}
-          <span style={{
-            color: 'white',
-            fontSize: '13px',
-            fontWeight: 500,
-            flex: '0 0 auto',
-            maxWidth: '200px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap'
-          }}>
-            {activeAudio.name}
-          </span>
-
-          {/* Play/Pause button */}
-          <button
-            onClick={() => {
-              if (audioRef.current) {
-                if (audioStatus.isPlaying) {
-                  // Fade out then pause
-                  fadeOutAudio(() => {
-                    if (audioRef.current) {
-                      audioRef.current.pause();
-                    }
-                  });
-                } else {
-                  // Fade in and play
-                  fadeInAudio();
-                }
-              }
-            }}
+      {/* Edit Playlist Modal */}
+      {editingPlaylistItemId && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000
+          }}
+          onClick={closeEditPlaylistModal}
+        >
+          <div
             style={{
-              padding: '6px',
-              background: 'rgba(255,255,255,0.2)',
-              border: 'none',
-              borderRadius: '50%',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
+              background: 'rgba(30, 30, 35, 0.98)',
+              border: '1px solid rgba(255, 152, 0, 0.3)',
+              borderRadius: '12px',
+              padding: '16px',
+              minWidth: '400px',
+              maxWidth: '500px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
             }}
+            onClick={(e) => e.stopPropagation()}
           >
-            {audioStatus.isPlaying ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-                <rect x="6" y="4" width="4" height="16" />
-                <rect x="14" y="4" width="4" height="16" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF9800" strokeWidth="2">
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
               </svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-                <polygon points="5,3 19,12 5,21" />
-              </svg>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: 'white' }}>
+                Edit Audio Playlist
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', fontSize: '11px', color: 'rgba(255,255,255,0.6)', marginBottom: '4px' }}>
+                Playlist Name
+              </label>
+              <input
+                type="text"
+                value={editingPlaylistName}
+                onChange={(e) => setEditingPlaylistName(e.target.value)}
+                placeholder="Playlist name"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  background: 'rgba(0,0,0,0.3)',
+                  border: '1px solid rgba(255, 152, 0, 0.4)',
+                  borderRadius: '6px',
+                  color: 'white',
+                  fontSize: '12px',
+                  outline: 'none'
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                color: 'rgba(255,255,255,0.8)'
+              }}>
+                <div style={{
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '4px',
+                  border: editingPlaylistShuffle ? '2px solid #FF9800' : '2px solid rgba(255,255,255,0.3)',
+                  background: editingPlaylistShuffle ? 'rgba(255, 152, 0, 0.3)' : 'transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.15s ease'
+                }}
+                  onClick={() => setEditingPlaylistShuffle(!editingPlaylistShuffle)}
+                >
+                  {editingPlaylistShuffle && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FF9800" strokeWidth="3">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </div>
+                <span onClick={() => setEditingPlaylistShuffle(!editingPlaylistShuffle)}>
+                  Shuffle playback order
+                </span>
+              </label>
+            </div>
+
+            {/* Track List with Reordering */}
+            <div style={{
+              maxHeight: '300px',
+              overflowY: 'auto',
+              marginBottom: '12px',
+              background: 'rgba(0,0,0,0.2)',
+              borderRadius: '6px',
+              padding: '4px'
+            }}>
+              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', padding: '4px 8px', marginBottom: '4px' }}>
+                Drag to reorder tracks ({editingPlaylistTracks.length} tracks)
+              </div>
+              {editingPlaylistTracks.map((track, index) => (
+                <div
+                  key={`${track.path}-${index}`}
+                  draggable
+                  onDragStart={() => handleEditPlaylistTrackDragStart(index)}
+                  onDragOver={(e) => handleEditPlaylistTrackDragOver(e, index)}
+                  onDragEnd={handleEditPlaylistTrackDragEnd}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '6px 8px',
+                    background: editPlaylistDraggedIndex === index
+                      ? 'rgba(255, 152, 0, 0.3)'
+                      : editPlaylistDropTargetIndex === index
+                        ? 'rgba(255, 152, 0, 0.15)'
+                        : 'transparent',
+                    borderRadius: '4px',
+                    cursor: 'grab',
+                    borderTop: editPlaylistDropTargetIndex === index && editPlaylistDraggedIndex !== null && editPlaylistDraggedIndex > index
+                      ? '2px solid #FF9800'
+                      : 'none',
+                    borderBottom: editPlaylistDropTargetIndex === index && editPlaylistDraggedIndex !== null && editPlaylistDraggedIndex < index
+                      ? '2px solid #FF9800'
+                      : 'none',
+                    transition: 'background 0.15s ease'
+                  }}
+                >
+                  {/* Drag handle */}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2">
+                    <line x1="8" y1="6" x2="16" y2="6" />
+                    <line x1="8" y1="12" x2="16" y2="12" />
+                    <line x1="8" y1="18" x2="16" y2="18" />
+                  </svg>
+                  {/* Track number */}
+                  <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', width: '16px', textAlign: 'center' }}>
+                    {index + 1}
+                  </span>
+                  {/* Track name */}
+                  <span style={{
+                    flex: 1,
+                    fontSize: '11px',
+                    color: 'white',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {track.name}
+                  </span>
+                  {/* Duration */}
+                  {track.duration && (
+                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>
+                      {Math.floor(track.duration / 60)}:{String(Math.floor(track.duration % 60)).padStart(2, '0')}
+                    </span>
+                  )}
+                  {/* Remove button */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeEditPlaylistTrack(index); }}
+                    style={{
+                      padding: '2px',
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: '3px',
+                      color: 'rgba(255,255,255,0.4)',
+                      cursor: 'pointer'
+                    }}
+                    title="Remove from playlist"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+              {editingPlaylistTracks.length === 0 && (
+                <div style={{ padding: '16px', textAlign: 'center', fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
+                  No tracks in playlist
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'space-between' }}>
+              <button
+                onClick={saveEditedPlaylistToDatabase}
+                disabled={editingPlaylistTracks.length === 0}
+                style={{
+                  padding: '8px 12px',
+                  background: editingPlaylistTracks.length === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(102, 126, 234, 0.2)',
+                  border: editingPlaylistTracks.length === 0 ? 'none' : '1px solid rgba(102, 126, 234, 0.4)',
+                  borderRadius: '6px',
+                  color: editingPlaylistTracks.length === 0 ? 'rgba(255,255,255,0.3)' : '#667eea',
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  cursor: editingPlaylistTracks.length === 0 ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="Save as new playlist"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
+                  <polyline points="17 21 17 13 7 13 7 21" />
+                  <polyline points="7 3 7 8 15 8" />
+                </svg>
+                Save as New
+              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={closeEditPlaylistModal}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'rgba(255,255,255,0.1)',
+                    border: 'none',
+                    borderRadius: '6px',
+                    color: 'rgba(255,255,255,0.7)',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveEditedPlaylist}
+                  disabled={editingPlaylistTracks.length === 0}
+                  style={{
+                    padding: '8px 16px',
+                    background: editingPlaylistTracks.length === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(255, 152, 0, 0.3)',
+                    border: editingPlaylistTracks.length === 0 ? 'none' : '1px solid rgba(255, 152, 0, 0.5)',
+                    borderRadius: '6px',
+                    color: editingPlaylistTracks.length === 0 ? 'rgba(255,255,255,0.3)' : '#FF9800',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: editingPlaylistTracks.length === 0 ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Setlist Item Context Menu */}
+      {setlistContextMenu && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 2000
+          }}
+          onClick={() => setSetlistContextMenu(null)}
+        >
+          <div
+            style={{
+              position: 'fixed',
+              top: setlistContextMenu.y,
+              left: setlistContextMenu.x,
+              background: 'rgba(30, 30, 35, 0.98)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: '8px',
+              padding: '4px',
+              minWidth: '160px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+              zIndex: 2001
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Edit option - shown for songs only (not bible) */}
+            {setlistContextMenu.item.type === 'song' && setlistContextMenu.item.song && (
+              <button
+                onClick={() => {
+                  startEditingSong(setlistContextMenu.item.song!);
+                  setSetlistContextMenu(null);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: '4px',
+                  color: 'rgba(255,255,255,0.8)',
+                  fontSize: '11px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(6,182,212,0.2)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                Edit Song
+              </button>
             )}
-          </button>
 
-          {/* Progress bar */}
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '11px', minWidth: '40px' }}>
-              {Math.floor(audioStatus.currentTime / 60)}:{String(Math.floor(audioStatus.currentTime % 60)).padStart(2, '0')}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={audioStatus.duration || 100}
-              value={audioStatus.currentTime}
-              onChange={(e) => {
-                if (audioRef.current) {
-                  audioRef.current.currentTime = parseFloat(e.target.value);
-                }
+            {/* Edit presentation - prayer/sermon type */}
+            {setlistContextMenu.item.type === 'presentation' && setlistContextMenu.item.presentation?.quickModeData &&
+             (setlistContextMenu.item.presentation.quickModeData.type === 'prayer' || setlistContextMenu.item.presentation.quickModeData.type === 'sermon') && (
+              <button
+                onClick={() => {
+                  setEditingPrayerPresentation(setlistContextMenu.item.presentation!);
+                  setShowPrayerEditor(true);
+                  setSetlistContextMenu(null);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: '4px',
+                  color: 'rgba(255,255,255,0.8)',
+                  fontSize: '11px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(6,182,212,0.2)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                Edit {setlistContextMenu.item.presentation.quickModeData.type === 'sermon' ? 'Sermon' : 'Prayer'} Points
+              </button>
+            )}
+
+            {/* Edit presentation - free-form type */}
+            {setlistContextMenu.item.type === 'presentation' && setlistContextMenu.item.presentation &&
+             !setlistContextMenu.item.presentation.quickModeData && (
+              <button
+                onClick={() => {
+                  navigate(`/presentation-editor?id=${setlistContextMenu.item.presentation!.id}`);
+                  setSetlistContextMenu(null);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: '4px',
+                  color: 'rgba(255,255,255,0.8)',
+                  fontSize: '11px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(6,182,212,0.2)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                Edit Presentation
+              </button>
+            )}
+
+            {/* Edit playlist */}
+            {setlistContextMenu.item.type === 'audioPlaylist' && setlistContextMenu.item.audioPlaylist && (
+              <button
+                onClick={() => {
+                  openEditPlaylistModal(setlistContextMenu.item);
+                  setSetlistContextMenu(null);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: '4px',
+                  color: 'rgba(255,255,255,0.8)',
+                  fontSize: '11px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(6,182,212,0.2)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                Edit Playlist
+              </button>
+            )}
+
+            {/* Rename section */}
+            {setlistContextMenu.item.type === 'section' && (
+              <button
+                onClick={() => {
+                  const newName = prompt('Enter new section name:', setlistContextMenu.item.title || 'Section');
+                  if (newName && newName.trim()) {
+                    setSetlist(prev => prev.map(item =>
+                      item.id === setlistContextMenu.item.id
+                        ? { ...item, title: newName.trim() }
+                        : item
+                    ));
+                  }
+                  setSetlistContextMenu(null);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: '4px',
+                  color: 'rgba(255,255,255,0.8)',
+                  fontSize: '11px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(6,182,212,0.2)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                Rename Section
+              </button>
+            )}
+
+            {/* Divider before delete */}
+            <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
+
+            {/* Delete option - shown for all items */}
+            <button
+              onClick={() => {
+                removeFromSetlist(setlistContextMenu.item.id);
+                setSetlistContextMenu(null);
               }}
               style={{
-                flex: 1,
-                height: '4px',
-                accentColor: 'white',
-                cursor: 'pointer'
+                width: '100%',
+                padding: '8px 10px',
+                background: 'transparent',
+                border: 'none',
+                borderRadius: '4px',
+                color: '#ef4444',
+                fontSize: '11px',
+                textAlign: 'left',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
               }}
-            />
-            <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '11px', minWidth: '40px' }}>
-              {audioStatus.duration ? `${Math.floor(audioStatus.duration / 60)}:${String(Math.floor(audioStatus.duration % 60)).padStart(2, '0')}` : '--:--'}
-            </span>
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+              Remove from Setlist
+            </button>
           </div>
-
-          {/* Volume control */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '100px' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2">
-              <polygon points="11,5 6,9 2,9 2,15 6,15 11,19" />
-              <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-            </svg>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={audioTargetVolume}
-              onChange={(e) => {
-                const newVolume = parseFloat(e.target.value);
-                setAudioTargetVolume(newVolume);
-                // Also set actual volume immediately if playing (not during fade)
-                if (audioRef.current && !audioFadeRef.current) {
-                  audioRef.current.volume = newVolume;
-                }
-              }}
-              style={{
-                width: '70px',
-                height: '4px',
-                accentColor: 'white',
-                cursor: 'pointer'
-              }}
-            />
-          </div>
-
-          {/* Stop/Clear button */}
-          <button
-            onClick={handleClearAudio}
-            title="Stop music"
-            style={{
-              padding: '6px 12px',
-              background: 'rgba(255,255,255,0.2)',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              color: 'white',
-              fontSize: '12px',
-              fontWeight: 500
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-            </svg>
-            Stop
-          </button>
         </div>
       )}
     </div>

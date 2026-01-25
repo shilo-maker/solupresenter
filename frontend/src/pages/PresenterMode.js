@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Form, Button, InputGroup, Modal, Row, Col, Alert, Badge, Dropdown, Toast, ToastContainer } from 'react-bootstrap';
+import { Form, Button, Modal, Row, Col, Alert, Badge, Dropdown, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FixedSizeList } from 'react-window';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import api, { getFullImageUrl, publicRoomAPI, roomAPI, presentationAPI, quickSlideAPI } from '../services/api';
 import socketService from '../services/socket';
-import { createCombinedSlides, getCombinedSlideLabel } from '../utils/slideCombining';
+import { createCombinedSlides } from '../utils/slideCombining';
 import ThemeSelector from '../components/ThemeSelector';
 import { PresentationEditor } from '../components/presentation-editor';
 
@@ -77,7 +77,7 @@ function PresenterMode() {
   // Public room state
   const [publicRooms, setPublicRooms] = useState([]);
   const [selectedPublicRoom, setSelectedPublicRoom] = useState(null);
-  const [linkedPublicRoomName, setLinkedPublicRoomName] = useState('');
+  const [, setLinkedPublicRoomName] = useState('');
   const [showRoomSelector, setShowRoomSelector] = useState(false);
   const [showGearMenu, setShowGearMenu] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
@@ -173,7 +173,6 @@ function PresenterMode() {
 
   // Save setlist state
   const [showSaveSetlistModal, setShowSaveSetlistModal] = useState(false);
-  const [setlistName, setSetlistName] = useState('');
   const [setlistDate, setSetlistDate] = useState('');
   const [setlistTime, setSetlistTime] = useState('');
   const [setlistVenue, setSetlistVenue] = useState('');
@@ -227,7 +226,7 @@ function PresenterMode() {
   const youtubeTimeIntervalRef = useRef(null);
 
   // Chromecast state
-  const [castAvailable, setCastAvailable] = useState(false);
+  const [, setCastAvailable] = useState(false);
   const [castConnected, setCastConnected] = useState(false);
   const castSessionRef = useRef(null); // Store active cast session
   const reconnectAttempts = useRef(0); // Track reconnection attempts
@@ -287,30 +286,9 @@ function PresenterMode() {
   const preCountdownStateRef = useRef(null); // Store state before countdown to restore after
   const preMessagesStateRef = useRef(null); // Store state before messages to restore after
 
-  // Calculate remaining seconds from target time
-  const getCountdownSeconds = () => {
-    const [hours, minutes] = countdownTargetTime.split(':').map(Number);
-    const now = new Date();
-    const target = new Date();
-    target.setHours(hours, minutes, 0, 0);
-
-    // If target time is earlier than now, assume it's for tomorrow
-    if (target <= now) {
-      target.setDate(target.getDate() + 1);
-    }
-
-    return Math.max(0, Math.floor((target - now) / 1000));
-  };
   // Clock state
-  const [clockFormat, setClockFormat] = useState('24h');
-  const [clockShowDate, setClockShowDate] = useState(false);
   const [clockBroadcasting, setClockBroadcasting] = useState(false);
   const clockIntervalRef = useRef(null);
-  // Stopwatch state
-  const [stopwatchTime, setStopwatchTime] = useState(0); // in seconds
-  const [stopwatchRunning, setStopwatchRunning] = useState(false);
-  const [stopwatchLabel, setStopwatchLabel] = useState('');
-  const stopwatchIntervalRef = useRef(null);
   // Announcement state
   const [announcementText, setAnnouncementText] = useState('');
   const [announcementVisible, setAnnouncementVisible] = useState(false);
@@ -327,7 +305,7 @@ function PresenterMode() {
   ]);
   const [rotatingInterval, setRotatingInterval] = useState(5); // seconds
   const [rotatingRunning, setRotatingRunning] = useState(false);
-  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+  const [, setCurrentMessageIndex] = useState(0);
   const [customMessageInput, setCustomMessageInput] = useState('');
   const rotatingIntervalRef = useRef(null);
   const broadcastRotatingMessageRef = useRef(null);
@@ -396,7 +374,7 @@ function PresenterMode() {
         try {
           presentationConnection.terminate();
         } catch (err) {
-          console.log('Error terminating presentation:', err);
+          // Error terminating presentation (safe to ignore)
         }
       }
     };
@@ -434,16 +412,14 @@ function PresenterMode() {
       setPresentationConnection(connection);
 
       connection.onconnect = () => {
-        console.log('✅ Presentation connected');
+        // Presentation connected
       };
 
       connection.onclose = () => {
-        console.log('📴 Presentation closed');
         setPresentationConnection(null);
       };
 
       connection.onterminate = () => {
-        console.log('🛑 Presentation terminated');
         setPresentationConnection(null);
       };
 
@@ -451,7 +427,6 @@ function PresenterMode() {
       console.error('Presentation error:', err);
       if (err.name === 'NotAllowedError') {
         // User cancelled the display picker
-        console.log('User cancelled display selection');
       } else if (err.name === 'NotFoundError') {
         alert(t('presenter.noDisplayFound') || 'No external display found. Please connect a display and try again.');
       } else {
@@ -474,66 +449,9 @@ function PresenterMode() {
     }
   };
 
-  // Store video in IndexedDB (accessible from all same-origin tabs/windows)
-  const storeVideoInIndexedDB = (file) => {
-    return new Promise((resolve, reject) => {
-      // First, read the file as ArrayBuffer (async operation)
-      const reader = new FileReader();
-      reader.onload = () => {
-        const arrayBuffer = reader.result;
-
-        // Now open IndexedDB and store the data
-        const request = indexedDB.open('solupresenter-videos', 1);
-
-        request.onerror = () => reject(request.error);
-
-        request.onupgradeneeded = (event) => {
-          const db = event.target.result;
-          if (!db.objectStoreNames.contains('videos')) {
-            db.createObjectStore('videos', { keyPath: 'id' });
-          }
-        };
-
-        request.onsuccess = (event) => {
-          const db = event.target.result;
-          const transaction = db.transaction(['videos'], 'readwrite');
-          const store = transaction.objectStore('videos');
-
-          const videoRecord = {
-            id: 'current-video',
-            data: arrayBuffer,
-            fileName: file.name,
-            mimeType: file.type,
-            timestamp: Date.now()
-          };
-
-          const putRequest = store.put(videoRecord);
-          putRequest.onsuccess = () => {
-            db.close();
-            resolve();
-          };
-          putRequest.onerror = () => {
-            db.close();
-            reject(putRequest.error);
-          };
-        };
-      };
-      reader.onerror = () => reject(reader.error);
-      reader.readAsArrayBuffer(file);
-    });
-  };
-
   // Send video to local HDMI display via Presentation API connection
   const sendVideoToDisplay = async () => {
     if (!selectedMediaFile || mediaType !== 'video' || !room) return;
-
-    console.log('📺 sendVideoToDisplay called:', {
-      roomId: room.id,
-      fileName: selectedMediaFile.name,
-      fileSize: selectedMediaFile.size,
-      hasPresentationConnection: !!presentationConnection,
-      connectionState: presentationConnection?.state
-    });
 
     if (!presentationConnection || presentationConnection.state !== 'connected') {
       console.error('📺 No active presentation connection');
@@ -549,8 +467,6 @@ function PresenterMode() {
       // Convert to Base64 in chunks (to avoid memory issues)
       const CHUNK_SIZE = 512 * 1024; // 512KB chunks
       const totalChunks = Math.ceil(uint8Array.length / CHUNK_SIZE);
-
-      console.log(`📺 Sending video in ${totalChunks} chunks...`);
 
       // Send start message
       presentationConnection.send(JSON.stringify({
@@ -579,11 +495,6 @@ function PresenterMode() {
           chunkIndex: i,
           data: base64Chunk
         }));
-
-        // Log progress every 10 chunks
-        if (i % 10 === 0 || i === totalChunks - 1) {
-          console.log(`📺 Sent chunk ${i + 1}/${totalChunks}`);
-        }
       }
 
       // Send end message
@@ -591,7 +502,6 @@ function PresenterMode() {
         type: 'videoEnd'
       }));
 
-      console.log('📺 Video sent via Presentation API');
       setVideoOnDisplay(true);
       setVideoPlaying(false);  // Start paused
       setVideoCurrentTime(0);  // Reset time display
@@ -631,7 +541,6 @@ function PresenterMode() {
         localVideoRef.current.pause();
       }
     }
-    console.log(`📺 Video ${newState ? 'playing' : 'paused'}`);
   };
 
   // Seek video on HDMI display
@@ -670,7 +579,6 @@ function PresenterMode() {
     setVideoOnDisplay(false);
     setVideoPlaying(true);
     setImageOnDisplay(false);
-    console.log('📺 Video hidden from display');
     // Notify online viewers that local media is no longer showing
     if (room) {
       socketService.operatorUpdateLocalMediaStatus(room.id, false);
@@ -683,34 +591,13 @@ function PresenterMode() {
     }
   };
 
-  // Stop video on local display
-  const stopVideoOnDisplay = () => {
-    const stopMessage = { type: 'stopLocalVideo' };
-
-    if (presentationConnection && presentationConnection.state === 'connected') {
-      try {
-        presentationConnection.send(JSON.stringify(stopMessage));
-      } catch (err) {
-        console.error('Failed to send stop via Presentation API:', err);
-      }
-    }
-
-    if (localViewerWindowRef.current && !localViewerWindowRef.current.closed) {
-      try {
-        localViewerWindowRef.current.postMessage(stopMessage, window.location.origin);
-      } catch (err) {
-        console.error('Failed to send stop via postMessage:', err);
-      }
-    }
-  };
-
   // Stop/close presentation
   const stopPresentation = () => {
     if (presentationConnection) {
       try {
         presentationConnection.terminate();
       } catch (err) {
-        console.log('Error terminating:', err);
+        // Error terminating (safe to ignore)
       }
       setPresentationConnection(null);
     }
@@ -720,13 +607,6 @@ function PresenterMode() {
   // Send image to local HDMI display via Presentation API
   const sendImageToDisplay = async () => {
     if (!selectedMediaFile || mediaType !== 'image') return;
-
-    console.log('🖼️ sendImageToDisplay called:', {
-      fileName: selectedMediaFile.name,
-      fileSize: selectedMediaFile.size,
-      hasPresentationConnection: !!presentationConnection,
-      connectionState: presentationConnection?.state
-    });
 
     if (!presentationConnection || presentationConnection.state !== 'connected') {
       console.error('🖼️ No active presentation connection');
@@ -744,7 +624,6 @@ function PresenterMode() {
           fileName: selectedMediaFile.name,
           mimeType: selectedMediaFile.type
         }));
-        console.log('🖼️ Image sent via Presentation API');
         setImageOnDisplay(true);
         setVideoOnDisplay(false); // Hide any video
         // Notify online viewers that local media is being shown
@@ -769,7 +648,6 @@ function PresenterMode() {
       type: 'hideImage'
     }));
     setImageOnDisplay(false);
-    console.log('🖼️ Image hidden from display');
     // Notify online viewers that local media is no longer showing
     if (room) {
       socketService.operatorUpdateLocalMediaStatus(room.id, false);
@@ -779,61 +657,6 @@ function PresenterMode() {
       } else if (isBlankActive) {
         updateSlide(null, 0, displayMode, true);
       }
-    }
-  };
-
-  // Countdown functions
-  const toggleCountdownBroadcast = () => {
-    if (!room) return;
-
-    if (countdownBroadcasting) {
-      // Stop broadcasting - clear the countdown from viewer
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-        countdownIntervalRef.current = null;
-      }
-      setCountdownRunning(false);
-      setCountdownBroadcasting(false);
-      setActiveSetlistCountdownIndex(null);
-      // Send blank to clear the countdown
-      socketService.operatorUpdateSlide({
-        roomId: room.id,
-        roomPin: room.pin,
-        backgroundImage: room.backgroundImage || '',
-        songId: null,
-        slideIndex: 0,
-        displayMode: displayMode,
-        isBlank: true,
-        toolsData: null
-      });
-    } else {
-      // Start broadcasting - calculate time and start countdown
-      const total = getCountdownSeconds();
-      if (total <= 0) return;
-
-      setCountdownRemaining(total);
-      setCountdownRunning(true);
-      setCountdownBroadcasting(true);
-
-      // Broadcast the countdown
-      socketService.operatorUpdateSlide({
-        roomId: room.id,
-        roomPin: room.pin,
-        backgroundImage: room.backgroundImage || '',
-        songId: null,
-        slideIndex: 0,
-        displayMode: displayMode,
-        isBlank: false,
-        toolsData: {
-          type: 'countdown',
-          countdown: {
-            remaining: total,
-            message: countdownMessage,
-            running: true,
-            endTime: Date.now() + (total * 1000)
-          }
-        }
-      });
     }
   };
 
@@ -1313,101 +1136,6 @@ function PresenterMode() {
     }
   };
 
-  // Clock functions
-  const toggleClockBroadcast = () => {
-    if (clockBroadcasting) {
-      // Stop broadcasting
-      if (clockIntervalRef.current) {
-        clearInterval(clockIntervalRef.current);
-        clockIntervalRef.current = null;
-      }
-      setClockBroadcasting(false);
-      // Clear the tools display
-      if (room) {
-        socketService.operatorUpdateSlide({
-          roomId: room.id,
-          roomPin: room.pin,
-          backgroundImage: room.backgroundImage || '',
-          songId: null,
-          slideIndex: 0,
-          displayMode: displayMode,
-          isBlank: true,
-          toolsData: null
-        });
-      }
-    } else {
-      // Start broadcasting clock
-      setClockBroadcasting(true);
-      broadcastClock();
-    }
-  };
-
-  const broadcastClock = () => {
-    if (!room) return;
-    socketService.operatorUpdateSlide({
-      roomId: room.id,
-      roomPin: room.pin,
-      backgroundImage: room.backgroundImage || '',
-      songId: null,
-      slideIndex: 0,
-      displayMode: displayMode,
-      isBlank: false,
-      toolsData: {
-        type: 'clock',
-        clock: {
-          format: clockFormat,
-          showDate: clockShowDate
-        }
-      }
-    });
-  };
-
-  // Stopwatch functions
-  const toggleStopwatch = () => {
-    if (stopwatchRunning) {
-      // Pause
-      if (stopwatchIntervalRef.current) {
-        clearInterval(stopwatchIntervalRef.current);
-        stopwatchIntervalRef.current = null;
-      }
-      setStopwatchRunning(false);
-    } else {
-      // Start
-      setStopwatchRunning(true);
-    }
-  };
-
-  const resetStopwatch = () => {
-    if (stopwatchIntervalRef.current) {
-      clearInterval(stopwatchIntervalRef.current);
-      stopwatchIntervalRef.current = null;
-    }
-    setStopwatchRunning(false);
-    setStopwatchTime(0);
-  };
-
-  const broadcastStopwatch = () => {
-    if (!room) return;
-    socketService.operatorUpdateSlide({
-      roomId: room.id,
-      roomPin: room.pin,
-      backgroundImage: room.backgroundImage || '',
-      songId: null,
-      slideIndex: 0,
-      displayMode: displayMode,
-      isBlank: false,
-      toolsData: {
-        type: 'stopwatch',
-        stopwatch: {
-          elapsed: stopwatchTime,
-          label: stopwatchLabel,
-          running: stopwatchRunning,
-          startTime: stopwatchRunning ? Date.now() - (stopwatchTime * 1000) : null
-        }
-      }
-    });
-  };
-
   // Announcement functions
   const hideAnnouncement = () => {
     // Clear any existing timer
@@ -1440,10 +1168,8 @@ function PresenterMode() {
     // Use ref to get current countdown state (not stale closure values)
     const currentCountdown = countdownStateRef.current;
     let hideToolsData;
-    console.log('🔧 hideAnnouncement - checking countdown state:', currentCountdown);
     if (currentCountdown.broadcasting && currentCountdown.running) {
       // Countdown was running underneath - restore it as the main tool
-      console.log('🔧 hideAnnouncement - restoring countdown');
       hideToolsData = {
         type: 'countdown',
         countdown: {
@@ -1475,64 +1201,6 @@ function PresenterMode() {
       slideData: hideSlideData,
       toolsData: hideToolsData
     });
-  };
-
-  const showAnnouncement = (text) => {
-    // Clear any existing timer
-    if (announcementTimerRef.current) {
-      clearTimeout(announcementTimerRef.current);
-    }
-
-    setAnnouncementVisible(true);
-
-    if (!room) return;
-
-    // Build slideData including combinedSlides for original mode
-    let showSlideData = null;
-    if (currentSong?.slides?.[currentSlideIndex]) {
-      const originalIndices = combinedSlides?.combinedToOriginal?.get(selectedCombinedIndex);
-      showSlideData = {
-        slide: currentSong.slides[currentSlideIndex],
-        title: currentSong.title,
-        isBible: currentSong.isBible || false,
-        isTemporary: currentSong.isTemporary || false,
-        originalLanguage: currentSong.originalLanguage || 'en',
-        combinedSlides: displayMode === 'original' && originalIndices?.length > 1
-          ? originalIndices.map(i => currentSong.slides[i]).filter(Boolean)
-          : null
-      };
-    }
-
-    socketService.operatorUpdateSlide({
-      roomId: room.id,
-      roomPin: room.pin,
-      backgroundImage: room.backgroundImage || '',
-      songId: currentSong?.id || null,
-      slideIndex: currentSlideIndex,
-      displayMode: displayMode,
-      isBlank: isBlankActive,
-      slideData: showSlideData,
-      toolsData: {
-        type: 'announcement',
-        announcement: {
-          text: text || announcementText,
-          visible: true
-        }
-      }
-    });
-
-    // Auto-hide after 15 seconds
-    announcementTimerRef.current = setTimeout(() => {
-      hideAnnouncement();
-    }, 15000);
-  };
-
-  const toggleAnnouncement = () => {
-    if (announcementVisible) {
-      hideAnnouncement();
-    } else {
-      showAnnouncement(announcementText);
-    }
   };
 
   // Update announcement text and broadcast if banner is visible
@@ -1610,38 +1278,6 @@ function PresenterMode() {
     setRotatingMessages(msgs => msgs.filter(msg => msg.id !== id));
   };
 
-  const toggleRotatingMessages = () => {
-    if (rotatingRunning) {
-      // Stop
-      if (rotatingIntervalRef.current) {
-        clearInterval(rotatingIntervalRef.current);
-        rotatingIntervalRef.current = null;
-      }
-      setRotatingRunning(false);
-      // Clear display
-      if (room) {
-        socketService.operatorUpdateSlide({
-          roomId: room.id,
-          roomPin: room.pin,
-          backgroundImage: room.backgroundImage || '',
-          songId: null,
-          slideIndex: 0,
-          displayMode: displayMode,
-          isBlank: true,
-          toolsData: null
-        });
-      }
-    } else {
-      // Start
-      const enabledMessages = rotatingMessages.filter(m => m.enabled);
-      if (enabledMessages.length === 0) return;
-      setCurrentMessageIndex(0);
-      setRotatingRunning(true);
-      // Broadcast first message immediately
-      broadcastRotatingMessage(0);
-    }
-  };
-
   const broadcastRotatingMessage = (index) => {
     if (!room) return;
     const enabledMessages = rotatingMessages.filter(m => m.enabled);
@@ -1670,43 +1306,6 @@ function PresenterMode() {
 
   // Keep ref updated for use in effects (avoids stale closures)
   broadcastRotatingMessageRef.current = broadcastRotatingMessage;
-
-  // Stop all running tools (called when broadcasting non-tool content)
-  const stopAllTools = () => {
-    // Stop rotating messages
-    if (rotatingRunning) {
-      if (rotatingIntervalRef.current) {
-        clearInterval(rotatingIntervalRef.current);
-        rotatingIntervalRef.current = null;
-      }
-      setRotatingRunning(false);
-    }
-    // Stop clock broadcast
-    if (clockBroadcasting) {
-      if (clockIntervalRef.current) {
-        clearInterval(clockIntervalRef.current);
-        clockIntervalRef.current = null;
-      }
-      setClockBroadcasting(false);
-    }
-    // Stop countdown broadcast
-    if (countdownBroadcasting) {
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-        countdownIntervalRef.current = null;
-      }
-      setCountdownRunning(false);
-      setCountdownBroadcasting(false);
-      setActiveSetlistCountdownIndex(null);
-      setFocusedCountdownIndex(null);
-    }
-    // Stop announcement
-    if (announcementVisible) {
-      setAnnouncementVisible(false);
-      setActiveSetlistAnnouncementIndex(null);
-      setFocusedAnnouncementIndex(null);
-    }
-  };
 
   // Stop tools except overlays (announcements) - used when switching slides
   const stopNonOverlayTools = () => {
@@ -1929,6 +1528,7 @@ function PresenterMode() {
     if (selectedBibleBook && selectedBibleChapter) {
       fetchBibleVerses(selectedBibleBook, selectedBibleChapter);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBibleBook, selectedBibleChapter]);
 
   // Responsive layout
@@ -2008,7 +1608,6 @@ function PresenterMode() {
       }).filter(Boolean);
 
       await api.put(`/api/rooms/${room.id}/setlist`, { items });
-      console.log('✅ Setlist saved to backend');
       setHasUnsavedChanges(false);
       setToast({
         show: true,
@@ -2050,21 +1649,8 @@ function PresenterMode() {
         clearInterval(countdownIntervalRef.current);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [countdownRunning]);
-
-  // Stopwatch timer effect
-  useEffect(() => {
-    if (stopwatchRunning) {
-      stopwatchIntervalRef.current = setInterval(() => {
-        setStopwatchTime(prev => prev + 1);
-      }, 1000);
-    }
-    return () => {
-      if (stopwatchIntervalRef.current) {
-        clearInterval(stopwatchIntervalRef.current);
-      }
-    };
-  }, [stopwatchRunning]);
 
   // Rotating messages effect
   useEffect(() => {
@@ -2091,22 +1677,13 @@ function PresenterMode() {
   }, [rotatingRunning, rotatingInterval, rotatingMessages]);
 
   useEffect(() => {
-    console.log('🔄 PresenterMode useEffect triggered', {
-      loading,
-      hasUser: !!user,
-      userId: user?.id,
-      roomCreated
-    });
-
     // Wait for auth to finish loading
     if (loading) {
-      console.log('⏳ Auth still loading...');
       return;
     }
 
     // Only create room once user is loaded and room hasn't been created yet
     if (!user || !user.id) {
-      console.log('❌ No user found after auth loaded');
       return;
     }
 
@@ -2115,16 +1692,13 @@ function PresenterMode() {
 
     // Only create room if it hasn't been created yet
     if (roomCreated) {
-      console.log('✅ Room already created, skipping room creation');
       return;
     }
 
     const createOrGetRoom = async () => {
       try {
         setIsCreatingRoom(true);
-        console.log('🏠 Creating room for user:', user.id);
         const response = await api.post('/api/rooms/create');
-        console.log('✅ Room created successfully:', response.data);
         setRoom(response.data.room);
         setRoomPin(response.data.room.pin);
         setSelectedBackground(response.data.room.backgroundImage || '');
@@ -2135,10 +1709,6 @@ function PresenterMode() {
         const setlistToLoad = response.data.room.linkedPermanentSetlist || response.data.room.temporarySetlist;
 
         if (setlistToLoad && setlistToLoad.items) {
-          const setlistType = response.data.room.linkedPermanentSetlist ? 'permanent' : 'temporary';
-          console.log(`📋 Loading ${setlistType} setlist from room:`, setlistToLoad);
-          console.log('📋 First item:', setlistToLoad.items[0]);
-
           // Store the linked setlist name if it's a permanent setlist
           if (response.data.room.linkedPermanentSetlist && setlistToLoad.name) {
             setLinkedSetlistName(setlistToLoad.name);
@@ -2173,7 +1743,6 @@ function PresenterMode() {
             return null;
           }).filter(Boolean);
           setSetlist(loadedItems);
-          console.log(`✅ Loaded ${loadedItems.length} items from ${setlistType} setlist`);
         }
 
         // Join as operator and listen for join confirmation with quickSlideText
@@ -2181,10 +1750,8 @@ function PresenterMode() {
 
         // Listen for operator:joined event to restore quickSlideText
         socketService.onOperatorJoined((data) => {
-          console.log('✅ Operator joined, restoring state:', data);
           if (data.quickSlideText) {
             setQuickSlideText(data.quickSlideText);
-            console.log('⚡ Restored quick slide text from room');
           }
         });
       } catch (error) {
@@ -2201,9 +1768,9 @@ function PresenterMode() {
     fetchPresentations();
 
     return () => {
-      console.log('🧹 Cleaning up socketService');
       socketService.disconnect();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, loading, roomCreated]);
 
   // Fetch public rooms when room is created
@@ -2217,7 +1784,6 @@ function PresenterMode() {
   useEffect(() => {
     // Wait for room to be ready before loading setlist
     if (!room?.id) {
-      console.log('⏳ Waiting for room to be ready before loading setlist...');
       return;
     }
 
@@ -2235,6 +1801,7 @@ function PresenterMode() {
     } else if (location.state?.songId) {
       loadSong(location.state.songId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state, location.search, room?.id]);
 
   const loadSetlist = async (setlistId) => {
@@ -2248,7 +1815,6 @@ function PresenterMode() {
       // Link this setlist to the room (replaces any previous link)
       try {
         await api.post(`/api/rooms/${room.id}/link-setlist`, { setlistId });
-        console.log('✅ Linked setlist to room');
 
         // Update local room state
         setRoom(prevRoom => ({
@@ -2293,7 +1859,6 @@ function PresenterMode() {
       }).filter(Boolean);
 
       setSetlist(items);
-      console.log('✅ Setlist loaded:', items.length, 'items');
     } catch (error) {
       console.error('Error loading setlist:', error);
       setError('Failed to load setlist. Please check your connection and try again.');
@@ -2311,7 +1876,6 @@ function PresenterMode() {
       setCurrentItem({ type: 'song', data: song });
       setCurrentSlideIndex(0);
       setSelectedPresentation(null); // Clear presentation when loading a song
-      console.log('✅ Song loaded:', song.title);
     } catch (error) {
       console.error('Error loading song:', error);
       setError('Failed to load song. Please check your connection and try again.');
@@ -2582,7 +2146,7 @@ function PresenterMode() {
       try {
         youtubePlayerRef.current.destroy();
       } catch (e) {
-        console.log('YouTube player cleanup error (safe to ignore):', e);
+        // YouTube player cleanup error (safe to ignore)
       }
       youtubePlayerRef.current = null;
     }
@@ -2613,7 +2177,6 @@ function PresenterMode() {
     const originalCallback = window.onYouTubeIframeAPIReady;
 
     window.onYouTubeIframeAPIReady = () => {
-      console.log('YouTube IFrame API ready (presenter)');
       setYoutubeAPIReady(true);
       if (originalCallback) originalCallback();
     };
@@ -2652,7 +2215,6 @@ function PresenterMode() {
           },
           events: {
             onReady: (event) => {
-              console.log('Operator YouTube player ready');
               setYoutubePlayerReady(true);
               // Get video duration
               const duration = event.target.getDuration();
@@ -2666,7 +2228,6 @@ function PresenterMode() {
               if (event.data === 0) {
                 // Check if loop is enabled
                 if (youtubeLoopRef.current) {
-                  console.log('YouTube video ended, looping...');
                   // Restart both players synced
                   if (youtubePlayerRef.current) {
                     youtubePlayerRef.current.seekTo(0, true);
@@ -2693,7 +2254,7 @@ function PresenterMode() {
           try {
             youtubePlayerRef.current.destroy();
           } catch (e) {
-            console.log('Error destroying operator YouTube player:', e);
+            // Error destroying operator YouTube player (safe to ignore)
           }
           youtubePlayerRef.current = null;
           setYoutubePlayerReady(false);
@@ -2705,7 +2266,7 @@ function PresenterMode() {
         try {
           youtubePlayerRef.current.destroy();
         } catch (e) {
-          console.log('Error destroying operator YouTube player:', e);
+          // Error destroying operator YouTube player (safe to ignore)
         }
         youtubePlayerRef.current = null;
         setYoutubePlayerReady(false);
@@ -2718,7 +2279,6 @@ function PresenterMode() {
     if (!youtubeOnDisplay) return;
 
     const handleViewerReady = () => {
-      console.log('Viewer YouTube player ready, syncing in 1 second...');
       // Wait 1 second after viewer is ready, then sync both players
       setTimeout(() => {
         if (youtubePlayerRef.current && youtubePlayerRef.current.seekTo) {
@@ -2729,7 +2289,6 @@ function PresenterMode() {
           if (room) {
             socketService.operatorYoutubePlay(room.id, 0);
           }
-          console.log('Auto-synced YouTube players to start');
         }
       }, 1000);
     };
@@ -3022,7 +2581,7 @@ function PresenterMode() {
       prefix = '\n';
     }
 
-    const newText = text.substring(0, start) + prefix + `[${tag}]` + '\n' + text.substring(end);
+    const newText = text.substring(0, start) + prefix + '[' + tag + ']\n' + text.substring(end);
     setNewSongExpressText(newText);
 
     // Set cursor position after the inserted tag
@@ -3077,11 +2636,6 @@ function PresenterMode() {
 
   const addImageToSetlist = (image) => {
     setSetlist([...setlist, { type: 'image', data: image }]);
-    setHasUnsavedChanges(true);
-  };
-
-  const addBlankToSetlist = () => {
-    setSetlist([...setlist, { type: 'blank', data: null }]);
     setHasUnsavedChanges(true);
   };
 
@@ -3372,7 +2926,7 @@ function PresenterMode() {
     }
 
     // Convert date from YYYY-MM-DD to DD/MM
-    const [year, month, day] = setlistDate.split('-');
+    const [, month, day] = setlistDate.split('-');
     const formattedDate = `${day}/${month}`;
 
     // Generate setlist name: Date(DD/MM) Time(HH:MM) Venue
@@ -3463,7 +3017,6 @@ function PresenterMode() {
   // Auto-reconnect to Chromecast after unexpected disconnect
   const attemptReconnect = useCallback(() => {
     if (reconnectAttempts.current >= maxReconnectAttempts) {
-      console.log('❌ Max reconnection attempts reached');
       setError('Chromecast disconnected. Please reconnect manually.');
       reconnectAttempts.current = 0;
       return;
@@ -3471,8 +3024,6 @@ function PresenterMode() {
 
     reconnectAttempts.current += 1;
     const delay = Math.min(1000 * reconnectAttempts.current, 5000); // Exponential backoff up to 5s
-
-    console.log(`🔄 Attempting to reconnect to Chromecast (attempt ${reconnectAttempts.current}/${maxReconnectAttempts}) in ${delay}ms...`);
 
     setTimeout(() => {
       if (!window.chrome?.cast || !roomPin) {
@@ -3482,13 +3033,12 @@ function PresenterMode() {
 
       const cast = window.chrome.cast;
       cast.requestSession((session) => {
-        console.log('✅ Reconnected to Chromecast successfully');
         reconnectAttempts.current = 0; // Reset counter on successful reconnect
         if (setupCastSessionRef.current) {
           setupCastSessionRef.current(session);
         }
       }, (error) => {
-        console.error('❌ Reconnection failed:', error);
+        console.error('Reconnection failed:', error);
         if (error.code !== 'cancel') {
           attemptReconnect(); // Try again
         }
@@ -3500,17 +3050,13 @@ function PresenterMode() {
 
   // Setup cast session with listeners
   const setupCastSession = useCallback((session) => {
-    console.log('✅ Setting up cast session with listeners');
     castSessionRef.current = session;
     setCastConnected(true);
     reconnectAttempts.current = 0; // Reset reconnection counter
 
     // Listen for session updates (disconnection, etc.)
     session.addUpdateListener((isAlive) => {
-      console.log('📡 Cast session update - isAlive:', isAlive);
-
       if (!isAlive) {
-        console.log('⚠️ Cast session disconnected unexpectedly');
         castSessionRef.current = null;
         setCastConnected(false);
 
@@ -3548,10 +3094,10 @@ function PresenterMode() {
       namespace,
       message,
       () => {
-        console.log('✅ Successfully sent viewer URL to Chromecast');
+        // Successfully sent viewer URL to Chromecast
       },
       (error) => {
-        console.error('❌ Error sending message to Chromecast:', error);
+        console.error('Error sending message to Chromecast:', error);
         setError('Failed to load viewer on Chromecast');
       }
     );
@@ -3566,11 +3112,8 @@ function PresenterMode() {
       return; // Only run when connected
     }
 
-    console.log('⏰ Setting up 9-minute screensaver warning timer');
-
     const warningInterval = setInterval(() => {
       if (castConnected) {
-        console.log('⚠️ Showing screensaver warning (9min)');
         setError('Chromecast screensaver may appear soon. Press any button on the Chromecast remote to keep it active.');
 
         // Auto-dismiss after 10 seconds
@@ -3582,7 +3125,6 @@ function PresenterMode() {
 
     // Cleanup interval on unmount or disconnect
     return () => {
-      console.log('🧹 Cleaning up screensaver warning timer');
       clearInterval(warningInterval);
     };
   }, [castConnected]);
@@ -3621,33 +3163,10 @@ function PresenterMode() {
     }
   };
 
-  // Handle Chromecast
-  const handleCast = () => {
-    if (!window.chrome || !window.chrome.cast || !roomPin) {
-      console.error('Cast not available or no room PIN');
-      return;
-    }
-
-    const cast = window.chrome.cast;
-    cast.requestSession((session) => {
-      console.log('✅ Cast session established:', session);
-      setupCastSession(session);
-    }, (error) => {
-      console.error('❌ Error launching cast:', error);
-      if (error.code !== 'cancel') {
-        setError('Failed to connect to Chromecast');
-      }
-    });
-  };
-
   // Initialize Chromecast SDK
   useEffect(() => {
-    console.log('🎬 Setting up Chromecast...');
-
     // Define the callback that Cast SDK will call when ready
     window['__onGCastApiAvailable'] = (isAvailable) => {
-      console.log('📡 Cast API available callback fired:', isAvailable);
-
       if (isAvailable) {
         const cast = window.chrome.cast;
 
@@ -3658,35 +3177,28 @@ function PresenterMode() {
         const apiConfig = new cast.ApiConfig(
           sessionRequest,
           (session) => {
-            console.log('✅ Existing cast session found:', session);
             setupCastSession(session);
           },
           (status) => {
-            console.log('📺 Cast receiver status:', status);
             if (status === cast.ReceiverAvailability.AVAILABLE) {
-              console.log('✅ Chromecast device found!');
               setCastAvailable(true);
             } else {
-              console.log('❌ No Chromecast device available');
               setCastAvailable(false);
             }
           }
         );
 
         cast.initialize(apiConfig, () => {
-          console.log('✅ Cast SDK initialized successfully');
+          // Cast SDK initialized successfully
         }, (error) => {
-          console.error('❌ Cast initialization error:', error);
+          console.error('Cast initialization error:', error);
         });
       }
     };
 
     // If Cast SDK is already loaded, trigger the callback manually
     if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
-      console.log('✅ Cast SDK already loaded, initializing now...');
       window['__onGCastApiAvailable'](true);
-    } else {
-      console.log('⏳ Waiting for Cast SDK to load...');
     }
   }, [setupCastSession]);
 
@@ -3696,8 +3208,6 @@ function PresenterMode() {
       const response = await api.post(`/api/rooms/${room.id}/link-setlist`, {
         setlistId
       });
-
-      console.log('Load setlist response:', response.data);
 
       // Update room with linked setlist and load the setlist content
       if (response.data && response.data.room) {
@@ -4089,15 +3599,12 @@ function PresenterMode() {
   const parseAndBroadcastQuickSlide = useCallback((slideIndexToBroadcast) => {
     const currentText = getCurrentQuickSlideText();
     if (!currentText.trim()) {
-      console.log('⚡ Quick Slide: Empty text, skipping');
       return;
     }
 
     // Split text into blocks (slides) separated by empty lines
     // Filter out empty blocks (e.g., when text ends with \n\n)
     const blocks = currentText.split(/\n\s*\n/).filter(block => block.trim());
-
-    console.log('⚡ Quick Slide: Found', blocks.length, 'slides');
 
     // Create slides array from all blocks for navigation
     const allSlides = blocks.map(block => {
@@ -4122,7 +3629,6 @@ function PresenterMode() {
     // Broadcast directly without adding to setlist
     if (slideIndexToBroadcast !== undefined) {
       const indexToBroadcast = Math.min(slideIndexToBroadcast, allSlides.length - 1);
-      console.log('⚡ Quick Slide: Broadcasting slide', indexToBroadcast + 1, 'to viewers!');
       setCurrentSong(quickSong);
       setCurrentItem({ type: 'song', data: quickSong });
       setCurrentSlideIndex(indexToBroadcast);
@@ -6337,8 +5843,6 @@ function PresenterMode() {
                           setCurrentSong(null);
                           setCurrentItem(null);
                           setHasUnsavedChanges(false);
-
-                          console.log('✅ Created new empty setlist');
                         } catch (error) {
                           console.error('Error creating new setlist:', error);
                           setError('Failed to create new setlist. Please try again.');
@@ -6479,14 +5983,7 @@ function PresenterMode() {
                   }}
                 >
                   {(() => {
-                    let itemNumber = 0;
                     return setlist.map((item, index) => {
-                    // Track item number (excluding sections)
-                    if (item.type !== 'section') {
-                      itemNumber++;
-                    }
-                    const currentItemNumber = itemNumber;
-
                     // Check if this item is selected (only show as selected if selection came from setlist)
                     // For tool items, use the exact index since multiple tools of the same type can exist
                     const isItemSelected = selectedFromSetlist && currentItem && (
@@ -8410,7 +7907,7 @@ function PresenterMode() {
             </Form.Group>
             {setlistDate && setlistTime && setlistVenue && (() => {
               // Format date for preview
-              const [year, month, day] = setlistDate.split('-');
+              const [, month, day] = setlistDate.split('-');
               const formattedDate = `${day}/${month}`;
               return (
                 <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>

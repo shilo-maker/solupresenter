@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Form, Tab, Tabs, Alert, Modal, Toast, ToastContainer } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Form, Tab, Tabs, Alert, Modal } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api, { getFullImageUrl } from '../services/api';
@@ -13,7 +13,6 @@ function MediaLibrary() {
   const [error, setError] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [modalTab, setModalTab] = useState('gradient');
-  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   // Form states
   const [newMediaName, setNewMediaName] = useState('');
@@ -27,6 +26,7 @@ function MediaLibrary() {
   useEffect(() => {
     fetchMedia();
     fetchUsage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchUsage = async () => {

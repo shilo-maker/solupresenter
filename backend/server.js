@@ -33,6 +33,22 @@ const quickSlideRoutes = require('./routes/quickSlide');
 const cleanupTemporarySetlists = require('./jobs/cleanupTemporarySetlists');
 const cleanupExpiredRooms = require('./jobs/cleanupExpiredRooms');
 
+// Global error handlers for production stability
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️ Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit - let the server continue running
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('⚠️ Uncaught Exception:', error);
+  // For critical errors, log and continue - the server should try to stay up
+  // Only exit for truly fatal errors that corrupt state
+  if (error.message && error.message.includes('FATAL')) {
+    console.error('Fatal error detected, shutting down gracefully...');
+    process.exit(1);
+  }
+});
+
 const app = express();
 
 // In development, allow any origin for local network testing (Chromecast)
@@ -195,8 +211,6 @@ const roomToolsData = new Map(); // Map of roomPin -> toolsData (for new viewers
 const roomActiveTheme = new Map(); // Map of roomPin -> theme (for new viewers)
 
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-
   // Operator joins their room
   socket.on('operator:join', async (data) => {
     try {
@@ -216,7 +230,6 @@ io.on('connection', (socket) => {
         roomPin: room.pin,
         quickSlideText: room.quickSlideText || ''
       });
-      console.log(`Operator ${userId} joined room ${room.pin}`);
     } catch (error) {
       console.error('Error in operator:join:', error);
       socket.emit('error', { message: 'Failed to join room' });
@@ -369,13 +382,10 @@ io.on('connection', (socket) => {
         stageMonitorTheme: stageMonitorTheme
       };
 
-      console.log(`📤 Sending to viewer:`, JSON.stringify(viewerJoinedData, null, 2));
       socket.emit('viewer:joined', viewerJoinedData);
 
       // Notify operator of viewer count
       io.to(`room:${room.pin}`).emit('room:viewerCount', { count: room.viewerCount + 1 });
-
-      console.log(`Viewer joined room ${room.pin}, total viewers: ${room.viewerCount + 1}`);
     } catch (error) {
       console.error('Error in viewer:join:', error);
       socket.emit('error', { message: 'Failed to join room' });
@@ -499,7 +509,6 @@ io.on('connection', (socket) => {
 
   // Operator updates background
   socket.on('operator:updateBackground', async (data) => {
-    console.log('📥 Received operator:updateBackground event:', data);
     try {
       const { roomId, backgroundImage } = data;
 
@@ -518,8 +527,6 @@ io.on('connection', (socket) => {
       io.to(`room:${room.pin}`).emit('background:update', {
         backgroundImage: room.backgroundImage
       });
-
-      console.log(`Background updated in room ${room.pin}`);
     } catch (error) {
       console.error('Error in operator:updateBackground:', error);
       socket.emit('error', { message: 'Failed to update background' });
@@ -528,7 +535,6 @@ io.on('connection', (socket) => {
 
   // Operator updates quick slide text
   socket.on('operator:updateQuickSlideText', async (data) => {
-    console.log('📥 Received operator:updateQuickSlideText event');
     try {
       const { roomId, quickSlideText } = data;
 
@@ -542,8 +548,6 @@ io.on('connection', (socket) => {
       // Update room's quick slide text
       room.quickSlideText = quickSlideText || '';
       await room.save();
-
-      console.log(`Quick slide text updated in room ${room.pin}`);
     } catch (error) {
       console.error('Error in operator:updateQuickSlideText:', error);
       socket.emit('error', { message: 'Failed to update quick slide text' });
@@ -560,8 +564,6 @@ io.on('connection', (socket) => {
         socket.emit('error', { message: 'Room not found' });
         return;
       }
-
-      console.log(`📺 Broadcasting local video to room ${room.pin}: ${videoData.fileName}`);
 
       // Broadcast to all viewers in the room (local viewers will display, online viewers can ignore)
       io.to(`room:${room.pin}`).emit('localVideo:update', videoData);
@@ -582,7 +584,6 @@ io.on('connection', (socket) => {
         return;
       }
 
-      console.log(`🛑 Stopping local video in room ${room.pin}`);
       io.to(`room:${room.pin}`).emit('localVideo:stop');
     } catch (error) {
       console.error('Error in operator:stopLocalVideo:', error);
@@ -603,7 +604,6 @@ io.on('connection', (socket) => {
         return;
       }
 
-      console.log(`▶️ Loading YouTube video in room ${room.pin}: ${videoId} - ${title}`);
       io.to(`room:${room.pin}`).emit('youtube:load', { videoId, title });
     } catch (error) {
       console.error('Error in operator:youtubeLoad:', error);
@@ -622,7 +622,6 @@ io.on('connection', (socket) => {
         return;
       }
 
-      console.log(`▶️ Playing YouTube in room ${room.pin} at ${currentTime}s`);
       io.to(`room:${room.pin}`).emit('youtube:play', { currentTime });
     } catch (error) {
       console.error('Error in operator:youtubePlay:', error);
@@ -640,7 +639,6 @@ io.on('connection', (socket) => {
         return;
       }
 
-      console.log(`⏸️ Pausing YouTube in room ${room.pin} at ${currentTime}s`);
       io.to(`room:${room.pin}`).emit('youtube:pause', { currentTime });
     } catch (error) {
       console.error('Error in operator:youtubePause:', error);
@@ -658,7 +656,6 @@ io.on('connection', (socket) => {
         return;
       }
 
-      console.log(`⏩ Seeking YouTube in room ${room.pin} to ${currentTime}s`);
       io.to(`room:${room.pin}`).emit('youtube:seek', { currentTime });
     } catch (error) {
       console.error('Error in operator:youtubeSeek:', error);
@@ -676,7 +673,6 @@ io.on('connection', (socket) => {
         return;
       }
 
-      console.log(`🛑 Stopping YouTube in room ${room.pin}`);
       io.to(`room:${room.pin}`).emit('youtube:stop');
     } catch (error) {
       console.error('Error in operator:youtubeStop:', error);
@@ -704,7 +700,6 @@ io.on('connection', (socket) => {
   socket.on('viewer:youtubeReady', async (data) => {
     try {
       const { roomPin } = data;
-      console.log('Viewer YouTube ready for room:', roomPin);
       // Notify operator that viewer's YouTube is ready
       io.to(`room:${roomPin}`).emit('viewer:youtubeReady', { roomPin });
     } catch (error) {
@@ -761,8 +756,6 @@ io.on('connection', (socket) => {
         theme: themeData
       });
 
-      console.log(`Theme ${themeData?.name || themeId || 'none'} applied to room ${pin}`);
-
       // 💾 Save to database asynchronously (only if we have roomId)
       if (roomId && room) {
         setImmediate(async () => {
@@ -796,11 +789,50 @@ io.on('connection', (socket) => {
       io.to(`room:${room.pin}`).emit('localMedia:status', {
         visible
       });
-
-      console.log(`📺 Local media status broadcast to room ${room.pin}: ${visible ? 'showing' : 'hidden'}`);
     } catch (error) {
       console.error('Error in operator:localMediaStatus:', error);
       socket.emit('error', { message: 'Failed to update local media status' });
+    }
+  });
+
+  // Operator updates tools (countdown, clock, stopwatch, announcement, rotating messages)
+  socket.on('operator:updateTool', async (data) => {
+    try {
+      const { roomId, roomPin, toolData } = data;
+
+      // Support both roomId (web app) and roomPin (desktop app)
+      let pin = roomPin;
+
+      if (roomId && !roomPin) {
+        const room = await Room.findByPk(roomId);
+        if (room) pin = room.pin;
+      }
+
+      if (!pin) {
+        socket.emit('error', { message: 'Room not found' });
+        return;
+      }
+
+      // Validate tool type
+      const validToolTypes = ['countdown', 'announcement', 'rotatingMessages', 'clock', 'stopwatch'];
+      if (!toolData || !toolData.type || !validToolTypes.includes(toolData.type)) {
+        console.error('Invalid tool data received:', toolData);
+        socket.emit('error', { message: 'Invalid tool data' });
+        return;
+      }
+
+      // Store tool data for new viewers joining later
+      if (toolData.active) {
+        roomToolsData.set(pin, toolData);
+      } else {
+        roomToolsData.delete(pin);
+      }
+
+      // Broadcast to all viewers in the room
+      io.to(`room:${pin}`).emit('tools:update', toolData);
+    } catch (error) {
+      console.error('Error in operator:updateTool:', error);
+      socket.emit('error', { message: 'Failed to update tool' });
     }
   });
 
@@ -826,7 +858,6 @@ io.on('connection', (socket) => {
         if (room) {
           // Notify operator of viewer count
           io.to(`room:${roomPin}`).emit('room:viewerCount', { count: Math.max(0, room.viewerCount) });
-          console.log(`Viewer left room ${roomPin}, remaining viewers: ${Math.max(0, room.viewerCount)}`);
         }
         viewerRooms.delete(socket.id);
       }
@@ -838,8 +869,6 @@ io.on('connection', (socket) => {
           break;
         }
       }
-
-      console.log('Client disconnected:', socket.id);
     } catch (error) {
       console.error('Error in disconnect:', error);
     }

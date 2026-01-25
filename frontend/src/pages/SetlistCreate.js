@@ -26,7 +26,6 @@ function SetlistCreate() {
 
   const { dateStr, timeStr } = getDefaultDateTime();
 
-  const [name, setName] = useState('');
   const [setlistDate, setSetlistDate] = useState(dateStr);
   const [setlistTime, setSetlistTime] = useState(timeStr);
   const [setlistVenue, setSetlistVenue] = useState('');
@@ -38,42 +37,40 @@ function SetlistCreate() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Fetch songs and media on mount
   useEffect(() => {
-    fetchSongs();
-    fetchMedia();
+    const loadData = async () => {
+      try {
+        const [songsResponse, mediaResponse] = await Promise.all([
+          api.get('/api/songs'),
+          api.get('/api/media')
+        ]);
 
-    // If a songId was passed from navigation state, add it
-    if (location.state?.songId) {
-      const songId = location.state.songId;
-      // We'll add it after songs are fetched
-      setTimeout(() => {
-        const song = allSongs.find(s => s._id === songId);
-        if (song) {
-          addSongToSetlist(song);
+        const songs = songsResponse.data.songs;
+        setAllSongs(songs);
+        setSearchResults(songs);
+        setMedia(mediaResponse.data.media);
+
+        // If a songId was passed from navigation state, add it
+        if (location.state?.songId) {
+          const song = songs.find(s => s._id === location.state.songId);
+          if (song) {
+            setItems(prevItems => [...prevItems, {
+              type: 'song',
+              song: song._id,
+              songData: song,
+              order: prevItems.length
+            }]);
+          }
         }
-      }, 500);
-    }
-  }, [location.state]);
+      } catch (error) {
+        console.error('Error loading data:', error);
+        setError('Failed to load songs');
+      }
+    };
 
-  const fetchSongs = async () => {
-    try {
-      const response = await api.get('/api/songs');
-      setAllSongs(response.data.songs);
-      setSearchResults(response.data.songs);
-    } catch (error) {
-      console.error('Error fetching songs:', error);
-      setError('Failed to load songs');
-    }
-  };
-
-  const fetchMedia = async () => {
-    try {
-      const response = await api.get('/api/media');
-      setMedia(response.data.media);
-    } catch (error) {
-      console.error('Error fetching media:', error);
-    }
-  };
+    loadData();
+  }, [location.state?.songId]);
 
   const handleSearch = (query) => {
     setSearchQuery(query);
@@ -168,7 +165,7 @@ function SetlistCreate() {
     }
 
     // Convert date from YYYY-MM-DD to DD/MM
-    const [year, month, day] = setlistDate.split('-');
+    const [, month, day] = setlistDate.split('-');
     const formattedDate = `${day}/${month}`;
 
     // Generate setlist name: Date(DD/MM) Time(HH:MM) Venue
@@ -262,7 +259,7 @@ function SetlistCreate() {
                 </Row>
                 {setlistDate && setlistTime && setlistVenue && (() => {
                   // Format date for preview
-                  const [year, month, day] = setlistDate.split('-');
+                  const [, month, day] = setlistDate.split('-');
                   const formattedDate = `${day}/${month}`;
                   return (
                     <div style={{ padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>

@@ -1,4 +1,4 @@
-import { getDb, saveDatabase, generateId, queryAll, queryOne, CLASSIC_STAGE_THEME_ID, beginTransaction, commitTransaction, rollbackTransaction } from './index';
+import { getDb, saveDatabase, generateId, queryAll, queryOne, CLASSIC_STAGE_THEME_ID, beginTransaction, commitTransaction, rollbackTransaction, createBackup } from './index';
 
 export interface StageMonitorTheme {
   id: string;
@@ -154,6 +154,9 @@ export function updateStageTheme(id: string, data: Partial<StageMonitorTheme>): 
 
   const updatedAt = new Date().toISOString();
 
+  // Track updated values for return object
+  const updatedTheme = { ...existing };
+
   // Build update query dynamically
   const updates: string[] = [];
   const values: any[] = [];
@@ -161,31 +164,38 @@ export function updateStageTheme(id: string, data: Partial<StageMonitorTheme>): 
   if (data.name !== undefined) {
     updates.push('name = ?');
     values.push(data.name);
+    updatedTheme.name = data.name;
   }
   if (data.canvasDimensions !== undefined) {
     updates.push('canvasDimensions = ?');
     values.push(JSON.stringify(data.canvasDimensions));
+    updatedTheme.canvasDimensions = data.canvasDimensions;
   }
   if (data.colors !== undefined) {
     updates.push('colors = ?');
     values.push(JSON.stringify(data.colors));
+    updatedTheme.colors = data.colors;
   }
   if (data.elements !== undefined) {
     updates.push('elements = ?');
     values.push(JSON.stringify(data.elements));
+    updatedTheme.elements = data.elements;
   }
   if (data.currentSlideText !== undefined) {
     updates.push('currentSlideText = ?');
     values.push(JSON.stringify(data.currentSlideText));
+    updatedTheme.currentSlideText = data.currentSlideText;
   }
   if (data.isDefault !== undefined) {
     updates.push('isDefault = ?');
     values.push(data.isDefault ? 1 : 0);
+    updatedTheme.isDefault = data.isDefault;
   }
 
   updates.push('updatedAt = ?');
   values.push(updatedAt);
   values.push(id);
+  updatedTheme.updatedAt = updatedAt;
 
   // Use transaction if setting as default (multiple statements)
   if (data.isDefault) {
@@ -203,7 +213,8 @@ export function updateStageTheme(id: string, data: Partial<StageMonitorTheme>): 
     saveDatabase();
   }
 
-  return getStageTheme(id);
+  // Return the updated object directly instead of re-querying
+  return updatedTheme;
 }
 
 /**
@@ -213,6 +224,9 @@ export function deleteStageTheme(id: string): boolean {
   const db = getDb();
   if (!db) return false;
 
+  // Validate input
+  if (!id || typeof id !== 'string') return false;
+
   // Check if theme is built-in
   const existing = getStageTheme(id);
   if (!existing) return false;
@@ -220,9 +234,17 @@ export function deleteStageTheme(id: string): boolean {
     throw new Error('Cannot delete built-in theme');
   }
 
-  db.run(`DELETE FROM stage_monitor_themes WHERE id = ?`, [id]);
-  saveDatabase();
-  return true;
+  // Create backup before destructive operation
+  createBackup('delete_stage_theme');
+
+  try {
+    db.run(`DELETE FROM stage_monitor_themes WHERE id = ?`, [id]);
+    saveDatabase();
+    return true;
+  } catch (error) {
+    console.error('[stageThemes] deleteStageTheme error:', error);
+    throw new Error(`Failed to delete Stage theme: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }
 
 /**

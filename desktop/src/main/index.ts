@@ -4,12 +4,18 @@ import * as fs from 'fs';
 import * as http from 'http';
 import { DisplayManager, setLocalServerPort } from './windows/displayManager';
 import { registerIpcHandlers, setSocketControlWindow } from './ipc';
-import { initDatabase } from './database';
+import { initDatabase, flushDatabase } from './database';
 import { initTranslator } from './services/mlTranslation';
+import { cleanupOrphanedFiles } from './services/mediaProcessor';
 
 // Local server for production (needed for YouTube to work - requires http:// origin)
 let localServer: http.Server | null = null;
-export let localServerPort = 0;
+let localServerPort = 0;
+
+// Export getter function for localServerPort (ES modules don't provide live bindings for reassigned let variables)
+export function getLocalServerPort(): number {
+  return localServerPort;
+}
 
 // Enable hardware acceleration for video
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
@@ -73,10 +79,6 @@ function createControlWindow(): void {
     }
   }
 
-  console.log('[Icon] __dirname:', __dirname);
-  console.log('[Icon] iconPath:', iconPath);
-  console.log('[Icon] icon exists:', fs.existsSync(iconPath));
-
   controlWindow = new BrowserWindow({
     x: primaryDisplay.bounds.x + 50,
     y: primaryDisplay.bounds.y + 50,
@@ -86,6 +88,8 @@ function createControlWindow(): void {
     minHeight: 700,
     title: 'SoluCast',
     icon: iconPath,
+    show: false, // Don't show until ready
+    backgroundColor: '#09090b', // Match app background to prevent white flash
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'control.js'),
       contextIsolation: true,
@@ -94,10 +98,15 @@ function createControlWindow(): void {
     }
   });
 
+  // Show window with smooth fade when ready to display
+  controlWindow.once('ready-to-show', () => {
+    controlWindow?.show();
+  });
+
   // Load the renderer
   if (isDev) {
     controlWindow.loadURL('http://localhost:5173');
-    controlWindow.webContents.openDevTools();
+    controlWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     // In production, use local HTTP server for proper origin (needed for YouTube)
     controlWindow.loadURL(`http://127.0.0.1:${localServerPort}/`);
@@ -118,7 +127,6 @@ function createControlWindow(): void {
 async function startLocalServer(): Promise<number> {
   return new Promise((resolve, reject) => {
     const rendererPath = path.join(__dirname, '../../renderer');
-    console.log('[LocalServer] Starting server for:', rendererPath);
 
     const mimeTypes: Record<string, string> = {
       '.html': 'text/html',
@@ -141,8 +149,228 @@ async function startLocalServer(): Promise<number> {
       '.wav': 'audio/wav'
     };
 
-    localServer = http.createServer((req, res) => {
-      let filePath = req.url || '/';
+    // Whitelist of allowed media extensions
+    const allowedMediaExtensions = new Set([
+      '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg',
+      '.mp4', '.webm', '.mov', '.avi', '.mkv', '.wmv', '.m4v',
+      '.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac'
+    ]);
+
+    localServer = http.createServer(async (req, res) => {
+      const reqUrl = req.url || '/';
+      console.log('[LocalServer] Incoming request:', req.method, reqUrl.substring(0, 100));
+
+      // Add CORS headers for all responses (needed for display windows in dev mode)
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type');
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
+
+      // Handle preflight OPTIONS requests
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
+      // Handle media requests: /media/<base64-encoded-path>
+      if (reqUrl.startsWith('/media/')) {
+        try {
+          const encodedPath = reqUrl.substring(7); // Remove '/media/'
+          // Convert URL-safe base64 back to standard base64
+          // Replace - with +, _ with /, and add padding if needed
+          let base64Path = decodeURIComponent(encodedPath)
+            .replace(/-/g, '+')
+            .replace(/_/g, '/');
+          // Add padding if needed
+          while (base64Path.length % 4 !== 0) {
+            base64Path += '=';
+          }
+          const mediaPath = Buffer.from(base64Path, 'base64').toString('utf8');
+          console.log('[LocalServer] Media request for:', mediaPath);
+
+          // Security: validate file extension
+          const ext = path.extname(mediaPath).toLowerCase();
+          if (!allowedMediaExtensions.has(ext)) {
+            console.error('[LocalServer] Disallowed file extension:', ext);
+            res.writeHead(403);
+            res.end('Forbidden');
+            return;
+          }
+
+          // Security: ensure path is absolute and doesn't contain traversal
+          if (!path.isAbsolute(mediaPath) || mediaPath.includes('..')) {
+            console.error('[LocalServer] Invalid media path:', mediaPath);
+            res.writeHead(403);
+            res.end('Forbidden');
+            return;
+          }
+
+          // Check if file exists
+          if (!fs.existsSync(mediaPath)) {
+            console.error('[LocalServer] Media file not found:', mediaPath);
+            res.writeHead(404);
+            res.end('Not Found');
+            return;
+          }
+
+          const stat = await fs.promises.stat(mediaPath);
+          const fileSize = stat.size;
+          const contentType = mimeTypes[ext] || 'application/octet-stream';
+          console.log('[LocalServer] File size:', fileSize, 'Content-Type:', contentType);
+
+          // Handle range requests for video/audio streaming
+          const rangeHeader = req.headers.range;
+          console.log('[LocalServer] Range header:', rangeHeader);
+
+          if (rangeHeader) {
+            const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+            if (rangeMatch) {
+              const start = parseInt(rangeMatch[1], 10);
+              const hasEndByte = rangeMatch[2] && rangeMatch[2].length > 0;
+              let end = hasEndByte ? parseInt(rangeMatch[2], 10) : fileSize - 1;
+              if (end >= fileSize) end = fileSize - 1;
+              if (start >= fileSize) {
+                res.writeHead(416, { 'Content-Range': `bytes */${fileSize}` });
+                res.end();
+                return;
+              }
+              const chunkSize = end - start + 1;
+              console.log('[LocalServer] Serving range:', start, '-', end, 'chunk size:', chunkSize);
+
+              // Always use 206 for range requests - this tells the browser we support seeking
+              res.writeHead(206, {
+                'Content-Type': contentType,
+                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                'Accept-Ranges': 'bytes',
+                'Content-Length': chunkSize
+              });
+
+              // Manual streaming with explicit drain handling
+              const fileStream = fs.createReadStream(mediaPath, { start, end, highWaterMark: 1024 * 1024 }); // 1MB chunks
+              let bytesSent = 0;
+              let isClientConnected = true;
+
+              res.on('close', () => {
+                console.log('[LocalServer] Response closed, bytes sent:', bytesSent);
+                isClientConnected = false;
+                fileStream.destroy();
+              });
+
+              res.on('error', (err) => {
+                console.error('[LocalServer] Response error:', err);
+                isClientConnected = false;
+                fileStream.destroy();
+              });
+
+              fileStream.on('error', (err) => {
+                console.error('[LocalServer] File stream error:', err);
+                if (!res.headersSent) {
+                  res.writeHead(500);
+                }
+                res.end();
+              });
+
+              fileStream.on('data', (chunk) => {
+                if (!isClientConnected) {
+                  fileStream.destroy();
+                  return;
+                }
+
+                bytesSent += chunk.length;
+                if (bytesSent <= 1000000 || bytesSent % 10000000 < 1100000) {
+                  console.log('[LocalServer] Sending chunk, total bytes:', bytesSent);
+                }
+
+                const canContinue = res.write(chunk);
+                if (!canContinue) {
+                  // Backpressure - pause until drained
+                  fileStream.pause();
+                  res.once('drain', () => {
+                    if (isClientConnected) {
+                      fileStream.resume();
+                    }
+                  });
+                }
+              });
+
+              fileStream.on('end', () => {
+                console.log('[LocalServer] Stream complete, total bytes:', bytesSent);
+                res.end();
+              });
+
+              return;
+            }
+          }
+
+          // Full file response - no Range header (rare case)
+          console.log('[LocalServer] Serving full file (no range), size:', fileSize);
+          res.writeHead(200, {
+            'Content-Type': contentType,
+            'Content-Length': fileSize,
+            'Accept-Ranges': 'bytes'
+          });
+
+          // Use same manual streaming for consistency
+          const fileStream = fs.createReadStream(mediaPath, { highWaterMark: 1024 * 1024 });
+          let bytesSent = 0;
+          let isClientConnected = true;
+
+          res.on('close', () => {
+            console.log('[LocalServer] Response closed (full file), bytes sent:', bytesSent);
+            isClientConnected = false;
+            fileStream.destroy();
+          });
+
+          res.on('error', (err) => {
+            console.error('[LocalServer] Response error (full file):', err);
+            isClientConnected = false;
+            fileStream.destroy();
+          });
+
+          fileStream.on('error', (err) => {
+            console.error('[LocalServer] File stream error (full file):', err);
+            if (!res.headersSent) {
+              res.writeHead(500);
+            }
+            res.end();
+          });
+
+          fileStream.on('data', (chunk) => {
+            if (!isClientConnected) {
+              fileStream.destroy();
+              return;
+            }
+            bytesSent += chunk.length;
+            if (bytesSent <= 1000000 || bytesSent % 10000000 < 1100000) {
+              console.log('[LocalServer] Full file chunk, total bytes:', bytesSent);
+            }
+            const canContinue = res.write(chunk);
+            if (!canContinue) {
+              fileStream.pause();
+              res.once('drain', () => {
+                if (isClientConnected) {
+                  fileStream.resume();
+                }
+              });
+            }
+          });
+
+          fileStream.on('end', () => {
+            console.log('[LocalServer] Full file stream complete, total bytes:', bytesSent);
+            res.end();
+          });
+
+          return;
+        } catch (error) {
+          console.error('[LocalServer] Media request error:', error);
+          res.writeHead(500);
+          res.end('Internal Server Error');
+          return;
+        }
+      }
+
+      let filePath = reqUrl;
 
       // Handle hash routes - serve index.html
       if (filePath.includes('#')) {
@@ -165,24 +393,32 @@ async function startLocalServer(): Promise<number> {
       }
 
       fs.readFile(fullPath, (err, data) => {
-        if (err) {
-          // Try index.html for SPA routing
-          fs.readFile(path.join(rendererPath, 'index.html'), (err2, data2) => {
-            if (err2) {
-              res.writeHead(404);
-              res.end('Not Found');
-            } else {
-              res.writeHead(200, { 'Content-Type': 'text/html' });
-              res.end(data2);
-            }
-          });
-          return;
-        }
+        try {
+          if (err) {
+            // Try index.html for SPA routing
+            fs.readFile(path.join(rendererPath, 'index.html'), (err2, data2) => {
+              try {
+                if (err2) {
+                  res.writeHead(404);
+                  res.end('Not Found');
+                } else {
+                  res.writeHead(200, { 'Content-Type': 'text/html' });
+                  res.end(data2);
+                }
+              } catch (responseError) {
+                console.error('[LocalServer] Error sending fallback response:', responseError);
+              }
+            });
+            return;
+          }
 
-        const ext = path.extname(fullPath).toLowerCase();
-        const contentType = mimeTypes[ext] || 'application/octet-stream';
-        res.writeHead(200, { 'Content-Type': contentType });
-        res.end(data);
+          const ext = path.extname(fullPath).toLowerCase();
+          const contentType = mimeTypes[ext] || 'application/octet-stream';
+          res.writeHead(200, { 'Content-Type': contentType });
+          res.end(data);
+        } catch (responseError) {
+          console.error('[LocalServer] Error sending response:', responseError);
+        }
       });
     });
 
@@ -190,7 +426,6 @@ async function startLocalServer(): Promise<number> {
     const tryPort = (port: number) => {
       localServer!.listen(port, '127.0.0.1', () => {
         localServerPort = port;
-        console.log(`[LocalServer] Running on http://127.0.0.1:${port}`);
         resolve(port);
       }).on('error', (err: any) => {
         if (err.code === 'EADDRINUSE') {
@@ -206,14 +441,17 @@ async function startLocalServer(): Promise<number> {
 }
 
 async function initializeApp(): Promise<void> {
-  console.log('Starting app initialization...');
-
   // Initialize database
   try {
     await initDatabase();
   } catch (err) {
     console.error('Database initialization failed:', err);
   }
+
+  // Cleanup orphaned media files from previous crashes
+  cleanupOrphanedFiles().catch((err) => {
+    console.warn('Media cleanup warning:', err);
+  });
 
   // Initialize ML translator in background (downloads model on first run)
   initTranslator().then((success) => {
@@ -227,48 +465,94 @@ async function initializeApp(): Promise<void> {
   });
 
   // Initialize display manager
-  console.log('Creating display manager...');
   displayManager = new DisplayManager();
-  console.log('Display manager created');
 
   // Register IPC handlers
-  console.log('Registering IPC handlers...');
   registerIpcHandlers(displayManager);
-  console.log('IPC handlers registered');
 
   // Register media protocol handler with streaming support
-  console.log('Registering media protocol...');
+
+  // Whitelist of allowed file extensions for security
+  const ALLOWED_MEDIA_EXTENSIONS = new Set([
+    // Images
+    '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg',
+    // Videos
+    '.mp4', '.webm', '.mov', '.avi', '.mkv', '.wmv', '.m4v',
+    // Audio
+    '.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac'
+  ]);
+
   try {
     protocol.handle('media', async (request) => {
-      // Extract file path from media:// URL
-      const url = new URL(request.url);
-      let filePath = decodeURIComponent(url.pathname);
+      try {
+        // Extract file path from media:// URL
+        const url = new URL(request.url);
+        console.log('[media protocol] Request URL:', request.url);
+        console.log('[media protocol] pathname:', url.pathname);
 
-      // On Windows, pathname starts with / before drive letter, remove it
-      if (process.platform === 'win32' && filePath.startsWith('/')) {
-        filePath = filePath.substring(1);
-      }
+        let filePath = decodeURIComponent(url.pathname);
+        console.log('[media protocol] Decoded pathname:', filePath);
 
-      // Convert forward slashes to backslashes on Windows
-      if (process.platform === 'win32') {
-        filePath = filePath.replace(/\//g, '\\');
-      }
+        // Remove /file/ prefix if present (used in media://file/C:/path format)
+        if (filePath.startsWith('/file/')) {
+          filePath = filePath.substring(6); // Remove '/file/'
+          console.log('[media protocol] After removing /file/:', filePath);
+        } else if (filePath.startsWith('/')) {
+          // On Windows, pathname starts with / before drive letter, remove it
+          filePath = filePath.substring(1);
+          console.log('[media protocol] After removing leading /:', filePath);
+        }
 
-      // Security: prevent directory traversal
-      if (filePath.includes('..')) {
-        return new Response('Forbidden', { status: 403 });
-      }
+        // Convert forward slashes to backslashes on Windows
+        if (process.platform === 'win32') {
+          filePath = filePath.replace(/\//g, '\\');
+        }
 
-      console.log('[media protocol] Request URL:', request.url);
-      console.log('[media protocol] Resolved path:', filePath);
+        // Normalize path to resolve any . or redundant separators
+        filePath = path.normalize(filePath);
+        console.log('[media protocol] Final path:', filePath);
+        console.log('[media protocol] File exists:', fs.existsSync(filePath));
 
-      // Check if file exists
-      if (!fs.existsSync(filePath)) {
-        console.error('[media protocol] File not found:', filePath);
-        return new Response('Not Found', { status: 404 });
-      }
+        // Security: prevent directory traversal
+        if (filePath.includes('..')) {
+          console.error('[media protocol] Path traversal attempt blocked:', request.url);
+          return new Response('Forbidden', { status: 403 });
+        }
 
-      const ext = path.extname(filePath).toLowerCase();
+        // Security: ensure path is absolute
+        if (!path.isAbsolute(filePath)) {
+          console.error('[media protocol] Non-absolute path rejected:', filePath);
+          return new Response('Forbidden', { status: 403 });
+        }
+
+        // Security: validate file extension
+        const ext = path.extname(filePath).toLowerCase();
+        if (!ALLOWED_MEDIA_EXTENSIONS.has(ext)) {
+          console.error('[media protocol] Disallowed file extension:', ext);
+          return new Response('Forbidden', { status: 403 });
+        }
+
+        // Check if file exists
+        if (!fs.existsSync(filePath)) {
+          console.error('[media protocol] File not found:', filePath);
+          return new Response('Not Found', { status: 404 });
+        }
+
+        // Security: check for symlinks and resolve to real path
+        const lstatResult = await fs.promises.lstat(filePath);
+        if (lstatResult.isSymbolicLink()) {
+          const realPath = await fs.promises.realpath(filePath);
+          // Ensure the real path still has an allowed extension
+          const realExt = path.extname(realPath).toLowerCase();
+          if (!ALLOWED_MEDIA_EXTENSIONS.has(realExt)) {
+            console.error('[media protocol] Symlink target has disallowed extension:', realPath);
+            return new Response('Forbidden', { status: 403 });
+          }
+          // Use the real path for serving
+          filePath = realPath;
+          console.log('[media protocol] Resolved symlink to:', filePath);
+        }
+
       const mimeTypes: Record<string, string> = {
         '.jpg': 'image/jpeg',
         '.jpeg': 'image/jpeg',
@@ -297,48 +581,107 @@ async function initializeApp(): Promise<void> {
       const isStreamable = isVideo || isAudio;
       const rangeHeader = request.headers.get('range');
 
-      console.log(`[media protocol] File: ${fileSize} bytes, Range: ${rangeHeader || 'none'}, Video: ${isVideo}, Audio: ${isAudio}`);
+      // For videos and audio: use ReadableStream for proper streaming
+      console.log('[media protocol] isStreamable:', isStreamable, 'rangeHeader:', rangeHeader, 'fileSize:', fileSize);
 
-      // For videos and audio: serve full file on initial request so browser gets duration
-      // Then use chunked responses for seeking
       if (isStreamable) {
-        if (!rangeHeader || rangeHeader === 'bytes=0-' || rangeHeader.startsWith('bytes=0-')) {
-          // Initial request - serve full file for duration metadata
-          console.log('[media protocol] Serving full media file for duration metadata');
-          const fullBuffer = await fs.promises.readFile(filePath);
+        // Parse range header
+        let start = 0;
+        let end = fileSize - 1;
+        let isRangeRequest = false;
 
-          return new Response(fullBuffer, {
-            status: 200,
-            headers: {
-              'Content-Type': contentType,
-              'Content-Length': String(fileSize),
-              'Accept-Ranges': 'bytes'
+        if (rangeHeader) {
+          const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+          if (rangeMatch) {
+            start = parseInt(rangeMatch[1], 10);
+            if (rangeMatch[2]) {
+              end = parseInt(rangeMatch[2], 10);
             }
+            isRangeRequest = true;
+          }
+        }
+
+        // Clamp values
+        if (end >= fileSize) end = fileSize - 1;
+        if (start >= fileSize) {
+          return new Response('Range Not Satisfiable', {
+            status: 416,
+            headers: { 'Content-Range': `bytes */${fileSize}` }
           });
         }
 
-        // Seeking request - serve the requested range
-        const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-        if (rangeMatch) {
-          const start = parseInt(rangeMatch[1], 10);
-          const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : fileSize - 1;
-          const chunkSize = end - start + 1;
+        const contentLength = end - start + 1;
+        console.log('[media protocol] Streaming range:', start, '-', end, 'length:', contentLength);
 
-          console.log(`[media protocol] Serving range ${start}-${end} (${chunkSize} bytes)`);
+        // Create a ReadableStream from the file
+        let fileStream: fs.ReadStream | null = null;
+        let isClosed = false;
 
-          const fd = await fs.promises.open(filePath, 'r');
-          const buffer = Buffer.alloc(chunkSize);
-          await fd.read(buffer, 0, chunkSize, start);
-          await fd.close();
+        const stream = new ReadableStream({
+          start(controller) {
+            fileStream = fs.createReadStream(filePath, { start, end });
 
-          return new Response(buffer, {
+            fileStream.on('data', (chunk: Buffer | string) => {
+              if (isClosed) return; // Don't enqueue if already closed
+              try {
+                if (typeof chunk === 'string') {
+                  controller.enqueue(new TextEncoder().encode(chunk));
+                } else {
+                  controller.enqueue(new Uint8Array(chunk));
+                }
+              } catch (err) {
+                // Controller may have been closed
+                console.log('[media protocol] Enqueue failed (controller likely closed)');
+                fileStream?.destroy();
+              }
+            });
+
+            fileStream.on('end', () => {
+              if (isClosed) return;
+              isClosed = true;
+              try {
+                controller.close();
+              } catch (err) {
+                // Already closed
+              }
+            });
+
+            fileStream.on('error', (err) => {
+              if (isClosed) return;
+              isClosed = true;
+              console.error('[media protocol] Stream error:', err);
+              try {
+                controller.error(err);
+              } catch (e) {
+                // Already closed
+              }
+            });
+          },
+          cancel() {
+            console.log('[media protocol] Stream cancelled by consumer');
+            isClosed = true;
+            fileStream?.destroy();
+          }
+        });
+
+        const headers: Record<string, string> = {
+          'Content-Type': contentType,
+          'Content-Length': String(contentLength),
+          'Accept-Ranges': 'bytes'
+        };
+
+        if (isRangeRequest) {
+          headers['Content-Range'] = `bytes ${start}-${end}/${fileSize}`;
+          console.log('[media protocol] Returning 206 with Content-Range:', headers['Content-Range']);
+          return new Response(stream, {
             status: 206,
-            headers: {
-              'Content-Type': contentType,
-              'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-              'Accept-Ranges': 'bytes',
-              'Content-Length': String(chunkSize)
-            }
+            headers
+          });
+        } else {
+          console.log('[media protocol] Returning 200 with full stream');
+          return new Response(stream, {
+            status: 200,
+            headers
           });
         }
       }
@@ -353,18 +696,19 @@ async function initializeApp(): Promise<void> {
           'Accept-Ranges': 'bytes'
         }
       });
+      } catch (error) {
+        console.error('[media protocol] Error handling request:', error);
+        return new Response('Internal Server Error', { status: 500 });
+      }
     });
-    console.log('Media protocol registered');
   } catch (err) {
     console.error('Failed to register media protocol:', err);
   }
 
   // Register app protocol for serving renderer files (needed for YouTube to work)
   if (!isDev) {
-    console.log('Registering app protocol for production...');
     try {
       const rendererPath = path.join(__dirname, '../../renderer');
-      console.log('[app protocol] Renderer path:', rendererPath);
 
       protocol.handle('app', async (request) => {
         const url = new URL(request.url);
@@ -381,7 +725,6 @@ async function initializeApp(): Promise<void> {
         }
 
         const fullPath = path.join(rendererPath, filePath);
-        console.log('[app protocol] Request:', request.url, '-> File:', fullPath);
 
         // Security: ensure path is within renderer directory
         const normalizedPath = path.normalize(fullPath);
@@ -425,7 +768,6 @@ async function initializeApp(): Promise<void> {
           return new Response('Not Found', { status: 404 });
         }
       });
-      console.log('App protocol registered');
     } catch (err) {
       console.error('Failed to register app protocol:', err);
     }
@@ -434,9 +776,18 @@ async function initializeApp(): Promise<void> {
     try {
       const port = await startLocalServer();
       setLocalServerPort(port);
-      console.log('Local server started on port:', port);
     } catch (err) {
       console.error('Failed to start local server:', err);
+    }
+  } else {
+    // In dev mode, also start local HTTP server just for media file serving
+    // (renderer is served by Vite, but media files need our server)
+    try {
+      const port = await startLocalServer();
+      setLocalServerPort(port);
+      console.log(`[Dev] Media server started on port ${port}`);
+    } catch (err) {
+      console.error('Failed to start media server:', err);
     }
   }
 
@@ -463,6 +814,23 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+// Cleanup on quit to ensure all resources are properly released
+app.on('before-quit', () => {
+  // Stop watching for display changes
+  if (displayManager) {
+    displayManager.stopWatching();
+  }
+
+  // Close local HTTP server
+  if (localServer) {
+    localServer.close();
+    localServer = null;
+  }
+
+  // Flush database
+  flushDatabase();
 });
 
 app.on('activate', () => {

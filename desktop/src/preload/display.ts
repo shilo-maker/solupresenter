@@ -65,14 +65,35 @@ contextBridge.exposeInMainWorld('displayAPI', {
 
   // ============ Report Status Back ============
   reportReady: () => ipcRenderer.send('display:ready'),
-  reportVideoTime: (time: number, duration: number) => ipcRenderer.send('video:timeUpdate', time, duration),
+  reportVideoTime: (time: number, duration: number) => {
+    // Validate inputs to prevent sending invalid data
+    if (typeof time !== 'number' || !isFinite(time) || time < 0) return;
+    if (typeof duration !== 'number' || !isFinite(duration) || duration < 0) return;
+    ipcRenderer.send('video:timeUpdate', time, duration);
+  },
   reportVideoEnded: () => ipcRenderer.send('video:ended'),
-  reportVideoPlaying: (playing: boolean) => ipcRenderer.send('video:playing', playing),
-  reportError: (error: string) => ipcRenderer.send('display:error', error),
+  reportVideoPlaying: (playing: boolean) => {
+    if (typeof playing !== 'boolean') return;
+    ipcRenderer.send('video:playing', playing);
+  },
+  reportError: (error: string) => {
+    // Validate and sanitize error message
+    if (typeof error !== 'string') return;
+    ipcRenderer.send('display:error', error.substring(0, 1000));
+  },
 
   // ============ Request Data ============
   getVideoPosition: () => ipcRenderer.invoke('video:getPosition'),
-  getYoutubePosition: () => ipcRenderer.invoke('youtube:getPosition')
+  getYoutubePosition: () => ipcRenderer.invoke('youtube:getPosition'),
+  getMediaServerPort: () => ipcRenderer.invoke('media:getServerPort'),
+
+  // ============ Video Sync ============
+  // Signal that display is ready to play video (triggers synchronized start)
+  signalVideoReady: () => ipcRenderer.invoke('video:displayReady'),
+
+  // ============ Display Control ============
+  // Close this display window (used when display is on same screen as control)
+  closeDisplay: () => ipcRenderer.invoke('display:closeSelf')
 });
 
 // Type declarations for TypeScript
@@ -101,6 +122,13 @@ declare global {
       // Request Data
       getVideoPosition: () => Promise<{ time: number; isPlaying: boolean } | null>;
       getYoutubePosition: () => Promise<{ time: number; isPlaying: boolean } | null>;
+      getMediaServerPort: () => Promise<number>;
+
+      // Video Sync
+      signalVideoReady: () => Promise<boolean>;
+
+      // Display Control
+      closeDisplay: () => Promise<boolean>;
     };
   }
 }

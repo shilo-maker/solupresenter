@@ -1,6 +1,9 @@
 import axios from 'axios';
 import { getDb, saveDatabase } from '../database';
 
+// Timeout for all auth requests (15 seconds)
+const AUTH_REQUEST_TIMEOUT = 15000;
+
 export interface User {
   id: string;
   email: string;
@@ -79,7 +82,7 @@ class AuthService {
       const response = await axios.post(`${url}/auth/login`, {
         email,
         password
-      });
+      }, { timeout: AUTH_REQUEST_TIMEOUT });
 
       const { token, user } = response.data;
 
@@ -121,7 +124,7 @@ class AuthService {
         email,
         password,
         language: 'he'
-      });
+      }, { timeout: AUTH_REQUEST_TIMEOUT });
 
       if (response.data.requiresVerification) {
         return {
@@ -162,7 +165,8 @@ class AuthService {
       const response = await axios.get(`${this.state.serverUrl}/auth/me`, {
         headers: {
           Authorization: `Bearer ${this.state.token}`
-        }
+        },
+        timeout: AUTH_REQUEST_TIMEOUT
       });
 
       return response.data.user;

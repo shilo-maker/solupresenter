@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Card, Button, Badge, ListGroup, Row, Col, Spinner, Alert, Toast, ToastContainer } from 'react-bootstrap';
+import { Container, Card, Button, Badge, ListGroup, Row, Col, Spinner, Alert } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -13,10 +13,10 @@ function SetlistView() {
   const [setlist, setSetlist] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   useEffect(() => {
     fetchSetlist();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchSetlist = async () => {

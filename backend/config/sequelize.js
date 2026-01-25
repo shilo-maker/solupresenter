@@ -17,6 +17,8 @@ if (useSQLite) {
 } else {
   // PostgreSQL for production or if DATABASE_URL is explicitly set
   console.log('🐘 Using PostgreSQL');
+  // Enable SSL for remote databases (render.com, etc.)
+  const needsSSL = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('render.com');
   sequelize = new Sequelize(process.env.DATABASE_URL, {
     dialect: 'postgres',
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
@@ -26,7 +28,7 @@ if (useSQLite) {
       acquire: 30000,
       idle: 10000
     },
-    dialectOptions: isProduction ? {
+    dialectOptions: (isProduction || needsSSL) ? {
       ssl: {
         require: true,
         rejectUnauthorized: false

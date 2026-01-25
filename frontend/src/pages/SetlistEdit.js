@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Form, ListGroup, InputGroup, Alert, Spinner, Toast, ToastContainer } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Form, ListGroup, InputGroup, Alert, Spinner } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api, { getFullImageUrl } from '../services/api';
@@ -17,7 +17,6 @@ function SetlistEdit() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   // Bible state
   const [bibleBooks, setBibleBooks] = useState([]);
@@ -34,6 +33,7 @@ function SetlistEdit() {
     fetchSongs();
     fetchMedia();
     fetchBibleBooks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchSetlist = async () => {
@@ -115,6 +115,7 @@ function SetlistEdit() {
     if (selectedBibleBook && selectedBibleChapter) {
       fetchBibleVerses(selectedBibleBook, selectedBibleChapter);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBibleBook, selectedBibleChapter]);
 
   const handleSearch = (query) => {
@@ -170,28 +171,6 @@ function SetlistEdit() {
   const removeItem = (index) => {
     const newItems = items.filter((_, i) => i !== index);
     // Reorder items
-    newItems.forEach((item, idx) => {
-      item.order = idx;
-    });
-    setItems(newItems);
-  };
-
-  const moveItemUp = (index) => {
-    if (index === 0) return;
-    const newItems = [...items];
-    [newItems[index - 1], newItems[index]] = [newItems[index], newItems[index - 1]];
-    // Update order
-    newItems.forEach((item, idx) => {
-      item.order = idx;
-    });
-    setItems(newItems);
-  };
-
-  const moveItemDown = (index) => {
-    if (index === items.length - 1) return;
-    const newItems = [...items];
-    [newItems[index], newItems[index + 1]] = [newItems[index + 1], newItems[index]];
-    // Update order
     newItems.forEach((item, idx) => {
       item.order = idx;
     });

@@ -171,7 +171,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     remove: (displayId: number, themeType: 'viewer' | 'stage' | 'bible' | 'prayer') =>
       ipcRenderer.invoke('displayThemeOverrides:remove', displayId, themeType),
     removeAllForDisplay: (displayId: number) =>
-      ipcRenderer.invoke('displayThemeOverrides:removeAllForDisplay', displayId)
+      ipcRenderer.invoke('displayThemeOverrides:removeAllForDisplay', displayId),
+    rebroadcast: () => ipcRenderer.invoke('displayThemeOverrides:rebroadcast')
   },
 
   // ============ Database - Presentations ============
@@ -462,6 +463,7 @@ declare global {
         } | null>;
         remove: (displayId: number, themeType: 'viewer' | 'stage' | 'bible' | 'prayer') => Promise<boolean>;
         removeAllForDisplay: (displayId: number) => Promise<boolean>;
+        rebroadcast: () => Promise<boolean>;
       };
 
       // Database - Presentations

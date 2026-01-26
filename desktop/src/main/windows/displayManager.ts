@@ -999,6 +999,34 @@ export class DisplayManager {
   }
 
   /**
+   * Re-broadcast all current themes to all displays
+   * Called after theme overrides are changed to apply the new settings
+   */
+  rebroadcastAllThemes(): void {
+    log.debug('Rebroadcasting all themes to displays');
+
+    // Re-broadcast viewer themes (songs)
+    if (this.currentViewerTheme) {
+      this.broadcastTheme(this.currentViewerTheme);
+    }
+
+    // Re-broadcast stage themes
+    if (this.currentStageTheme) {
+      this.broadcastStageTheme(this.currentStageTheme);
+    }
+
+    // Re-broadcast bible themes
+    if (this.currentBibleTheme) {
+      this.broadcastBibleTheme(this.currentBibleTheme);
+    }
+
+    // Re-broadcast prayer themes
+    if (this.currentPrayerTheme) {
+      this.broadcastPrayerTheme(this.currentPrayerTheme);
+    }
+  }
+
+  /**
    * Start watching for display changes (connect/disconnect)
    */
   startWatching(callback: (displays: DisplayInfo[]) => void): void {

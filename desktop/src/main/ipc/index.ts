@@ -2017,7 +2017,10 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
       if (!themeId || typeof themeId !== 'string' || themeId.length > MAX_NAME_LENGTH) {
         throw new Error('Invalid theme ID');
       }
-      return setDisplayThemeOverride(displayId, themeType, themeId);
+      const result = setDisplayThemeOverride(displayId, themeType, themeId);
+      // Re-broadcast themes to apply the new override immediately
+      displayManager.rebroadcastAllThemes();
+      return result;
     } catch (error) {
       console.error('[IPC displayThemeOverrides:set] Error:', error);
       return null;
@@ -2033,7 +2036,10 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
       if (!validTypes.includes(themeType)) {
         throw new Error('Invalid theme type');
       }
-      return removeDisplayThemeOverride(displayId, themeType);
+      const result = removeDisplayThemeOverride(displayId, themeType);
+      // Re-broadcast themes to apply the change immediately
+      displayManager.rebroadcastAllThemes();
+      return result;
     } catch (error) {
       console.error('[IPC displayThemeOverrides:remove] Error:', error);
       return false;
@@ -2045,9 +2051,22 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
       if (typeof displayId !== 'number' || isNaN(displayId)) {
         throw new Error('Invalid display ID');
       }
-      return removeAllDisplayThemeOverrides(displayId);
+      const result = removeAllDisplayThemeOverrides(displayId);
+      // Re-broadcast themes to apply the change immediately
+      displayManager.rebroadcastAllThemes();
+      return result;
     } catch (error) {
       console.error('[IPC displayThemeOverrides:removeAllForDisplay] Error:', error);
+      return false;
+    }
+  });
+
+  ipcMain.handle('displayThemeOverrides:rebroadcast', () => {
+    try {
+      displayManager.rebroadcastAllThemes();
+      return true;
+    } catch (error) {
+      console.error('[IPC displayThemeOverrides:rebroadcast] Error:', error);
       return false;
     }
   });

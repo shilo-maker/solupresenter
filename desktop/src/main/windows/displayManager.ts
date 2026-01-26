@@ -564,22 +564,28 @@ export class DisplayManager {
     // Store for late-joining displays
     this.currentSlideData = slideData;
 
-    // Include the appropriate theme based on contentType
+    // Determine the global theme based on contentType
     const contentType = slideData.contentType || 'song';
-    let activeTheme = this.currentViewerTheme;
+    let globalTheme = this.currentViewerTheme;
+    let themeType: DisplayThemeType = 'viewer';
     if (contentType === 'bible') {
-      activeTheme = this.currentBibleTheme;
+      globalTheme = this.currentBibleTheme;
+      themeType = 'bible';
     } else if (contentType === 'prayer' || contentType === 'sermon') {
-      activeTheme = this.currentPrayerTheme;
+      globalTheme = this.currentPrayerTheme;
+      themeType = 'prayer';
     }
-    const slideWithTheme = {
-      ...slideData,
-      activeTheme // Include theme so viewer knows which to apply
-    };
 
+    // Send to each display with its appropriate theme (respecting overrides)
     for (const managed of this.displays.values()) {
       try {
         if (managed.window && !managed.window.isDestroyed()) {
+          // Get the theme for this specific display (may have override)
+          const activeTheme = this.getThemeForDisplay(managed.id, themeType, globalTheme);
+          const slideWithTheme = {
+            ...slideData,
+            activeTheme
+          };
           managed.window.webContents.send('slide:update', slideWithTheme);
         }
       } catch (error) {
@@ -588,9 +594,13 @@ export class DisplayManager {
       }
     }
 
-    // Also send to OBS overlay
+    // Also send to OBS overlay (no per-display override for OBS)
     try {
       if (this.obsOverlayWindow?.window && !this.obsOverlayWindow.window.isDestroyed()) {
+        const slideWithTheme = {
+          ...slideData,
+          activeTheme: globalTheme
+        };
         this.obsOverlayWindow.window.webContents.send('slide:update', slideWithTheme);
       }
     } catch (error) {

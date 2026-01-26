@@ -39,7 +39,7 @@ function getSqlJsWasmPath(): string {
 }
 
 // Current schema version - increment when adding migrations
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2;
 
 let db: Database | null = null;
 
@@ -89,15 +89,21 @@ function runMigrations(fromVersion: number): void {
   console.log(`Running migrations from version ${fromVersion} to ${CURRENT_SCHEMA_VERSION}`);
 
   // Add new migrations here as the schema evolves
-  // Example:
-  // if (fromVersion < 2) {
-  //   console.log('Running migration to version 2...');
-  //   db.run('ALTER TABLE songs ADD COLUMN newField TEXT');
-  // }
-  // if (fromVersion < 3) {
-  //   console.log('Running migration to version 3...');
-  //   db.run('CREATE TABLE new_table (...)');
-  // }
+  if (fromVersion < 2) {
+    console.log('Running migration to version 2: Adding display_theme_overrides table...');
+    db.run(`
+      CREATE TABLE IF NOT EXISTS display_theme_overrides (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        displayId INTEGER NOT NULL,
+        themeType TEXT NOT NULL CHECK(themeType IN ('viewer', 'stage', 'bible', 'prayer')),
+        themeId TEXT NOT NULL,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(displayId, themeType)
+      )
+    `);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_display_theme_overrides_displayId ON display_theme_overrides(displayId)`);
+  }
 
   setSchemaVersion(CURRENT_SCHEMA_VERSION);
   console.log(`Migrations complete. Schema is now at version ${CURRENT_SCHEMA_VERSION}`);
@@ -626,6 +632,20 @@ export async function initDatabase(): Promise<void> {
       )
     `);
     db.run(`CREATE INDEX IF NOT EXISTS idx_audio_playlists_name ON audio_playlists(name)`);
+
+    // Create display_theme_overrides table
+    db.run(`
+      CREATE TABLE IF NOT EXISTS display_theme_overrides (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        displayId INTEGER NOT NULL,
+        themeType TEXT NOT NULL CHECK(themeType IN ('viewer', 'stage', 'bible', 'prayer')),
+        themeId TEXT NOT NULL,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(displayId, themeType)
+      )
+    `);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_display_theme_overrides_displayId ON display_theme_overrides(displayId)`);
 
     // Create prayer_themes table
     db.run(`
@@ -1416,3 +1436,88 @@ export const CLASSIC_OBS_BIBLE_THEME_ID = '00000000-0000-0000-0000-000000000005'
 export const CLASSIC_PRAYER_THEME_ID = '00000000-0000-0000-0000-000000000006';
 export const LOWER_THIRD_OBS_SONGS_THEME_ID = '00000000-0000-0000-0000-000000000007';
 export const CLASSIC_OBS_PRAYER_THEME_ID = '00000000-0000-0000-0000-000000000008';
+
+// ============ Display Theme Overrides ============
+
+export type DisplayThemeType = 'viewer' | 'stage' | 'bible' | 'prayer';
+
+export interface DisplayThemeOverride {
+  id: number;
+  displayId: number;
+  themeType: DisplayThemeType;
+  themeId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Get all display theme overrides
+ */
+export function getAllDisplayThemeOverrides(): DisplayThemeOverride[] {
+  return queryAll('SELECT * FROM display_theme_overrides ORDER BY displayId, themeType');
+}
+
+/**
+ * Get theme overrides for a specific display
+ */
+export function getDisplayThemeOverrides(displayId: number): DisplayThemeOverride[] {
+  return queryAll('SELECT * FROM display_theme_overrides WHERE displayId = ?', [displayId]);
+}
+
+/**
+ * Get a specific theme override for a display and theme type
+ */
+export function getDisplayThemeOverride(displayId: number, themeType: DisplayThemeType): DisplayThemeOverride | null {
+  return queryOne('SELECT * FROM display_theme_overrides WHERE displayId = ? AND themeType = ?', [displayId, themeType]);
+}
+
+/**
+ * Set a theme override for a display (upsert)
+ */
+export function setDisplayThemeOverride(displayId: number, themeType: DisplayThemeType, themeId: string): DisplayThemeOverride | null {
+  if (!db) return null;
+
+  const now = new Date().toISOString();
+
+  // Use INSERT OR REPLACE for upsert behavior
+  db.run(`
+    INSERT OR REPLACE INTO display_theme_overrides (displayId, themeType, themeId, createdAt, updatedAt)
+    VALUES (?, ?, ?, COALESCE((SELECT createdAt FROM display_theme_overrides WHERE displayId = ? AND themeType = ?), ?), ?)
+  `, [displayId, themeType, themeId, displayId, themeType, now, now]);
+
+  saveDatabase();
+  return getDisplayThemeOverride(displayId, themeType);
+}
+
+/**
+ * Remove a theme override for a display and theme type
+ */
+export function removeDisplayThemeOverride(displayId: number, themeType: DisplayThemeType): boolean {
+  if (!db) return false;
+
+  db.run('DELETE FROM display_theme_overrides WHERE displayId = ? AND themeType = ?', [displayId, themeType]);
+  saveDatabase();
+  return true;
+}
+
+/**
+ * Remove all theme overrides for a display
+ */
+export function removeAllDisplayThemeOverrides(displayId: number): boolean {
+  if (!db) return false;
+
+  db.run('DELETE FROM display_theme_overrides WHERE displayId = ?', [displayId]);
+  saveDatabase();
+  return true;
+}
+
+/**
+ * Clear all display theme overrides
+ */
+export function clearAllDisplayThemeOverrides(): boolean {
+  if (!db) return false;
+
+  db.run('DELETE FROM display_theme_overrides');
+  saveDatabase();
+  return true;
+}

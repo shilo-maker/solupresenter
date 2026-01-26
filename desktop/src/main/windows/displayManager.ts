@@ -1,6 +1,7 @@
 import { BrowserWindow, screen, Display, ipcMain, app } from 'electron';
 import * as path from 'path';
 import { createLogger } from '../utils/debug';
+import { getDisplayThemeOverride, DisplayThemeType } from '../database/index';
 
 // Create logger for this module
 const log = createLogger('DisplayManager');
@@ -98,6 +99,14 @@ export class DisplayManager {
   private identifyWindows: BrowserWindow[] = [];
   private identifyTimeout: NodeJS.Timeout | null = null;
 
+  // Theme resolver callbacks - set from IPC to resolve theme IDs to theme objects
+  private themeResolvers: {
+    viewer?: (id: string) => any;
+    stage?: (id: string) => any;
+    bible?: (id: string) => any;
+    prayer?: (id: string) => any;
+  } = {};
+
   // Track ALL current presentation state for late-joining displays
   private currentViewerTheme: any = null;
   private currentStageTheme: any = null;
@@ -173,9 +182,10 @@ export class DisplayManager {
 
     try {
     if (managed.type === 'viewer') {
-      // Theme
+      // Theme - respect per-display overrides
       if (this.currentViewerTheme) {
-        managed.window.webContents.send('theme:update', this.currentViewerTheme);
+        const themeToSend = this.getThemeForDisplay(managed.id, 'viewer', this.currentViewerTheme);
+        managed.window.webContents.send('theme:update', themeToSend);
       }
 
       // Background
@@ -183,15 +193,20 @@ export class DisplayManager {
         managed.window.webContents.send('background:update', this.currentBackground);
       }
 
-      // Slide data (with calculated activeTheme for late-joining displays)
+      // Slide data (with calculated activeTheme for late-joining displays, respecting overrides)
       if (this.currentSlideData) {
         const contentType = this.currentSlideData.contentType || 'song';
         let activeTheme = this.currentViewerTheme;
+        let themeType: DisplayThemeType = 'viewer';
         if (contentType === 'bible') {
           activeTheme = this.currentBibleTheme;
+          themeType = 'bible';
         } else if (contentType === 'prayer' || contentType === 'sermon') {
           activeTheme = this.currentPrayerTheme;
+          themeType = 'prayer';
         }
+        // Apply per-display override if available
+        activeTheme = this.getThemeForDisplay(managed.id, themeType, activeTheme);
         managed.window.webContents.send('slide:update', { ...this.currentSlideData, activeTheme });
       }
 
@@ -220,9 +235,10 @@ export class DisplayManager {
         });
       }
     } else if (managed.type === 'stage') {
-      // Stage theme
+      // Stage theme - respect per-display overrides
       if (this.currentStageTheme) {
-        managed.window.webContents.send('stageTheme:update', this.currentStageTheme);
+        const themeToSend = this.getThemeForDisplay(managed.id, 'stage', this.currentStageTheme);
+        managed.window.webContents.send('stageTheme:update', themeToSend);
       }
 
       // Slide data (stage monitors also show slides, with activeTheme)
@@ -599,7 +615,7 @@ export class DisplayManager {
   }
 
   /**
-   * Send theme update to all viewers
+   * Send theme update to all viewers (respects per-display overrides)
    */
   broadcastTheme(theme: any): void {
     // Validate theme is an object (can be null to clear theme)
@@ -609,11 +625,17 @@ export class DisplayManager {
     }
     this.currentViewerTheme = theme;
     log.debug(' broadcastTheme - storing theme:', theme?.name);
-    this.broadcastToType('viewer', 'theme:update', theme);
+
+    // Send to each viewer with potential per-display override
+    for (const managed of this.displays.values()) {
+      if (managed.type === 'viewer') {
+        this.sendThemeToDisplay(managed, 'viewer', theme, 'theme:update');
+      }
+    }
   }
 
   /**
-   * Send stage theme update to all stage monitors
+   * Send stage theme update to all stage monitors (respects per-display overrides)
    */
   broadcastStageTheme(theme: any): void {
     // Validate theme is an object (can be null to clear theme)
@@ -622,11 +644,17 @@ export class DisplayManager {
       return;
     }
     this.currentStageTheme = theme;
-    this.broadcastToType('stage', 'stageTheme:update', theme);
+
+    // Send to each stage display with potential per-display override
+    for (const managed of this.displays.values()) {
+      if (managed.type === 'stage') {
+        this.sendThemeToDisplay(managed, 'stage', theme, 'stageTheme:update');
+      }
+    }
   }
 
   /**
-   * Send bible theme update to all viewers (for bible content)
+   * Send bible theme update to all viewers (for bible content, respects per-display overrides)
    */
   broadcastBibleTheme(theme: any): void {
     // Validate theme is an object (can be null to clear theme)
@@ -636,11 +664,17 @@ export class DisplayManager {
     }
     // Store for late-joining displays and content-type detection
     this.currentBibleTheme = theme;
-    this.broadcastToType('viewer', 'bibleTheme:update', theme);
+
+    // Send to each viewer with potential per-display override
+    for (const managed of this.displays.values()) {
+      if (managed.type === 'viewer') {
+        this.sendThemeToDisplay(managed, 'bible', theme, 'bibleTheme:update');
+      }
+    }
   }
 
   /**
-   * Send prayer theme update to all viewers (for prayer/sermon content)
+   * Send prayer theme update to all viewers (for prayer/sermon content, respects per-display overrides)
    */
   broadcastPrayerTheme(theme: any): void {
     // Validate theme is an object (can be null to clear theme)
@@ -650,7 +684,13 @@ export class DisplayManager {
     }
     // Store for late-joining displays and content-type detection
     this.currentPrayerTheme = theme;
-    this.broadcastToType('viewer', 'prayerTheme:update', theme);
+
+    // Send to each viewer with potential per-display override
+    for (const managed of this.displays.values()) {
+      if (managed.type === 'viewer') {
+        this.sendThemeToDisplay(managed, 'prayer', theme, 'prayerTheme:update');
+      }
+    }
   }
 
   /**
@@ -912,6 +952,50 @@ export class DisplayManager {
       time: this.currentYoutubePosition.currentTime,
       isPlaying: this.currentYoutubePosition.isPlaying
     };
+  }
+
+  /**
+   * Set theme resolvers for looking up themes by ID
+   * These are used when applying per-display theme overrides
+   */
+  setThemeResolvers(resolvers: {
+    viewer?: (id: string) => any;
+    stage?: (id: string) => any;
+    bible?: (id: string) => any;
+    prayer?: (id: string) => any;
+  }): void {
+    this.themeResolvers = resolvers;
+  }
+
+  /**
+   * Get the theme to apply for a specific display, considering overrides
+   */
+  private getThemeForDisplay(displayId: number, themeType: DisplayThemeType, globalTheme: any): any {
+    // Check for display-specific override
+    const override = getDisplayThemeOverride(displayId, themeType);
+    if (override && this.themeResolvers[themeType]) {
+      const overrideTheme = this.themeResolvers[themeType]!(override.themeId);
+      if (overrideTheme) {
+        log.debug(`Using override theme for display ${displayId}, type ${themeType}:`, overrideTheme.name);
+        return overrideTheme;
+      }
+    }
+    // Fall back to global theme
+    return globalTheme;
+  }
+
+  /**
+   * Send theme to a specific display, respecting overrides
+   */
+  private sendThemeToDisplay(managed: ManagedDisplay, themeType: DisplayThemeType, globalTheme: any, channel: string): void {
+    if (!managed.window || managed.window.isDestroyed()) return;
+
+    try {
+      const themeToSend = this.getThemeForDisplay(managed.id, themeType, globalTheme);
+      managed.window.webContents.send(channel, themeToSend);
+    } catch (error) {
+      log.debug(`Error sending theme to display ${managed.id}:`, error);
+    }
   }
 
   /**

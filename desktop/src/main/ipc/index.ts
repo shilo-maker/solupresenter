@@ -68,7 +68,12 @@ import { getOBSThemes, getOBSTheme, createOBSTheme, updateOBSTheme, deleteOBSThe
 import { getPrayerThemes, getPrayerTheme, createPrayerTheme, updatePrayerTheme, deletePrayerTheme, getDefaultPrayerTheme } from '../database/prayerThemes';
 import { getPresentations, getPresentation, createPresentation, updatePresentation, deletePresentation } from '../database/presentations';
 import { getAudioPlaylists, getAudioPlaylist, createAudioPlaylist, updateAudioPlaylist, deleteAudioPlaylist } from '../database/audioPlaylists';
-import { getSelectedThemeIds, saveSelectedThemeId } from '../database/index';
+import {
+  getSelectedThemeIds, saveSelectedThemeId,
+  getAllDisplayThemeOverrides, getDisplayThemeOverrides, getDisplayThemeOverride,
+  setDisplayThemeOverride, removeDisplayThemeOverride, removeAllDisplayThemeOverrides,
+  DisplayThemeType
+} from '../database/index';
 import {
   addMediaItem, getAllMediaItems, getMediaItem, deleteMediaItem, isMediaImported, moveMediaToFolder,
   createMediaFolder, getAllMediaFolders, renameMediaFolder, deleteMediaFolder,
@@ -1952,4 +1957,98 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   if (controlWindowRef) {
     remoteControlServer.setControlWindow(controlWindowRef);
   }
+
+  // Set up theme resolvers for per-display theme overrides
+  displayManager.setThemeResolvers({
+    viewer: (id: string) => getTheme(id),
+    stage: (id: string) => getStageTheme(id),
+    bible: (id: string) => getBibleTheme(id),
+    prayer: (id: string) => getPrayerTheme(id)
+  });
+
+  // ============ Display Theme Overrides ============
+
+  ipcMain.handle('displayThemeOverrides:getAll', () => {
+    try {
+      return getAllDisplayThemeOverrides();
+    } catch (error) {
+      console.error('[IPC displayThemeOverrides:getAll] Error:', error);
+      return [];
+    }
+  });
+
+  ipcMain.handle('displayThemeOverrides:getForDisplay', (event, displayId: number) => {
+    try {
+      if (typeof displayId !== 'number' || isNaN(displayId)) {
+        throw new Error('Invalid display ID');
+      }
+      return getDisplayThemeOverrides(displayId);
+    } catch (error) {
+      console.error('[IPC displayThemeOverrides:getForDisplay] Error:', error);
+      return [];
+    }
+  });
+
+  ipcMain.handle('displayThemeOverrides:get', (event, displayId: number, themeType: DisplayThemeType) => {
+    try {
+      if (typeof displayId !== 'number' || isNaN(displayId)) {
+        throw new Error('Invalid display ID');
+      }
+      const validTypes: DisplayThemeType[] = ['viewer', 'stage', 'bible', 'prayer'];
+      if (!validTypes.includes(themeType)) {
+        throw new Error('Invalid theme type');
+      }
+      return getDisplayThemeOverride(displayId, themeType);
+    } catch (error) {
+      console.error('[IPC displayThemeOverrides:get] Error:', error);
+      return null;
+    }
+  });
+
+  ipcMain.handle('displayThemeOverrides:set', (event, displayId: number, themeType: DisplayThemeType, themeId: string) => {
+    try {
+      if (typeof displayId !== 'number' || isNaN(displayId)) {
+        throw new Error('Invalid display ID');
+      }
+      const validTypes: DisplayThemeType[] = ['viewer', 'stage', 'bible', 'prayer'];
+      if (!validTypes.includes(themeType)) {
+        throw new Error('Invalid theme type');
+      }
+      if (!themeId || typeof themeId !== 'string' || themeId.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid theme ID');
+      }
+      return setDisplayThemeOverride(displayId, themeType, themeId);
+    } catch (error) {
+      console.error('[IPC displayThemeOverrides:set] Error:', error);
+      return null;
+    }
+  });
+
+  ipcMain.handle('displayThemeOverrides:remove', (event, displayId: number, themeType: DisplayThemeType) => {
+    try {
+      if (typeof displayId !== 'number' || isNaN(displayId)) {
+        throw new Error('Invalid display ID');
+      }
+      const validTypes: DisplayThemeType[] = ['viewer', 'stage', 'bible', 'prayer'];
+      if (!validTypes.includes(themeType)) {
+        throw new Error('Invalid theme type');
+      }
+      return removeDisplayThemeOverride(displayId, themeType);
+    } catch (error) {
+      console.error('[IPC displayThemeOverrides:remove] Error:', error);
+      return false;
+    }
+  });
+
+  ipcMain.handle('displayThemeOverrides:removeAllForDisplay', (event, displayId: number) => {
+    try {
+      if (typeof displayId !== 'number' || isNaN(displayId)) {
+        throw new Error('Invalid display ID');
+      }
+      return removeAllDisplayThemeOverrides(displayId);
+    } catch (error) {
+      console.error('[IPC displayThemeOverrides:removeAllForDisplay] Error:', error);
+      return false;
+    }
+  });
 }

@@ -160,6 +160,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveSelectedThemeId: (themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'obsBible' | 'prayer' | 'obsPrayer', themeId: string | null) =>
     ipcRenderer.invoke('settings:saveSelectedThemeId', themeType, themeId),
 
+  // ============ Display Theme Overrides ============
+  displayThemeOverrides: {
+    getAll: () => ipcRenderer.invoke('displayThemeOverrides:getAll'),
+    getForDisplay: (displayId: number) => ipcRenderer.invoke('displayThemeOverrides:getForDisplay', displayId),
+    get: (displayId: number, themeType: 'viewer' | 'stage' | 'bible' | 'prayer') =>
+      ipcRenderer.invoke('displayThemeOverrides:get', displayId, themeType),
+    set: (displayId: number, themeType: 'viewer' | 'stage' | 'bible' | 'prayer', themeId: string) =>
+      ipcRenderer.invoke('displayThemeOverrides:set', displayId, themeType, themeId),
+    remove: (displayId: number, themeType: 'viewer' | 'stage' | 'bible' | 'prayer') =>
+      ipcRenderer.invoke('displayThemeOverrides:remove', displayId, themeType),
+    removeAllForDisplay: (displayId: number) =>
+      ipcRenderer.invoke('displayThemeOverrides:removeAllForDisplay', displayId)
+  },
+
   // ============ Database - Presentations ============
   getPresentations: () => ipcRenderer.invoke('db:presentations:getAll'),
   getPresentation: (id: string) => ipcRenderer.invoke('db:presentations:get', id),
@@ -411,6 +425,44 @@ declare global {
         obsPrayerThemeId: string | null;
       }>;
       saveSelectedThemeId: (themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'obsBible' | 'prayer' | 'obsPrayer', themeId: string | null) => Promise<boolean>;
+
+      // Display Theme Overrides
+      displayThemeOverrides: {
+        getAll: () => Promise<Array<{
+          id: number;
+          displayId: number;
+          themeType: 'viewer' | 'stage' | 'bible' | 'prayer';
+          themeId: string;
+          createdAt: string;
+          updatedAt: string;
+        }>>;
+        getForDisplay: (displayId: number) => Promise<Array<{
+          id: number;
+          displayId: number;
+          themeType: 'viewer' | 'stage' | 'bible' | 'prayer';
+          themeId: string;
+          createdAt: string;
+          updatedAt: string;
+        }>>;
+        get: (displayId: number, themeType: 'viewer' | 'stage' | 'bible' | 'prayer') => Promise<{
+          id: number;
+          displayId: number;
+          themeType: 'viewer' | 'stage' | 'bible' | 'prayer';
+          themeId: string;
+          createdAt: string;
+          updatedAt: string;
+        } | null>;
+        set: (displayId: number, themeType: 'viewer' | 'stage' | 'bible' | 'prayer', themeId: string) => Promise<{
+          id: number;
+          displayId: number;
+          themeType: 'viewer' | 'stage' | 'bible' | 'prayer';
+          themeId: string;
+          createdAt: string;
+          updatedAt: string;
+        } | null>;
+        remove: (displayId: number, themeType: 'viewer' | 'stage' | 'bible' | 'prayer') => Promise<boolean>;
+        removeAllForDisplay: (displayId: number) => Promise<boolean>;
+      };
 
       // Database - Presentations
       getPresentations: () => Promise<any[]>;

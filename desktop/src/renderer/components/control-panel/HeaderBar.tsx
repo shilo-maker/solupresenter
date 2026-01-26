@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { colors } from '../../styles/controlPanelStyles';
 import ThemeSelectionPanel from './ThemeSelectionPanel';
 import BroadcastSelector from '../BroadcastSelector';
+import DisplayThemeOverrideModal from './modals/DisplayThemeOverrideModal';
 import logoImage from '../../assets/logo.png';
 
 interface Display {
@@ -88,6 +89,9 @@ export interface HeaderBarProps {
   // Auth callbacks
   onConnectOnline: () => void;
   onLogout: () => void;
+
+  // Theme override callback
+  onThemeOverrideChanged?: () => void;
 }
 
 const HeaderBar = memo<HeaderBarProps>(({
@@ -133,11 +137,13 @@ const HeaderBar = memo<HeaderBarProps>(({
   onCloseDisplayPanel,
   onToggleOBSServer,
   onConnectOnline,
-  onLogout
+  onLogout,
+  onThemeOverrideChanged
 }) => {
   const { t, i18n } = useTranslation();
   const isRTL = i18n.language === 'he';
   const [obsUrlCopied, setObsUrlCopied] = useState(false);
+  const [showThemeOverrideModal, setShowThemeOverrideModal] = useState(false);
 
   // Convert theme IDs to theme objects for ThemeSelectionPanel
   // Note: selectedTheme may already be a theme object (from useThemeState) or a string ID
@@ -459,6 +465,41 @@ const HeaderBar = memo<HeaderBarProps>(({
               </div>
             </div>
 
+            {/* Per-Display Theme Overrides Button */}
+            {assignedDisplays.length > 0 && (
+              <button
+                onClick={() => setShowThemeOverrideModal(true)}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  background: 'rgba(156, 39, 176, 0.15)',
+                  border: '1px solid rgba(156, 39, 176, 0.3)',
+                  borderRadius: '8px',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  marginBottom: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(156, 39, 176, 0.25)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(156, 39, 176, 0.15)';
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                {t('displayThemeOverrides.configureButton', 'Configure Per-Display Themes')}
+              </button>
+            )}
+
             {/* Themes Section */}
             <ThemeSelectionPanel
               themes={themes}
@@ -657,6 +698,22 @@ const HeaderBar = memo<HeaderBarProps>(({
         </button>
         <img src={logoImage} alt="SoluCast" style={{ height: '32px', objectFit: 'contain' }} />
       </div>
+
+      {/* Per-Display Theme Override Modal */}
+      <DisplayThemeOverrideModal
+        isOpen={showThemeOverrideModal}
+        onClose={() => setShowThemeOverrideModal(false)}
+        displays={displays}
+        themes={themes}
+        stageThemes={stageMonitorThemes}
+        bibleThemes={bibleThemes}
+        prayerThemes={prayerThemes}
+        onOverrideChanged={() => {
+          if (onThemeOverrideChanged) {
+            onThemeOverrideChanged();
+          }
+        }}
+      />
     </header>
   );
 });

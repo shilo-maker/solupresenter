@@ -787,8 +787,10 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
       console.error('[IPC] video:play: invalid filePath');
       return false;
     }
+    // Only broadcast media to load it - don't start playing yet
+    // Display will signal ready via video:displayReady, then startVideoPlayback()
+    // will send synchronized play command to both display and control panel
     displayManager.broadcastMedia({ type: 'video', path: filePath });
-    displayManager.broadcastVideoCommand({ type: 'play', path: filePath });
     return true;
   });
 

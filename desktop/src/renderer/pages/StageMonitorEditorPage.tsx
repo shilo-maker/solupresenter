@@ -161,12 +161,6 @@ const StageMonitorEditorPage: React.FC = () => {
         setTheme(prev => ({ ...prev, id: created.id }));
       }
       setHasChanges(false);
-
-      // Apply theme to active stage monitors
-      await window.electronAPI.applyStageTheme({
-        ...themeData,
-        id: theme.id
-      });
     } catch (error) {
       console.error('Failed to save stage theme:', error);
       alert('Failed to save stage theme');

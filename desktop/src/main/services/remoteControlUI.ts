@@ -10,7 +10,7 @@ export function getRemoteControlUI(port: number): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <title>SoluPresenter Remote</title>
+  <title>SoluCast Remote</title>
   <style>
     * {
       margin: 0;
@@ -46,10 +46,14 @@ export function getRemoteControlUI(port: number): string {
     }
 
     .logo {
-      font-size: 24px;
-      font-weight: bold;
+      font-size: 28px;
+      font-weight: 800;
       margin-bottom: 8px;
-      color: #06b6d4;
+      background: linear-gradient(135deg, #06b6d4, #8b5cf6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.5px;
     }
 
     .subtitle {
@@ -134,8 +138,11 @@ export function getRemoteControlUI(port: number): string {
 
     .header-title {
       font-size: 16px;
-      font-weight: 600;
-      color: #06b6d4;
+      font-weight: 700;
+      background: linear-gradient(135deg, #06b6d4, #8b5cf6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
     .connection-status {
@@ -656,7 +663,7 @@ export function getRemoteControlUI(port: number): string {
   <div class="app">
     <!-- PIN Entry Screen -->
     <div id="pin-screen">
-      <div class="logo">SoluPresenter</div>
+      <div class="logo">SoluCast</div>
       <div class="subtitle">Remote Control</div>
       <div class="pin-label">Enter 6-digit PIN</div>
       <div class="pin-input-container">
@@ -674,7 +681,7 @@ export function getRemoteControlUI(port: number): string {
     <!-- Main Control Screen -->
     <div id="control-screen">
       <div class="header">
-        <div class="header-title">SoluPresenter</div>
+        <div class="header-title">SoluCast</div>
         <div class="connection-status" id="connection-status">
           <div class="status-dot"></div>
           <span>Connected</span>
@@ -872,7 +879,7 @@ export function getRemoteControlUI(port: number): string {
     pinDigits.forEach((input, index) => {
       input.addEventListener('input', (e) => {
         const value = e.target.value;
-        if (value.length === 1 && index < 3) {
+        if (value.length === 1 && index < 5) {
           pinDigits[index + 1].focus();
         }
         checkPinComplete();
@@ -965,7 +972,7 @@ export function getRemoteControlUI(port: number): string {
 
       socket.on('connect_error', () => {
         showLoading(false);
-        errorMsg.textContent = 'Connection failed. Check if SoluPresenter is running.';
+        errorMsg.textContent = 'Connection failed. Check if SoluCast is running.';
       });
     }
 

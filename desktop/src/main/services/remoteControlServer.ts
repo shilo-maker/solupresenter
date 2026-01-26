@@ -1,5 +1,6 @@
 import * as http from 'http';
 import * as os from 'os';
+import { exec } from 'child_process';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { BrowserWindow } from 'electron';
 import { EventEmitter } from 'events';
@@ -7,6 +8,8 @@ import { getRemoteControlUI } from './remoteControlUI';
 import { getSongs } from '../database/songs';
 import { getAllMediaItems } from '../database/media';
 import { getBibleBooks, getBibleVerses } from './bibleService';
+
+const FIREWALL_RULE_NAME = 'SoluCast Remote Control';
 
 const DEFAULT_PORT = 45680;
 const MAX_PORT_RETRIES = 10;
@@ -51,6 +54,56 @@ function checkClientRateLimit(socketId: string): boolean {
   limiter.count++;
   limiter.lastCall = now;
   return true;
+}
+
+/**
+ * Ensure Windows Firewall rule exists for the remote control port
+ */
+function ensureFirewallRule(port: number): Promise<void> {
+  return new Promise((resolve) => {
+    // Only run on Windows
+    if (process.platform !== 'win32') {
+      resolve();
+      return;
+    }
+
+    // Check if rule already exists
+    const checkCmd = `netsh advfirewall firewall show rule name="${FIREWALL_RULE_NAME}"`;
+    exec(checkCmd, (checkError, stdout) => {
+      if (!checkError && stdout.includes(`${port}`)) {
+        // Rule exists with correct port, nothing to do
+        console.log(`[RemoteControlServer] Firewall rule already exists for port ${port}`);
+        resolve();
+      } else if (!checkError) {
+        // Rule exists but may have wrong port - delete and recreate
+        const deleteCmd = `netsh advfirewall firewall delete rule name="${FIREWALL_RULE_NAME}"`;
+        exec(deleteCmd, () => {
+          // Ignore delete errors, try to create anyway
+          const createCmd = `netsh advfirewall firewall add rule name="${FIREWALL_RULE_NAME}" dir=in action=allow protocol=TCP localport=${port}`;
+          exec(createCmd, (createError) => {
+            if (createError) {
+              console.log('[RemoteControlServer] Could not update firewall rule (may need admin rights)');
+            } else {
+              console.log(`[RemoteControlServer] Updated firewall rule for port ${port}`);
+            }
+            resolve();
+          });
+        });
+      } else {
+        // Rule doesn't exist, create it
+        const createCmd = `netsh advfirewall firewall add rule name="${FIREWALL_RULE_NAME}" dir=in action=allow protocol=TCP localport=${port}`;
+        exec(createCmd, (createError) => {
+          if (createError) {
+            console.log('[RemoteControlServer] Could not create firewall rule (may need admin rights)');
+            console.log('[RemoteControlServer] Remote control may not work from other devices');
+          } else {
+            console.log(`[RemoteControlServer] Created firewall rule for port ${port}`);
+          }
+          resolve();
+        });
+      }
+    });
+  });
 }
 
 export interface RemoteControlState {
@@ -204,9 +257,12 @@ class RemoteControlServer extends EventEmitter {
         }
       });
 
-      this.httpServer.listen(port, '0.0.0.0', () => {
+      this.httpServer.listen(port, '0.0.0.0', async () => {
         console.log(`[RemoteControlServer] Started on port ${port}`);
         this.port = port;
+
+        // Ensure Windows Firewall allows connections on this port
+        await ensureFirewallRule(port);
 
         // Initialize Socket.IO - restrict CORS to local network only
         this.io = new SocketIOServer(this.httpServer!, {

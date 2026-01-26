@@ -1763,6 +1763,7 @@ const DisplayViewer: React.FC = () => {
         isBlank={false}
         fillContainer={true}
         presentationSlide={presentationSlide}
+        combinedSlides={combinedSlides}
       />
       {/* Overlay tools on top of the slide content */}
       {renderRotatingMessages()}

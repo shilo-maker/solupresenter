@@ -32,7 +32,7 @@ const SlideGridItem: React.FC<SlideGridItemProps> = memo(({
 
   const containerStyle: CSSProperties = {
     position: 'relative',
-    border: isSelected ? '3px solid #00d4ff' : '1px solid rgba(255,255,255,0.1)',
+    border: isSelected ? '2px solid #00d4ff' : '2px solid rgba(255,255,255,0.1)',
     borderRadius: '6px',
     padding: '8px 10px',
     cursor: 'pointer',

@@ -304,11 +304,6 @@ const OBSBibleThemeEditorPage: React.FC = () => {
       }
       setHasChanges(false);
 
-      await window.electronAPI.applyOBSTheme({
-        ...themeData,
-        id: theme.id
-      });
-
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (error) {

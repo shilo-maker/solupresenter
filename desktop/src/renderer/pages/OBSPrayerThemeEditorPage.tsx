@@ -290,12 +290,6 @@ const OBSPrayerThemeEditorPage: React.FC = () => {
       }
       setHasChanges(false);
 
-      // Apply theme to OBS server
-      await window.electronAPI.applyOBSTheme({
-        ...themeData,
-        id: theme.id
-      });
-
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (error) {

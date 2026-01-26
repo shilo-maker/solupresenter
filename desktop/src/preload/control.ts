@@ -538,6 +538,10 @@ declare global {
           slides?: Array<{ index: number; preview: string; verseType?: string; isCombined?: boolean }>;
           activeTools?: string[];
           onlineViewerCount?: number;
+          activeMedia?: { type: 'image' | 'video'; name: string } | null;
+          activeAudio?: { name: string; isPlaying: boolean; currentTime: number; duration: number; volume: number } | null;
+          activeVideo?: { name: string; isPlaying: boolean; currentTime: number; duration: number; volume: number } | null;
+          activeYoutube?: { videoId: string; title: string; isPlaying: boolean; currentTime: number; duration: number } | null;
         }) => void;
         onCommand: (callback: (command: { type: string; payload?: any }) => void) => () => void;
       };

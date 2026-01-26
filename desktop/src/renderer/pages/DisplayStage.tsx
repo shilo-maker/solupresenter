@@ -170,9 +170,19 @@ const DisplayStage: React.FC = () => {
     const stageThemeCleanup = window.displayAPI.onStageThemeUpdate((newTheme) => {
       if (newTheme) {
         setTheme({
-          colors: newTheme.colors || DEFAULT_THEME.colors,
-          elements: newTheme.elements || DEFAULT_THEME.elements,
-          currentSlideText: newTheme.currentSlideText || DEFAULT_THEME.currentSlideText
+          colors: { ...DEFAULT_THEME.colors, ...(newTheme.colors || {}) },
+          elements: {
+            header: { ...DEFAULT_THEME.elements.header, ...(newTheme.elements?.header || {}) },
+            clock: { ...DEFAULT_THEME.elements.clock, ...(newTheme.elements?.clock || {}) },
+            songTitle: { ...DEFAULT_THEME.elements.songTitle, ...(newTheme.elements?.songTitle || {}) },
+            currentSlideArea: { ...DEFAULT_THEME.elements.currentSlideArea, ...(newTheme.elements?.currentSlideArea || {}) },
+            nextSlideArea: { ...DEFAULT_THEME.elements.nextSlideArea, ...(newTheme.elements?.nextSlideArea || {}) },
+          },
+          currentSlideText: {
+            original: { ...DEFAULT_THEME.currentSlideText.original, ...(newTheme.currentSlideText?.original || {}) },
+            transliteration: { ...DEFAULT_THEME.currentSlideText.transliteration, ...(newTheme.currentSlideText?.transliteration || {}) },
+            translation: { ...DEFAULT_THEME.currentSlideText.translation, ...(newTheme.currentSlideText?.translation || {}) },
+          }
         });
       }
     });

@@ -339,12 +339,6 @@ const PrayerThemeEditorPage: React.FC = () => {
       }
       setHasChanges(false);
 
-      // Apply theme to active viewer
-      await window.electronAPI.applyPrayerTheme({
-        ...themeData,
-        id: theme.id
-      });
-
       // Show saved state briefly
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);

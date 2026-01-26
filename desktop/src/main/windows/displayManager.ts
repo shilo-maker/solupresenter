@@ -769,24 +769,17 @@ export class DisplayManager {
   }
 
   /**
-   * Start video playback after display signals ready
-   * Returns true if playback was started, false if no video or already playing
+   * Signal that display is ready for video playback
+   * Does NOT start playback - control panel will orchestrate sync via resumeVideo
+   * Returns true if ready to play, false if no video or already playing
    */
   startVideoPlayback(): boolean {
     if (!this.currentVideoState) return false;
     if (this.currentVideoState.isPlaying) return false; // Already playing
 
-    this.currentVideoState.isPlaying = true;
-    this.currentVideoState.currentTime = 0;
-    this.currentVideoState.playStartedAt = Date.now();
-    log.debug(' startVideoPlayback - starting synchronized playback');
-
-    // Send play command to all displays
-    for (const managed of this.displays.values()) {
-      if (managed.window && !managed.window.isDestroyed()) {
-        managed.window.webContents.send('video:command', { command: 'play' });
-      }
-    }
+    // Just mark as ready - don't actually play yet
+    // Control panel will call resumeVideo() after syncing both videos to same position
+    log.debug(' startVideoPlayback - display ready, waiting for control panel to sync');
 
     return true;
   }

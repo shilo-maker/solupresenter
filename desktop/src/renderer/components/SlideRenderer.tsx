@@ -653,14 +653,13 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
     switch (lineType) {
       case 'original':
       case 'hebrew':  // Bible theme compatibility
-        // In original-only mode with combined slides, show main slide + combined slides' original text
+        // In original-only mode with combined slides, show all combined slides' original text
+        // combinedSlides already contains all slides (including the first), so don't add mainText
         if (displayMode === 'original' && combinedSlides && combinedSlides.length > 0) {
-          const mainText = slideData.originalText || '';
-          const combinedText = combinedSlides
+          return combinedSlides
             .map(slide => slide.originalText)
             .filter(Boolean)
-            .join('\n');
-          return [mainText, combinedText].filter(Boolean).join('\n') || null;
+            .join('\n') || null;
         }
         return slideData.originalText || null;
       case 'transliteration':

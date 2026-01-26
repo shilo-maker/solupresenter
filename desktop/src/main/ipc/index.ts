@@ -72,7 +72,7 @@ import {
   getSelectedThemeIds, saveSelectedThemeId,
   getAllDisplayThemeOverrides, getDisplayThemeOverrides, getDisplayThemeOverride,
   setDisplayThemeOverride, removeDisplayThemeOverride, removeAllDisplayThemeOverrides,
-  DisplayThemeType
+  DisplayThemeType, queryOne
 } from '../database/index';
 import {
   addMediaItem, getAllMediaItems, getMediaItem, deleteMediaItem, isMediaImported, moveMediaToFolder,
@@ -1959,11 +1959,12 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   }
 
   // Set up theme resolvers for per-display theme overrides
+  // Use synchronous queryOne directly since the async functions return Promises
   displayManager.setThemeResolvers({
-    viewer: (id: string) => getTheme(id),
-    stage: (id: string) => getStageTheme(id),
-    bible: (id: string) => getBibleTheme(id),
-    prayer: (id: string) => getPrayerTheme(id)
+    viewer: (id: string) => queryOne('SELECT * FROM viewer_themes WHERE id = ?', [id]),
+    stage: (id: string) => queryOne('SELECT * FROM stage_themes WHERE id = ?', [id]),
+    bible: (id: string) => queryOne('SELECT * FROM bible_themes WHERE id = ?', [id]),
+    prayer: (id: string) => queryOne('SELECT * FROM prayer_themes WHERE id = ?', [id])
   });
 
   // ============ Display Theme Overrides ============

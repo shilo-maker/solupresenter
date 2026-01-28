@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'; // perf optimized
 import { Form, Button, Modal, Row, Col, Alert, Badge, Dropdown, Toast, ToastContainer } from 'react-bootstrap';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FixedSizeList } from 'react-window';
@@ -123,6 +123,13 @@ function PresenterMode() {
   const [editingPresentation, setEditingPresentation] = useState(null);
   const [selectedPresentation, setSelectedPresentation] = useState(null);
   const [selectedPresentationSlideIndex, setSelectedPresentationSlideIndex] = useState(0);
+
+  // Song express edit modal state
+  const [showSongEditModal, setShowSongEditModal] = useState(false);
+  const [editingSong, setEditingSong] = useState(null);
+  const [editSongSaving, setEditSongSaving] = useState(false);
+  const editTextareaRef = useRef(null);
+  const editExpressTextRef = useRef('');
 
   // Image search state
   const [imageSearchResults, setImageSearchResults] = useState([]);
@@ -272,7 +279,16 @@ function PresenterMode() {
   });
   const [countdownMessage, setCountdownMessage] = useState('');
   const [countdownRunning, setCountdownRunning] = useState(false);
-  const [countdownRemaining, setCountdownRemaining] = useState(0); // in seconds
+  const countdownRemainingRef = useRef(0); // in seconds - ref to avoid re-renders every second
+  const setCountdownRemaining = useCallback((valOrFn) => {
+    if (typeof valOrFn === 'function') {
+      countdownRemainingRef.current = valOrFn(countdownRemainingRef.current);
+    } else {
+      countdownRemainingRef.current = valOrFn;
+    }
+    // Keep the state ref in sync
+    countdownStateRef.current.remaining = countdownRemainingRef.current;
+  }, []);
   const [countdownBroadcasting, setCountdownBroadcasting] = useState(false);
   // Refs to track current countdown state (for use in timeouts/closures)
   const countdownStateRef = useRef({ running: false, broadcasting: false, remaining: 0, message: '' });
@@ -305,7 +321,7 @@ function PresenterMode() {
   ]);
   const [rotatingInterval, setRotatingInterval] = useState(5); // seconds
   const [rotatingRunning, setRotatingRunning] = useState(false);
-  const [, setCurrentMessageIndex] = useState(0);
+  const currentMessageIndexRef = useRef(0);
   const [customMessageInput, setCustomMessageInput] = useState('');
   const rotatingIntervalRef = useRef(null);
   const broadcastRotatingMessageRef = useRef(null);
@@ -326,10 +342,10 @@ function PresenterMode() {
     countdownStateRef.current = {
       running: countdownRunning,
       broadcasting: countdownBroadcasting,
-      remaining: countdownRemaining,
+      remaining: countdownRemainingRef.current,
       message: countdownMessage
     };
-  }, [countdownRunning, countdownBroadcasting, countdownRemaining, countdownMessage]);
+  }, [countdownRunning, countdownBroadcasting, countdownMessage]);
 
   // Combined slides for original-only mode (pairs consecutive same-verseType slides)
   const combinedSlides = useMemo(() => {
@@ -895,10 +911,10 @@ function PresenterMode() {
       // If countdown is active, include it so viewer can show both
       if (countdownBroadcasting && countdownRunning) {
         announcementToolsData.countdown = {
-          remaining: countdownRemaining,
+          remaining: countdownRemainingRef.current,
           message: countdownMessage,
           running: true,
-          endTime: Date.now() + (countdownRemaining * 1000)
+          endTime: Date.now() + (countdownRemainingRef.current * 1000)
         };
       }
 
@@ -1629,19 +1645,21 @@ function PresenterMode() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Countdown timer effect
+  // Countdown timer effect - uses ref to avoid re-renders every second
   useEffect(() => {
-    if (countdownRunning && countdownRemaining > 0) {
+    if (countdownRunning && countdownRemainingRef.current > 0) {
       countdownIntervalRef.current = setInterval(() => {
-        setCountdownRemaining(prev => {
-          if (prev <= 1) {
-            clearInterval(countdownIntervalRef.current);
-            countdownIntervalRef.current = null;
-            setCountdownRunning(false);
-            return 0;
-          }
-          return prev - 1;
-        });
+        const prev = countdownRemainingRef.current;
+        if (prev <= 1) {
+          countdownRemainingRef.current = 0;
+          countdownStateRef.current.remaining = 0;
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+          setCountdownRunning(false);
+          return;
+        }
+        countdownRemainingRef.current = prev - 1;
+        countdownStateRef.current.remaining = prev - 1;
       }, 1000);
     }
     return () => {
@@ -1652,20 +1670,18 @@ function PresenterMode() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [countdownRunning]);
 
-  // Rotating messages effect
+  // Rotating messages effect - uses ref to avoid re-renders
   useEffect(() => {
     if (rotatingRunning) {
       rotatingIntervalRef.current = setInterval(() => {
-        setCurrentMessageIndex(prev => {
-          const enabledMessages = rotatingMessages.filter(m => m.enabled);
-          if (enabledMessages.length === 0) return prev;
-          const nextIndex = (prev + 1) % enabledMessages.length;
-          // Use ref to avoid stale closure issues
-          if (broadcastRotatingMessageRef.current) {
-            broadcastRotatingMessageRef.current(nextIndex);
-          }
-          return nextIndex;
-        });
+        const enabledMessages = rotatingMessages.filter(m => m.enabled);
+        if (enabledMessages.length === 0) return;
+        const prev = currentMessageIndexRef.current;
+        const nextIndex = (prev + 1) % enabledMessages.length;
+        currentMessageIndexRef.current = nextIndex;
+        if (broadcastRotatingMessageRef.current) {
+          broadcastRotatingMessageRef.current(nextIndex);
+        }
       }, rotatingInterval * 1000);
     }
     return () => {
@@ -2300,15 +2316,21 @@ function PresenterMode() {
     };
   }, [youtubeOnDisplay, room]);
 
-  // YouTube time tracking - increment time every second while playing
+  // YouTube time tracking - use ref for every-second tracking, sync state every 5s for display
+  const youtubeTimeRef = useRef(0);
+  const youtubeDisplayTickRef = useRef(0);
   useEffect(() => {
     if (youtubePlaying && youtubeOnDisplay) {
+      youtubeTimeRef.current = youtubeCurrentTime;
+      youtubeDisplayTickRef.current = 0;
       youtubeTimeIntervalRef.current = setInterval(() => {
-        setYoutubeCurrentTime(prev => {
-          const newTime = prev + 1;
-          // Cap at duration if we have it
-          return youtubeDuration > 0 ? Math.min(newTime, youtubeDuration) : newTime;
-        });
+        const newTime = youtubeTimeRef.current + 1;
+        youtubeTimeRef.current = youtubeDuration > 0 ? Math.min(newTime, youtubeDuration) : newTime;
+        youtubeDisplayTickRef.current++;
+        // Only update React state every 5 seconds to reduce re-renders
+        if (youtubeDisplayTickRef.current % 5 === 0) {
+          setYoutubeCurrentTime(youtubeTimeRef.current);
+        }
       }, 1000);
     } else {
       if (youtubeTimeIntervalRef.current) {
@@ -2321,6 +2343,7 @@ function PresenterMode() {
         clearInterval(youtubeTimeIntervalRef.current);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [youtubePlaying, youtubeOnDisplay, youtubeDuration]);
 
   // YouTube sync interval - send current time to viewers every second
@@ -2680,10 +2703,10 @@ function PresenterMode() {
       const updateToolsData = {
         type: 'countdown',
         countdown: {
-          remaining: countdownRemaining,
+          remaining: countdownRemainingRef.current,
           message: countdownMessage,
           running: true,
-          endTime: Date.now() + (countdownRemaining * 1000)
+          endTime: Date.now() + (countdownRemainingRef.current * 1000)
         }
       };
 
@@ -3387,6 +3410,100 @@ function PresenterMode() {
       // YouTube item selected
     }
   };
+
+  // Song express edit helpers
+  const openSongEditModal = useCallback(async (song) => {
+    try {
+      const response = await api.get(`/api/songs/${song.id || song._id}`);
+      const fullSong = response.data.song;
+      setEditingSong(fullSong);
+      // Convert slides to express text
+      let lastVt = '';
+      const expText = (fullSong.slides || []).map(slide => {
+        const lines = [];
+        if (slide.verseType && slide.verseType !== lastVt) {
+          lines.push(`[${slide.verseType}]`);
+          lastVt = slide.verseType;
+        }
+        lines.push(slide.originalText);
+        if (slide.transliteration) lines.push(slide.transliteration);
+        if (slide.translation) lines.push(slide.translation);
+        if (slide.translationOverflow) lines.push(slide.translationOverflow);
+        return lines.join('\n');
+      }).join('\n\n');
+      editExpressTextRef.current = expText;
+      setShowSongEditModal(true);
+    } catch (error) {
+      console.error('Error loading song for edit:', error);
+      setToast({ show: true, message: 'Failed to load song', variant: 'danger' });
+    }
+  }, []);
+
+  const saveSongFromExpressEdit = useCallback(async () => {
+    const song = editingSong;
+    if (!song) return;
+    // Read text from ref (not state)
+    const text = editTextareaRef.current ? editTextareaRef.current.value : editExpressTextRef.current;
+    // Parse express text into slides
+    const slideBlocks = text.split(/\n\s*\n/);
+    let currentVerseType = '';
+    const parsedSlides = slideBlocks
+      .map(block => {
+        const lines = block.split('\n').map(line => line.trim()).filter(line => line);
+        if (lines.length === 0) return null;
+        const verseTypeMatch = lines[0].match(/^\[(.+)\]$/);
+        if (verseTypeMatch) {
+          currentVerseType = verseTypeMatch[1];
+          lines.shift();
+          if (lines.length === 0) return null;
+        }
+        return {
+          originalText: lines[0] || '',
+          transliteration: lines[1] || '',
+          translation: lines[2] || '',
+          translationOverflow: lines[3] || '',
+          verseType: currentVerseType
+        };
+      })
+      .filter(slide => slide !== null && slide.originalText);
+
+    if (parsedSlides.length === 0) {
+      setToast({ show: true, message: 'No valid slides found', variant: 'danger' });
+      return;
+    }
+
+    setEditSongSaving(true);
+    try {
+      const songId = song.id || song._id;
+      await api.put(`/api/songs/${songId}`, {
+        title: song.title,
+        author: song.author || null,
+        originalLanguage: song.originalLanguage,
+        slides: parsedSlides,
+        tags: song.tags || []
+      });
+      setShowSongEditModal(false);
+      setEditingSong(null);
+      setToast({ show: true, message: t('songs.songUpdatedSuccess'), variant: 'success' });
+      // Patch song in-place instead of refetching all songs
+      const patchSong = (s) => {
+        if (!s) return s;
+        const id = s.id || s._id;
+        if (id && id.toString() === songId.toString()) {
+          return { ...s, slides: parsedSlides };
+        }
+        return s;
+      };
+      setAllSongs(prev => prev.map(patchSong));
+      setSearchResults(prev => prev.map(patchSong));
+      setCurrentSong(prev => patchSong(prev));
+    } catch (error) {
+      console.error('Error saving song:', error);
+      setToast({ show: true, message: error.response?.data?.error || 'Failed to save song', variant: 'danger' });
+    } finally {
+      setEditSongSaving(false);
+    }
+  }, [editingSong, t]);
 
   const selectSong = async (song) => {
     // Song data now includes slides from initial fetch - no API call needed!
@@ -4589,7 +4706,11 @@ function PresenterMode() {
                               transition: 'all 0.2s ease',
                               boxShadow: isSelected ? '0 2px 8px rgba(0,123,255,0.25)' : 'none',
                               direction: 'ltr',
-                              textAlign: i18n.language === 'he' ? 'right' : 'left'
+                              textAlign: i18n.language === 'he' ? 'right' : 'left',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: '4px'
                             }}
                             onMouseEnter={(e) => {
                               if (!isSelected) {
@@ -4604,7 +4725,32 @@ function PresenterMode() {
                               }
                             }}
                           >
-                            {song.title}
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{song.title}</span>
+                            {isAdmin && (
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openSongEditModal(song);
+                                }}
+                                style={{
+                                  flexShrink: 0,
+                                  color: 'rgba(255,255,255,0.4)',
+                                  cursor: 'pointer',
+                                  padding: '2px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  borderRadius: '3px'
+                                }}
+                                title={t('songs.editSong')}
+                                onMouseEnter={(e) => { e.currentTarget.style.color = 'white'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; }}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                              </span>
+                            )}
                           </div>
                           <Button
                             variant="outline-success"
@@ -8153,6 +8299,84 @@ function PresenterMode() {
           }
         }}
       />
+
+      {/* Song Express Edit Modal */}
+      {showSongEditModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1055, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }} onClick={() => { setShowSongEditModal(false); setEditingSong(null); }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)' }} />
+          <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative', width: '90%', maxWidth: '800px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', background: '#1a1a2e', borderRadius: '8px', color: 'white', border: '1px solid rgba(255,255,255,0.15)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
+                <span style={{ fontSize: '1.1rem', fontWeight: 500 }}>{editingSong?.title || t('songs.editSong')}</span>
+                <span onClick={() => { setShowSongEditModal(false); setEditingSong(null); }} style={{ cursor: 'pointer', color: 'rgba(255,255,255,0.5)', fontSize: '1.3rem', lineHeight: 1 }}>&times;</span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
+                {['Verse1', 'Verse2', 'Verse3', 'Chorus', 'PreChorus', 'Bridge', 'Intro', 'Outro', 'Tag'].map(tag => (
+                  <span
+                    key={tag}
+                    onClick={() => {
+                      const ta = editTextareaRef.current;
+                      if (!ta) return;
+                      const pos = ta.selectionStart;
+                      const val = ta.value;
+                      const before = val.slice(0, pos);
+                      const after = val.slice(pos);
+                      const insert = `[${tag}]\n`;
+                      const needsNewline = before.length > 0 && !before.endsWith('\n');
+                      ta.value = before + (needsNewline ? '\n' : '') + insert + after;
+                      const newPos = (needsNewline ? before.length + 1 : before.length) + insert.length;
+                      ta.focus();
+                      ta.selectionStart = ta.selectionEnd = newPos;
+                    }}
+                    style={{
+                      padding: '3px 10px',
+                      fontSize: '0.75rem',
+                      borderRadius: '4px',
+                      background: 'rgba(255,255,255,0.1)',
+                      color: 'rgba(255,255,255,0.8)',
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.2)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+              <div style={{ padding: '16px', flex: 1, overflow: 'auto', minHeight: 0 }}>
+                <textarea
+                  ref={editTextareaRef}
+                  rows={18}
+                  defaultValue={editExpressTextRef.current}
+                  dir={(editingSong?.originalLanguage === 'he' || editingSong?.originalLanguage === 'ar') ? 'rtl' : 'ltr'}
+                  style={{
+                    width: '100%',
+                    fontFamily: 'monospace',
+                    fontSize: '0.9rem',
+                    background: '#0d0d1a',
+                    color: 'white',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '6px',
+                    padding: '10px',
+                    resize: 'vertical',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
+                <Button variant="outline-light" size="sm" onClick={() => { setShowSongEditModal(false); setEditingSong(null); }}>
+                  {t('common.cancel')}
+                </Button>
+                <Button variant="primary" size="sm" onClick={saveSongFromExpressEdit} disabled={editSongSaving}>
+                  {editSongSaving ? (t('songs.saving') || 'Saving...') : t('common.save')}
+                </Button>
+              </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification */}
       <ToastContainer position="top-center" style={{ zIndex: 9999, marginTop: '20px' }}>

@@ -1,9 +1,10 @@
-import React, { memo, useMemo, useState } from 'react';
+import React, { memo, useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../../styles/controlPanelStyles';
-import ThemeSelectionPanel from './ThemeSelectionPanel';
 import BroadcastSelector from '../BroadcastSelector';
 import DisplayThemeOverrideModal from './modals/DisplayThemeOverrideModal';
+import { DisplaySettingsModal, OBSSettingsModal } from './modals';
+import DisplayItem from './DisplayItem';
 import logoImage from '../../assets/logo.png';
 
 interface Display {
@@ -42,20 +43,30 @@ export interface HeaderBarProps {
   authState: AuthState;
   showUserMenu: boolean;
 
-  // Theme state
+  // Theme state (for per-display override modal)
   themes: Theme[];
   stageMonitorThemes: Theme[];
   bibleThemes: Theme[];
   prayerThemes: Theme[];
-  obsThemes: Theme[];
-  selectedTheme: string | Theme | null;
-  selectedStageTheme: string | Theme | null;
-  selectedBibleTheme: string | Theme | null;
-  selectedPrayerTheme: string | Theme | null;
-  selectedOBSTheme: string | Theme | null;
-  selectedOBSSongsTheme: string | Theme | null;
-  selectedOBSBibleTheme: string | Theme | null;
-  selectedOBSPrayerTheme: string | Theme | null;
+  obsThemes?: Theme[];
+  selectedOBSSongsTheme?: Theme | null;
+  selectedOBSBibleTheme?: Theme | null;
+  selectedOBSPrayerTheme?: Theme | null;
+  onApplyOBSTheme?: (theme: Theme) => void;
+
+  // Theme menu state
+  showThemePanel: boolean;
+  selectedTheme: Theme | null;
+  selectedBibleTheme: Theme | null;
+  selectedPrayerTheme: Theme | null;
+  selectedStageTheme: Theme | null;
+  onShowThemePanelChange: (show: boolean) => void;
+  onApplyViewerTheme: (theme: Theme) => void;
+  onApplyBibleTheme: (theme: Theme) => void;
+  onApplyPrayerTheme: (theme: Theme) => void;
+  onApplyStageTheme: (theme: Theme) => void;
+  onCreateTheme: (themeType: 'songs' | 'bible' | 'prayer' | 'stage' | 'obs-songs' | 'obs-bible' | 'obs-prayer') => void;
+  onEditTheme: (themeType: 'songs' | 'bible' | 'prayer' | 'stage' | 'obs-songs' | 'obs-bible' | 'obs-prayer', themeId: string) => void;
 
   // OBS state
   obsServerRunning: boolean;
@@ -73,14 +84,6 @@ export interface HeaderBarProps {
   onOpenDisplay: (displayId: number, type: 'viewer' | 'stage') => void;
   onCloseDisplay: (displayId: number) => void;
   onIdentifyDisplay: (displayId: number) => Promise<void>;
-
-  // Theme callbacks
-  onApplyViewerTheme: (theme: Theme) => void;
-  onApplyStageTheme: (theme: Theme) => void;
-  onApplyBibleTheme: (theme: Theme) => void;
-  onApplyPrayerTheme: (theme: Theme) => void;
-  onApplyOBSTheme: (theme: Theme) => void;
-  onCreateNewTheme: (type: string) => void;
   onCloseDisplayPanel: () => void;
 
   // OBS callbacks
@@ -109,14 +112,22 @@ const HeaderBar = memo<HeaderBarProps>(({
   bibleThemes,
   prayerThemes,
   obsThemes,
-  selectedTheme,
-  selectedStageTheme,
-  selectedBibleTheme,
-  selectedPrayerTheme,
-  selectedOBSTheme,
   selectedOBSSongsTheme,
   selectedOBSBibleTheme,
   selectedOBSPrayerTheme,
+  onApplyOBSTheme,
+  showThemePanel,
+  selectedTheme,
+  selectedBibleTheme,
+  selectedPrayerTheme,
+  selectedStageTheme,
+  onShowThemePanelChange,
+  onApplyViewerTheme,
+  onApplyBibleTheme,
+  onApplyPrayerTheme,
+  onApplyStageTheme,
+  onCreateTheme,
+  onEditTheme,
   obsServerRunning,
   obsServerUrl,
   onShowDisplayPanelChange,
@@ -128,12 +139,6 @@ const HeaderBar = memo<HeaderBarProps>(({
   onOpenDisplay,
   onCloseDisplay,
   onIdentifyDisplay,
-  onApplyViewerTheme,
-  onApplyStageTheme,
-  onApplyBibleTheme,
-  onApplyPrayerTheme,
-  onApplyOBSTheme,
-  onCreateNewTheme,
   onCloseDisplayPanel,
   onToggleOBSServer,
   onConnectOnline,
@@ -144,51 +149,84 @@ const HeaderBar = memo<HeaderBarProps>(({
   const isRTL = i18n.language === 'he';
   const [obsUrlCopied, setObsUrlCopied] = useState(false);
   const [showThemeOverrideModal, setShowThemeOverrideModal] = useState(false);
+  const [selectedDisplayForSettings, setSelectedDisplayForSettings] = useState<number | 'obs' | null>(null);
+  const [obsHovered, setObsHovered] = useState(false);
+  const [showDisplaySettingsModal, setShowDisplaySettingsModal] = useState(false);
+  const [displayForSettings, setDisplayForSettings] = useState<Display | null>(null);
+  const [showOBSSettingsModal, setShowOBSSettingsModal] = useState(false);
+  const obsUrlCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Convert theme IDs to theme objects for ThemeSelectionPanel
-  // Note: selectedTheme may already be a theme object (from useThemeState) or a string ID
-  const selectedThemeObj = useMemo(() => {
-    if (!selectedTheme) return null;
-    // If it's already a theme object with an id, return it directly
-    if (typeof selectedTheme === 'object' && selectedTheme.id) return selectedTheme;
-    // Otherwise look it up by ID
-    return themes.find(t => t.id === selectedTheme) || null;
-  }, [themes, selectedTheme]);
-  const selectedStageThemeObj = useMemo(() => {
-    if (!selectedStageTheme) return null;
-    if (typeof selectedStageTheme === 'object' && selectedStageTheme.id) return selectedStageTheme;
-    return stageMonitorThemes.find(t => t.id === selectedStageTheme) || null;
-  }, [stageMonitorThemes, selectedStageTheme]);
-  const selectedBibleThemeObj = useMemo(() => {
-    if (!selectedBibleTheme) return null;
-    if (typeof selectedBibleTheme === 'object' && selectedBibleTheme.id) return selectedBibleTheme;
-    return bibleThemes.find(t => t.id === selectedBibleTheme) || null;
-  }, [bibleThemes, selectedBibleTheme]);
-  const selectedPrayerThemeObj = useMemo(() => {
-    if (!selectedPrayerTheme) return null;
-    if (typeof selectedPrayerTheme === 'object' && selectedPrayerTheme.id) return selectedPrayerTheme;
-    return prayerThemes.find(t => t.id === selectedPrayerTheme) || null;
-  }, [prayerThemes, selectedPrayerTheme]);
-  const selectedOBSThemeObj = useMemo(() => {
-    if (!selectedOBSTheme) return null;
-    if (typeof selectedOBSTheme === 'object' && selectedOBSTheme.id) return selectedOBSTheme;
-    return obsThemes.find(t => t.id === selectedOBSTheme) || null;
-  }, [obsThemes, selectedOBSTheme]);
-  const selectedOBSSongsThemeObj = useMemo(() => {
-    if (!selectedOBSSongsTheme) return null;
-    if (typeof selectedOBSSongsTheme === 'object' && selectedOBSSongsTheme.id) return selectedOBSSongsTheme;
-    return obsThemes.find(t => t.id === selectedOBSSongsTheme) || null;
-  }, [obsThemes, selectedOBSSongsTheme]);
-  const selectedOBSBibleThemeObj = useMemo(() => {
-    if (!selectedOBSBibleTheme) return null;
-    if (typeof selectedOBSBibleTheme === 'object' && selectedOBSBibleTheme.id) return selectedOBSBibleTheme;
-    return obsThemes.find(t => t.id === selectedOBSBibleTheme) || null;
-  }, [obsThemes, selectedOBSBibleTheme]);
-  const selectedOBSPrayerThemeObj = useMemo(() => {
-    if (!selectedOBSPrayerTheme) return null;
-    if (typeof selectedOBSPrayerTheme === 'object' && selectedOBSPrayerTheme.id) return selectedOBSPrayerTheme;
-    return obsThemes.find(t => t.id === selectedOBSPrayerTheme) || null;
-  }, [obsThemes, selectedOBSPrayerTheme]);
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (obsUrlCopyTimeoutRef.current) {
+        clearTimeout(obsUrlCopyTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Memoized callback for sending stage messages (passed to DisplayItem)
+  const handleSendStageMessage = useCallback(async (displayId: number, message: string) => {
+    await window.electronAPI.sendStageMessage(displayId, message);
+  }, []);
+
+  // Memoized callback for opening display settings
+  const handleOpenDisplaySettings = useCallback((display: Display) => {
+    setDisplayForSettings(display);
+    setShowDisplaySettingsModal(true);
+  }, []);
+
+  // Memoized callbacks for OBS row
+  const handleObsMouseEnter = useCallback(() => setObsHovered(true), []);
+  const handleObsMouseLeave = useCallback(() => setObsHovered(false), []);
+
+  const handleCopyObsUrl = useCallback(() => {
+    if (obsServerUrl) {
+      navigator.clipboard.writeText(obsServerUrl);
+      setObsUrlCopied(true);
+      if (obsUrlCopyTimeoutRef.current) {
+        clearTimeout(obsUrlCopyTimeoutRef.current);
+      }
+      obsUrlCopyTimeoutRef.current = setTimeout(() => setObsUrlCopied(false), 2000);
+    }
+  }, [obsServerUrl]);
+
+  const handleOpenOBSSettings = useCallback(() => {
+    setShowOBSSettingsModal(true);
+  }, []);
+
+  const handleCloseOBSSettingsModal = useCallback(() => {
+    setShowOBSSettingsModal(false);
+  }, []);
+
+  const handleOBSApplyTheme = useCallback((themeType: 'songs' | 'bible' | 'prayer', theme: Theme | null) => {
+    if (onApplyOBSTheme && theme) {
+      onApplyOBSTheme(theme);
+    }
+  }, [onApplyOBSTheme]);
+
+  // Memoized modal callbacks
+  const handleCloseThemeOverrideModal = useCallback(() => {
+    setShowThemeOverrideModal(false);
+    setSelectedDisplayForSettings(null);
+  }, []);
+
+  const handleCloseDisplaySettingsModal = useCallback(() => {
+    setShowDisplaySettingsModal(false);
+    setDisplayForSettings(null);
+  }, []);
+
+  const handleDisplaySettingsStart = useCallback((displayId: number, type: 'viewer' | 'stage') => {
+    onOpenDisplay(displayId, type);
+    setShowDisplaySettingsModal(false);
+    setDisplayForSettings(null);
+  }, [onOpenDisplay]);
+
+  const handleThemeOverrideChanged = useCallback(() => {
+    if (onThemeOverrideChanged) {
+      onThemeOverrideChanged();
+    }
+  }, [onThemeOverrideChanged]);
 
   return (
     <header style={{
@@ -294,87 +332,25 @@ const HeaderBar = memo<HeaderBarProps>(({
               </select>
             </div>
 
-            {/* Display List */}
+            {/* Display List - Using memoized DisplayItem component */}
             {displays.map((display, index) => (
-              <div
+              <DisplayItem
                 key={display.id}
-                className="display-row"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px',
-                  background: 'rgba(255,255,255,0.05)',
-                  borderRadius: '8px',
-                  marginBottom: '8px',
-                  position: 'relative'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  {/* Display Number - Click to Identify */}
-                  <button
-                    onClick={async () => {
-                      try {
-                        await onIdentifyDisplay(display.id);
-                      } catch (err) {
-                        console.error('Failed to identify display:', err);
-                      }
-                    }}
-                    title={t('controlPanel.identifyDisplays', 'Click to identify this display')}
-                    style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '6px',
-                      background: 'rgba(255, 152, 0, 0.2)',
-                      border: '1px solid rgba(255, 152, 0, 0.5)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#FF9800',
-                      fontWeight: 'bold',
-                      fontSize: '0.85rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(255, 152, 0, 0.4)';
-                      e.currentTarget.style.transform = 'scale(1.1)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(255, 152, 0, 0.2)';
-                      e.currentTarget.style.transform = 'scale(1)';
-                    }}
-                  >
-                    {index + 1}
-                  </button>
-                  <div>
-                    <div style={{ color: 'white', fontWeight: 500 }}>
-                      {display.label}
-                      {display.isAssigned && <span style={{ marginLeft: '8px', fontSize: '0.7rem', background: '#28a745', padding: '2px 6px', borderRadius: '4px' }}>{display.assignedType}</span>}
-                    </div>
-                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>{display.bounds.width}x{display.bounds.height}</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                  {display.id === controlDisplayId ? (
-                    <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontStyle: 'italic' }}>
-                      {t('controlPanel.controlScreen', 'Control Screen')}
-                    </span>
-                  ) : display.isAssigned ? (
-                    <button onClick={() => onCloseDisplay(display.id)} style={{ background: colors.button.danger, border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}>{t('common.close')}</button>
-                  ) : (
-                    <>
-                      <button onClick={() => onOpenDisplay(display.id, 'viewer')} style={{ background: colors.button.info, border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}>{t('controlPanel.viewer')}</button>
-                      <button onClick={() => onOpenDisplay(display.id, 'stage')} style={{ background: colors.button.secondary, border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}>{t('controlPanel.stage')}</button>
-                    </>
-                  )}
-                </div>
-              </div>
+                display={display}
+                index={index}
+                controlDisplayId={controlDisplayId}
+                onIdentifyDisplay={onIdentifyDisplay}
+                onCloseDisplay={onCloseDisplay}
+                onOpenSettings={handleOpenDisplaySettings}
+                onSendStageMessage={handleSendStageMessage}
+              />
             ))}
 
             {/* OBS Virtual Display */}
             <div
               className="display-row"
+              onMouseEnter={handleObsMouseEnter}
+              onMouseLeave={handleObsMouseLeave}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -426,104 +402,67 @@ const HeaderBar = memo<HeaderBarProps>(({
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
-                {obsServerRunning && obsServerUrl && (
+                {/* Settings icon - only visible on hover when OBS is running */}
+                {obsServerRunning && (
                   <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(obsServerUrl);
-                      setObsUrlCopied(true);
-                      setTimeout(() => setObsUrlCopied(false), 2000);
-                    }}
+                    onClick={handleOpenOBSSettings}
+                    title={t('displayThemeOverrides.configureOBSTheme', 'Configure OBS themes')}
                     style={{
-                      background: obsUrlCopied ? '#28a745' : 'rgba(255,255,255,0.1)',
+                      background: 'rgba(255,255,255,0.1)',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '6px',
+                      color: 'white',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s',
+                      opacity: obsHovered ? 1 : 0,
+                      pointerEvents: obsHovered ? 'auto' : 'none'
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                  </button>
+                )}
+                {obsServerRunning ? (
+                  <button
+                    onClick={onToggleOBSServer}
+                    style={{
+                      background: colors.button.danger,
                       border: 'none',
                       borderRadius: '6px',
                       padding: '6px 12px',
                       color: 'white',
                       fontSize: '0.75rem',
-                      cursor: 'pointer',
-                      transition: 'background 0.2s',
-                      minWidth: '55px'
+                      cursor: 'pointer'
                     }}
                   >
-                    {obsUrlCopied ? t('common.copied', 'Copied!') : t('common.copy', 'Copy')}
+                    {t('common.stop', 'Stop')}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleOpenOBSSettings}
+                    style={{
+                      background: '#17a2b8',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '6px 12px',
+                      color: 'white',
+                      fontSize: '0.75rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {t('common.start', 'Start')}
                   </button>
                 )}
-                <button
-                  onClick={onToggleOBSServer}
-                  style={{
-                    background: obsServerRunning ? colors.button.danger : '#17a2b8',
-                    border: 'none',
-                    borderRadius: '6px',
-                    padding: '6px 12px',
-                    color: 'white',
-                    fontSize: '0.75rem',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {obsServerRunning ? t('common.stop', 'Stop') : t('common.start', 'Start')}
-                </button>
               </div>
             </div>
 
-            {/* Per-Display Theme Overrides Button - always visible */}
-            <button
-              onClick={() => setShowThemeOverrideModal(true)}
-              style={{
-                width: '100%',
-                padding: '10px',
-                background: 'rgba(156, 39, 176, 0.15)',
-                border: '1px solid rgba(156, 39, 176, 0.3)',
-                borderRadius: '8px',
-                color: 'white',
-                cursor: 'pointer',
-                fontSize: '0.85rem',
-                marginBottom: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                justifyContent: 'center',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(156, 39, 176, 0.25)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(156, 39, 176, 0.15)';
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-              {t('displayThemeOverrides.configureButton', 'Configure Per-Display Themes')}
-            </button>
-
-            {/* Themes Section */}
-            <ThemeSelectionPanel
-              themes={themes}
-              stageMonitorThemes={stageMonitorThemes}
-              bibleThemes={bibleThemes}
-              prayerThemes={prayerThemes}
-              obsThemes={obsThemes}
-              selectedTheme={selectedThemeObj}
-              selectedStageTheme={selectedStageThemeObj}
-              selectedBibleTheme={selectedBibleThemeObj}
-              selectedPrayerTheme={selectedPrayerThemeObj}
-              selectedOBSTheme={selectedOBSThemeObj}
-              selectedOBSSongsTheme={selectedOBSSongsThemeObj}
-              selectedOBSBibleTheme={selectedOBSBibleThemeObj}
-              selectedOBSPrayerTheme={selectedOBSPrayerThemeObj}
-              isRTL={isRTL}
-              onApplyViewerTheme={onApplyViewerTheme}
-              onApplyStageTheme={onApplyStageTheme}
-              onApplyBibleTheme={onApplyBibleTheme}
-              onApplyPrayerTheme={onApplyPrayerTheme}
-              onApplyOBSTheme={onApplyOBSTheme}
-              onCreateNewTheme={() => onCreateNewTheme('songs')}
-              onCloseDisplayPanel={onCloseDisplayPanel}
-            />
-
-            {/* Online Broadcast Section */}
+            {/* Online Broadcast Section - Hidden for now
             <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
               <h4 style={{ margin: '0 0 12px 0', color: 'white', fontSize: '0.9rem' }}>{t('controlPanel.onlineBroadcast', 'Online Broadcast')}</h4>
               <BroadcastSelector
@@ -535,6 +474,603 @@ const HeaderBar = memo<HeaderBarProps>(({
                 embedded={true}
               />
             </div>
+            */}
+          </div>
+        )}
+      </div>
+
+      {/* Theme Menu Button */}
+      <div data-panel="theme" style={{ position: 'relative', marginLeft: '12px' }}>
+        <button
+          onClick={() => onShowThemePanelChange(!showThemePanel)}
+          style={{
+            background: 'rgba(255,255,255,0.1)',
+            border: 'none',
+            borderRadius: '10px',
+            padding: '10px 16px',
+            color: 'white',
+            cursor: 'pointer',
+            display: 'flex',
+            flexDirection: isRTL ? 'row-reverse' : 'row',
+            alignItems: 'center',
+            gap: '10px'
+          }}
+          title={t('controlPanel.themes', 'Themes')}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 2a10 10 0 0 0-6.88 17.23l3.12-3.12a5 5 0 1 1 7.52 0l3.12 3.12A10 10 0 0 0 12 2z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <span style={{ fontWeight: 500 }}>
+            {t('controlPanel.themes', 'Themes')}
+          </span>
+        </button>
+
+        {/* Theme Panel Dropdown */}
+        {showThemePanel && (
+          <div style={{
+            position: 'absolute',
+            top: '100%',
+            left: isRTL ? 'auto' : 0,
+            right: isRTL ? 0 : 'auto',
+            marginTop: '8px',
+            background: 'rgba(30, 30, 50, 0.98)',
+            borderRadius: '12px',
+            border: '1px solid rgba(255,255,255,0.2)',
+            padding: '12px',
+            minWidth: '300px',
+            maxHeight: 'calc(100vh - 120px)',
+            overflowY: 'auto',
+            zIndex: 1000,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
+          }}>
+            <h4 style={{ margin: '0 0 12px 0', color: 'white', fontSize: '0.9rem' }}>
+              {t('controlPanel.globalThemes', 'Global Themes')}
+            </h4>
+
+            {/* Songs Theme */}
+            <div style={{
+              padding: '10px',
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: '8px',
+              marginBottom: '8px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '6px',
+                    background: 'rgba(33, 150, 243, 0.2)',
+                    border: '1px solid rgba(33, 150, 243, 0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2196F3" strokeWidth="2">
+                      <path d="M9 18V5l12-2v13"/>
+                      <circle cx="6" cy="18" r="3"/>
+                      <circle cx="18" cy="16" r="3"/>
+                    </svg>
+                  </div>
+                  <span style={{ color: 'white', fontWeight: 500, fontSize: '0.85rem' }}>
+                    {t('displayThemeOverrides.songsTheme', 'Songs Theme')}
+                  </span>
+                </div>
+                <button
+                  onClick={() => onCreateTheme('songs')}
+                  title={t('common.new', 'New')}
+                  style={{
+                    background: 'rgba(33, 150, 243, 0.2)',
+                    border: '1px solid rgba(33, 150, 243, 0.4)',
+                    borderRadius: '4px',
+                    padding: '4px 8px',
+                    color: '#2196F3',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem'
+                  }}
+                >
+                  + {t('common.new', 'New')}
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '120px', overflowY: 'auto' }}>
+                {themes.map(theme => (
+                  <div
+                    key={theme.id}
+                    onClick={() => onApplyViewerTheme(theme)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '6px 8px',
+                      borderRadius: '4px',
+                      background: selectedTheme?.id === theme.id ? 'rgba(33, 150, 243, 0.3)' : 'rgba(255,255,255,0.05)',
+                      border: selectedTheme?.id === theme.id ? '1px solid rgba(33, 150, 243, 0.5)' : '1px solid transparent',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span style={{ color: 'white', fontSize: '0.8rem' }}>{theme.name}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onEditTheme('songs', theme.id); }}
+                      title={t('common.edit', 'Edit')}
+                      style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '2px 6px',
+                        color: 'rgba(255,255,255,0.6)',
+                        cursor: 'pointer',
+                        fontSize: '0.65rem'
+                      }}
+                    >
+                      {t('common.edit', 'Edit')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Bible Theme */}
+            <div style={{
+              padding: '10px',
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: '8px',
+              marginBottom: '8px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '6px',
+                    background: 'rgba(156, 39, 176, 0.2)',
+                    border: '1px solid rgba(156, 39, 176, 0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9c27b0" strokeWidth="2">
+                      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                    </svg>
+                  </div>
+                  <span style={{ color: 'white', fontWeight: 500, fontSize: '0.85rem' }}>
+                    {t('displayThemeOverrides.bibleTheme', 'Bible Theme')}
+                  </span>
+                </div>
+                <button
+                  onClick={() => onCreateTheme('bible')}
+                  title={t('common.new', 'New')}
+                  style={{
+                    background: 'rgba(156, 39, 176, 0.2)',
+                    border: '1px solid rgba(156, 39, 176, 0.4)',
+                    borderRadius: '4px',
+                    padding: '4px 8px',
+                    color: '#9c27b0',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem'
+                  }}
+                >
+                  + {t('common.new', 'New')}
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '120px', overflowY: 'auto' }}>
+                {bibleThemes.map(theme => (
+                  <div
+                    key={theme.id}
+                    onClick={() => onApplyBibleTheme(theme)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '6px 8px',
+                      borderRadius: '4px',
+                      background: selectedBibleTheme?.id === theme.id ? 'rgba(156, 39, 176, 0.3)' : 'rgba(255,255,255,0.05)',
+                      border: selectedBibleTheme?.id === theme.id ? '1px solid rgba(156, 39, 176, 0.5)' : '1px solid transparent',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span style={{ color: 'white', fontSize: '0.8rem' }}>{theme.name}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onEditTheme('bible', theme.id); }}
+                      title={t('common.edit', 'Edit')}
+                      style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '2px 6px',
+                        color: 'rgba(255,255,255,0.6)',
+                        cursor: 'pointer',
+                        fontSize: '0.65rem'
+                      }}
+                    >
+                      {t('common.edit', 'Edit')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Prayer Theme */}
+            <div style={{
+              padding: '10px',
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: '8px',
+              marginBottom: '8px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '6px',
+                    background: 'rgba(255, 152, 0, 0.2)',
+                    border: '1px solid rgba(255, 152, 0, 0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FF9800" strokeWidth="2">
+                      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                    </svg>
+                  </div>
+                  <span style={{ color: 'white', fontWeight: 500, fontSize: '0.85rem' }}>
+                    {t('displayThemeOverrides.prayerTheme', 'Prayer Theme')}
+                  </span>
+                </div>
+                <button
+                  onClick={() => onCreateTheme('prayer')}
+                  title={t('common.new', 'New')}
+                  style={{
+                    background: 'rgba(255, 152, 0, 0.2)',
+                    border: '1px solid rgba(255, 152, 0, 0.4)',
+                    borderRadius: '4px',
+                    padding: '4px 8px',
+                    color: '#FF9800',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem'
+                  }}
+                >
+                  + {t('common.new', 'New')}
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '120px', overflowY: 'auto' }}>
+                {prayerThemes.map(theme => (
+                  <div
+                    key={theme.id}
+                    onClick={() => onApplyPrayerTheme(theme)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '6px 8px',
+                      borderRadius: '4px',
+                      background: selectedPrayerTheme?.id === theme.id ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255,255,255,0.05)',
+                      border: selectedPrayerTheme?.id === theme.id ? '1px solid rgba(255, 152, 0, 0.5)' : '1px solid transparent',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span style={{ color: 'white', fontSize: '0.8rem' }}>{theme.name}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onEditTheme('prayer', theme.id); }}
+                      title={t('common.edit', 'Edit')}
+                      style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '2px 6px',
+                        color: 'rgba(255,255,255,0.6)',
+                        cursor: 'pointer',
+                        fontSize: '0.65rem'
+                      }}
+                    >
+                      {t('common.edit', 'Edit')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Stage Theme */}
+            <div style={{
+              padding: '10px',
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: '8px',
+              marginBottom: '8px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '6px',
+                    background: 'rgba(76, 175, 80, 0.2)',
+                    border: '1px solid rgba(76, 175, 80, 0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#4caf50" strokeWidth="2">
+                      <rect x="2" y="7" width="20" height="15" rx="2" ry="2"/>
+                      <polyline points="17 2 12 7 7 2"/>
+                    </svg>
+                  </div>
+                  <span style={{ color: 'white', fontWeight: 500, fontSize: '0.85rem' }}>
+                    {t('displayThemeOverrides.stageTheme', 'Stage Theme')}
+                  </span>
+                </div>
+                <button
+                  onClick={() => onCreateTheme('stage')}
+                  title={t('common.new', 'New')}
+                  style={{
+                    background: 'rgba(76, 175, 80, 0.2)',
+                    border: '1px solid rgba(76, 175, 80, 0.4)',
+                    borderRadius: '4px',
+                    padding: '4px 8px',
+                    color: '#4caf50',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem'
+                  }}
+                >
+                  + {t('common.new', 'New')}
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '120px', overflowY: 'auto' }}>
+                {stageMonitorThemes.map(theme => (
+                  <div
+                    key={theme.id}
+                    onClick={() => onApplyStageTheme(theme)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '6px 8px',
+                      borderRadius: '4px',
+                      background: selectedStageTheme?.id === theme.id ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255,255,255,0.05)',
+                      border: selectedStageTheme?.id === theme.id ? '1px solid rgba(76, 175, 80, 0.5)' : '1px solid transparent',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span style={{ color: 'white', fontSize: '0.8rem' }}>{theme.name}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onEditTheme('stage', theme.id); }}
+                      title={t('common.edit', 'Edit')}
+                      style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '2px 6px',
+                        color: 'rgba(255,255,255,0.6)',
+                        cursor: 'pointer',
+                        fontSize: '0.65rem'
+                      }}
+                    >
+                      {t('common.edit', 'Edit')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* OBS Themes */}
+            {(() => {
+              // Filter OBS themes by type, falling back to regular themes if no OBS-specific themes exist
+              const obsSongsThemeList = obsThemes?.filter(t => t.type === 'songs') || [];
+              const obsBibleThemeList = obsThemes?.filter(t => t.type === 'bible') || [];
+              const obsPrayerThemeList = obsThemes?.filter(t => t.type === 'prayer') || [];
+
+              // Use OBS themes if available, otherwise fall back to regular themes
+              const songsThemesForOBS = obsSongsThemeList.length > 0 ? obsSongsThemeList : themes;
+              const bibleThemesForOBS = obsBibleThemeList.length > 0 ? obsBibleThemeList : bibleThemes;
+              const prayerThemesForOBS = obsPrayerThemeList.length > 0 ? obsPrayerThemeList : prayerThemes;
+
+              return (
+            <div style={{
+              padding: '10px',
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: '8px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <div style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '6px',
+                  background: 'rgba(23, 162, 184, 0.2)',
+                  border: '1px solid rgba(23, 162, 184, 0.5)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#17a2b8" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </div>
+                <span style={{ color: 'white', fontWeight: 500, fontSize: '0.85rem' }}>
+                  OBS
+                </span>
+              </div>
+
+              {/* OBS Songs Theme */}
+              <div style={{ marginBottom: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem' }}>
+                    {t('displayThemeOverrides.songsTheme', 'Songs Theme')}
+                  </div>
+                  <button
+                    onClick={() => onCreateTheme('obs-songs')}
+                    title={t('common.new', 'New')}
+                    style={{
+                      background: 'rgba(23, 162, 184, 0.2)',
+                      border: '1px solid rgba(23, 162, 184, 0.4)',
+                      borderRadius: '4px',
+                      padding: '2px 6px',
+                      color: '#17a2b8',
+                      cursor: 'pointer',
+                      fontSize: '0.6rem'
+                    }}
+                  >
+                    + {t('common.new', 'New')}
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxHeight: '80px', overflowY: 'auto' }}>
+                  {songsThemesForOBS.map(theme => (
+                    <div
+                      key={theme.id}
+                      onClick={() => onApplyOBSTheme && onApplyOBSTheme({ ...theme, type: theme.type || 'songs' })}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        background: selectedOBSSongsTheme?.id === theme.id ? 'rgba(23, 162, 184, 0.3)' : 'rgba(255,255,255,0.03)',
+                        border: selectedOBSSongsTheme?.id === theme.id ? '1px solid rgba(23, 162, 184, 0.5)' : '1px solid transparent',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <span style={{ color: 'white', fontSize: '0.75rem' }}>{theme.name}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onEditTheme('obs-songs', theme.id); }}
+                        title={t('common.edit', 'Edit')}
+                        style={{
+                          background: 'rgba(255,255,255,0.1)',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '2px 6px',
+                          color: 'rgba(255,255,255,0.6)',
+                          cursor: 'pointer',
+                          fontSize: '0.6rem'
+                        }}
+                      >
+                        {t('common.edit', 'Edit')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* OBS Bible Theme */}
+              <div style={{ marginBottom: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem' }}>
+                    {t('displayThemeOverrides.bibleTheme', 'Bible Theme')}
+                  </div>
+                  <button
+                    onClick={() => onCreateTheme('obs-bible')}
+                    title={t('common.new', 'New')}
+                    style={{
+                      background: 'rgba(23, 162, 184, 0.2)',
+                      border: '1px solid rgba(23, 162, 184, 0.4)',
+                      borderRadius: '4px',
+                      padding: '2px 6px',
+                      color: '#17a2b8',
+                      cursor: 'pointer',
+                      fontSize: '0.6rem'
+                    }}
+                  >
+                    + {t('common.new', 'New')}
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxHeight: '80px', overflowY: 'auto' }}>
+                  {bibleThemesForOBS.map(theme => (
+                    <div
+                      key={theme.id}
+                      onClick={() => onApplyOBSTheme && onApplyOBSTheme({ ...theme, type: theme.type || 'bible' })}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        background: selectedOBSBibleTheme?.id === theme.id ? 'rgba(23, 162, 184, 0.3)' : 'rgba(255,255,255,0.03)',
+                        border: selectedOBSBibleTheme?.id === theme.id ? '1px solid rgba(23, 162, 184, 0.5)' : '1px solid transparent',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <span style={{ color: 'white', fontSize: '0.75rem' }}>{theme.name}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onEditTheme('obs-bible', theme.id); }}
+                        title={t('common.edit', 'Edit')}
+                        style={{
+                          background: 'rgba(255,255,255,0.1)',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '2px 6px',
+                          color: 'rgba(255,255,255,0.6)',
+                          cursor: 'pointer',
+                          fontSize: '0.6rem'
+                        }}
+                      >
+                        {t('common.edit', 'Edit')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* OBS Prayer Theme */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem' }}>
+                    {t('displayThemeOverrides.prayerTheme', 'Prayer Theme')}
+                  </div>
+                  <button
+                    onClick={() => onCreateTheme('obs-prayer')}
+                    title={t('common.new', 'New')}
+                    style={{
+                      background: 'rgba(23, 162, 184, 0.2)',
+                      border: '1px solid rgba(23, 162, 184, 0.4)',
+                      borderRadius: '4px',
+                      padding: '2px 6px',
+                      color: '#17a2b8',
+                      cursor: 'pointer',
+                      fontSize: '0.6rem'
+                    }}
+                  >
+                    + {t('common.new', 'New')}
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxHeight: '80px', overflowY: 'auto' }}>
+                  {prayerThemesForOBS.map(theme => (
+                    <div
+                      key={theme.id}
+                      onClick={() => onApplyOBSTheme && onApplyOBSTheme({ ...theme, type: theme.type || 'prayer' })}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        background: selectedOBSPrayerTheme?.id === theme.id ? 'rgba(23, 162, 184, 0.3)' : 'rgba(255,255,255,0.03)',
+                        border: selectedOBSPrayerTheme?.id === theme.id ? '1px solid rgba(23, 162, 184, 0.5)' : '1px solid transparent',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <span style={{ color: 'white', fontSize: '0.75rem' }}>{theme.name}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onEditTheme('obs-prayer', theme.id); }}
+                        title={t('common.edit', 'Edit')}
+                        style={{
+                          background: 'rgba(255,255,255,0.1)',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '2px 6px',
+                          color: 'rgba(255,255,255,0.6)',
+                          cursor: 'pointer',
+                          fontSize: '0.6rem'
+                        }}
+                      >
+                        {t('common.edit', 'Edit')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -700,17 +1236,48 @@ const HeaderBar = memo<HeaderBarProps>(({
       {/* Per-Display Theme Override Modal */}
       <DisplayThemeOverrideModal
         isOpen={showThemeOverrideModal}
-        onClose={() => setShowThemeOverrideModal(false)}
+        onClose={handleCloseThemeOverrideModal}
         displays={displays}
         themes={themes}
         stageThemes={stageMonitorThemes}
         bibleThemes={bibleThemes}
         prayerThemes={prayerThemes}
-        onOverrideChanged={() => {
-          if (onThemeOverrideChanged) {
-            onThemeOverrideChanged();
-          }
-        }}
+        onOverrideChanged={handleThemeOverrideChanged}
+        selectedDisplayId={selectedDisplayForSettings}
+        obsThemes={obsThemes}
+        selectedOBSSongsTheme={selectedOBSSongsTheme}
+        selectedOBSBibleTheme={selectedOBSBibleTheme}
+        selectedOBSPrayerTheme={selectedOBSPrayerTheme}
+        onApplyOBSTheme={onApplyOBSTheme}
+      />
+
+      {/* Display Settings Modal - for unassigned displays */}
+      <DisplaySettingsModal
+        isOpen={showDisplaySettingsModal}
+        onClose={handleCloseDisplaySettingsModal}
+        display={displayForSettings}
+        themes={themes}
+        stageThemes={stageMonitorThemes}
+        bibleThemes={bibleThemes}
+        prayerThemes={prayerThemes}
+        onStart={handleDisplaySettingsStart}
+        onThemeOverrideChanged={handleThemeOverrideChanged}
+      />
+
+      {/* OBS Settings Modal */}
+      <OBSSettingsModal
+        isOpen={showOBSSettingsModal}
+        onClose={handleCloseOBSSettingsModal}
+        isRunning={obsServerRunning}
+        obsUrl={obsServerUrl}
+        themes={obsThemes || themes}
+        bibleThemes={bibleThemes}
+        prayerThemes={prayerThemes}
+        selectedSongsTheme={selectedOBSSongsTheme}
+        selectedBibleTheme={selectedOBSBibleTheme}
+        selectedPrayerTheme={selectedOBSPrayerTheme}
+        onApplyTheme={handleOBSApplyTheme}
+        onStart={onToggleOBSServer}
       />
     </header>
   );

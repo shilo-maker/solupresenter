@@ -40,6 +40,7 @@ interface StageElementConfig {
   labelColor?: string;
   opacity?: number;
   showSeconds?: boolean;
+  alignH?: 'left' | 'center' | 'right';
 }
 
 interface StageTextStyle {
@@ -48,6 +49,21 @@ interface StageTextStyle {
   fontSize: number;
   fontWeight: string;
   opacity: number;
+  // Position properties (percentage-based)
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  alignH?: 'left' | 'center' | 'right';
+  alignV?: 'top' | 'center' | 'bottom';
+  // Flow positioning
+  positionMode?: 'absolute' | 'flow';
+  flowAnchor?: string;
+  flowGap?: number;
+  flowBeside?: boolean;
+  // Auto height
+  autoHeight?: boolean;
+  growDirection?: 'up' | 'down';
 }
 
 interface StageTheme {
@@ -60,6 +76,11 @@ interface StageTheme {
     nextSlideArea: StageElementConfig;
   };
   currentSlideText: {
+    original: StageTextStyle;
+    transliteration: StageTextStyle;
+    translation: StageTextStyle;
+  };
+  nextSlideText: {
     original: StageTextStyle;
     transliteration: StageTextStyle;
     translation: StageTextStyle;
@@ -82,9 +103,14 @@ const DEFAULT_THEME: StageTheme = {
     nextSlideArea: { visible: true, x: 68, y: 12, width: 30, height: 84, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 8, labelText: 'Next' }
   },
   currentSlideText: {
-    original: { visible: true, color: '#ffffff', fontSize: 100, fontWeight: '500', opacity: 1 },
-    transliteration: { visible: true, color: 'rgba(255,255,255,0.9)', fontSize: 70, fontWeight: '400', opacity: 1 },
-    translation: { visible: true, color: 'rgba(255,255,255,0.7)', fontSize: 60, fontWeight: '400', opacity: 1 }
+    original: { visible: true, color: '#ffffff', fontSize: 100, fontWeight: '500', opacity: 1, x: 5, y: 20, width: 58, height: 15, alignH: 'center', alignV: 'center' },
+    transliteration: { visible: true, color: 'rgba(255,255,255,0.9)', fontSize: 70, fontWeight: '400', opacity: 1, x: 5, y: 40, width: 58, height: 12, alignH: 'center', alignV: 'center' },
+    translation: { visible: true, color: 'rgba(255,255,255,0.7)', fontSize: 60, fontWeight: '400', opacity: 1, x: 5, y: 55, width: 58, height: 12, alignH: 'center', alignV: 'center' }
+  },
+  nextSlideText: {
+    original: { visible: true, color: '#ffffff', fontSize: 100, fontWeight: 'bold', opacity: 0.8, x: 70, y: 25, width: 26, height: 12, alignH: 'center', alignV: 'center' },
+    transliteration: { visible: true, color: '#888888', fontSize: 70, fontWeight: '400', opacity: 0.7, x: 70, y: 40, width: 26, height: 10, alignH: 'center', alignV: 'center' },
+    translation: { visible: true, color: '#ffffff', fontSize: 70, fontWeight: '400', opacity: 0.7, x: 70, y: 52, width: 26, height: 10, alignH: 'center', alignV: 'center' }
   }
 };
 
@@ -120,6 +146,97 @@ interface RotatingMessagesState {
   currentIndex: number;
 }
 
+// Helper to calculate effective position based on flow mode
+interface TextStyles {
+  original: StageTextStyle;
+  transliteration: StageTextStyle;
+  translation: StageTextStyle;
+}
+
+const getDefaultPosition = (lineType: 'original' | 'transliteration' | 'translation') => {
+  switch (lineType) {
+    case 'original': return { x: 5, y: 20, width: 58, height: 15 };
+    case 'transliteration': return { x: 5, y: 40, width: 58, height: 12 };
+    case 'translation': return { x: 5, y: 55, width: 58, height: 12 };
+  }
+};
+
+const getEffectivePosition = (
+  textStyle: StageTextStyle,
+  allTextStyles: TextStyles,
+  lineType: 'original' | 'transliteration' | 'translation',
+  measuredHeights: Record<string, number> = {},
+  visited: Set<string> = new Set()
+): { x: number; y: number; width: number; height: number } => {
+  const defaultPos = getDefaultPosition(lineType);
+
+  // Cycle detection - prevent infinite recursion
+  if (visited.has(lineType)) {
+    console.warn(`[DisplayStage] Circular flow dependency detected at: ${lineType}`);
+    return {
+      x: textStyle.x ?? defaultPos.x,
+      y: textStyle.y ?? defaultPos.y,
+      width: textStyle.width ?? defaultPos.width,
+      height: textStyle.autoHeight && measuredHeights[lineType] !== undefined
+        ? measuredHeights[lineType]
+        : (textStyle.height ?? defaultPos.height)
+    };
+  }
+  visited.add(lineType);
+
+  // Determine the effective height (use measured height if autoHeight is enabled)
+  const effectiveHeight = textStyle.autoHeight && measuredHeights[lineType] !== undefined
+    ? measuredHeights[lineType]
+    : (textStyle.height ?? defaultPos.height);
+
+  // If not in flow mode, use absolute position
+  if (textStyle.positionMode !== 'flow') {
+    return {
+      x: textStyle.x ?? defaultPos.x,
+      y: textStyle.y ?? defaultPos.y,
+      width: textStyle.width ?? defaultPos.width,
+      height: effectiveHeight
+    };
+  }
+
+  // Flow mode - calculate position based on anchor
+  let rawAnchor = textStyle.flowAnchor;
+  // Strip 'next' prefix if present (e.g., 'nextOriginal' -> 'original')
+  if (rawAnchor && rawAnchor.startsWith('next')) {
+    rawAnchor = rawAnchor.charAt(4).toLowerCase() + rawAnchor.slice(5);
+  }
+  const anchor = rawAnchor as 'original' | 'transliteration' | 'translation' | undefined;
+  const gap = textStyle.flowGap ?? 1;
+
+  let y = textStyle.y ?? defaultPos.y;
+
+  if (anchor && allTextStyles[anchor]) {
+    const anchorStyle = allTextStyles[anchor];
+    const anchorPos = getEffectivePosition(
+      anchorStyle,
+      allTextStyles,
+      anchor,
+      measuredHeights,
+      new Set(visited) // Pass a copy to preserve visited set for other branches
+    );
+
+    if (textStyle.flowBeside) {
+      // Position beside - same Y as anchor
+      y = anchorPos.y;
+    } else {
+      // Position below - Y = anchor's Y + anchor's height + gap
+      y = anchorPos.y + anchorPos.height + gap;
+    }
+  }
+
+  return {
+    x: textStyle.x ?? defaultPos.x,
+    y,
+    width: textStyle.width ?? defaultPos.width,
+    height: effectiveHeight
+  };
+};
+
 const DisplayStage: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState<SlideData | null>(null);
   const [nextSlide, setNextSlide] = useState<SlideData | null>(null);
@@ -127,6 +244,16 @@ const DisplayStage: React.FC = () => {
   const [isBlank, setIsBlank] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [theme, setTheme] = useState<StageTheme>(DEFAULT_THEME);
+
+  // Measured heights for auto-height text elements (percentage of viewport)
+  const [measuredHeights, setMeasuredHeights] = useState<Record<string, number>>({});
+  const [nextMeasuredHeights, setNextMeasuredHeights] = useState<Record<string, number>>({});
+  const originalRef = useRef<HTMLDivElement>(null);
+  const translitRef = useRef<HTMLDivElement>(null);
+  const translationRef = useRef<HTMLDivElement>(null);
+  const nextOriginalRef = useRef<HTMLDivElement>(null);
+  const nextTranslitRef = useRef<HTMLDivElement>(null);
+  const nextTranslationRef = useRef<HTMLDivElement>(null);
 
   // Tool states
   const [countdown, setCountdown] = useState<CountdownState>({ active: false, remaining: '', message: '' });
@@ -141,6 +268,13 @@ const DisplayStage: React.FC = () => {
   const announcementTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const announcementFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasAnnouncementActive = useRef(false);
+
+  // Stage message state
+  const [stageMessage, setStageMessage] = useState<{ text: string; timestamp: number } | null>(null);
+  const [stageMessageVisible, setStageMessageVisible] = useState(false);
+  const [stageMessageFading, setStageMessageFading] = useState(false);
+  const stageMessageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stageMessageFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // Report ready
@@ -182,6 +316,11 @@ const DisplayStage: React.FC = () => {
             original: { ...DEFAULT_THEME.currentSlideText.original, ...(newTheme.currentSlideText?.original || {}) },
             transliteration: { ...DEFAULT_THEME.currentSlideText.transliteration, ...(newTheme.currentSlideText?.transliteration || {}) },
             translation: { ...DEFAULT_THEME.currentSlideText.translation, ...(newTheme.currentSlideText?.translation || {}) },
+          },
+          nextSlideText: {
+            original: { ...DEFAULT_THEME.nextSlideText.original, ...(newTheme.nextSlideText?.original || {}) },
+            transliteration: { ...DEFAULT_THEME.nextSlideText.transliteration, ...(newTheme.nextSlideText?.transliteration || {}) },
+            translation: { ...DEFAULT_THEME.nextSlideText.translation, ...(newTheme.nextSlideText?.translation || {}) },
           }
         });
       }
@@ -229,6 +368,13 @@ const DisplayStage: React.FC = () => {
       }
     });
 
+    // Listen for stage messages
+    const stageMessageCleanup = window.displayAPI.onStageMessage((data) => {
+      if (data && data.text) {
+        setStageMessage(data);
+      }
+    });
+
     // Update clock
     const clockInterval = setInterval(() => {
       setCurrentTime(new Date());
@@ -238,9 +384,66 @@ const DisplayStage: React.FC = () => {
       slideCleanup();
       stageThemeCleanup();
       toolCleanup();
+      stageMessageCleanup();
       clearInterval(clockInterval);
     };
   }, []);
+
+  // Measure text heights for auto-height flow positioning (current slide)
+  useEffect(() => {
+    const measureHeights = () => {
+      const viewportHeight = window.innerHeight;
+      const newHeights: Record<string, number> = {};
+
+      if (originalRef.current && theme.currentSlideText?.original?.autoHeight) {
+        const heightPx = originalRef.current.getBoundingClientRect().height;
+        newHeights['original'] = (heightPx / viewportHeight) * 100;
+      }
+      if (translitRef.current && theme.currentSlideText?.transliteration?.autoHeight) {
+        const heightPx = translitRef.current.getBoundingClientRect().height;
+        newHeights['transliteration'] = (heightPx / viewportHeight) * 100;
+      }
+      if (translationRef.current && theme.currentSlideText?.translation?.autoHeight) {
+        const heightPx = translationRef.current.getBoundingClientRect().height;
+        newHeights['translation'] = (heightPx / viewportHeight) * 100;
+      }
+
+      if (Object.keys(newHeights).length > 0) {
+        setMeasuredHeights(prev => ({ ...prev, ...newHeights }));
+      }
+    };
+
+    // Measure after render
+    requestAnimationFrame(measureHeights);
+  }, [currentSlide, theme.currentSlideText]);
+
+  // Measure text heights for auto-height flow positioning (next slide)
+  useEffect(() => {
+    const measureHeights = () => {
+      const viewportHeight = window.innerHeight;
+      const newHeights: Record<string, number> = {};
+
+      if (nextOriginalRef.current && theme.nextSlideText?.original?.autoHeight) {
+        const heightPx = nextOriginalRef.current.getBoundingClientRect().height;
+        newHeights['original'] = (heightPx / viewportHeight) * 100;
+      }
+      if (nextTranslitRef.current && theme.nextSlideText?.transliteration?.autoHeight) {
+        const heightPx = nextTranslitRef.current.getBoundingClientRect().height;
+        newHeights['transliteration'] = (heightPx / viewportHeight) * 100;
+      }
+      if (nextTranslationRef.current && theme.nextSlideText?.translation?.autoHeight) {
+        const heightPx = nextTranslationRef.current.getBoundingClientRect().height;
+        newHeights['translation'] = (heightPx / viewportHeight) * 100;
+      }
+
+      if (Object.keys(newHeights).length > 0) {
+        setNextMeasuredHeights(prev => ({ ...prev, ...newHeights }));
+      }
+    };
+
+    // Measure after render
+    requestAnimationFrame(measureHeights);
+  }, [nextSlide, theme.nextSlideText]);
 
   // Handle announcement visibility and auto-dismiss after 10 seconds
   useEffect(() => {
@@ -307,6 +510,43 @@ const DisplayStage: React.FC = () => {
     };
   }, [rotatingMessages.active, rotatingMessages.messages.length, rotatingMessages.interval]);
 
+  // Stage message auto-hide after 15 seconds
+  useEffect(() => {
+    if (stageMessage && stageMessage.text) {
+      // Clear any existing timers
+      if (stageMessageTimerRef.current) {
+        clearTimeout(stageMessageTimerRef.current);
+      }
+      if (stageMessageFadeRef.current) {
+        clearTimeout(stageMessageFadeRef.current);
+      }
+
+      // Show message with slide-up animation
+      setStageMessageFading(false);
+      setStageMessageVisible(true);
+
+      // Start fade-out after 13 seconds, then hide after 15 seconds total
+      stageMessageTimerRef.current = setTimeout(() => {
+        setStageMessageFading(true);
+        // Fully hide after fade animation completes (2 seconds)
+        stageMessageFadeRef.current = setTimeout(() => {
+          setStageMessageVisible(false);
+          setStageMessageFading(false);
+          setStageMessage(null);
+        }, 2000);
+      }, 13000);
+    }
+
+    return () => {
+      if (stageMessageTimerRef.current) {
+        clearTimeout(stageMessageTimerRef.current);
+      }
+      if (stageMessageFadeRef.current) {
+        clearTimeout(stageMessageFadeRef.current);
+      }
+    };
+  }, [stageMessage?.timestamp]);
+
   // Format time
   const formatTime = (date: Date): string => {
     const opts: Intl.DateTimeFormatOptions = {
@@ -364,9 +604,11 @@ const DisplayStage: React.FC = () => {
             height: `${elements.songTitle.height}%`,
             display: 'flex',
             alignItems: 'center',
-            paddingLeft: '1%',
-            fontSize: '2vw',
-            fontWeight: 600,
+            justifyContent: elements.songTitle.alignH === 'left' ? 'flex-start' : elements.songTitle.alignH === 'right' ? 'flex-end' : 'center',
+            paddingLeft: elements.songTitle.alignH === 'left' ? '1%' : '0',
+            paddingRight: elements.songTitle.alignH === 'right' ? '1%' : '0',
+            fontSize: `${2 * ((elements.songTitle.fontSize || 100) / 100)}vw`,
+            fontWeight: elements.songTitle.fontWeight || 600,
             color: elements.songTitle.color || colors.accent
           }}
         >
@@ -385,10 +627,11 @@ const DisplayStage: React.FC = () => {
             height: `${elements.clock.height}%`,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'flex-end',
-            paddingRight: '1%',
-            fontSize: '2.5vw',
-            fontWeight: 700,
+            justifyContent: elements.clock.alignH === 'left' ? 'flex-start' : elements.clock.alignH === 'center' ? 'center' : 'flex-end',
+            paddingLeft: elements.clock.alignH === 'left' ? '1%' : '0',
+            paddingRight: elements.clock.alignH === 'right' || !elements.clock.alignH ? '1%' : '0',
+            fontSize: `${2.5 * ((elements.clock.fontSize || 100) / 100)}vw`,
+            fontWeight: elements.clock.fontWeight || 700,
             fontFamily: elements.clock.fontFamily || 'monospace',
             color: elements.clock.color || colors.text
           }}
@@ -397,7 +640,7 @@ const DisplayStage: React.FC = () => {
         </div>
       )}
 
-      {/* Current Slide Area */}
+      {/* Current Slide Area (Background) */}
       <div
         style={{
           position: 'absolute',
@@ -407,187 +650,304 @@ const DisplayStage: React.FC = () => {
           height: `${elements.currentSlideArea.height}%`,
           background: elements.currentSlideArea.backgroundColor || 'rgba(0,0,0,0.5)',
           borderRadius: `${elements.currentSlideArea.borderRadius || 8}px`,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
+          boxSizing: 'border-box'
+        }}
+      />
+
+      {/* Current Label */}
+      <div
+        style={{
+          position: 'absolute',
+          left: `${elements.currentSlideArea.x}%`,
+          top: `${elements.currentSlideArea.y}%`,
+          width: `${elements.currentSlideArea.width}%`,
+          padding: '1%',
+          fontSize: '1vw',
+          color: colors.secondary,
+          textTransform: 'uppercase',
+          letterSpacing: '0.2em',
           textAlign: 'center',
-          padding: '2%',
           boxSizing: 'border-box'
         }}
       >
-        <div
-          style={{
-            fontSize: '1vw',
-            color: colors.secondary,
-            marginBottom: '1vh',
-            textTransform: 'uppercase',
-            letterSpacing: '0.2em'
-          }}
-        >
-          Current
-        </div>
-
-        {isBlank ? (
-          <div style={{ fontSize: '3vw', color: 'rgba(255,255,255,0.3)' }}>BLANK</div>
-        ) : currentSlide ? (
-          // Check if this is prayer content (has title) or song content (has originalText)
-          currentSlide.title ? (
-            // Render prayer/sermon content
-            <>
-              {currentSlide.title && (
-                <div
-                  style={{
-                    fontSize: `${currentSlideText.original.fontSize / 25}vw`,
-                    fontWeight: currentSlideText.original.fontWeight as any,
-                    color: currentSlideText.original.color,
-                    opacity: currentSlideText.original.opacity,
-                    marginBottom: '1vh',
-                    direction: 'rtl',
-                    lineHeight: 1.3
-                  }}
-                >
-                  {currentSlide.title}
-                </div>
-              )}
-              {currentSlide.titleTranslation && (
-                <div
-                  style={{
-                    fontSize: `${currentSlideText.translation.fontSize / 30}vw`,
-                    fontWeight: currentSlideText.translation.fontWeight as any,
-                    color: currentSlideText.translation.color,
-                    opacity: currentSlideText.translation.opacity,
-                    marginBottom: '2vh'
-                  }}
-                >
-                  {currentSlide.titleTranslation}
-                </div>
-              )}
-              {currentSlide.subtitle && (
-                <div
-                  style={{
-                    fontSize: `${currentSlideText.original.fontSize / 30}vw`,
-                    fontWeight: '500',
-                    color: currentSlideText.original.color,
-                    opacity: 0.9,
-                    marginBottom: '0.5vh',
-                    direction: 'rtl',
-                    lineHeight: 1.3
-                  }}
-                >
-                  {currentSlide.subtitle}
-                </div>
-              )}
-              {currentSlide.subtitleTranslation && (
-                <div
-                  style={{
-                    fontSize: `${currentSlideText.translation.fontSize / 35}vw`,
-                    fontWeight: currentSlideText.translation.fontWeight as any,
-                    color: currentSlideText.translation.color,
-                    opacity: 0.8,
-                    marginBottom: '2vh'
-                  }}
-                >
-                  {currentSlide.subtitleTranslation}
-                </div>
-              )}
-              {currentSlide.description && (
-                <div
-                  style={{
-                    fontSize: `${currentSlideText.original.fontSize / 35}vw`,
-                    fontWeight: '400',
-                    color: currentSlideText.original.color,
-                    opacity: 0.85,
-                    marginBottom: '0.5vh',
-                    direction: 'rtl',
-                    lineHeight: 1.4
-                  }}
-                >
-                  {currentSlide.description}
-                </div>
-              )}
-              {currentSlide.descriptionTranslation && (
-                <div
-                  style={{
-                    fontSize: `${currentSlideText.translation.fontSize / 40}vw`,
-                    fontWeight: currentSlideText.translation.fontWeight as any,
-                    color: currentSlideText.translation.color,
-                    opacity: 0.75,
-                    marginBottom: '2vh'
-                  }}
-                >
-                  {currentSlide.descriptionTranslation}
-                </div>
-              )}
-              {(currentSlide.reference || currentSlide.referenceTranslation) && (
-                <div
-                  style={{
-                    fontSize: '1.5vw',
-                    fontWeight: '500',
-                    color: colors.accent,
-                    opacity: 0.9,
-                    marginTop: '1vh'
-                  }}
-                >
-                  {currentSlide.reference && <span style={{ direction: 'rtl' }}>{currentSlide.reference}</span>}
-                  {currentSlide.reference && currentSlide.referenceTranslation && ' | '}
-                  {currentSlide.referenceTranslation && <span>{currentSlide.referenceTranslation}</span>}
-                </div>
-              )}
-            </>
-          ) : (
-            // Render song content (original, transliteration, translation)
-            <>
-              {currentSlideText.original.visible && currentSlide.originalText && (
-                <div
-                  style={{
-                    fontSize: `${currentSlideText.original.fontSize / 25}vw`,
-                    fontWeight: currentSlideText.original.fontWeight as any,
-                    color: currentSlideText.original.color,
-                    opacity: currentSlideText.original.opacity,
-                    marginBottom: '2vh',
-                    direction: 'rtl',
-                    lineHeight: 1.3
-                  }}
-                >
-                  {currentSlide.originalText}
-                </div>
-              )}
-              {currentSlideText.transliteration.visible && currentSlide.transliteration && (
-                <div
-                  style={{
-                    fontSize: `${currentSlideText.transliteration.fontSize / 30}vw`,
-                    fontWeight: currentSlideText.transliteration.fontWeight as any,
-                    color: currentSlideText.transliteration.color,
-                    opacity: currentSlideText.transliteration.opacity,
-                    marginBottom: '1vh'
-                  }}
-                >
-                  {currentSlide.transliteration}
-                </div>
-              )}
-              {currentSlideText.translation.visible && currentSlide.translation && (
-                <div
-                  style={{
-                    fontSize: `${currentSlideText.translation.fontSize / 35}vw`,
-                    fontWeight: currentSlideText.translation.fontWeight as any,
-                    color: currentSlideText.translation.color,
-                    opacity: currentSlideText.translation.opacity
-                  }}
-                >
-                  {currentSlide.translation}
-                </div>
-              )}
-            </>
-          )
-        ) : (
-          <div style={{ fontSize: '2vw', color: 'rgba(255,255,255,0.3)' }}>
-            Waiting for content...
-          </div>
-        )}
+        Current
       </div>
 
-      {/* Next Slide Preview */}
+      {/* Blank/Waiting State */}
+      {isBlank && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${elements.currentSlideArea.x}%`,
+            top: `${elements.currentSlideArea.y}%`,
+            width: `${elements.currentSlideArea.width}%`,
+            height: `${elements.currentSlideArea.height}%`,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            fontSize: '3vw',
+            color: 'rgba(255,255,255,0.3)'
+          }}
+        >
+          BLANK
+        </div>
+      )}
+
+      {!isBlank && !currentSlide && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${elements.currentSlideArea.x}%`,
+            top: `${elements.currentSlideArea.y}%`,
+            width: `${elements.currentSlideArea.width}%`,
+            height: `${elements.currentSlideArea.height}%`,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            fontSize: '2vw',
+            color: 'rgba(255,255,255,0.3)'
+          }}
+        >
+          Waiting for content...
+        </div>
+      )}
+
+      {/* Song Content - Individual Positioned Text Lines */}
+      {!isBlank && currentSlide && !currentSlide.title && (() => {
+        // Calculate effective positions based on flow settings
+        const originalPos = getEffectivePosition(currentSlideText.original, currentSlideText, 'original', measuredHeights);
+        const translitPos = getEffectivePosition(currentSlideText.transliteration, currentSlideText, 'transliteration', measuredHeights);
+        const translationPos = getEffectivePosition(currentSlideText.translation, currentSlideText, 'translation', measuredHeights);
+
+        return (
+        <>
+          {/* Original Text */}
+          {currentSlideText.original.visible && currentSlide.originalText && (
+            <div
+              ref={originalRef}
+              style={{
+                position: 'absolute',
+                left: `${originalPos.x}%`,
+                top: currentSlideText.original.autoHeight && currentSlideText.original.growDirection === 'up'
+                  ? 'auto'
+                  : `${originalPos.y}%`,
+                bottom: currentSlideText.original.autoHeight && currentSlideText.original.growDirection === 'up'
+                  ? `${100 - originalPos.y - originalPos.height}%`
+                  : 'auto',
+                width: `${originalPos.width}%`,
+                height: currentSlideText.original.autoHeight ? 'fit-content' : `${originalPos.height}%`,
+                minHeight: currentSlideText.original.autoHeight ? 0 : undefined,
+                display: currentSlideText.original.autoHeight ? 'block' : 'flex',
+                justifyContent: currentSlideText.original.autoHeight ? undefined : (currentSlideText.original.alignH === 'left' ? 'flex-start' : currentSlideText.original.alignH === 'right' ? 'flex-end' : 'center'),
+                alignItems: currentSlideText.original.autoHeight ? undefined : (currentSlideText.original.alignV === 'top' ? 'flex-start' : currentSlideText.original.alignV === 'bottom' ? 'flex-end' : 'center'),
+                fontSize: `${currentSlideText.original.fontSize / 25}vw`,
+                fontWeight: currentSlideText.original.fontWeight as any,
+                color: currentSlideText.original.color,
+                opacity: currentSlideText.original.opacity,
+                direction: 'rtl',
+                lineHeight: currentSlideText.original.autoHeight ? 0.9 : 1.3,
+                textAlign: currentSlideText.original.alignH || 'center',
+                boxSizing: 'border-box',
+                padding: 0,
+                margin: 0
+              }}
+            >
+              {currentSlide.originalText}
+            </div>
+          )}
+
+          {/* Transliteration Text */}
+          {currentSlideText.transliteration.visible && currentSlide.transliteration && (
+            <div
+              ref={translitRef}
+              style={{
+                position: 'absolute',
+                left: `${translitPos.x}%`,
+                top: currentSlideText.transliteration.autoHeight && currentSlideText.transliteration.growDirection === 'up'
+                  ? 'auto'
+                  : `${translitPos.y}%`,
+                bottom: currentSlideText.transliteration.autoHeight && currentSlideText.transliteration.growDirection === 'up'
+                  ? `${100 - translitPos.y - translitPos.height}%`
+                  : 'auto',
+                width: `${translitPos.width}%`,
+                height: currentSlideText.transliteration.autoHeight ? 'fit-content' : `${translitPos.height}%`,
+                minHeight: currentSlideText.transliteration.autoHeight ? 0 : undefined,
+                display: currentSlideText.transliteration.autoHeight ? 'block' : 'flex',
+                justifyContent: currentSlideText.transliteration.autoHeight ? undefined : (currentSlideText.transliteration.alignH === 'left' ? 'flex-start' : currentSlideText.transliteration.alignH === 'right' ? 'flex-end' : 'center'),
+                alignItems: currentSlideText.transliteration.autoHeight ? undefined : (currentSlideText.transliteration.alignV === 'top' ? 'flex-start' : currentSlideText.transliteration.alignV === 'bottom' ? 'flex-end' : 'center'),
+                fontSize: `${currentSlideText.transliteration.fontSize / 30}vw`,
+                fontWeight: currentSlideText.transliteration.fontWeight as any,
+                color: currentSlideText.transliteration.color,
+                opacity: currentSlideText.transliteration.opacity,
+                lineHeight: currentSlideText.transliteration.autoHeight ? 0.9 : 1.3,
+                textAlign: currentSlideText.transliteration.alignH || 'center',
+                boxSizing: 'border-box',
+                padding: 0,
+                margin: 0
+              }}
+            >
+              {currentSlide.transliteration}
+            </div>
+          )}
+
+          {/* Translation Text */}
+          {currentSlideText.translation.visible && currentSlide.translation && (
+            <div
+              ref={translationRef}
+              style={{
+                position: 'absolute',
+                left: `${translationPos.x}%`,
+                top: currentSlideText.translation.autoHeight && currentSlideText.translation.growDirection === 'up'
+                  ? 'auto'
+                  : `${translationPos.y}%`,
+                bottom: currentSlideText.translation.autoHeight && currentSlideText.translation.growDirection === 'up'
+                  ? `${100 - translationPos.y - translationPos.height}%`
+                  : 'auto',
+                width: `${translationPos.width}%`,
+                height: currentSlideText.translation.autoHeight ? 'fit-content' : `${translationPos.height}%`,
+                minHeight: currentSlideText.translation.autoHeight ? 0 : undefined,
+                display: currentSlideText.translation.autoHeight ? 'block' : 'flex',
+                justifyContent: currentSlideText.translation.autoHeight ? undefined : (currentSlideText.translation.alignH === 'left' ? 'flex-start' : currentSlideText.translation.alignH === 'right' ? 'flex-end' : 'center'),
+                alignItems: currentSlideText.translation.autoHeight ? undefined : (currentSlideText.translation.alignV === 'top' ? 'flex-start' : currentSlideText.translation.alignV === 'bottom' ? 'flex-end' : 'center'),
+                fontSize: `${currentSlideText.translation.fontSize / 35}vw`,
+                fontWeight: currentSlideText.translation.fontWeight as any,
+                color: currentSlideText.translation.color,
+                opacity: currentSlideText.translation.opacity,
+                lineHeight: currentSlideText.translation.autoHeight ? 0.9 : 1.3,
+                textAlign: currentSlideText.translation.alignH || 'center',
+                boxSizing: 'border-box',
+                padding: 0,
+                margin: 0
+              }}
+            >
+              {currentSlide.translation}
+            </div>
+          )}
+        </>
+        );
+      })()}
+
+      {/* Prayer/Sermon Content - Positioned in Current Slide Area */}
+      {!isBlank && currentSlide && currentSlide.title && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${elements.currentSlideArea.x}%`,
+            top: `${elements.currentSlideArea.y + 5}%`,
+            width: `${elements.currentSlideArea.width}%`,
+            height: `${elements.currentSlideArea.height - 5}%`,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            textAlign: 'center',
+            padding: '2%',
+            boxSizing: 'border-box'
+          }}
+        >
+          {currentSlide.title && (
+            <div
+              style={{
+                fontSize: `${currentSlideText.original.fontSize / 25}vw`,
+                fontWeight: currentSlideText.original.fontWeight as any,
+                color: currentSlideText.original.color,
+                opacity: currentSlideText.original.opacity,
+                marginBottom: '1vh',
+                direction: 'rtl',
+                lineHeight: 1.3
+              }}
+            >
+              {currentSlide.title}
+            </div>
+          )}
+          {currentSlide.titleTranslation && (
+            <div
+              style={{
+                fontSize: `${currentSlideText.translation.fontSize / 30}vw`,
+                fontWeight: currentSlideText.translation.fontWeight as any,
+                color: currentSlideText.translation.color,
+                opacity: currentSlideText.translation.opacity,
+                marginBottom: '2vh'
+              }}
+            >
+              {currentSlide.titleTranslation}
+            </div>
+          )}
+          {currentSlide.subtitle && (
+            <div
+              style={{
+                fontSize: `${currentSlideText.original.fontSize / 30}vw`,
+                fontWeight: '500',
+                color: currentSlideText.original.color,
+                opacity: 0.9,
+                marginBottom: '0.5vh',
+                direction: 'rtl',
+                lineHeight: 1.3
+              }}
+            >
+              {currentSlide.subtitle}
+            </div>
+          )}
+          {currentSlide.subtitleTranslation && (
+            <div
+              style={{
+                fontSize: `${currentSlideText.translation.fontSize / 35}vw`,
+                fontWeight: currentSlideText.translation.fontWeight as any,
+                color: currentSlideText.translation.color,
+                opacity: 0.8,
+                marginBottom: '2vh'
+              }}
+            >
+              {currentSlide.subtitleTranslation}
+            </div>
+          )}
+          {currentSlide.description && (
+            <div
+              style={{
+                fontSize: `${currentSlideText.original.fontSize / 35}vw`,
+                fontWeight: '400',
+                color: currentSlideText.original.color,
+                opacity: 0.85,
+                marginBottom: '0.5vh',
+                direction: 'rtl',
+                lineHeight: 1.4
+              }}
+            >
+              {currentSlide.description}
+            </div>
+          )}
+          {currentSlide.descriptionTranslation && (
+            <div
+              style={{
+                fontSize: `${currentSlideText.translation.fontSize / 40}vw`,
+                fontWeight: currentSlideText.translation.fontWeight as any,
+                color: currentSlideText.translation.color,
+                opacity: 0.75,
+                marginBottom: '2vh'
+              }}
+            >
+              {currentSlide.descriptionTranslation}
+            </div>
+          )}
+          {(currentSlide.reference || currentSlide.referenceTranslation) && (
+            <div
+              style={{
+                fontSize: '1.5vw',
+                fontWeight: '500',
+                color: colors.accent,
+                opacity: 0.9,
+                marginTop: '1vh'
+              }}
+            >
+              {currentSlide.reference && <span style={{ direction: 'rtl' }}>{currentSlide.reference}</span>}
+              {currentSlide.reference && currentSlide.referenceTranslation && ' | '}
+              {currentSlide.referenceTranslation && <span>{currentSlide.referenceTranslation}</span>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Next Slide Preview - Background Area */}
       {elements.nextSlideArea.visible && (
         <div
           style={{
@@ -598,113 +958,221 @@ const DisplayStage: React.FC = () => {
             height: `${elements.nextSlideArea.height}%`,
             background: elements.nextSlideArea.backgroundColor || 'rgba(0,0,0,0.3)',
             borderRadius: `${elements.nextSlideArea.borderRadius || 8}px`,
-            display: 'flex',
-            flexDirection: 'column',
-            padding: '2%',
             boxSizing: 'border-box',
             opacity: elements.nextSlideArea.opacity ?? 1
           }}
         >
+          {/* Label */}
           <div
             style={{
+              position: 'absolute',
+              top: '4%',
+              left: '5%',
               fontSize: '1vw',
               color: elements.nextSlideArea.labelColor || colors.secondary,
-              marginBottom: '1vh',
               textTransform: 'uppercase',
               letterSpacing: '0.2em'
             }}
           >
             {elements.nextSlideArea.labelText || 'Next'}
           </div>
+        </div>
+      )}
 
-          <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              alignItems: 'center',
-              textAlign: 'center'
-            }}
-          >
-            {nextSlide ? (
-              // Check if next slide is prayer content (has title) or song content
-              nextSlide.title ? (
-                // Prayer/sermon next preview
-                <>
-                  {nextSlide.title && (
-                    <div
-                      style={{
-                        fontSize: '1.8vw',
-                        fontWeight: 600,
-                        marginBottom: '0.5vh',
-                        direction: 'rtl',
-                        color: 'rgba(255,255,255,0.8)',
-                        lineHeight: 1.3
-                      }}
-                    >
-                      {nextSlide.title}
-                    </div>
-                  )}
-                  {nextSlide.titleTranslation && (
-                    <div
-                      style={{
-                        fontSize: '1.2vw',
-                        color: 'rgba(255,255,255,0.5)',
-                        marginBottom: '0.5vh'
-                      }}
-                    >
-                      {nextSlide.titleTranslation}
-                    </div>
-                  )}
-                  {nextSlide.subtitle && (
-                    <div
-                      style={{
-                        fontSize: '1.4vw',
-                        fontWeight: 500,
-                        direction: 'rtl',
-                        color: 'rgba(255,255,255,0.6)',
-                        marginTop: '0.5vh'
-                      }}
-                    >
-                      {nextSlide.subtitle}
-                    </div>
-                  )}
-                </>
-              ) : (
-                // Song next preview
-                <>
-                  {nextSlide.originalText && (
-                    <div
-                      style={{
-                        fontSize: '2vw',
-                        fontWeight: 500,
-                        marginBottom: '1vh',
-                        direction: 'rtl',
-                        color: 'rgba(255,255,255,0.8)',
-                        lineHeight: 1.3
-                      }}
-                    >
-                      {nextSlide.originalText}
-                    </div>
-                  )}
-                  {nextSlide.transliteration && (
-                    <div
-                      style={{
-                        fontSize: '1.2vw',
-                        color: 'rgba(255,255,255,0.5)'
-                      }}
-                    >
-                      {nextSlide.transliteration}
-                    </div>
-                  )}
-                </>
-              )
-            ) : (
-              <div style={{ fontSize: '1.5vw', color: 'rgba(255,255,255,0.2)' }}>
-                End of content
-              </div>
-            )}
+      {/* Next Slide Text - Positioned Absolutely on Canvas */}
+      {elements.nextSlideArea.visible && nextSlide && !nextSlide.title && (() => {
+        // Calculate effective positions for next slide text based on flow settings
+        const nextOriginalPos = getEffectivePosition(theme.nextSlideText.original, theme.nextSlideText, 'original', nextMeasuredHeights);
+        const nextTranslitPos = getEffectivePosition(theme.nextSlideText.transliteration, theme.nextSlideText, 'transliteration', nextMeasuredHeights);
+        const nextTranslationPos = getEffectivePosition(theme.nextSlideText.translation, theme.nextSlideText, 'translation', nextMeasuredHeights);
+
+        return (
+        <>
+          {/* Next Original Text */}
+          {theme.nextSlideText.original.visible && nextSlide.originalText && (
+            <div
+              ref={nextOriginalRef}
+              style={{
+                position: 'absolute',
+                left: `${nextOriginalPos.x}%`,
+                top: theme.nextSlideText.original.autoHeight && theme.nextSlideText.original.growDirection === 'up'
+                  ? 'auto'
+                  : `${nextOriginalPos.y}%`,
+                bottom: theme.nextSlideText.original.autoHeight && theme.nextSlideText.original.growDirection === 'up'
+                  ? `${100 - nextOriginalPos.y - nextOriginalPos.height}%`
+                  : 'auto',
+                width: `${nextOriginalPos.width}%`,
+                height: theme.nextSlideText.original.autoHeight ? 'fit-content' : `${nextOriginalPos.height}%`,
+                minHeight: theme.nextSlideText.original.autoHeight ? 0 : undefined,
+                display: theme.nextSlideText.original.autoHeight ? 'block' : 'flex',
+                justifyContent: theme.nextSlideText.original.autoHeight ? undefined : (theme.nextSlideText.original.alignH === 'left' ? 'flex-start' : theme.nextSlideText.original.alignH === 'right' ? 'flex-end' : 'center'),
+                alignItems: theme.nextSlideText.original.autoHeight ? undefined : (theme.nextSlideText.original.alignV === 'top' ? 'flex-start' : theme.nextSlideText.original.alignV === 'bottom' ? 'flex-end' : 'center'),
+                fontSize: `${theme.nextSlideText.original.fontSize / 40}vw`,
+                fontWeight: theme.nextSlideText.original.fontWeight as any,
+                color: theme.nextSlideText.original.color,
+                opacity: theme.nextSlideText.original.opacity,
+                direction: 'rtl',
+                lineHeight: theme.nextSlideText.original.autoHeight ? 0.9 : 1.3,
+                textAlign: theme.nextSlideText.original.alignH || 'center',
+                boxSizing: 'border-box',
+                padding: 0,
+                margin: 0
+              }}
+            >
+              {nextSlide.originalText}
+            </div>
+          )}
+
+          {/* Next Transliteration Text */}
+          {theme.nextSlideText.transliteration.visible && nextSlide.transliteration && (
+            <div
+              ref={nextTranslitRef}
+              style={{
+                position: 'absolute',
+                left: `${nextTranslitPos.x}%`,
+                top: theme.nextSlideText.transliteration.autoHeight && theme.nextSlideText.transliteration.growDirection === 'up'
+                  ? 'auto'
+                  : `${nextTranslitPos.y}%`,
+                bottom: theme.nextSlideText.transliteration.autoHeight && theme.nextSlideText.transliteration.growDirection === 'up'
+                  ? `${100 - nextTranslitPos.y - nextTranslitPos.height}%`
+                  : 'auto',
+                width: `${nextTranslitPos.width}%`,
+                height: theme.nextSlideText.transliteration.autoHeight ? 'fit-content' : `${nextTranslitPos.height}%`,
+                minHeight: theme.nextSlideText.transliteration.autoHeight ? 0 : undefined,
+                display: theme.nextSlideText.transliteration.autoHeight ? 'block' : 'flex',
+                justifyContent: theme.nextSlideText.transliteration.autoHeight ? undefined : (theme.nextSlideText.transliteration.alignH === 'left' ? 'flex-start' : theme.nextSlideText.transliteration.alignH === 'right' ? 'flex-end' : 'center'),
+                alignItems: theme.nextSlideText.transliteration.autoHeight ? undefined : (theme.nextSlideText.transliteration.alignV === 'top' ? 'flex-start' : theme.nextSlideText.transliteration.alignV === 'bottom' ? 'flex-end' : 'center'),
+                fontSize: `${theme.nextSlideText.transliteration.fontSize / 50}vw`,
+                fontWeight: theme.nextSlideText.transliteration.fontWeight as any,
+                color: theme.nextSlideText.transliteration.color,
+                opacity: theme.nextSlideText.transliteration.opacity,
+                lineHeight: theme.nextSlideText.transliteration.autoHeight ? 0.9 : 1.3,
+                textAlign: theme.nextSlideText.transliteration.alignH || 'center',
+                boxSizing: 'border-box',
+                padding: 0,
+                margin: 0
+              }}
+            >
+              {nextSlide.transliteration}
+            </div>
+          )}
+
+          {/* Next Translation Text */}
+          {theme.nextSlideText.translation.visible && nextSlide.translation && (
+            <div
+              ref={nextTranslationRef}
+              style={{
+                position: 'absolute',
+                left: `${nextTranslationPos.x}%`,
+                top: theme.nextSlideText.translation.autoHeight && theme.nextSlideText.translation.growDirection === 'up'
+                  ? 'auto'
+                  : `${nextTranslationPos.y}%`,
+                bottom: theme.nextSlideText.translation.autoHeight && theme.nextSlideText.translation.growDirection === 'up'
+                  ? `${100 - nextTranslationPos.y - nextTranslationPos.height}%`
+                  : 'auto',
+                width: `${nextTranslationPos.width}%`,
+                height: theme.nextSlideText.translation.autoHeight ? 'fit-content' : `${nextTranslationPos.height}%`,
+                minHeight: theme.nextSlideText.translation.autoHeight ? 0 : undefined,
+                display: theme.nextSlideText.translation.autoHeight ? 'block' : 'flex',
+                justifyContent: theme.nextSlideText.translation.autoHeight ? undefined : (theme.nextSlideText.translation.alignH === 'left' ? 'flex-start' : theme.nextSlideText.translation.alignH === 'right' ? 'flex-end' : 'center'),
+                alignItems: theme.nextSlideText.translation.autoHeight ? undefined : (theme.nextSlideText.translation.alignV === 'top' ? 'flex-start' : theme.nextSlideText.translation.alignV === 'bottom' ? 'flex-end' : 'center'),
+                fontSize: `${theme.nextSlideText.translation.fontSize / 50}vw`,
+                fontWeight: theme.nextSlideText.translation.fontWeight as any,
+                color: theme.nextSlideText.translation.color,
+                opacity: theme.nextSlideText.translation.opacity,
+                lineHeight: theme.nextSlideText.translation.autoHeight ? 0.9 : 1.3,
+                textAlign: theme.nextSlideText.translation.alignH || 'center',
+                boxSizing: 'border-box',
+                padding: 0,
+                margin: 0
+              }}
+            >
+              {nextSlide.translation}
+            </div>
+          )}
+        </>
+        );
+      })()}
+
+      {/* Next Slide - Prayer/Sermon Content (centered in area) */}
+      {elements.nextSlideArea.visible && nextSlide && nextSlide.title && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${elements.nextSlideArea.x}%`,
+            top: `${elements.nextSlideArea.y + 10}%`,
+            width: `${elements.nextSlideArea.width}%`,
+            height: `${elements.nextSlideArea.height - 15}%`,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            textAlign: 'center',
+            boxSizing: 'border-box',
+            padding: '2%'
+          }}
+        >
+          {nextSlide.title && theme.nextSlideText.original.visible && (
+            <div
+              style={{
+                fontSize: `${theme.nextSlideText.original.fontSize / 40}vw`,
+                fontWeight: theme.nextSlideText.original.fontWeight as any,
+                marginBottom: '0.5vh',
+                direction: 'rtl',
+                color: theme.nextSlideText.original.color,
+                opacity: theme.nextSlideText.original.opacity,
+                lineHeight: 1.3
+              }}
+            >
+              {nextSlide.title}
+            </div>
+          )}
+          {nextSlide.titleTranslation && theme.nextSlideText.translation.visible && (
+            <div
+              style={{
+                fontSize: `${theme.nextSlideText.translation.fontSize / 50}vw`,
+                fontWeight: theme.nextSlideText.translation.fontWeight as any,
+                color: theme.nextSlideText.translation.color,
+                opacity: theme.nextSlideText.translation.opacity,
+                marginBottom: '0.5vh'
+              }}
+            >
+              {nextSlide.titleTranslation}
+            </div>
+          )}
+          {nextSlide.subtitle && theme.nextSlideText.transliteration.visible && (
+            <div
+              style={{
+                fontSize: `${theme.nextSlideText.transliteration.fontSize / 50}vw`,
+                fontWeight: theme.nextSlideText.transliteration.fontWeight as any,
+                direction: 'rtl',
+                color: theme.nextSlideText.transliteration.color,
+                opacity: theme.nextSlideText.transliteration.opacity,
+                marginTop: '0.5vh'
+              }}
+            >
+              {nextSlide.subtitle}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* No Next Slide Message */}
+      {elements.nextSlideArea.visible && !nextSlide && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${elements.nextSlideArea.x}%`,
+            top: `${elements.nextSlideArea.y}%`,
+            width: `${elements.nextSlideArea.width}%`,
+            height: `${elements.nextSlideArea.height}%`,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}
+        >
+          <div style={{ fontSize: '1.5vw', color: 'rgba(255,255,255,0.2)' }}>
+            End of content
           </div>
         </div>
       )}
@@ -823,6 +1291,92 @@ const DisplayStage: React.FC = () => {
               to {
                 opacity: 0;
                 transform: translateY(30px);
+              }
+            }
+          `}</style>
+        </div>
+      )}
+
+      {/* Stage message alert - centered with pulsing icon */}
+      {stageMessageVisible && stageMessage?.text && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            padding: '3vh 4vw',
+            background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.95), rgba(219, 39, 119, 0.95))',
+            borderRadius: '2vh',
+            textAlign: 'center',
+            zIndex: 200,
+            animation: stageMessageFading ? 'fadeOutStageMsg 0.5s ease-out forwards' : 'fadeInStageMsg 0.5s ease-out forwards',
+            boxShadow: '0 8px 40px rgba(236, 72, 153, 0.6), 0 0 100px rgba(236, 72, 153, 0.3)',
+            minWidth: '30vw',
+            maxWidth: '80vw'
+          }}
+        >
+          {/* Pulsing alert icon */}
+          <div style={{
+            marginBottom: '2vh',
+            display: 'flex',
+            justifyContent: 'center'
+          }}>
+            <svg
+              width="8vw"
+              height="8vw"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth="2"
+              style={{
+                animation: 'pulseIcon 1s ease-in-out infinite'
+              }}
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </div>
+          {/* Message text */}
+          <div style={{
+            fontSize: '4vw',
+            fontWeight: 700,
+            color: 'white',
+            lineHeight: 1.3,
+            textShadow: '0 2px 10px rgba(0,0,0,0.3)'
+          }}>
+            {stageMessage.text}
+          </div>
+          <style>{`
+            @keyframes fadeInStageMsg {
+              from {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.8);
+              }
+              to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+              }
+            }
+            @keyframes fadeOutStageMsg {
+              from {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+              }
+              to {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.8);
+              }
+            }
+            @keyframes pulseIcon {
+              0%, 100% {
+                transform: scale(1);
+                opacity: 1;
+              }
+              50% {
+                transform: scale(1.15);
+                opacity: 0.8;
               }
             }
           `}</style>

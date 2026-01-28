@@ -42,6 +42,7 @@ interface SlideData {
   transliteration?: string;
   translation?: string;
   translationOverflow?: string;
+  originalLanguage?: string; // Song's original language - used for single-language song rendering
   reference?: string;
   referenceTranslation?: string;
   referenceEnglish?: string; // English reference for Bible themes (e.g., "Genesis 1:1")

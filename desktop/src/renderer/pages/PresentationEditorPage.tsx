@@ -1640,8 +1640,29 @@ const PresentationEditorPage: React.FC = () => {
     return { x: snappedX, y: snappedY, guides };
   }, [getOtherElementBounds]);
 
+  // Check if presentation is valid for saving
+  const isValidPresentation = useCallback(() => {
+    if (!presentation.title.trim()) return false;
+    if (presentation.slides.length === 0) return false;
+    // Check if at least one slide has content (text boxes, image boxes, or background boxes)
+    const hasContent = presentation.slides.some(slide =>
+      (slide.textBoxes && slide.textBoxes.length > 0) ||
+      (slide.imageBoxes && slide.imageBoxes.length > 0) ||
+      (slide.backgroundBoxes && slide.backgroundBoxes.length > 0)
+    );
+    return hasContent;
+  }, [presentation.title, presentation.slides]);
+
   // Save presentation
   const handleSave = async () => {
+    if (!presentation.title.trim()) {
+      alert('Please enter a presentation title');
+      return;
+    }
+    if (presentation.slides.length === 0 || !isValidPresentation()) {
+      alert('Please add at least one slide with content');
+      return;
+    }
     setSaveStatus('saving');
     try {
       const data = {
@@ -1787,14 +1808,14 @@ const PresentationEditorPage: React.FC = () => {
           {(hasChanges || saveStatus !== 'idle') && (
             <button
               onClick={handleSave}
-              disabled={saveStatus !== 'idle'}
+              disabled={saveStatus !== 'idle' || !isValidPresentation()}
               style={{
                 padding: '10px 24px',
                 borderRadius: '6px',
                 border: 'none',
-                background: saveStatus === 'saved' ? '#28a745' : '#00d4ff',
-                color: saveStatus === 'saved' ? 'white' : 'black',
-                cursor: saveStatus !== 'idle' ? 'not-allowed' : 'pointer',
+                background: saveStatus === 'saved' ? '#28a745' : (!isValidPresentation() ? 'rgba(255,255,255,0.2)' : '#00d4ff'),
+                color: saveStatus === 'saved' ? 'white' : (!isValidPresentation() ? 'rgba(255,255,255,0.5)' : 'black'),
+                cursor: (saveStatus !== 'idle' || !isValidPresentation()) ? 'not-allowed' : 'pointer',
                 fontWeight: 600
               }}
             >

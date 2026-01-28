@@ -339,6 +339,9 @@ const PrayerThemeEditorPage: React.FC = () => {
       }
       setHasChanges(false);
 
+      // Broadcast the updated theme to all connected displays showing Prayer/Sermon content
+      await window.electronAPI.applyPrayerTheme({ ...themeData, id: theme.id });
+
       // Show saved state briefly
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);

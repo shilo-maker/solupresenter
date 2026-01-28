@@ -123,6 +123,50 @@ export interface Presentation extends PresentationData {
 }
 
 /**
+ * Generate a unique presentation title by appending (1), (2), etc. if needed
+ */
+function generateUniquePresentationTitle(title: string, excludeId?: string): string {
+  const baseTitle = title.trim();
+
+  // Check if exact title exists
+  const existingQuery = excludeId
+    ? queryOne('SELECT id FROM presentations WHERE title = ? AND id != ?', [baseTitle, excludeId])
+    : queryOne('SELECT id FROM presentations WHERE title = ?', [baseTitle]);
+
+  if (!existingQuery) {
+    return baseTitle;
+  }
+
+  // Find all presentations with titles matching the pattern "baseTitle" or "baseTitle (N)"
+  const pattern = `${baseTitle} (%)`;
+  const existingPresentations = queryAll(
+    excludeId
+      ? 'SELECT title FROM presentations WHERE (title = ? OR title LIKE ?) AND id != ?'
+      : 'SELECT title FROM presentations WHERE title = ? OR title LIKE ?',
+    excludeId ? [baseTitle, pattern, excludeId] : [baseTitle, pattern]
+  );
+
+  // Extract existing numbers
+  const usedNumbers = new Set<number>([0]); // 0 represents the base title
+  const regex = new RegExp(`^${baseTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\((\\d+)\\)$`);
+
+  for (const presentation of existingPresentations) {
+    const match = presentation.title.match(regex);
+    if (match) {
+      usedNumbers.add(parseInt(match[1], 10));
+    }
+  }
+
+  // Find the next available number
+  let nextNumber = 1;
+  while (usedNumbers.has(nextNumber)) {
+    nextNumber++;
+  }
+
+  return `${baseTitle} (${nextNumber})`;
+}
+
+/**
  * Get all presentations
  */
 export async function getPresentations(): Promise<Presentation[]> {
@@ -155,11 +199,12 @@ export async function createPresentation(data: PresentationData): Promise<Presen
   if (!data.title || typeof data.title !== 'string') {
     throw new Error('Presentation title is required');
   }
-  // Sanitize title
-  const sanitizedTitle = data.title.trim().substring(0, 500);
-  if (sanitizedTitle.length === 0) {
+  // Sanitize title and ensure uniqueness
+  const rawTitle = data.title.trim().substring(0, 500);
+  if (rawTitle.length === 0) {
     throw new Error('Presentation title cannot be empty');
   }
+  const sanitizedTitle = generateUniquePresentationTitle(rawTitle);
 
   const id = generateId();
   const now = new Date().toISOString();
@@ -234,9 +279,11 @@ export async function updatePresentation(id: string, data: Partial<PresentationD
   const updatedPresentation = { ...existing };
 
   if (data.title !== undefined) {
+    // Ensure unique title (excluding current presentation)
+    const uniqueTitle = generateUniquePresentationTitle(data.title.trim(), id);
     updates.push('title = ?');
-    values.push(data.title);
-    updatedPresentation.title = data.title;
+    values.push(uniqueTitle);
+    updatedPresentation.title = uniqueTitle;
   }
   if (data.slides !== undefined) {
     updates.push('slides = ?');

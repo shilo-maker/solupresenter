@@ -39,7 +39,7 @@ function getSqlJsWasmPath(): string {
 }
 
 // Current schema version - increment when adding migrations
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 
 let db: Database | null = null;
 
@@ -103,6 +103,16 @@ function runMigrations(fromVersion: number): void {
       )
     `);
     db.run(`CREATE INDEX IF NOT EXISTS idx_display_theme_overrides_displayId ON display_theme_overrides(displayId)`);
+  }
+
+  if (fromVersion < 3) {
+    console.log('Running migration to version 3: Adding arrangements column to songs...');
+    try {
+      db.run(`ALTER TABLE songs ADD COLUMN arrangements TEXT DEFAULT '[]'`);
+    } catch (e) {
+      // Column might already exist
+      console.log('[Migration] arrangements column may already exist');
+    }
   }
 
   setSchemaVersion(CURRENT_SCHEMA_VERSION);
@@ -253,12 +263,20 @@ export async function initDatabase(): Promise<void> {
         tags TEXT DEFAULT '[]',
         author TEXT,
         backgroundImage TEXT DEFAULT '',
+        arrangements TEXT DEFAULT '[]',
         usageCount INTEGER DEFAULT 0,
         remoteId TEXT,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
         updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Migration: Add arrangements column if it doesn't exist (for existing databases)
+    try {
+      db.run(`ALTER TABLE songs ADD COLUMN arrangements TEXT DEFAULT '[]'`);
+    } catch (e) {
+      // Column already exists
+    }
 
     // Create indexes on songs for faster lookups and sorting
     db.run(`CREATE INDEX IF NOT EXISTS idx_songs_remoteId ON songs(remoteId)`);
@@ -362,17 +380,16 @@ export async function initDatabase(): Promise<void> {
     const existingTheme = db.exec(`SELECT id FROM viewer_themes WHERE id = '${CLASSIC_THEME_ID}'`);
 
     if (existingTheme.length === 0 || existingTheme[0].values.length === 0) {
-      // Song Theme - Heebo font, 86px Hebrew bold, 64px Translit light white, 64px English light gray
-      // At 1080p, base font = 54px (fontSize 100), so 86px = 159, 64px = 119
+      // Default Song Theme - with flow positioning for stacked lines
       const defaultStyles = {
-        original: { fontSize: 159, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true },
-        transliteration: { fontSize: 119, fontWeight: '300', color: '#ffffff', opacity: 1, visible: true },
-        translation: { fontSize: 119, fontWeight: '300', color: '#b7b7b7', opacity: 1, visible: true }
+        original: { fontSize: 178, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true },
+        transliteration: { fontSize: 136, fontWeight: '400', color: '#ffffff', opacity: 0.9, visible: true },
+        translation: { fontSize: 146, fontWeight: '400', color: '#cfcfcf', opacity: 0.85, visible: true }
       };
       const defaultLinePositions = {
-        original: { x: 0, y: 20, width: 100, height: 15, paddingTop: 0, paddingBottom: 0, alignH: 'center', alignV: 'center' },
-        transliteration: { x: 0, y: 36, width: 100, height: 12, paddingTop: 0, paddingBottom: 0, alignH: 'center', alignV: 'center' },
-        translation: { x: 0, y: 55, width: 100, height: 30, paddingTop: 0, paddingBottom: 0, alignH: 'center', alignV: 'top' }
+        original: { x: 0, y: 31.79, width: 100, height: 11.38, paddingTop: 0, paddingBottom: 0, alignH: 'center', alignV: 'center', autoHeight: true, growDirection: 'up', positionMode: 'absolute', flowGap: 1 },
+        transliteration: { x: 0, y: 38.97, width: 100, height: 12.14, paddingTop: 0, paddingBottom: 0, alignH: 'center', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'original' },
+        translation: { x: 0, y: 51.10, width: 100, height: 26.92, paddingTop: 0, paddingBottom: 0, alignH: 'center', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'transliteration' }
       };
 
       db.run(`
@@ -380,7 +397,7 @@ export async function initDatabase(): Promise<void> {
         VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         CLASSIC_THEME_ID,
-        'Classic',
+        'Default',
         hasDefaultViewerTheme ? 0 : 1,
         JSON.stringify(['original', 'transliteration', 'translation']),
         JSON.stringify(defaultStyles),
@@ -391,7 +408,7 @@ export async function initDatabase(): Promise<void> {
         JSON.stringify(defaultLinePositions),
         JSON.stringify([])
       ]);
-      console.log('Created Classic theme');
+      console.log('Created Default theme');
       saveDatabase();
     }
 
@@ -480,10 +497,19 @@ export async function initDatabase(): Promise<void> {
         colors TEXT,
         elements TEXT,
         currentSlideText TEXT,
+        nextSlideText TEXT,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
         updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Migration: Add nextSlideText column to stage_monitor_themes if it doesn't exist
+    try {
+      db.run(`ALTER TABLE stage_monitor_themes ADD COLUMN nextSlideText TEXT`);
+      console.log('[DB Migration] Added nextSlideText column to stage_monitor_themes');
+    } catch {
+      // Column already exists
+    }
 
     // Check if any default stage theme already exists (from seed database)
     const existingDefaultStageTheme = db.exec(`SELECT id FROM stage_monitor_themes WHERE isDefault = 1`);
@@ -494,39 +520,46 @@ export async function initDatabase(): Promise<void> {
     const existingStageTheme = db.exec(`SELECT id FROM stage_monitor_themes WHERE id = '${CLASSIC_STAGE_THEME_ID}'`);
 
     if (existingStageTheme.length === 0 || existingStageTheme[0].values.length === 0) {
+      // Default Stage Theme
       const defaultColors = {
-        background: '#1a1a2e',
-        text: '#FFFFFF',
-        accent: '#FF8C42',
-        secondary: '#667eea',
-        border: 'rgba(255,255,255,0.1)'
+        background: '#0a0a0a',
+        text: '#ffffff',
+        accent: '#4a90d9',
+        secondary: '#888888',
+        border: '#333333'
       };
       const defaultElements = {
-        header: { visible: true, x: 0, y: 0, width: 100, height: 8, backgroundColor: 'rgba(0,0,0,0.5)' },
-        clock: { visible: true, x: 85, y: 1, width: 14, height: 6, fontSize: 24, fontWeight: '600', color: '#FFFFFF', showSeconds: true },
-        songTitle: { visible: true, x: 2, y: 1, width: 60, height: 6, fontSize: 20, fontWeight: '600', color: '#FF8C42' },
-        currentSlide: { visible: true, x: 2, y: 12, width: 60, height: 55, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 8 },
-        nextSlide: { visible: true, x: 65, y: 12, width: 33, height: 35, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 8, labelText: 'NEXT', labelColor: 'rgba(255,255,255,0.5)' }
+        header: { visible: true, x: 0, y: 0, width: 100, height: 8, backgroundColor: 'rgba(255,255,255,0.05)' },
+        clock: { visible: true, x: 67.86, y: 2.07, width: 30.14, height: 5.93, color: '#ffffff', fontFamily: 'monospace', showSeconds: false, fontSize: 126 },
+        songTitle: { visible: true, x: 2, y: 2.07, width: 64.17, height: 5.93, color: '#4a90d9', fontWeight: '600', fontSize: 138 },
+        currentSlideArea: { visible: true, x: 2, y: 12, width: 64, height: 84, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12 },
+        nextSlideArea: { visible: true, x: 68, y: 12, width: 30, height: 84, backgroundColor: '#1a1a1a', borderRadius: 8, labelText: 'Next', opacity: 0.8 }
       };
-      const defaultSlideText = {
-        original: { visible: true, fontSize: 32, fontWeight: '500', color: '#FFFFFF', opacity: 1 },
-        transliteration: { visible: true, fontSize: 24, fontWeight: '400', color: '#FFFFFF', opacity: 0.9 },
-        translation: { visible: true, fontSize: 24, fontWeight: '400', color: '#FFFFFF', opacity: 0.9 }
+      const defaultCurrentSlideText = {
+        original: { visible: true, color: '#ffffff', fontSize: 113, fontWeight: 'bold', opacity: 1, x: 5, y: 37.28, width: 58, height: 10.37, alignH: 'center', alignV: 'center', positionMode: 'absolute', autoHeight: true, growDirection: 'down' },
+        transliteration: { visible: true, color: '#ffffff', fontSize: 91, fontWeight: '400', opacity: 1, x: 5, y: 49.14, width: 58, height: 6.91, alignH: 'center', alignV: 'center', positionMode: 'flow', autoHeight: true, growDirection: 'down', flowGap: 2, flowAnchor: 'original' },
+        translation: { visible: true, color: '#ffffff', fontSize: 86, fontWeight: '400', opacity: 0.9, x: 5, y: 55.57, width: 58, height: 5.68, alignH: 'center', alignV: 'center', positionMode: 'flow', autoHeight: true, growDirection: 'down', flowGap: 2, flowAnchor: 'transliteration' }
+      };
+      const defaultNextSlideText = {
+        original: { visible: true, color: '#8f8f8f', fontSize: 115, fontWeight: 'bold', opacity: 0.8, x: 70, y: 39.63, width: 26, height: 6.67, alignH: 'center', alignV: 'center', positionMode: 'absolute', autoHeight: true, growDirection: 'up' },
+        transliteration: { visible: true, color: '#8f8f8f', fontSize: 91, fontWeight: '400', opacity: 0.7, x: 70, y: 46.30, width: 26, height: 3.21, alignH: 'center', alignV: 'center', positionMode: 'flow', autoHeight: true, growDirection: 'down', flowGap: 0, flowAnchor: 'nextOriginal' },
+        translation: { visible: true, color: '#8f8f8f', fontSize: 92, fontWeight: '400', opacity: 0.7, x: 70, y: 50.49, width: 26, height: 3.21, alignH: 'center', alignV: 'center', positionMode: 'flow', autoHeight: true, growDirection: 'down', flowGap: 0, flowAnchor: 'nextTransliteration' }
       };
 
       db.run(`
-        INSERT INTO stage_monitor_themes (id, name, isBuiltIn, isDefault, canvasDimensions, colors, elements, currentSlideText)
-        VALUES (?, ?, 1, ?, ?, ?, ?, ?)
+        INSERT INTO stage_monitor_themes (id, name, isBuiltIn, isDefault, canvasDimensions, colors, elements, currentSlideText, nextSlideText)
+        VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)
       `, [
         CLASSIC_STAGE_THEME_ID,
-        'Classic Stage',
+        'Default Stage',
         hasDefaultStageTheme ? 0 : 1,
         JSON.stringify({ width: 1920, height: 1080 }),
         JSON.stringify(defaultColors),
         JSON.stringify(defaultElements),
-        JSON.stringify(defaultSlideText)
+        JSON.stringify(defaultCurrentSlideText),
+        JSON.stringify(defaultNextSlideText)
       ]);
-      console.log('Created Classic Stage theme');
+      console.log('Created Default Stage theme');
       saveDatabase();
     }
 
@@ -735,21 +768,20 @@ export async function initDatabase(): Promise<void> {
     console.log('[DB Init] Existing Bible theme check result:', existingBibleTheme.length, existingBibleTheme[0]?.values?.length);
 
     // Default reference styles for Bible themes
-    const defaultReferenceStyle = { fontSize: 50, fontWeight: '400', color: '#a0a0a0', opacity: 1, visible: true };
-    const defaultReferencePosition = { x: 2, y: 94, width: 50, height: 5, alignH: 'left', alignV: 'center' };
-    const defaultReferenceEnglishStyle = { fontSize: 50, fontWeight: '400', color: '#a0a0a0', opacity: 1, visible: true };
-    const defaultReferenceEnglishPosition = { x: 48, y: 94, width: 50, height: 5, alignH: 'right', alignV: 'center' };
+    const defaultReferenceStyle = { fontSize: 63, fontWeight: '400', color: '#a0a0a0', opacity: 1, visible: true, borderTop: 0, borderBottom: 1, borderLeft: 1, borderRadiusTopLeft: 0, borderRadiusBottomLeft: 4 };
+    const defaultReferencePosition = { x: 2, y: 40.97, width: 20.88, height: 8.10, paddingTop: 0, paddingBottom: 0, alignH: 'left', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'hebrew', paddingRight: 0, paddingLeft: 5 };
+    const defaultReferenceEnglishStyle = { fontSize: 61, fontWeight: '400', color: '#a0a0a0', opacity: 1, visible: true, borderRight: 1, borderBottom: 1, borderRadiusBottomRight: 5 };
+    const defaultReferenceEnglishPosition = { x: 77.12, y: 90, width: 20.88, height: 5, paddingTop: 0, paddingBottom: 0, alignH: 'right', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'english', paddingRight: 9 };
 
     if (existingBibleTheme.length === 0 || existingBibleTheme[0].values.length === 0) {
-      // Bible Theme - Heebo font, 45px Hebrew normal, 42px English extra-light
-      // At 1080p, base font = 54px (fontSize 100), so 45px = 83, 42px = 78
+      // Default Bible Theme - with flow positioning
       const defaultBibleStyles = {
-        hebrew: { fontSize: 83, fontWeight: '400', color: '#ffffff', opacity: 1, visible: true },
-        english: { fontSize: 78, fontWeight: '200', color: '#ffffff', opacity: 1, visible: true }
+        hebrew: { fontSize: 143, fontWeight: '600', color: '#ffffff', opacity: 1, visible: true },
+        english: { fontSize: 120, fontWeight: '400', color: '#e0e0e0', opacity: 0.9, visible: true }
       };
       const defaultBiblePositions = {
-        hebrew: { x: 2, y: 2, width: 96, height: 45, paddingTop: 0, paddingBottom: 0, alignH: 'right', alignV: 'top' },
-        english: { x: 2, y: 50, width: 96, height: 45, paddingTop: 0, paddingBottom: 0, alignH: 'left', alignV: 'top' }
+        hebrew: { x: 2, y: 1.57, width: 96, height: 11.24, paddingTop: 0, paddingBottom: 0, alignH: 'right', alignV: 'center', autoHeight: true },
+        english: { x: 2, y: 51.27, width: 96, height: 20.13, paddingTop: 1, paddingBottom: 1, alignH: 'left', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 1, flowAnchor: 'reference' }
       };
 
       db.run(`
@@ -757,9 +789,9 @@ export async function initDatabase(): Promise<void> {
         VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         CLASSIC_BIBLE_THEME_ID,
-        'Classic Bible',
+        'Default Bible',
         hasDefaultBibleTheme ? 0 : 1,
-        JSON.stringify(['hebrew', 'english']),
+        JSON.stringify(['hebrew', 'reference', 'english', 'referenceEnglish']),
         JSON.stringify(defaultBibleStyles),
         JSON.stringify(defaultBiblePositions),
         JSON.stringify(defaultReferenceStyle),
@@ -770,7 +802,7 @@ export async function initDatabase(): Promise<void> {
         JSON.stringify({ width: 1920, height: 1080 }),
         JSON.stringify([])
       ]);
-      console.log('Created Classic Bible theme');
+      console.log('Created Default Bible theme');
       saveDatabase();
     } else {
       // Migration: Update existing classic Bible theme to add referenceEnglishStyle and referenceEnglishPosition if missing
@@ -806,15 +838,16 @@ export async function initDatabase(): Promise<void> {
     const existingOBSSongsTheme = db.exec(`SELECT id FROM obs_themes WHERE id = '${CLASSIC_OBS_SONGS_THEME_ID}'`);
 
     if (existingOBSSongsTheme.length === 0 || existingOBSSongsTheme[0].values.length === 0) {
+      // Default OBS Songs Theme - with flow positioning
       const defaultOBSStyles = {
-        original: { fontSize: 120, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true },
-        transliteration: { fontSize: 90, fontWeight: '400', color: '#e0e0e0', opacity: 0.9, visible: true },
-        translation: { fontSize: 100, fontWeight: '400', color: '#b0b0b0', opacity: 0.85, visible: true }
+        original: { fontSize: 114, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true },
+        transliteration: { fontSize: 88, fontWeight: '400', color: '#ffffff', opacity: 1, visible: true },
+        translation: { fontSize: 90, fontWeight: '400', color: '#ffffff', opacity: 1, visible: true }
       };
       const defaultOBSPositions = {
-        original: { x: 0, y: 70, width: 100, height: 10, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' },
-        transliteration: { x: 0, y: 80, width: 100, height: 8, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' },
-        translation: { x: 0, y: 88, width: 100, height: 10, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' }
+        original: { x: 0, y: 74.64, width: 100, height: 10, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center', autoHeight: true },
+        transliteration: { x: 0, y: 80, width: 100, height: 8, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'original' },
+        translation: { x: 0, y: 88, width: 100, height: 10, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'transliteration' }
       };
 
       db.run(`
@@ -822,7 +855,7 @@ export async function initDatabase(): Promise<void> {
         VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
       `, [
         CLASSIC_OBS_SONGS_THEME_ID,
-        'Classic OBS Songs',
+        'Default OBS Songs',
         'songs',
         hasDefaultOBSSongsTheme ? 0 : 1,
         JSON.stringify(['original', 'transliteration', 'translation']),
@@ -830,44 +863,9 @@ export async function initDatabase(): Promise<void> {
         JSON.stringify(defaultOBSPositions),
         JSON.stringify({ type: 'transparent', color: null }),
         JSON.stringify({ width: 1920, height: 1080 }),
-        JSON.stringify([{ x: 0, y: 68, width: 100, height: 32, color: '#000000', opacity: 0.7, borderRadius: 0 }])
+        JSON.stringify([])
       ]);
-      console.log('Created Classic OBS Songs theme');
-      saveDatabase();
-    }
-
-    // Seed "Lower Third" OBS Songs theme (matches OBS Overlay style with per-line backgrounds)
-    const LOWER_THIRD_OBS_SONGS_THEME_ID = '00000000-0000-0000-0000-000000000007';
-    const existingLowerThirdTheme = db.exec(`SELECT id FROM obs_themes WHERE id = '${LOWER_THIRD_OBS_SONGS_THEME_ID}'`);
-
-    if (existingLowerThirdTheme.length === 0 || existingLowerThirdTheme[0].values.length === 0) {
-      // Lower Third style with per-line black backgrounds (matches OBS Overlay)
-      const lowerThirdStyles = {
-        original: { fontSize: 100, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true, backgroundColor: '#000000', borderRadius: 6 },
-        transliteration: { fontSize: 100, fontWeight: '400', color: '#ffffff', opacity: 1, visible: true, backgroundColor: '#000000', borderRadius: 6 },
-        translation: { fontSize: 100, fontWeight: '400', color: '#ffffff', opacity: 1, visible: true, backgroundColor: '#000000', borderRadius: 6 }
-      };
-      const lowerThirdPositions = {
-        original: { x: 0, y: 78, width: 100, height: 7, paddingTop: 0, paddingBottom: 0, alignH: 'center', alignV: 'center' },
-        transliteration: { x: 0, y: 85, width: 100, height: 7, paddingTop: 0, paddingBottom: 0, alignH: 'center', alignV: 'center' },
-        translation: { x: 0, y: 92, width: 100, height: 7, paddingTop: 0, paddingBottom: 0, alignH: 'center', alignV: 'center' }
-      };
-
-      db.run(`
-        INSERT INTO obs_themes (id, name, type, isBuiltIn, isDefault, lineOrder, lineStyles, linePositions, viewerBackground, canvasDimensions, backgroundBoxes)
-        VALUES (?, ?, ?, 1, 0, ?, ?, ?, ?, ?, ?)
-      `, [
-        LOWER_THIRD_OBS_SONGS_THEME_ID,
-        'Lower Third',
-        'songs',
-        JSON.stringify(['original', 'transliteration', 'translation']),
-        JSON.stringify(lowerThirdStyles),
-        JSON.stringify(lowerThirdPositions),
-        JSON.stringify({ type: 'transparent', color: null }),
-        JSON.stringify({ width: 1920, height: 1080 }),
-        JSON.stringify([])  // No background boxes - using per-line backgrounds instead
-      ]);
-      console.log('Created Lower Third OBS Songs theme');
+      console.log('Created Default OBS Songs theme');
       saveDatabase();
     }
 
@@ -876,35 +874,40 @@ export async function initDatabase(): Promise<void> {
     const existingOBSBibleTheme = db.exec(`SELECT id FROM obs_themes WHERE id = '${CLASSIC_OBS_BIBLE_THEME_ID}'`);
 
     if (existingOBSBibleTheme.length === 0 || existingOBSBibleTheme[0].values.length === 0) {
+      // Default OBS Bible Theme - with paper texture background box and flow positioning
       const defaultOBSBibleStyles = {
-        hebrew: { fontSize: 100, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true },
-        english: { fontSize: 80, fontWeight: '400', color: '#e0e0e0', opacity: 0.9, visible: true }
+        hebrew: { fontSize: 83, fontWeight: '700', color: '#000000', opacity: 1, visible: true },
+        english: { fontSize: 72, fontWeight: '600', color: '#000000', opacity: 1, visible: true }
       };
       const defaultOBSBiblePositions = {
-        hebrew: { x: 0, y: 72, width: 100, height: 10, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' },
-        english: { x: 0, y: 82, width: 100, height: 10, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' }
+        hebrew: { x: 2.87, y: 33.12, width: 32.35, height: 31.37, paddingTop: 0, paddingBottom: 0, alignH: 'right', alignV: 'top', autoHeight: true, growDirection: 'up' },
+        english: { x: 2.65, y: 29.18, width: 32.35, height: 44.97, paddingTop: 0, paddingBottom: 0, alignH: 'left', alignV: 'top', autoHeight: true, positionMode: 'flow', flowGap: 1, flowAnchor: 'reference' }
       };
-      const defaultOBSReferenceStyle = { fontSize: 60, fontWeight: '500', color: '#FF8C42', opacity: 0.9 };
-      const defaultOBSReferencePosition = { x: 0, y: 92, width: 100, height: 6, alignH: 'center', alignV: 'center' };
+      const defaultOBSReferenceStyle = { fontSize: 54, fontWeight: '400', color: '#000000', opacity: 1, visible: true };
+      const defaultOBSReferencePosition = { x: 2.65, y: 13.89, width: 26.68, height: 12.81, paddingTop: 0, paddingBottom: 0, alignH: 'left', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 1, flowAnchor: 'hebrew' };
+      const defaultOBSReferenceEnglishStyle = { fontSize: 50, fontWeight: '400', color: '#000000', opacity: 1, visible: true };
+      const defaultOBSReferenceEnglishPosition = { x: 10.15, y: 66.21, width: 24.85, height: 31.37, paddingTop: 0, paddingBottom: 0, alignH: 'right', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'english' };
 
       db.run(`
-        INSERT INTO obs_themes (id, name, type, isBuiltIn, isDefault, lineOrder, lineStyles, linePositions, referenceStyle, referencePosition, viewerBackground, canvasDimensions, backgroundBoxes)
-        VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO obs_themes (id, name, type, isBuiltIn, isDefault, lineOrder, lineStyles, linePositions, referenceStyle, referencePosition, referenceEnglishStyle, referenceEnglishPosition, viewerBackground, canvasDimensions, backgroundBoxes)
+        VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         CLASSIC_OBS_BIBLE_THEME_ID,
-        'Classic OBS Bible',
+        'Default OBS Bible',
         'bible',
         hasDefaultOBSBibleTheme ? 0 : 1,
-        JSON.stringify(['hebrew', 'english']),
+        JSON.stringify(['hebrew', 'reference', 'english', 'referenceEnglish']),
         JSON.stringify(defaultOBSBibleStyles),
         JSON.stringify(defaultOBSBiblePositions),
         JSON.stringify(defaultOBSReferenceStyle),
         JSON.stringify(defaultOBSReferencePosition),
+        JSON.stringify(defaultOBSReferenceEnglishStyle),
+        JSON.stringify(defaultOBSReferenceEnglishPosition),
         JSON.stringify({ type: 'transparent', color: null }),
         JSON.stringify({ width: 1920, height: 1080 }),
-        JSON.stringify([{ x: 0, y: 70, width: 100, height: 30, color: '#000000', opacity: 0.7, borderRadius: 0 }])
+        JSON.stringify([{ id: 'box-default', x: 0, y: 0, width: 38.09, height: 100, color: '#e8dcc8', opacity: 0.87, borderRadius: 8, texture: 'paper', textureOpacity: 0.3 }])
       ]);
-      console.log('Created Classic OBS Bible theme');
+      console.log('Created Default OBS Bible theme');
       saveDatabase();
     }
 
@@ -913,28 +916,27 @@ export async function initDatabase(): Promise<void> {
     const existingOBSPrayerTheme = db.exec(`SELECT id FROM obs_themes WHERE id = '${CLASSIC_OBS_PRAYER_THEME_ID}'`);
 
     if (existingOBSPrayerTheme.length === 0 || existingOBSPrayerTheme[0].values.length === 0) {
-      // OBS Prayer theme - matches NewClassicPrayer structure but for lower-third OBS display
-      // Same font sizes, colors, weights as Prayer theme
+      // Default OBS Prayer theme - with paper texture background and flow positioning
       const defaultOBSPrayerStyles = {
-        title: { fontSize: 130, fontWeight: '700', color: '#FF8C42', opacity: 1, visible: true },
-        titleTranslation: { fontSize: 129, fontWeight: '700', color: '#FF8C42', opacity: 0.9, visible: true },
-        subtitle: { fontSize: 94, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true },
-        subtitleTranslation: { fontSize: 94, fontWeight: '700', color: '#e0e0e0', opacity: 0.9, visible: true },
-        description: { fontSize: 90, fontWeight: '400', color: '#e0e0e0', opacity: 0.9, visible: true },
-        descriptionTranslation: { fontSize: 90, fontWeight: '400', color: '#b0b0b0', opacity: 0.85, visible: true },
-        reference: { fontSize: 56, fontWeight: '500', color: '#ffffff', opacity: 0.8, visible: true },
-        referenceTranslation: { fontSize: 60, fontWeight: '400', color: '#ffffff', opacity: 0.7, visible: true }
+        title: { fontSize: 130, fontWeight: '700', color: '#000000', opacity: 1, visible: true },
+        titleTranslation: { fontSize: 129, fontWeight: '700', color: '#000000', opacity: 0.9, visible: true },
+        subtitle: { fontSize: 94, fontWeight: '700', color: '#000000', opacity: 1, visible: true },
+        subtitleTranslation: { fontSize: 94, fontWeight: '700', color: '#000000', opacity: 0.9, visible: true },
+        description: { fontSize: 90, fontWeight: '400', color: '#000000', opacity: 0.9, visible: true },
+        descriptionTranslation: { fontSize: 90, fontWeight: '400', color: '#000000', opacity: 0.85, visible: true },
+        reference: { fontSize: 56, fontWeight: '500', color: '#000000', opacity: 0.8, visible: true },
+        referenceTranslation: { fontSize: 60, fontWeight: '400', color: '#000000', opacity: 0.7, visible: true }
       };
-      // Lower-third positioning for OBS overlay (centered, stacked at bottom)
+      // Side-by-side positioning with flow for OBS overlay
       const defaultOBSPrayerPositions = {
-        title: { x: 0, y: 58, width: 100, height: 6, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' },
-        titleTranslation: { x: 0, y: 64, width: 100, height: 6, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' },
-        subtitle: { x: 0, y: 70, width: 100, height: 6, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' },
-        subtitleTranslation: { x: 0, y: 76, width: 100, height: 6, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' },
-        description: { x: 0, y: 82, width: 100, height: 5, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' },
-        descriptionTranslation: { x: 0, y: 87, width: 100, height: 5, paddingTop: 1, paddingBottom: 1, alignH: 'center', alignV: 'center' },
-        reference: { x: 0, y: 92, width: 100, height: 4, paddingTop: 0, paddingBottom: 0, alignH: 'center', alignV: 'center' },
-        referenceTranslation: { x: 0, y: 96, width: 100, height: 4, paddingTop: 0, paddingBottom: 0, alignH: 'center', alignV: 'center' }
+        title: { x: 2.65, y: 16.17, width: 39.71, height: 9.15, paddingTop: 1, paddingBottom: 1, alignH: 'right', alignV: 'center', autoHeight: true },
+        titleTranslation: { x: 3.24, y: 55.35, width: 39.71, height: 9.15, paddingTop: 1, paddingBottom: 1, alignH: 'left', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 3, flowAnchor: 'reference' },
+        subtitle: { x: 3.24, y: 21.65, width: 39.71, height: 6.54, paddingTop: 1, paddingBottom: 1, alignH: 'right', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'title' },
+        subtitleTranslation: { x: 3.24, y: 66.85, width: 39.71, height: 6.54, paddingTop: 1, paddingBottom: 1, alignH: 'left', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'titleTranslation' },
+        description: { x: 3.24, y: 31.18, width: 39.71, height: 6.27, paddingTop: 1, paddingBottom: 1, alignH: 'right', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'subtitle' },
+        descriptionTranslation: { x: 3.24, y: 79.97, width: 39.71, height: 6.27, paddingTop: 1, paddingBottom: 1, alignH: 'left', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'subtitleTranslation' },
+        reference: { x: 3.24, y: 41.63, width: 39.71, height: 5, paddingTop: 0, paddingBottom: 0, alignH: 'right', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'description' },
+        referenceTranslation: { x: 3.24, y: 86.25, width: 39.71, height: 5, paddingTop: 0, paddingBottom: 0, alignH: 'left', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'descriptionTranslation' }
       };
 
       db.run(`
@@ -942,17 +944,17 @@ export async function initDatabase(): Promise<void> {
         VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
       `, [
         CLASSIC_OBS_PRAYER_THEME_ID,
-        'Classic OBS Prayer',
+        'Default OBS Prayer',
         'prayer',
         hasDefaultOBSPrayerTheme ? 0 : 1,
-        JSON.stringify(['title', 'titleTranslation', 'subtitle', 'subtitleTranslation', 'description', 'descriptionTranslation', 'reference', 'referenceTranslation']),
+        JSON.stringify(['title', 'subtitle', 'description', 'reference', 'titleTranslation', 'subtitleTranslation', 'descriptionTranslation', 'referenceTranslation']),
         JSON.stringify(defaultOBSPrayerStyles),
         JSON.stringify(defaultOBSPrayerPositions),
         JSON.stringify({ type: 'transparent', color: null }),
         JSON.stringify({ width: 1920, height: 1080 }),
-        JSON.stringify([{ x: 0, y: 56, width: 100, height: 44, color: '#000000', opacity: 0.7, borderRadius: 0 }])
+        JSON.stringify([{ id: 'default-box', x: 0, y: 0.07, width: 45, height: 99.87, color: '#d4c4a8', opacity: 0.84, borderRadius: 0, texture: 'paper', textureOpacity: 0.3 }])
       ]);
-      console.log('Created Classic OBS Prayer theme');
+      console.log('Created Default OBS Prayer theme');
       saveDatabase();
     }
 
@@ -965,37 +967,36 @@ export async function initDatabase(): Promise<void> {
     const existingPrayerTheme = db.exec(`SELECT id FROM prayer_themes WHERE id = '${CLASSIC_PRAYER_THEME_ID}'`);
 
     if (existingPrayerTheme.length === 0 || existingPrayerTheme[0].values.length === 0) {
-      // Classic Prayer theme based on NewClassicPrayer layout
-      // Hebrew text aligned right, English text aligned left
+      // Default Prayer theme - Hebrew text aligned right, English text aligned left, with flow positioning
       const defaultPrayerStyles = {
-        title: { fontSize: 130, fontWeight: '700', color: '#FF8C42', opacity: 1, visible: true },
-        titleTranslation: { fontSize: 129, fontWeight: '700', color: '#FF8C42', opacity: 0.9, visible: true },
-        subtitle: { fontSize: 94, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true },
-        subtitleTranslation: { fontSize: 94, fontWeight: '700', color: '#e0e0e0', opacity: 0.9, visible: true },
-        description: { fontSize: 90, fontWeight: '400', color: '#e0e0e0', opacity: 0.9, visible: true },
-        descriptionTranslation: { fontSize: 90, fontWeight: '400', color: '#b0b0b0', opacity: 0.85, visible: true }
+        title: { fontSize: 165, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true },
+        titleTranslation: { fontSize: 147, fontWeight: '700', color: '#ffffff', opacity: 0.9, visible: true },
+        subtitle: { fontSize: 113, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true },
+        subtitleTranslation: { fontSize: 109, fontWeight: '700', color: '#e0e0e0', opacity: 0.9, visible: true },
+        description: { fontSize: 97, fontWeight: '400', color: '#e0e0e0', opacity: 0.9, visible: true },
+        descriptionTranslation: { fontSize: 95, fontWeight: '400', color: '#b0b0b0', opacity: 0.85, visible: true }
       };
       const defaultPrayerPositions = {
-        title: { x: 0, y: 3, width: 100, height: 8, paddingTop: 1, paddingBottom: 1, alignH: 'right', alignV: 'center' },
-        titleTranslation: { x: 0, y: 40.97, width: 100, height: 8.85, paddingTop: 0, paddingBottom: 1, alignH: 'left', alignV: 'center' },
-        subtitle: { x: 0, y: 11.15, width: 100, height: 10.87, paddingTop: 2, paddingBottom: 2, alignH: 'right', alignV: 'top' },
-        subtitleTranslation: { x: 0, y: 50.90, width: 100, height: 9.61, paddingTop: 1, paddingBottom: 1, alignH: 'left', alignV: 'top' },
-        description: { x: 0, y: 21.65, width: 100, height: 10.12, paddingTop: 1, paddingBottom: 1, alignH: 'right', alignV: 'top' },
-        descriptionTranslation: { x: 0, y: 60.18, width: 100, height: 10, paddingTop: 1, paddingBottom: 1, alignH: 'left', alignV: 'center' }
+        title: { x: 3.63, y: 8.34, width: 92.75, height: 9.11, paddingTop: 0, paddingBottom: 0, alignH: 'right', alignV: 'center', autoHeight: true },
+        titleTranslation: { x: 3.63, y: 41.60, width: 92.75, height: 9.11, paddingTop: 0, paddingBottom: 0, alignH: 'left', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 2, flowAnchor: 'reference' },
+        subtitle: { x: 3.63, y: 10.78, width: 92.75, height: 6.67, paddingTop: 0, paddingBottom: 0, alignH: 'right', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'title' },
+        subtitleTranslation: { x: 3.63, y: 50.71, width: 92.75, height: 6.67, paddingTop: 0, paddingBottom: 0, alignH: 'left', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'titleTranslation' },
+        description: { x: 3.63, y: 21.66, width: 92.75, height: 6.22, paddingTop: 0, paddingBottom: 0, alignH: 'right', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'subtitle' },
+        descriptionTranslation: { x: 3.63, y: 60.32, width: 92.75, height: 6.22, paddingTop: 0, paddingBottom: 0, alignH: 'left', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'subtitleTranslation' }
       };
-      const defaultPrayerReferenceStyle = { fontSize: 56, fontWeight: '500', color: '#ffffff', opacity: 0.8, visible: true };
-      const defaultPrayerReferencePosition = { x: 0, y: 31.78, width: 100, height: 5.11, paddingTop: 0, paddingBottom: 0, alignH: 'right', alignV: 'center' };
+      const defaultPrayerReferenceStyle = { fontSize: 71, fontWeight: '500', color: '#ffffff', opacity: 0.8, visible: true };
+      const defaultPrayerReferencePosition = { x: 75.75, y: 31.78, width: 20.63, height: 5.11, paddingTop: 0, paddingBottom: 0, alignH: 'right', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'description' };
       const defaultPrayerRefTransStyle = { fontSize: 60, fontWeight: '400', color: '#ffffff', opacity: 0.7, visible: true };
-      const defaultPrayerRefTransPosition = { x: 0, y: 70.32, width: 100, height: 8, paddingTop: 0, paddingBottom: 0, alignH: 'left', alignV: 'center' };
+      const defaultPrayerRefTransPosition = { x: 3.63, y: 70.10, width: 24.88, height: 5.11, paddingTop: 0, paddingBottom: 0, alignH: 'left', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'descriptionTranslation' };
 
       db.run(`
         INSERT INTO prayer_themes (id, name, isBuiltIn, isDefault, lineOrder, lineStyles, linePositions, referenceStyle, referencePosition, referenceTranslationStyle, referenceTranslationPosition, container, viewerBackground, canvasDimensions, backgroundBoxes)
         VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         CLASSIC_PRAYER_THEME_ID,
-        'Classic Prayer',
+        'Default Prayer',
         hasDefaultPrayerTheme ? 0 : 1,
-        JSON.stringify(['title', 'titleTranslation', 'subtitle', 'subtitleTranslation', 'description', 'descriptionTranslation', 'reference', 'referenceTranslation']),
+        JSON.stringify(['title', 'subtitle', 'description', 'reference', 'titleTranslation', 'subtitleTranslation', 'descriptionTranslation', 'referenceTranslation']),
         JSON.stringify(defaultPrayerStyles),
         JSON.stringify(defaultPrayerPositions),
         JSON.stringify(defaultPrayerReferenceStyle),
@@ -1007,7 +1008,7 @@ export async function initDatabase(): Promise<void> {
         JSON.stringify({ width: 1920, height: 1080 }),
         JSON.stringify([])
       ]);
-      console.log('Created Classic Prayer theme');
+      console.log('Created Default Prayer theme');
       saveDatabase();
     }
 
@@ -1434,7 +1435,6 @@ export const CLASSIC_BIBLE_THEME_ID = '00000000-0000-0000-0000-000000000003';
 export const CLASSIC_OBS_SONGS_THEME_ID = '00000000-0000-0000-0000-000000000004';
 export const CLASSIC_OBS_BIBLE_THEME_ID = '00000000-0000-0000-0000-000000000005';
 export const CLASSIC_PRAYER_THEME_ID = '00000000-0000-0000-0000-000000000006';
-export const LOWER_THIRD_OBS_SONGS_THEME_ID = '00000000-0000-0000-0000-000000000007';
 export const CLASSIC_OBS_PRAYER_THEME_ID = '00000000-0000-0000-0000-000000000008';
 
 // ============ Display Theme Overrides ============
@@ -1479,11 +1479,20 @@ export function setDisplayThemeOverride(displayId: number, themeType: DisplayThe
 
   const now = new Date().toISOString();
 
-  // Use INSERT OR REPLACE for upsert behavior
+  // Check if override already exists to preserve createdAt
+  const existing = getDisplayThemeOverride(displayId, themeType);
+  const createdAt = existing?.createdAt || now;
+
+  // Delete existing record if any (needed for INSERT OR REPLACE to work correctly)
+  if (existing) {
+    db.run('DELETE FROM display_theme_overrides WHERE displayId = ? AND themeType = ?', [displayId, themeType]);
+  }
+
+  // Insert the new/updated record
   db.run(`
-    INSERT OR REPLACE INTO display_theme_overrides (displayId, themeType, themeId, createdAt, updatedAt)
-    VALUES (?, ?, ?, COALESCE((SELECT createdAt FROM display_theme_overrides WHERE displayId = ? AND themeType = ?), ?), ?)
-  `, [displayId, themeType, themeId, displayId, themeType, now, now]);
+    INSERT INTO display_theme_overrides (displayId, themeType, themeId, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?)
+  `, [displayId, themeType, themeId, createdAt, now]);
 
   saveDatabase();
   return getDisplayThemeOverride(displayId, themeType);

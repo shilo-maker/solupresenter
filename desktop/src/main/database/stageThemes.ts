@@ -28,6 +28,11 @@ export interface StageMonitorTheme {
     transliteration: TextStyle;
     translation: TextStyle;
   };
+  nextSlideText?: {
+    original: TextStyle;
+    transliteration: TextStyle;
+    translation: TextStyle;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -51,6 +56,21 @@ export interface TextStyle {
   fontWeight: string;
   color: string;
   opacity: number;
+  // Position properties (percentage-based)
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  alignH?: 'left' | 'center' | 'right';
+  alignV?: 'top' | 'center' | 'bottom';
+  // Flow positioning
+  positionMode?: 'absolute' | 'flow';
+  flowAnchor?: string;
+  flowGap?: number;
+  flowBeside?: boolean;
+  // Auto height
+  autoHeight?: boolean;
+  growDirection?: 'up' | 'down';
 }
 
 /**
@@ -114,13 +134,18 @@ export function createStageTheme(data: Partial<StageMonitorTheme>): StageMonitor
       transliteration: { visible: true, fontSize: 24, fontWeight: '400', color: '#FFFFFF', opacity: 0.9 },
       translation: { visible: true, fontSize: 24, fontWeight: '400', color: '#FFFFFF', opacity: 0.9 }
     },
+    nextSlideText: data.nextSlideText || {
+      original: { visible: true, fontSize: 100, fontWeight: 'bold', color: '#FFFFFF', opacity: 0.8, x: 70, y: 25, width: 26, height: 12 },
+      transliteration: { visible: true, fontSize: 100, fontWeight: '400', color: '#888888', opacity: 0.7, x: 70, y: 40, width: 26, height: 10 },
+      translation: { visible: true, fontSize: 100, fontWeight: '400', color: '#FFFFFF', opacity: 0.7, x: 70, y: 52, width: 26, height: 10 }
+    },
     createdAt: now,
     updatedAt: now
   };
 
   db.run(`
-    INSERT INTO stage_monitor_themes (id, name, isBuiltIn, isDefault, canvasDimensions, colors, elements, currentSlideText, createdAt, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO stage_monitor_themes (id, name, isBuiltIn, isDefault, canvasDimensions, colors, elements, currentSlideText, nextSlideText, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     theme.id,
     theme.name,
@@ -130,6 +155,7 @@ export function createStageTheme(data: Partial<StageMonitorTheme>): StageMonitor
     JSON.stringify(theme.colors),
     JSON.stringify(theme.elements),
     JSON.stringify(theme.currentSlideText),
+    JSON.stringify(theme.nextSlideText),
     theme.createdAt,
     theme.updatedAt
   ]);
@@ -185,6 +211,11 @@ export function updateStageTheme(id: string, data: Partial<StageMonitorTheme>): 
     updates.push('currentSlideText = ?');
     values.push(JSON.stringify(data.currentSlideText));
     updatedTheme.currentSlideText = data.currentSlideText;
+  }
+  if (data.nextSlideText !== undefined) {
+    updates.push('nextSlideText = ?');
+    values.push(JSON.stringify(data.nextSlideText));
+    updatedTheme.nextSlideText = data.nextSlideText;
   }
   if (data.isDefault !== undefined) {
     updates.push('isDefault = ?');
@@ -259,7 +290,8 @@ export function duplicateStageTheme(id: string, newName?: string): StageMonitorT
     canvasDimensions: existing.canvasDimensions,
     colors: existing.colors,
     elements: existing.elements,
-    currentSlideText: existing.currentSlideText
+    currentSlideText: existing.currentSlideText,
+    nextSlideText: existing.nextSlideText
   });
 }
 

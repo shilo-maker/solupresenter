@@ -21,6 +21,7 @@ interface CombinedSlideGridItemProps {
   isSelected: boolean;
   bgColor: string;
   onSelect: (index: number) => void;
+  slideCode?: string;  // e.g., "V11", "C12"
 }
 
 const CombinedSlideGridItem: React.FC<CombinedSlideGridItemProps> = memo(({
@@ -28,7 +29,8 @@ const CombinedSlideGridItem: React.FC<CombinedSlideGridItemProps> = memo(({
   combinedIndex,
   isSelected,
   bgColor,
-  onSelect
+  onSelect,
+  slideCode
 }) => {
   // Use onMouseDown instead of onClick for instant response (no wait for mouseup)
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -86,6 +88,19 @@ const CombinedSlideGridItem: React.FC<CombinedSlideGridItemProps> = memo(({
           </span>
         ) : (
           <span>{verseType ? `${verseType} ` : ''}{item.label}</span>
+        )}
+        {slideCode && (
+          <span style={{
+            marginLeft: 'auto',
+            backgroundColor: 'rgba(0,0,0,0.3)',
+            padding: '1px 5px',
+            borderRadius: '3px',
+            fontSize: '0.65rem',
+            fontFamily: 'monospace',
+            color: isSelected ? '#00d4ff' : 'rgba(255,255,255,0.5)'
+          }}>
+            {slideCode}
+          </span>
         )}
       </div>
       {/* Slide content */}

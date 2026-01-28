@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSettings } from '../contexts/SettingsContext';
+import { useThemeState, Theme } from '../hooks/useThemeState';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -26,6 +27,32 @@ export default function SettingsPage() {
   const [remoteControlStatus, setRemoteControlStatus] = useState<RemoteControlStatus | null>(null);
   const [remoteControlLoading, setRemoteControlLoading] = useState(false);
   const [remoteControlQRCode, setRemoteControlQRCode] = useState<string | null>(null);
+  const [syncLoading, setSyncLoading] = useState(false);
+
+  // Theme state
+  const {
+    themes,
+    stageMonitorThemes,
+    bibleThemes,
+    prayerThemes,
+    obsThemes,
+    selectedTheme,
+    selectedStageTheme,
+    selectedBibleTheme,
+    selectedPrayerTheme,
+    selectedOBSSongsTheme,
+    selectedOBSBibleTheme,
+    selectedOBSPrayerTheme,
+    loadThemes,
+    applyViewerTheme,
+    applyStageTheme,
+    applyBibleTheme,
+    applyPrayerTheme,
+    applyOBSTheme,
+  } = useThemeState();
+
+  // Theme dropdown state
+  const [openThemeDropdown, setOpenThemeDropdown] = useState<string | null>(null);
 
   const loadRemoteControlStatus = useCallback(async () => {
     try {
@@ -55,10 +82,13 @@ export default function SettingsPage() {
     // Load remote control status
     loadRemoteControlStatus();
 
+    // Load themes
+    loadThemes();
+
     // Poll for status updates while component is mounted
     const interval = setInterval(loadRemoteControlStatus, 5000);
     return () => clearInterval(interval);
-  }, [loadRemoteControlStatus]);
+  }, [loadRemoteControlStatus, loadThemes]);
 
   const handleLanguageChange = async (lang: 'en' | 'he') => {
     await updateSetting('language', lang);
@@ -102,6 +132,103 @@ export default function SettingsPage() {
   };
 
   const isRTL = i18n.language === 'he';
+
+  // Memoized OBS theme filters
+  const obsSongsThemes = useMemo(() => obsThemes.filter(t => t.type === 'songs'), [obsThemes]);
+  const obsBibleThemes = useMemo(() => obsThemes.filter(t => t.type === 'bible'), [obsThemes]);
+  const obsPrayerThemes = useMemo(() => obsThemes.filter(t => t.type === 'prayer'), [obsThemes]);
+
+  // Theme dropdown renderer
+  const renderThemeDropdown = (
+    id: string,
+    label: string,
+    themeList: Theme[],
+    selectedThemeObj: Theme | null,
+    onApply: (theme: Theme) => void,
+    editRoute: string,
+    borderColor: string
+  ) => (
+    <div style={{ marginBottom: '12px', position: 'relative' }}>
+      <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.7)' }}>
+        {label}
+      </label>
+      <button
+        onClick={() => setOpenThemeDropdown(openThemeDropdown === id ? null : id)}
+        style={{
+          width: '100%',
+          padding: '10px 14px',
+          background: 'rgba(255,255,255,0.1)',
+          border: `1px solid ${borderColor}`,
+          borderRadius: '8px',
+          color: 'white',
+          fontSize: '0.9rem',
+          cursor: 'pointer',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          textAlign: isRTL ? 'right' : 'left',
+        }}
+      >
+        <span>{selectedThemeObj?.name || t('controlPanel.selectTheme', 'Select...')}</span>
+        <span style={{ fontSize: '0.6rem', transform: openThemeDropdown === id ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▼</span>
+      </button>
+      {openThemeDropdown === id && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          left: 0,
+          right: 0,
+          background: '#2a2a3e',
+          border: `1px solid ${borderColor}`,
+          borderRadius: '8px',
+          marginTop: '4px',
+          zIndex: 100,
+          maxHeight: '200px',
+          overflowY: 'auto',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+        }}>
+          {themeList.map((theme) => (
+            <div
+              key={theme.id}
+              onClick={() => { onApply(theme); setOpenThemeDropdown(null); }}
+              style={{
+                padding: '10px 12px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                background: selectedThemeObj?.id === theme.id ? `${borderColor}33` : 'transparent',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => { if (selectedThemeObj?.id !== theme.id) e.currentTarget.style.background = `${borderColor}22`; }}
+              onMouseLeave={(e) => { if (selectedThemeObj?.id !== theme.id) e.currentTarget.style.background = 'transparent'; }}
+            >
+              <span style={{ color: 'white', fontSize: '0.85rem' }}>{theme.name}</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); navigate(`${editRoute}?id=${theme.id}`); setOpenThemeDropdown(null); }}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '4px 8px',
+                  color: 'rgba(255,255,255,0.7)',
+                  fontSize: '0.7rem',
+                  cursor: 'pointer'
+                }}
+              >
+                {t('common.edit', 'Edit')}
+              </button>
+            </div>
+          ))}
+          {themeList.length === 0 && (
+            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', textAlign: 'center', padding: '12px' }}>
+              {t('controlPanel.noThemesAvailable')}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div
@@ -330,6 +457,64 @@ export default function SettingsPage() {
                 {t('settings.resetToDefault')}
               </button>
             )}
+          </div>
+        </section>
+
+        {/* Global Themes Section */}
+        <section
+          style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '20px'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h2 style={{ margin: 0, fontSize: '1.1rem', color: '#06b6d4' }}>
+              {t('settings.globalThemes', 'Global Themes')}
+            </h2>
+            <button
+              onClick={() => navigate('/theme-editor')}
+              style={{
+                background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '6px 12px',
+                color: 'white',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              <span>+</span> {t('themes.createNew', 'Create New')}
+            </button>
+          </div>
+
+          <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginBottom: '16px' }}>
+            {t('settings.globalThemesDescription', 'Set default themes for all displays. Individual displays can override these in the Display menu.')}
+          </p>
+
+          {/* Main Themes */}
+          <div style={{ marginBottom: '20px' }}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '0.95rem', color: 'rgba(255,255,255,0.8)' }}>
+              {t('settings.mainThemes', 'Main Themes')}
+            </h3>
+            {renderThemeDropdown('songs', t('controlPanel.songsTheme', 'Songs Theme'), themes, selectedTheme, applyViewerTheme, '/theme-editor', 'rgba(102, 126, 234, 0.5)')}
+            {renderThemeDropdown('stage', t('controlPanel.stageMonitorTheme', 'Stage Monitor'), stageMonitorThemes, selectedStageTheme, applyStageTheme, '/stage-monitor-editor', 'rgba(240, 147, 251, 0.5)')}
+            {renderThemeDropdown('bible', t('controlPanel.bibleTheme', 'Bible'), bibleThemes, selectedBibleTheme, applyBibleTheme, '/bible-theme-editor', 'rgba(76, 175, 80, 0.5)')}
+            {renderThemeDropdown('prayer', t('controlPanel.prayerTheme', 'Prayer/Sermon'), prayerThemes, selectedPrayerTheme, applyPrayerTheme, '/prayer-theme-editor', 'rgba(6, 182, 212, 0.5)')}
+          </div>
+
+          {/* OBS Themes */}
+          <div>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '0.95rem', color: 'rgba(255,255,255,0.8)' }}>
+              {t('settings.obsThemes', 'OBS Themes')}
+            </h3>
+            {renderThemeDropdown('obs-songs', t('controlPanel.obsSongsTheme', 'OBS Songs'), obsSongsThemes, selectedOBSSongsTheme || null, applyOBSTheme, '/obs-songs-theme-editor', 'rgba(102, 126, 234, 0.5)')}
+            {renderThemeDropdown('obs-bible', t('controlPanel.obsBibleTheme', 'OBS Bible'), obsBibleThemes, selectedOBSBibleTheme || null, applyOBSTheme, '/obs-bible-theme-editor', 'rgba(76, 175, 80, 0.5)')}
+            {renderThemeDropdown('obs-prayer', t('controlPanel.obsPrayerTheme', 'OBS Prayer'), obsPrayerThemes, selectedOBSPrayerTheme || null, applyOBSTheme, '/obs-prayer-theme-editor', 'rgba(6, 182, 212, 0.5)')}
           </div>
         </section>
 
@@ -834,6 +1019,300 @@ export default function SettingsPage() {
           >
             {t('settings.resetToDefaults', 'Reset to Defaults')}
           </button>
+        </section>
+
+        {/* Import/Export Section */}
+        <section
+          style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '20px'
+          }}
+        >
+          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#06b6d4' }}>
+            {t('settings.importExport', 'Import / Export')}
+          </h2>
+          <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginBottom: '16px' }}>
+            {t('settings.importExportDescription', 'Export your songs database to a JSON file for backup, or import songs from a previously exported file.')}
+          </p>
+
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            {/* Export Button */}
+            <button
+              onClick={async () => {
+                try {
+                  const result = await window.electronAPI.showSaveDialog({
+                    defaultPath: `solupresenter-songs-${new Date().toISOString().split('T')[0]}.json`,
+                    filters: [{ name: 'JSON Files', extensions: ['json'] }]
+                  });
+
+                  if (!result.canceled && result.filePath) {
+                    const jsonData = await window.electronAPI.exportSongsJSON();
+                    await window.electronAPI.writeFile(result.filePath, jsonData);
+                    alert(t('settings.exportSuccess', 'Songs exported successfully!'));
+                  }
+                } catch (error) {
+                  console.error('Export failed:', error);
+                  alert(t('settings.exportError', 'Failed to export songs. Please try again.'));
+                }
+              }}
+              style={{
+                flex: 1,
+                minWidth: '150px',
+                padding: '14px 20px',
+                background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                border: 'none',
+                borderRadius: '8px',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              {t('settings.exportSongs', 'Export Songs')}
+            </button>
+
+            {/* Import Button */}
+            <button
+              onClick={async () => {
+                try {
+                  const result = await window.electronAPI.showOpenDialog({
+                    filters: [{ name: 'JSON Files', extensions: ['json'] }]
+                  });
+
+                  if (!result.canceled && result.filePaths.length > 0) {
+                    const jsonData = await window.electronAPI.readFile(result.filePaths[0]);
+                    const importResult = await window.electronAPI.importSongsJSON(jsonData);
+
+                    alert(t('settings.importResult', `Import complete!\n\nImported: ${importResult.imported}\nSkipped (duplicates): ${importResult.skipped}\nErrors: ${importResult.errors}`));
+                  }
+                } catch (error) {
+                  console.error('Import failed:', error);
+                  alert(t('settings.importError', 'Failed to import songs. Please check that the file is a valid JSON export.'));
+                }
+              }}
+              style={{
+                flex: 1,
+                minWidth: '150px',
+                padding: '14px 20px',
+                background: 'rgba(6, 182, 212, 0.2)',
+                border: '1px solid rgba(6, 182, 212, 0.4)',
+                borderRadius: '8px',
+                color: '#06b6d4',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              {t('settings.importSongs', 'Import Songs')}
+            </button>
+          </div>
+
+          <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '12px' }}>
+            {t('settings.importNote', 'Note: Importing will skip songs that already exist with the same title.')}
+          </p>
+        </section>
+
+        {/* Theme Import/Export Section */}
+        <section
+          style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '20px'
+          }}
+        >
+          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#f59e0b' }}>
+            {t('settings.themeImportExport', 'Theme Import / Export')}
+          </h2>
+          <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginBottom: '16px' }}>
+            {t('settings.themeImportExportDescription', 'Export all your custom themes (Songs, Bible, Prayer, Stage, and OBS themes) to a JSON file for backup or transfer to another device.')}
+          </p>
+
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            {/* Export Themes Button */}
+            <button
+              onClick={async () => {
+                try {
+                  const result = await window.electronAPI.showSaveDialog({
+                    defaultPath: `solupresenter-themes-${new Date().toISOString().split('T')[0]}.json`,
+                    filters: [{ name: 'JSON Files', extensions: ['json'] }]
+                  });
+
+                  if (!result.canceled && result.filePath) {
+                    const jsonData = await window.electronAPI.exportThemesJSON();
+                    await window.electronAPI.writeFile(result.filePath, jsonData);
+                    alert(t('settings.themeExportSuccess', 'Themes exported successfully!'));
+                  }
+                } catch (error) {
+                  console.error('Theme export failed:', error);
+                  alert(t('settings.themeExportError', 'Failed to export themes. Please try again.'));
+                }
+              }}
+              style={{
+                flex: 1,
+                minWidth: '150px',
+                padding: '14px 20px',
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                border: 'none',
+                borderRadius: '8px',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              {t('settings.exportThemes', 'Export Themes')}
+            </button>
+
+            {/* Import Themes Button */}
+            <button
+              onClick={async () => {
+                try {
+                  const result = await window.electronAPI.showOpenDialog({
+                    filters: [{ name: 'JSON Files', extensions: ['json'] }]
+                  });
+
+                  if (!result.canceled && result.filePaths.length > 0) {
+                    const jsonData = await window.electronAPI.readFile(result.filePaths[0]);
+                    const importResult = await window.electronAPI.importThemesJSON(jsonData);
+
+                    const message = t('settings.themeImportResult',
+                      `Theme import complete!\n\n` +
+                      `Songs Themes: ${importResult.viewerThemes.imported} imported, ${importResult.viewerThemes.skipped} skipped\n` +
+                      `Bible Themes: ${importResult.bibleThemes.imported} imported, ${importResult.bibleThemes.skipped} skipped\n` +
+                      `Prayer Themes: ${importResult.prayerThemes.imported} imported, ${importResult.prayerThemes.skipped} skipped\n` +
+                      `Stage Themes: ${importResult.stageThemes.imported} imported, ${importResult.stageThemes.skipped} skipped\n` +
+                      `OBS Themes: ${importResult.obsThemes.imported} imported, ${importResult.obsThemes.skipped} skipped\n\n` +
+                      `Total: ${importResult.total.imported} imported, ${importResult.total.skipped} skipped, ${importResult.total.errors} errors`
+                    );
+                    alert(message);
+                  }
+                } catch (error) {
+                  console.error('Theme import failed:', error);
+                  alert(t('settings.themeImportError', 'Failed to import themes. Please check that the file is a valid theme export.'));
+                }
+              }}
+              style={{
+                flex: 1,
+                minWidth: '150px',
+                padding: '14px 20px',
+                background: 'rgba(245, 158, 11, 0.2)',
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                borderRadius: '8px',
+                color: '#f59e0b',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              {t('settings.importThemes', 'Import Themes')}
+            </button>
+          </div>
+
+          <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '12px' }}>
+            {t('settings.themeImportNote', 'Note: Built-in themes are not exported. Importing will skip themes that already exist with the same name.')}
+          </p>
+        </section>
+
+        {/* Sync Official Database Section */}
+        <section
+          style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '20px'
+          }}
+        >
+          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#10b981' }}>
+            {t('settings.syncOfficialDatabase', 'Sync Official Database')}
+          </h2>
+          <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginBottom: '16px' }}>
+            {t('settings.syncOfficialDatabaseDescription', 'Download and sync songs from the official SoluCast online database. This will add new songs and update existing songs to match the official versions. Your local-only songs will not be affected.')}
+          </p>
+
+          <button
+            onClick={async () => {
+              if (syncLoading) return;
+
+              const confirmSync = confirm(t('settings.syncConfirm', 'This will sync your song database with the official online database.\n\n• New songs will be added\n• Existing synced songs will be updated\n• Your local-only songs will NOT be changed\n\nContinue?'));
+              if (!confirmSync) return;
+
+              setSyncLoading(true);
+              try {
+                const result = await window.electronAPI.importSongs('https://solupresenter-backend-4rn5.onrender.com');
+                alert(t('settings.syncResult', `Sync complete!\n\nNew songs added: ${result.imported}\nSongs updated: ${result.updated}\nErrors: ${result.errors}`));
+              } catch (error) {
+                console.error('Sync failed:', error);
+                alert(t('settings.syncError', 'Failed to sync with the official database. Please check your internet connection and try again.'));
+              } finally {
+                setSyncLoading(false);
+              }
+            }}
+            disabled={syncLoading}
+            style={{
+              width: '100%',
+              padding: '14px 20px',
+              background: syncLoading ? 'rgba(16, 185, 129, 0.5)' : 'linear-gradient(135deg, #10b981, #059669)',
+              border: 'none',
+              borderRadius: '8px',
+              color: 'white',
+              cursor: syncLoading ? 'not-allowed' : 'pointer',
+              fontSize: '0.95rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+              opacity: syncLoading ? 0.7 : 1
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" />
+            </svg>
+            {syncLoading ? t('settings.syncing', 'Syncing...') : t('settings.syncNow', 'Sync with Official Database')}
+          </button>
+
+          <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '12px' }}>
+            {t('settings.syncNote', 'Note: This is a one-way sync. Changes you make locally will not be uploaded to the official database.')}
+          </p>
         </section>
 
         {/* About Section */}

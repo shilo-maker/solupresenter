@@ -299,6 +299,9 @@ const BibleThemeEditorPage: React.FC = () => {
       }
       setHasChanges(false);
 
+      // Broadcast the updated theme to all connected displays showing Bible content
+      await window.electronAPI.applyBibleTheme({ ...themeData, id: theme.id });
+
       // Show saved state briefly
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);

@@ -233,6 +233,9 @@ const ThemeEditorPage: React.FC = () => {
       }
       setHasChanges(false);
 
+      // Broadcast the updated theme to all connected displays showing song content
+      window.electronAPI.applyTheme({ ...themeData, id: theme.id });
+
       // Show saved state briefly
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);

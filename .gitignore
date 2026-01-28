@@ -43,4 +43,12 @@ database-backups/
 # Migration scripts with credentials
 backend/migrate-songs-to-production.js
 backend/set-admin-production.js
+
+# Desktop app - seed data (not included in builds)
+desktop/resources/seed-database.sqlite
+desktop/resources/seed-media/
+
+# Desktop app - build outputs
+desktop/dist/
+desktop/release/
 nul

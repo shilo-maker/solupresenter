@@ -42,6 +42,8 @@ export interface SetlistItem {
   type: 'song' | 'blank' | 'section' | 'countdown' | 'announcement' | 'messages' | 'media' | 'bible' | 'presentation' | 'youtube' | 'clock' | 'stopwatch' | 'audioPlaylist';
   song?: Song;
   title?: string;
+  // Arrangement for songs
+  arrangementId?: string;
   // Tool-specific data
   countdownTime?: string;
   countdownMessage?: string;
@@ -122,6 +124,7 @@ const serializeSetlistForComparison = (items: SetlistItem[]): string => {
     type: item.type,
     songId: item.song?.id,
     title: item.title,
+    arrangementId: item.arrangementId,
     countdownTime: item.countdownTime,
     countdownMessage: item.countdownMessage,
     announcementText: item.announcementText,
@@ -188,14 +191,12 @@ const saveDraftSetlist = (draft: DraftSetlist): void => {
 };
 
 export const SetlistProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Load draft setlist from localStorage on initial render
-  const initialDraft = useMemo(() => loadDraftSetlist(), []);
-
-  const [setlist, setSetlist] = useState<SetlistItem[]>(initialDraft?.items || []);
-  const [currentSetlistId, setCurrentSetlistId] = useState<string | null>(initialDraft?.currentSetlistId || null);
-  const [currentSetlistName, setCurrentSetlistName] = useState<string>(initialDraft?.currentSetlistName || '');
+  // Always start with an empty setlist - don't load draft from localStorage on startup
+  const [setlist, setSetlist] = useState<SetlistItem[]>([]);
+  const [currentSetlistId, setCurrentSetlistId] = useState<string | null>(null);
+  const [currentSetlistName, setCurrentSetlistName] = useState<string>('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const lastSavedSetlistRef = useRef<string>(initialDraft?.lastSavedSnapshot || '[]');
+  const lastSavedSetlistRef = useRef<string>('[]');
 
   // Memoize the serialized setlist to avoid recalculating on every render
   const serializedSetlist = useMemo(() => serializeSetlistForComparison(setlist), [setlist]);

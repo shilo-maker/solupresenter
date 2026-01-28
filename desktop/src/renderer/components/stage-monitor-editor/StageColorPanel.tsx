@@ -94,6 +94,7 @@ const StageColorPanel: React.FC<StageColorPanelProps> = ({
           {COLOR_PRESETS.map(preset => (
             <button
               key={preset.name}
+              type="button"
               onClick={() => onChange(preset.colors)}
               style={{
                 padding: '6px 10px',

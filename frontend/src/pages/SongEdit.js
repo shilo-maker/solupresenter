@@ -27,7 +27,7 @@ function SongEdit() {
   const [availableTags, setAvailableTags] = useState([]);
   const [error, setError] = useState('');
   const [isPersonalCopy, setIsPersonalCopy] = useState(false);
-  const [expressMode, setExpressMode] = useState(false);
+  const [expressMode, setExpressMode] = useState(true);
   const [expressText, setExpressText] = useState('');
   const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
   const [isPublic, setIsPublic] = useState(false);
@@ -80,6 +80,21 @@ function SongEdit() {
       }];
 
       setSlides(processedSlides);
+      // Populate express text since express mode is on by default
+      let lastVt = '';
+      const expText = processedSlides.map(slide => {
+        const lines = [];
+        if (slide.verseType && slide.verseType !== lastVt) {
+          lines.push(`[${slide.verseType}]`);
+          lastVt = slide.verseType;
+        }
+        lines.push(slide.originalText);
+        if (slide.transliteration) lines.push(slide.transliteration);
+        if (slide.translation) lines.push(slide.translation);
+        if (slide.translationOverflow) lines.push(slide.translationOverflow);
+        return lines.join('\n');
+      }).join('\n\n');
+      setExpressText(expText);
       setTags(song.tags || []);
     } catch (error) {
       console.error('Error fetching song:', error);

@@ -13,7 +13,6 @@ import AuthModal from '../components/AuthModal';
 import BroadcastSelector from '../components/BroadcastSelector';
 import MediaGrid from '../components/MediaGrid';
 import SlidePreview from '../components/SlidePreview';
-import ThemeSelectionPanel from '../components/control-panel/ThemeSelectionPanel';
 import SlideGridItem from '../components/control-panel/SlideGridItem';
 import CombinedSlideGridItem from '../components/control-panel/CombinedSlideGridItem';
 import AudioPlayerBar from '../components/control-panel/AudioPlayerBar';
@@ -45,9 +44,14 @@ import { usePanelResize } from '../hooks/usePanelResize';
 import { useYouTubeState, YouTubeVideo, YouTubeSearchResult } from '../hooks/useYouTubeState';
 import { useThemeState } from '../hooks/useThemeState';
 import { useBibleState } from '../hooks/useBibleState';
-import { KeyboardHelpModal, QuickSlideModal, ThemeEditorModal, NewThemeTypeModal, SongEditorModal, EditPlaylistModal, TemplateSelectionModal, PrayerEditorModal, SectionModal, SaveSetlistModal, LoadSetlistModal, UnsavedChangesModal, SetlistContextMenu } from '../components/control-panel/modals';
+import { KeyboardHelpModal, QuickSlideModal, ThemeEditorModal, NewThemeTypeModal, SongEditorModal, SlideEditorModal, EditPlaylistModal, TemplateSelectionModal, PrayerEditorModal, SectionModal, SaveSetlistModal, LoadSetlistModal, UnsavedChangesModal, SetlistContextMenu } from '../components/control-panel/modals';
 import { QuickModeWizard } from '../components/control-panel/quick-mode';
 import { SongItem, PresentationItem, ThemeItem } from '../components/control-panel/list-items';
+import SlideCodeIndicator from '../components/control-panel/SlideCodeIndicator';
+import { useSlideKeyboardNav } from '../hooks/useSlideKeyboardNav';
+import { SlideCodeMap } from '../utils/slideCodeUtils';
+import { useArrangementState } from '../hooks/useArrangementState';
+import { SongArrangement } from '../utils/arrangementUtils';
 import {
   colors,
   buttonStyles,
@@ -82,6 +86,7 @@ interface Song {
     verseType?: string;
   }>;
   author?: string;
+  arrangements?: SongArrangement[];
 }
 
 interface AudioPlaylistTrack {
@@ -278,8 +283,12 @@ const ControlPanel: React.FC = () => {
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const importStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showDisplayPanel, setShowDisplayPanel] = useState(false);
+  const [showThemePanel, setShowThemePanel] = useState(false);
   const [obsServerRunning, setObsServerRunning] = useState(false);
   const [obsServerUrl, setObsServerUrl] = useState<string | null>(null);
+
+  // Slide code navigation state
+  const [slideCodeMap, setSlideCodeMap] = useState<SlideCodeMap | null>(null);
 
   // Theme state (extracted to hook)
   const {
@@ -326,7 +335,11 @@ const ControlPanel: React.FC = () => {
   // Prayer/Sermon express editor state
   const [showPrayerEditor, setShowPrayerEditor] = useState(false);
   const [editingPrayerPresentation, setEditingPrayerPresentation] = useState<Presentation | null>(null);
-  const [prayerExpressText, setPrayerExpressText] = useState('');
+
+  // Single slide editor state
+  const [showSlideEditor, setShowSlideEditor] = useState(false);
+  const [editingSlideIndex, setEditingSlideIndex] = useState<number | null>(null);
+  const [isAddingNewSlide, setIsAddingNewSlide] = useState(false);
 
   // Tools state (extracted to hook)
   const {
@@ -503,6 +516,41 @@ const ControlPanel: React.FC = () => {
     setCurrentSlideIndex,
     setIsBlank,
     setCurrentContentType
+  });
+
+  // Arrangement state - callback to save arrangements to database
+  const handleArrangementUpdate = useCallback(async (songId: string, arrangements: SongArrangement[]) => {
+    try {
+      await window.electronAPI.updateSong(songId, { arrangements });
+
+      // Update local songs list
+      setSongs(prev => prev.map(s =>
+        s.id === songId ? { ...s, arrangements } : s
+      ));
+
+      // Update selected song if it's the one being edited
+      setSelectedSong(prev => {
+        if (prev?.id === songId) {
+          return { ...prev, arrangements };
+        }
+        return prev;
+      });
+
+      // Update setlist items containing this song
+      setSetlist(prev => prev.map(item => {
+        if (item.type === 'song' && item.song?.id === songId) {
+          return { ...item, song: { ...item.song, arrangements } };
+        }
+        return item;
+      }));
+    } catch (error) {
+      console.error('Failed to update song arrangements:', error);
+    }
+  }, [setSetlist]);
+
+  // Use arrangement state hook
+  const arrangementState = useArrangementState(selectedSong, {
+    onSongUpdate: handleArrangementUpdate
   });
 
   // Setlist persistence state
@@ -785,6 +833,9 @@ const ControlPanel: React.FC = () => {
       if (showDisplayPanel && !target.closest('[data-panel="display"]')) {
         setShowDisplayPanel(false);
       }
+      if (showThemePanel && !target.closest('[data-panel="theme"]')) {
+        setShowThemePanel(false);
+      }
       if (showBackgroundDropdown && !target.closest('[data-panel="background"]')) {
         setShowBackgroundDropdown(false);
       }
@@ -800,7 +851,7 @@ const ControlPanel: React.FC = () => {
 
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
-  }, [showDisplayPanel, showBackgroundDropdown, expandedPlaylistIds.size]);
+  }, [showDisplayPanel, showThemePanel, showBackgroundDropdown, expandedPlaylistIds.size]);
 
   const loadDisplays = async () => {
     const displayList = await window.electronAPI.getDisplays();
@@ -964,47 +1015,136 @@ const ControlPanel: React.FC = () => {
     setShowSongEditor(true);
   }, []);
 
-  // Prayer/Sermon express editor functions
+  // Prayer/Sermon editor functions
   const closePrayerEditor = useCallback(() => {
     setShowPrayerEditor(false);
     setEditingPrayerPresentation(null);
-    setPrayerExpressText('');
   }, []);
 
   const startEditingPrayerPresentation = useCallback((presentation: Presentation) => {
     if (!presentation.quickModeData) return;
-
-    const qmd = presentation.quickModeData;
-    // Convert to express text format
-    // Format: Each point separated by blank line
-    // Line 1: Hebrew subtitle
-    // Line 2: ~English subtitle translation (optional, prefix with ~)
-    // Line 3: --- (separator for description)
-    // Line 4: Hebrew description
-    // Line 5: ~~English description translation (optional, prefix with ~~)
-    // Line 6: @hebrewReference | englishReference (if exists)
-    const expressText = qmd.subtitles.map(subtitle => {
-      const lines: string[] = [];
-      if (subtitle.subtitle) lines.push(subtitle.subtitle);
-      if (subtitle.subtitleTranslation) lines.push('~' + subtitle.subtitleTranslation);
-      if (subtitle.description && subtitle.description !== subtitle.subtitle) {
-        lines.push('---');
-        lines.push(subtitle.description);
-        if (subtitle.descriptionTranslation) lines.push('~~' + subtitle.descriptionTranslation);
-      }
-      if (subtitle.bibleRef?.reference || subtitle.bibleRef?.hebrewReference) {
-        const refParts: string[] = [];
-        if (subtitle.bibleRef.hebrewReference) refParts.push(subtitle.bibleRef.hebrewReference);
-        if (subtitle.bibleRef.reference) refParts.push(subtitle.bibleRef.reference);
-        lines.push('@' + refParts.join(' | '));
-      }
-      return lines.join('\n');
-    }).join('\n\n');
-
-    setPrayerExpressText(expressText);
     setEditingPrayerPresentation(presentation);
     setShowPrayerEditor(true);
-  }, []);
+    // Ensure Bible books are loaded for the editor
+    if (bibleBooks.length === 0) {
+      fetchBibleBooks();
+    }
+  }, [bibleBooks.length, fetchBibleBooks]);
+
+  // Single slide editor functions
+  const handleEditSlide = useCallback((slideIndex: number) => {
+    if (!selectedSong) return;
+    setEditingSlideIndex(slideIndex);
+    setIsAddingNewSlide(false);
+    setShowSlideEditor(true);
+  }, [selectedSong]);
+
+  const handleAddSlide = useCallback(() => {
+    if (!selectedSong) return;
+    setEditingSlideIndex(selectedSong.slides.length); // Index for new slide
+    setIsAddingNewSlide(true);
+    setShowSlideEditor(true);
+  }, [selectedSong]);
+
+  const handleSaveSlide = useCallback(async (slideIndex: number, updatedSlide: { originalText?: string; transliteration?: string; translation?: string; translationOverflow?: string; verseType?: string }) => {
+    if (!selectedSong) return;
+
+    // Create new slides array
+    const newSlides = [...selectedSong.slides];
+
+    if (isAddingNewSlide) {
+      // Adding a new slide at the end
+      newSlides.push(updatedSlide);
+    } else {
+      // Editing an existing slide
+      newSlides[slideIndex] = { ...newSlides[slideIndex], ...updatedSlide };
+    }
+
+    try {
+      // Save to database
+      await window.electronAPI.updateSong(selectedSong.id, { slides: newSlides });
+
+      // Refresh songs list from database
+      await loadSongs();
+
+      // Update local state
+      const updatedSong = { ...selectedSong, slides: newSlides };
+      setSelectedSong(updatedSong);
+
+      // Update any setlist items containing this song
+      setSetlist(prev => prev.map(item => {
+        if (item.type === 'song' && item.song?.id === selectedSong.id) {
+          return { ...item, song: { ...item.song, slides: newSlides } };
+        }
+        return item;
+      }));
+
+      // If this slide is currently live (only for edits, not new slides), re-broadcast
+      if (!isAddingNewSlide && liveSongId === selectedSong.id && liveSlideIndex === slideIndex) {
+        const slide = newSlides[slideIndex];
+        window.electronAPI.sendSlide({
+          songId: selectedSong.id,
+          slideIndex: slideIndex,
+          displayMode: displayMode,
+          isBlank: false,
+          songTitle: selectedSong.title,
+          contentType: 'song',
+          backgroundImage: selectedBackground || undefined,
+          slideData: {
+            originalText: slide.originalText,
+            transliteration: slide.transliteration,
+            translation: slide.translation,
+            translationOverflow: slide.translationOverflow,
+            verseType: slide.verseType,
+            originalLanguage: selectedSong.originalLanguage || 'he'
+          }
+        });
+      }
+
+      // Close modal
+      setShowSlideEditor(false);
+      setEditingSlideIndex(null);
+      setIsAddingNewSlide(false);
+    } catch (error) {
+      console.error('Failed to save slide:', error);
+    }
+  }, [selectedSong, liveSongId, liveSlideIndex, displayMode, setSetlist, isAddingNewSlide, loadSongs, selectedBackground]);
+
+  const handleDeleteSlide = useCallback(async (slideIndex: number) => {
+    if (!selectedSong || selectedSong.slides.length <= 1) {
+      alert('Cannot delete the last slide. A song must have at least one slide.');
+      return;
+    }
+
+    // Create new slides array without the deleted slide
+    const newSlides = selectedSong.slides.filter((_, idx) => idx !== slideIndex);
+
+    try {
+      // Save to database
+      await window.electronAPI.updateSong(selectedSong.id, { slides: newSlides });
+
+      // Refresh songs list from database
+      await loadSongs();
+
+      // Update local state
+      const updatedSong = { ...selectedSong, slides: newSlides };
+      setSelectedSong(updatedSong);
+
+      // Update any setlist items containing this song
+      setSetlist(prev => prev.map(item => {
+        if (item.type === 'song' && item.song?.id === selectedSong.id) {
+          return { ...item, song: { ...item.song, slides: newSlides } };
+        }
+        return item;
+      }));
+
+      // Close modal
+      setShowSlideEditor(false);
+      setEditingSlideIndex(null);
+    } catch (error) {
+      console.error('Failed to delete slide:', error);
+    }
+  }, [selectedSong, setSetlist, loadSongs]);
 
   // Memoized deleteSongById
   const deleteSongById = useCallback(async (songId: string) => {
@@ -1141,6 +1281,7 @@ const ControlPanel: React.FC = () => {
           translation: slide.translation,
           translationOverflow: slide.translationOverflow,
           verseType: slide.verseType,
+          originalLanguage: song.originalLanguage || 'he', // Pass language for single-language song handling
           // Prayer/Sermon theme fields (mapped from slide structure when available)
           title: (slide as any).title,
           titleTranslation: (slide as any).titleTranslation,
@@ -1448,8 +1589,9 @@ const ControlPanel: React.FC = () => {
       const slideData = contentType === 'bible' ? {
         ...slide,
         reference: (slide as any).hebrewReference || song.title,
-        referenceEnglish: (slide as any).reference
-      } : slide;
+        referenceEnglish: (slide as any).reference,
+        originalLanguage: song.originalLanguage
+      } : { ...slide, originalLanguage: song.originalLanguage };
       setLiveState({ slideData, contentType, songId: song.id, slideIndex: 0 });
 
       sendCurrentSlide(song, 0, displayMode, undefined, contentType);
@@ -1484,12 +1626,50 @@ const ControlPanel: React.FC = () => {
     const slideData = currentContentType === 'bible' ? {
       ...slide,
       reference: (slide as any).hebrewReference || selectedSong.title,
-      referenceEnglish: (slide as any).reference
-    } : slide;
+      referenceEnglish: (slide as any).reference,
+      originalLanguage: selectedSong.originalLanguage
+    } : { ...slide, originalLanguage: selectedSong.originalLanguage };
     setLiveState({ slideData, contentType: currentContentType, songId: selectedSong.id, slideIndex: newIndex });
 
     sendCurrentSlide(selectedSong, newIndex, displayMode, combinedIndices, currentContentType);
   }, [selectedSong, sendCurrentSlide, displayMode, currentContentType, selectedOBSBibleTheme, selectedOBSSongsTheme, selectedOBSPrayerTheme, autoPlayActive]);
+
+  // Track previous arrangement slide index to detect changes from arrangement navigation
+  const prevArrangementSlideIndexRef = useRef<number>(-1);
+
+  // Sync arrangement state to display when navigating via arrangement
+  useEffect(() => {
+    // Only sync when arrangement is active and not in edit mode
+    if (!arrangementState.activeArrangement || arrangementState.isArrangementMode) {
+      prevArrangementSlideIndexRef.current = -1;
+      return;
+    }
+
+    const actualIndex = arrangementState.actualSlideIndex;
+
+    // Only sync if the index actually changed (from arrangement navigation)
+    if (actualIndex >= 0 && actualIndex !== prevArrangementSlideIndexRef.current && selectedSong) {
+      prevArrangementSlideIndexRef.current = actualIndex;
+
+      // Update current slide index and send to display
+      setCurrentSlideIndex(actualIndex);
+      setIsBlank(false);
+
+      // Update live state
+      const slide = selectedSong.slides[actualIndex];
+      if (slide) {
+        const slideData = currentContentType === 'bible' ? {
+          ...slide,
+          reference: (slide as any).hebrewReference || selectedSong.title,
+          referenceEnglish: (slide as any).reference,
+          originalLanguage: selectedSong.originalLanguage
+        } : { ...slide, originalLanguage: selectedSong.originalLanguage };
+        setLiveState({ slideData, contentType: currentContentType, songId: selectedSong.id, slideIndex: actualIndex });
+
+        sendCurrentSlide(selectedSong, actualIndex, displayMode, undefined, currentContentType);
+      }
+    }
+  }, [arrangementState.activeArrangement, arrangementState.isArrangementMode, arrangementState.actualSlideIndex, selectedSong, currentContentType, displayMode, sendCurrentSlide]);
 
   // Memoized selectCombinedSlide (for original-only mode)
   const selectCombinedSlide = useCallback((combinedIndex: number) => {
@@ -1518,8 +1698,9 @@ const ControlPanel: React.FC = () => {
     const slideData = currentContentType === 'bible' ? {
       ...slide,
       reference: (slide as any).hebrewReference || selectedSong.title,
-      referenceEnglish: (slide as any).reference
-    } : slide;
+      referenceEnglish: (slide as any).reference,
+      originalLanguage: selectedSong.originalLanguage
+    } : { ...slide, originalLanguage: selectedSong.originalLanguage };
     setLiveState({ slideData, contentType: currentContentType, songId: selectedSong.id, slideIndex: firstOriginalIndex });
 
     // Send slide with combined indices
@@ -1530,6 +1711,13 @@ const ControlPanel: React.FC = () => {
   const nextSlide = useCallback(() => {
     if (!selectedSong) return;
 
+    // If arrangement is active (not in edit mode, but arrangement selected), use arrangement navigation
+    if (arrangementState.activeArrangement && !arrangementState.isArrangementMode) {
+      arrangementState.goToNextSlide();
+      // The effect below will sync the actual slide index to the display
+      return;
+    }
+
     // If in original mode with combined slides, navigate by combined index
     if (displayMode === 'original' && combinedSlidesData) {
       if (selectedCombinedIndex < combinedSlidesData.combinedSlides.length - 1) {
@@ -1539,11 +1727,18 @@ const ControlPanel: React.FC = () => {
     } else if (currentSlideIndex < selectedSong.slides.length - 1) {
       goToSlide(currentSlideIndex + 1);
     }
-  }, [selectedSong, displayMode, combinedSlidesData, selectedCombinedIndex, selectCombinedSlide, currentSlideIndex, goToSlide]);
+  }, [selectedSong, displayMode, combinedSlidesData, selectedCombinedIndex, selectCombinedSlide, currentSlideIndex, goToSlide, arrangementState]);
 
   // Memoized prevSlide
   const prevSlide = useCallback(() => {
     if (!selectedSong) return;
+
+    // If arrangement is active (not in edit mode, but arrangement selected), use arrangement navigation
+    if (arrangementState.activeArrangement && !arrangementState.isArrangementMode) {
+      arrangementState.goToPrevSlide();
+      // The effect below will sync the actual slide index to the display
+      return;
+    }
 
     // If in original mode with combined slides, navigate by combined index
     if (displayMode === 'original' && combinedSlidesData) {
@@ -1554,7 +1749,7 @@ const ControlPanel: React.FC = () => {
     } else if (currentSlideIndex > 0) {
       goToSlide(currentSlideIndex - 1);
     }
-  }, [selectedSong, displayMode, combinedSlidesData, selectedCombinedIndex, selectCombinedSlide, currentSlideIndex, goToSlide]);
+  }, [selectedSong, displayMode, combinedSlidesData, selectedCombinedIndex, selectCombinedSlide, currentSlideIndex, goToSlide, arrangementState]);
 
   // Memoized selectSlide
   const selectSlide = useCallback((index: number) => {
@@ -1585,8 +1780,9 @@ const ControlPanel: React.FC = () => {
         const slideData = currentContentType === 'bible' ? {
           ...slide,
           reference: (slide as any).hebrewReference || selectedSong.title,
-          referenceEnglish: (slide as any).reference
-        } : slide;
+          referenceEnglish: (slide as any).reference,
+          originalLanguage: selectedSong.originalLanguage
+        } : { ...slide, originalLanguage: selectedSong.originalLanguage };
         setLiveState({ slideData, contentType: currentContentType, songId: selectedSong.id, slideIndex: currentSlideIndex });
         sendCurrentSlide(selectedSong, currentSlideIndex, displayMode, undefined, currentContentType);
       }
@@ -1921,6 +2117,17 @@ const ControlPanel: React.FC = () => {
     { quickSlideTextareaRef }
   );
 
+  // Slide code keyboard navigation
+  const { currentInput: slideCodeInput, isTyping: isTypingSlideCode } = useSlideKeyboardNav({
+    codeMap: slideCodeMap,
+    onNavigate: useCallback((slideIndex: number) => {
+      if (selectedSong) {
+        goToSlide(slideIndex);
+      }
+    }, [selectedSong, goToSlide]),
+    enabled: !!selectedSong && !showQuickSlideModal && !showSongEditor && !showPrayerEditor && !showSlideEditor
+  });
+
   // Load Bible books when switching to Bible panel
   const handleResourcePanelChange = useCallback((panel: ResourcePanel) => {
     // Direct state update for instant tab switch
@@ -1940,6 +2147,13 @@ const ControlPanel: React.FC = () => {
       setCountdownTargetTime(`${hours}:${minutes}`);
     }
   }, [activeResourcePanel, bibleBooks.length, isCountdownActive, fetchBibleBooks]);
+
+  // Fetch Bible books when QuickModeWizard opens and books aren't loaded
+  useEffect(() => {
+    if (showQuickModeWizard && bibleBooks.length === 0) {
+      fetchBibleBooks();
+    }
+  }, [showQuickModeWizard, bibleBooks.length, fetchBibleBooks]);
 
   // Reset Quick Mode wizard state (used before opening wizard with preset values)
   const resetQuickModeWizard = (showAfterReset = false) => {
@@ -1974,7 +2188,15 @@ const ControlPanel: React.FC = () => {
 
         return false;
       })
-      .sort((a, b) => a.title.localeCompare(b.title, 'he'));
+      .sort((a, b) => {
+        // Hebrew songs first, then other languages
+        const aIsHebrew = a.originalLanguage === 'he' ? 0 : 1;
+        const bIsHebrew = b.originalLanguage === 'he' ? 0 : 1;
+        if (aIsHebrew !== bIsHebrew) return aIsHebrew - bIsHebrew;
+        // Within same language group, sort alphabetically (א to ת for Hebrew)
+        const locale = a.originalLanguage === 'he' ? 'he' : 'en';
+        return a.title.localeCompare(b.title, locale, { sensitivity: 'base' });
+      });
   }, [songs, searchQuery]);
 
   const currentSlide = selectedSong?.slides[currentSlideIndex];
@@ -2073,14 +2295,56 @@ const ControlPanel: React.FC = () => {
         bibleThemes={bibleThemes}
         prayerThemes={prayerThemes}
         obsThemes={obsThemes}
-        selectedTheme={selectedTheme}
-        selectedStageTheme={selectedStageTheme}
-        selectedBibleTheme={selectedBibleTheme}
-        selectedPrayerTheme={selectedPrayerTheme}
-        selectedOBSTheme={selectedOBSTheme}
         selectedOBSSongsTheme={selectedOBSSongsTheme}
         selectedOBSBibleTheme={selectedOBSBibleTheme}
         selectedOBSPrayerTheme={selectedOBSPrayerTheme}
+        onApplyOBSTheme={applyOBSThemeCallback}
+        showThemePanel={showThemePanel}
+        selectedTheme={selectedTheme}
+        selectedBibleTheme={selectedBibleTheme}
+        selectedPrayerTheme={selectedPrayerTheme}
+        selectedStageTheme={selectedStageTheme}
+        onShowThemePanelChange={setShowThemePanel}
+        onApplyViewerTheme={applyViewerTheme}
+        onApplyBibleTheme={applyBibleThemeCallback}
+        onApplyPrayerTheme={applyPrayerThemeCallback}
+        onApplyStageTheme={applyStageTheme}
+        onCreateTheme={(themeType) => {
+          setShowThemePanel(false);
+          if (themeType === 'songs') {
+            navigate('/theme-editor?new=true');
+          } else if (themeType === 'bible') {
+            navigate('/bible-theme-editor?new=true');
+          } else if (themeType === 'prayer') {
+            navigate('/prayer-theme-editor?new=true');
+          } else if (themeType === 'stage') {
+            navigate('/stage-monitor-editor?new=true');
+          } else if (themeType === 'obs-songs') {
+            navigate('/obs-songs-theme-editor?new=true');
+          } else if (themeType === 'obs-bible') {
+            navigate('/obs-bible-theme-editor?new=true');
+          } else if (themeType === 'obs-prayer') {
+            navigate('/obs-prayer-theme-editor?new=true');
+          }
+        }}
+        onEditTheme={(themeType, themeId) => {
+          setShowThemePanel(false);
+          if (themeType === 'songs') {
+            navigate(`/theme-editor?id=${themeId}`);
+          } else if (themeType === 'bible') {
+            navigate(`/bible-theme-editor?id=${themeId}`);
+          } else if (themeType === 'prayer') {
+            navigate(`/prayer-theme-editor?id=${themeId}`);
+          } else if (themeType === 'stage') {
+            navigate(`/stage-monitor-editor?id=${themeId}`);
+          } else if (themeType === 'obs-songs') {
+            navigate(`/obs-songs-theme-editor?id=${themeId}`);
+          } else if (themeType === 'obs-bible') {
+            navigate(`/obs-bible-theme-editor?id=${themeId}`);
+          } else if (themeType === 'obs-prayer') {
+            navigate(`/obs-prayer-theme-editor?id=${themeId}`);
+          }
+        }}
         obsServerRunning={obsServerRunning}
         obsServerUrl={obsServerUrl}
         onShowDisplayPanelChange={setShowDisplayPanel}
@@ -2097,12 +2361,6 @@ const ControlPanel: React.FC = () => {
         onOpenDisplay={openDisplay}
         onCloseDisplay={closeDisplay}
         onIdentifyDisplay={(displayId) => window.electronAPI.identifyDisplays(displayId)}
-        onApplyViewerTheme={applyViewerTheme}
-        onApplyStageTheme={applyStageTheme}
-        onApplyBibleTheme={applyBibleThemeCallback}
-        onApplyPrayerTheme={applyPrayerThemeCallback}
-        onApplyOBSTheme={applyOBSThemeCallback}
-        onCreateNewTheme={handleCreateNewTheme}
         onCloseDisplayPanel={handleCloseDisplayPanel}
         onToggleOBSServer={async () => {
           try {
@@ -2550,8 +2808,15 @@ const ControlPanel: React.FC = () => {
           }}
           onSetAutoPlayInterval={setAutoPlayInterval}
           onSetCurrentPresentationSlideIndex={setCurrentPresentationSlideIndex}
+          onSlideCodeMapChange={setSlideCodeMap}
+          onEditSlide={handleEditSlide}
+          onAddSlide={handleAddSlide}
+          arrangementState={arrangementState}
         />
       </main>
+
+      {/* Slide Code Keyboard Navigation Indicator */}
+      <SlideCodeIndicator currentInput={slideCodeInput} isTyping={isTypingSlideCode} />
 
       {/* Section Title Modal */}
       {showSectionModal && (
@@ -2676,6 +2941,13 @@ const ControlPanel: React.FC = () => {
                 if (selectedSong?.id === songData.id) {
                   setSelectedSong({ ...selectedSong, ...songData, id: songData.id });
                 }
+                // Update any setlist items that contain this song
+                setSetlist(prev => prev.map(item => {
+                  if (item.type === 'song' && item.song?.id === songData.id) {
+                    return { ...item, song: { ...item.song, ...songData, id: songData.id } };
+                  }
+                  return item;
+                }));
               } else {
                 await window.electronAPI.createSong({
                   title: songData.title,
@@ -2695,18 +2967,44 @@ const ControlPanel: React.FC = () => {
         />
       )}
 
-      {/* Prayer/Sermon Express Editor Modal */}
+      {/* Single Slide Editor Modal */}
+      {showSlideEditor && selectedSong && editingSlideIndex !== null && (
+        <SlideEditorModal
+          slide={isAddingNewSlide ? { originalText: '', transliteration: '', translation: '', verseType: 'Verse' } : selectedSong.slides[editingSlideIndex]}
+          slideIndex={editingSlideIndex}
+          originalLanguage={selectedSong.originalLanguage || 'he'}
+          isNewSlide={isAddingNewSlide}
+          onClose={() => {
+            setShowSlideEditor(false);
+            setEditingSlideIndex(null);
+            setIsAddingNewSlide(false);
+          }}
+          onSave={handleSaveSlide}
+          onDelete={handleDeleteSlide}
+        />
+      )}
+
+      {/* Prayer/Sermon Editor Modal */}
       {showPrayerEditor && editingPrayerPresentation && (
         <PrayerEditorModal
           presentation={editingPrayerPresentation}
+          bibleBooks={bibleBooks}
           onClose={closePrayerEditor}
-          onSave={async (presentationId, subtitles) => {
+          onSave={async (presentationId, subtitles, title, titleTranslation) => {
             try {
               const updatedQuickModeData = {
                 ...editingPrayerPresentation.quickModeData!,
+                title: title || editingPrayerPresentation.quickModeData!.title,
+                titleTranslation: titleTranslation,
                 subtitles
               };
+
+              // Update the presentation title if it changed
+              const typeLabel = updatedQuickModeData.type === 'sermon' ? 'Sermon' : updatedQuickModeData.type === 'prayer' ? 'Prayer' : 'Announcements';
+              const newPresentationTitle = `${typeLabel}: ${updatedQuickModeData.title}`;
+
               await window.electronAPI.updatePresentation(presentationId, {
+                title: newPresentationTitle,
                 quickModeData: updatedQuickModeData
               });
               const presentationList = await window.electronAPI.getPresentations();
@@ -2907,10 +3205,7 @@ const ControlPanel: React.FC = () => {
           contextMenu={setlistContextMenu}
           onClose={() => setSetlistContextMenu(null)}
           onEditSong={startEditingSong}
-          onEditPrayerPresentation={(presentation) => {
-            setEditingPrayerPresentation(presentation);
-            setShowPrayerEditor(true);
-          }}
+          onEditPrayerPresentation={startEditingPrayerPresentation}
           onNavigateToPresentation={(id) => navigate(`/presentation-editor?id=${id}`)}
           onEditPlaylist={openEditPlaylistModal}
           onRenameSection={(itemId, newName) => {

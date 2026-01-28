@@ -8,6 +8,8 @@ import { getRemoteControlUI } from './remoteControlUI';
 import { getSongs } from '../database/songs';
 import { getAllMediaItems } from '../database/media';
 import { getBibleBooks, getBibleVerses } from './bibleService';
+import { getPresentations, getPresentation } from '../database/presentations';
+import type { DisplayManager } from '../windows/displayManager';
 
 const FIREWALL_RULE_NAME = 'SoluCast Remote Control';
 
@@ -26,6 +28,7 @@ const VALID_COMMANDS = new Set([
   'library:addSong', 'library:selectSong',
   'library:addBible', 'library:selectBible',
   'library:addMedia', 'library:selectMedia',
+  'library:addPresentation', 'library:selectPresentation',
   'media:stop',
   'audio:play', 'audio:pause', 'audio:stop', 'audio:volume', 'audio:seek',
   'video:play', 'video:pause', 'video:stop', 'video:seek', 'video:volume',
@@ -37,6 +40,126 @@ const clientRateLimits = new Map<string, { lastCall: number; count: number }>();
 
 // Brute-force protection: track failed auth attempts per socket
 const authAttempts = new Map<string, number>();
+
+// Periodic cleanup interval for rate limiter maps (every 5 minutes)
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+const RATE_LIMIT_STALE_MS = 60 * 1000; // Consider entries stale after 1 minute of inactivity
+
+let cleanupInterval: ReturnType<typeof setInterval> | null = null;
+
+function startMapCleanup(): void {
+  if (cleanupInterval) return;
+  cleanupInterval = setInterval(() => {
+    const now = Date.now();
+    // Clean up stale rate limit entries
+    Array.from(clientRateLimits.entries()).forEach(([socketId, limiter]) => {
+      if (now - limiter.lastCall > RATE_LIMIT_STALE_MS) {
+        clientRateLimits.delete(socketId);
+      }
+    });
+  }, CLEANUP_INTERVAL_MS);
+}
+
+function stopMapCleanup(): void {
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+  }
+}
+
+// Simple cache for database queries to reduce latency
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+const CACHE_TTL_MS = 30000; // 30 second cache
+const BIBLE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minute cache for Bible (rarely changes)
+
+const songsCache: { entry: CacheEntry<any[]> | null } = { entry: null };
+const bibleCache: { books: CacheEntry<any[]> | null; chapters: Map<string, CacheEntry<any>> } = {
+  books: null,
+  chapters: new Map()
+};
+
+async function getCachedSongs(): Promise<any[]> {
+  const now = Date.now();
+  if (songsCache.entry && (now - songsCache.entry.timestamp) < CACHE_TTL_MS) {
+    return songsCache.entry.data;
+  }
+  const songs = await getSongs();
+  songsCache.entry = { data: songs, timestamp: now };
+  return songs;
+}
+
+async function getCachedBibleBooks(): Promise<any[]> {
+  const now = Date.now();
+  if (bibleCache.books && (now - bibleCache.books.timestamp) < BIBLE_CACHE_TTL_MS) {
+    return bibleCache.books.data;
+  }
+  const books = await getBibleBooks();
+  bibleCache.books = { data: books, timestamp: now };
+  return books;
+}
+
+async function getCachedBibleChapter(book: string, chapter: number): Promise<any> {
+  const now = Date.now();
+  const cacheKey = `${book}:${chapter}`;
+  const cached = bibleCache.chapters.get(cacheKey);
+  if (cached && (now - cached.timestamp) < BIBLE_CACHE_TTL_MS) {
+    return cached.data;
+  }
+  const result = await getBibleVerses(book, chapter);
+  bibleCache.chapters.set(cacheKey, { data: result, timestamp: now });
+
+  // Limit cache size to prevent memory bloat (keep last 20 chapters)
+  if (bibleCache.chapters.size > 20) {
+    const oldestKey = bibleCache.chapters.keys().next().value;
+    if (oldestKey) bibleCache.chapters.delete(oldestKey);
+  }
+
+  return result;
+}
+
+// Media cache (synchronous function but still worth caching to avoid disk I/O)
+const mediaCache: { entry: CacheEntry<any[]> | null } = { entry: null };
+
+function getCachedMedia(): any[] {
+  const now = Date.now();
+  if (mediaCache.entry && (now - mediaCache.entry.timestamp) < CACHE_TTL_MS) {
+    return mediaCache.entry.data;
+  }
+  const media = getAllMediaItems();
+  mediaCache.entry = { data: media, timestamp: now };
+  return media;
+}
+
+// Presentations cache
+const presentationsCache: { entry: CacheEntry<any[]> | null } = { entry: null };
+
+async function getCachedPresentations(): Promise<any[]> {
+  const now = Date.now();
+  if (presentationsCache.entry && (now - presentationsCache.entry.timestamp) < CACHE_TTL_MS) {
+    return presentationsCache.entry.data;
+  }
+  const presentations = await getPresentations();
+  presentationsCache.entry = { data: presentations, timestamp: now };
+  return presentations;
+}
+
+// Invalidate songs cache (call when songs are modified)
+export function invalidateSongsCache(): void {
+  songsCache.entry = null;
+}
+
+// Invalidate media cache (call when media is modified)
+export function invalidateMediaCache(): void {
+  mediaCache.entry = null;
+}
+
+// Invalidate presentations cache (call when presentations are modified)
+export function invalidatePresentationsCache(): void {
+  presentationsCache.entry = null;
+}
 
 function checkClientRateLimit(socketId: string): boolean {
   const now = Date.now();
@@ -128,6 +251,13 @@ export interface RemoteControlState {
     verseType?: string;
     isCombined?: boolean;
   }>;
+  // Full slide data for direct broadcasting (not sent to mobile clients)
+  fullSlides?: Array<any>;
+  songTitle?: string;
+  // Full setlist with complete song/presentation data (not sent to mobile clients)
+  fullSetlist?: Array<any>;
+  // Current content type for theme selection
+  currentContentType?: 'song' | 'bible' | 'prayer' | 'presentation';
   activeTools: string[];
   onlineViewerCount: number;
   activeMedia: {
@@ -162,6 +292,91 @@ export interface RemoteCommand {
   payload?: any;
 }
 
+// Simple hash function for state comparison
+function simpleHash(obj: any): string {
+  return JSON.stringify(obj);
+}
+
+// Combined slide types for original-only mode (replicated from slideUtils.ts)
+interface CombinedSlideItem {
+  type: 'single' | 'combined';
+  originalIndex?: number;
+  originalIndices?: number[];
+  slide?: any;
+  slides?: any[];
+  label: string;
+  verseType: string;
+}
+
+// Create combined slides for original-only mode
+function createCombinedSlides(slides: any[]): CombinedSlideItem[] {
+  if (!slides || slides.length === 0) {
+    return [];
+  }
+
+  const combinedSlides: CombinedSlideItem[] = [];
+
+  let i = 0;
+  while (i < slides.length) {
+    const currentType = slides[i].verseType || '';
+
+    // If slide has no verseType, keep it as single
+    if (!currentType) {
+      combinedSlides.push({
+        type: 'single',
+        originalIndex: i,
+        slide: slides[i],
+        label: `${i + 1}`,
+        verseType: ''
+      });
+      i++;
+      continue;
+    }
+
+    // Find all consecutive slides with the same verseType
+    let groupEnd = i;
+    while (groupEnd < slides.length) {
+      const nextType = slides[groupEnd].verseType || '';
+      if (nextType !== currentType) break;
+      groupEnd++;
+    }
+
+    // Pair slides within this group (2-by-2)
+    let j = i;
+    while (j < groupEnd) {
+      const remainingInGroup = groupEnd - j;
+      const slidesToCombine = Math.min(2, remainingInGroup);
+
+      if (slidesToCombine >= 2) {
+        // Combine slides
+        const indices = Array.from({ length: slidesToCombine }, (_, k) => j + k);
+        combinedSlides.push({
+          type: 'combined',
+          originalIndices: indices,
+          slides: indices.map(idx => slides[idx]),
+          label: `${j + 1}-${j + slidesToCombine}`,
+          verseType: currentType
+        });
+        j += slidesToCombine;
+      } else {
+        // Last slide stays single
+        combinedSlides.push({
+          type: 'single',
+          originalIndex: j,
+          slide: slides[j],
+          label: `${j + 1}`,
+          verseType: currentType
+        });
+        j += 1;
+      }
+    }
+
+    i = groupEnd;
+  }
+
+  return combinedSlides;
+}
+
 class RemoteControlServer extends EventEmitter {
   private httpServer: http.Server | null = null;
   private io: SocketIOServer | null = null;
@@ -169,6 +384,16 @@ class RemoteControlServer extends EventEmitter {
   private pin: string = '';
   private authenticatedSockets: Set<string> = new Set();
   private controlWindow: BrowserWindow | null = null;
+  private displayManager: DisplayManager | null = null;
+  private commandHandlerActive: boolean = false; // True when ControlPanel's useRemoteControl is active
+  private directlyLoadedContent: boolean = false; // True when content was loaded via direct commands (not ControlPanel)
+  private broadcastDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingBroadcast: boolean = false;
+  // Track last broadcast state for diff optimization
+  private lastBroadcastHash: {
+    setlist: string;
+    slides: string;
+  } = { setlist: '', slides: '' };
   private currentState: RemoteControlState = {
     currentItem: null,
     currentSlideIndex: 0,
@@ -184,6 +409,9 @@ class RemoteControlServer extends EventEmitter {
     activeVideo: null,
     activeYoutube: null
   };
+  // Cache for combined slides (original mode) and raw slides
+  private combinedSlidesCache: CombinedSlideItem[] = [];
+  private rawSlidesCache: any[] = [];
   private sessionTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   constructor() {
@@ -257,14 +485,17 @@ class RemoteControlServer extends EventEmitter {
         }
       });
 
-      this.httpServer.listen(port, '0.0.0.0', async () => {
+      this.httpServer.listen(port, '0.0.0.0', () => {
         console.log(`[RemoteControlServer] Started on port ${port}`);
         this.port = port;
 
-        // Ensure Windows Firewall allows connections on this port
-        await ensureFirewallRule(port);
+        // Ensure Windows Firewall allows connections (non-blocking)
+        ensureFirewallRule(port).catch(() => {
+          // Ignore errors - already logged in ensureFirewallRule
+        });
 
         // Initialize Socket.IO - restrict CORS to local network only
+        // Configure for low latency: WebSocket first, minimal ping interval, compression enabled
         this.io = new SocketIOServer(this.httpServer!, {
           cors: {
             origin: (origin, callback) => {
@@ -282,8 +513,26 @@ class RemoteControlServer extends EventEmitter {
               callback(null, isAllowed);
             },
             methods: ['GET', 'POST']
+          },
+          // Performance optimizations for low latency
+          transports: ['websocket', 'polling'], // WebSocket first for lower latency
+          pingInterval: 10000, // 10 seconds between pings (default is 25s)
+          pingTimeout: 5000,   // 5 second timeout (default is 20s)
+          upgradeTimeout: 5000, // Faster upgrade to WebSocket
+          // Enable per-message compression for smaller payload sizes
+          perMessageDeflate: {
+            threshold: 1024, // Only compress messages > 1KB
+            zlibDeflateOptions: {
+              chunkSize: 16 * 1024 // 16KB chunks for efficient compression
+            },
+            zlibInflateOptions: {
+              chunkSize: 16 * 1024
+            }
           }
         });
+
+        // Start periodic cleanup of rate limiter maps
+        startMapCleanup();
 
         this.setupSocketHandlers();
 
@@ -299,11 +548,20 @@ class RemoteControlServer extends EventEmitter {
    * Stop the server
    */
   stop(): void {
+    // Stop periodic cleanup
+    stopMapCleanup();
+
     // Clear all session timeouts
     for (const timeout of this.sessionTimeouts.values()) {
       clearTimeout(timeout);
     }
     this.sessionTimeouts.clear();
+
+    // Clear broadcast debounce timer
+    if (this.broadcastDebounceTimer) {
+      clearTimeout(this.broadcastDebounceTimer);
+      this.broadcastDebounceTimer = null;
+    }
 
     // Clear authenticated sockets and auth attempts
     this.authenticatedSockets.clear();
@@ -349,6 +607,13 @@ class RemoteControlServer extends EventEmitter {
   }
 
   /**
+   * Get the current setlist from the server's state
+   */
+  getSetlist(): any[] {
+    return this.currentState.fullSetlist || [];
+  }
+
+  /**
    * Set the control window reference for forwarding commands
    */
   setControlWindow(window: BrowserWindow): void {
@@ -356,23 +621,161 @@ class RemoteControlServer extends EventEmitter {
   }
 
   /**
+   * Set the display manager reference for direct slide broadcasting
+   */
+  setDisplayManager(manager: DisplayManager): void {
+    this.displayManager = manager;
+    console.log('[RemoteControlServer] DisplayManager reference set');
+  }
+
+  /**
+   * Set whether the command handler (ControlPanel's useRemoteControl) is active
+   */
+  setCommandHandlerActive(active: boolean): void {
+    this.commandHandlerActive = active;
+    console.log(`[RemoteControlServer] Command handler active: ${active}`);
+  }
+
+  /**
    * Update state and broadcast to all authenticated clients
    */
   updateState(state: Partial<RemoteControlState>): void {
+    // When ControlPanel syncs setlist, handle carefully:
+    // - If ControlPanel sends empty setlist, accept it (user cleared the setlist)
+    // - If ControlPanel sends non-empty setlist missing our items, preserve ours
+    if (state.fullSetlist !== undefined && this.currentState.fullSetlist) {
+      if (state.fullSetlist.length === 0) {
+        // ControlPanel cleared the setlist - accept this
+        console.log(`[RemoteControlServer] ControlPanel cleared setlist - syncing to remote`);
+        // Also clear directlyLoadedContent since the content source is gone
+        this.directlyLoadedContent = false;
+      } else {
+        // Check if our setlist has items that ControlPanel's doesn't
+        const ourIds = new Set(this.currentState.fullSetlist.map((i: any) => i.id));
+        const theirIds = new Set(state.fullSetlist.map((i: any) => i.id));
+        const weHaveExtra = Array.from(ourIds).some(id => !theirIds.has(id));
+
+        if (weHaveExtra) {
+          // Keep our setlist, don't let ControlPanel overwrite it
+          // Instead, sync our additions back to ControlPanel
+          console.log(`[RemoteControlServer] Preserving locally added setlist items`);
+          delete state.fullSetlist;
+          delete state.setlist;
+        }
+      }
+    }
+
     this.currentState = { ...this.currentState, ...state };
+    // When ControlPanel syncs fullSlides with actual content, it's taking over content control
+    // Only reset directlyLoadedContent if:
+    // 1. ControlPanel is sending non-empty slides
+    // 2. The content is different from what we loaded directly
+    if (state.fullSlides && state.fullSlides.length > 0) {
+      // Check if this is different content from what we loaded - use IDs for reliable comparison
+      const currentContentId = this.currentState.currentItem?.id;
+      const incomingContentId = state.currentItem?.id;
+      const incomingTitle = state.songTitle || 'unknown';
+
+      // Only reset if we have directly loaded content AND this looks like different content
+      if (this.directlyLoadedContent) {
+        // Compare by content ID (more reliable than title which can be duplicated)
+        // Fall back to title comparison only if IDs aren't available
+        const isSameContent = currentContentId && incomingContentId
+          ? currentContentId === incomingContentId
+          : (this.currentState.songTitle || '') === incomingTitle;
+
+        if (!isSameContent) {
+          this.directlyLoadedContent = false;
+          console.log(`[RemoteControlServer] ControlPanel took over with different content: "${incomingTitle}" (ID: ${incomingContentId}, was ID: ${currentContentId})`);
+        } else {
+          console.log(`[RemoteControlServer] Received ${state.fullSlides.length} fullSlides for same content "${incomingTitle}" (ID: ${currentContentId}) - keeping directlyLoadedContent=true`);
+        }
+      } else {
+        console.log(`[RemoteControlServer] Received ${state.fullSlides.length} fullSlides for "${incomingTitle}"`);
+      }
+    } else if (state.fullSlides) {
+      // Empty slides array - don't reset directlyLoadedContent
+      console.log(`[RemoteControlServer] Received empty fullSlides array - ignoring (directlyLoadedContent=${this.directlyLoadedContent})`);
+    }
     this.broadcastState();
   }
 
   /**
    * Broadcast current state to all authenticated clients
+   * Uses debouncing to avoid excessive updates during rapid commands
    */
-  private broadcastState(): void {
+  private broadcastState(immediate: boolean = false): void {
     if (!this.io) return;
+
+    // Mark that we have a pending broadcast
+    this.pendingBroadcast = true;
+
+    // For immediate broadcasts (e.g., slide changes), send right away
+    if (immediate) {
+      this.sendStateToClients();
+      return;
+    }
+
+    // Debounce non-immediate broadcasts (e.g., state sync)
+    if (this.broadcastDebounceTimer) {
+      return; // Already scheduled
+    }
+
+    this.broadcastDebounceTimer = setTimeout(() => {
+      this.broadcastDebounceTimer = null;
+      if (this.pendingBroadcast) {
+        this.sendStateToClients();
+      }
+    }, 16); // ~60fps max update rate
+  }
+
+  /**
+   * Actually send state to all clients
+   * Uses differential updates to reduce data transmission
+   */
+  private sendStateToClients(): void {
+    if (!this.io) return;
+    this.pendingBroadcast = false;
+
+    // Create a copy without fullSlides and fullSetlist (mobile clients don't need the full data)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { fullSlides, fullSetlist, ...stateForClients } = this.currentState;
+
+    // Check what has changed since last broadcast
+    const currentSetlistHash = simpleHash(stateForClients.setlist);
+    const currentSlidesHash = simpleHash(stateForClients.slides);
+
+    const setlistChanged = currentSetlistHash !== this.lastBroadcastHash.setlist;
+    const slidesChanged = currentSlidesHash !== this.lastBroadcastHash.slides;
+
+    if (setlistChanged) {
+      console.log(`[RemoteControlServer] Broadcasting setlist change: ${stateForClients.setlist?.length || 0} items`);
+    }
+
+    // Update hash cache
+    this.lastBroadcastHash.setlist = currentSetlistHash;
+    this.lastBroadcastHash.slides = currentSlidesHash;
+
+    // Create optimized state - omit unchanged arrays to reduce payload
+    const optimizedState: Partial<typeof stateForClients> = {
+      ...stateForClients
+    };
+
+    // Only include arrays if they changed (mobile client keeps last known state)
+    if (!setlistChanged) {
+      delete optimizedState.setlist;
+    }
+    if (!slidesChanged) {
+      delete optimizedState.slides;
+    }
+
+    const numClients = this.authenticatedSockets.size;
+    console.log(`[RemoteControlServer] Sending state to ${numClients} clients, setlist included: ${!!optimizedState.setlist}`);
 
     for (const socketId of this.authenticatedSockets) {
       const socket = this.io.sockets.sockets.get(socketId);
       if (socket) {
-        socket.emit('state', this.currentState);
+        socket.emit('state', optimizedState);
       }
     }
   }
@@ -454,7 +857,7 @@ class RemoteControlServer extends EventEmitter {
         }
         this.resetSessionTimeout(socket.id);
         try {
-          const songs = await getSongs();
+          const songs = await getCachedSongs();
           // Send simplified song data for mobile
           const simplifiedSongs = songs.map((s: any) => ({
             id: s.id,
@@ -477,7 +880,7 @@ class RemoteControlServer extends EventEmitter {
         }
         this.resetSessionTimeout(socket.id);
         try {
-          const songs = await getSongs();
+          const songs = await getCachedSongs();
           const song = songs.find((s: any) => s.id === songId);
           if (song) {
             callback({ song });
@@ -497,7 +900,7 @@ class RemoteControlServer extends EventEmitter {
         }
         this.resetSessionTimeout(socket.id);
         try {
-          const books = await getBibleBooks();
+          const books = await getCachedBibleBooks();
           callback({ books });
         } catch (error) {
           console.error('[RemoteControlServer] Error fetching Bible books:', error);
@@ -512,7 +915,7 @@ class RemoteControlServer extends EventEmitter {
         }
         this.resetSessionTimeout(socket.id);
         try {
-          const result = await getBibleVerses(data.book, data.chapter);
+          const result = await getCachedBibleChapter(data.book, data.chapter);
           callback({ verses: result.verses });
         } catch (error) {
           console.error('[RemoteControlServer] Error fetching Bible chapter:', error);
@@ -520,14 +923,14 @@ class RemoteControlServer extends EventEmitter {
         }
       });
 
-      socket.on('getMedia', async (callback: (data: any) => void) => {
+      socket.on('getMedia', (callback: (data: any) => void) => {
         if (!this.authenticatedSockets.has(socket.id)) {
           callback({ error: 'Not authenticated' });
           return;
         }
         this.resetSessionTimeout(socket.id);
         try {
-          const media = getAllMediaItems();
+          const media = getCachedMedia();
           // Send simplified media data
           const simplifiedMedia = media.map((m: any) => ({
             id: m.id,
@@ -540,6 +943,29 @@ class RemoteControlServer extends EventEmitter {
         } catch (error) {
           console.error('[RemoteControlServer] Error fetching media:', error);
           callback({ error: 'Failed to fetch media' });
+        }
+      });
+
+      socket.on('getPresentations', async (callback: (data: any) => void) => {
+        if (!this.authenticatedSockets.has(socket.id)) {
+          callback({ error: 'Not authenticated' });
+          return;
+        }
+        this.resetSessionTimeout(socket.id);
+        try {
+          const presentations = await getCachedPresentations();
+          // Send simplified presentation data for mobile
+          const simplifiedPresentations = presentations.map((p: any) => ({
+            id: p.id,
+            title: p.title,
+            slideCount: p.slides?.length || 0,
+            quickModeType: p.quickModeData?.type || null,
+            updatedAt: p.updatedAt
+          }));
+          callback({ presentations: simplifiedPresentations });
+        } catch (error) {
+          console.error('[RemoteControlServer] Error fetching presentations:', error);
+          callback({ error: 'Failed to fetch presentations' });
         }
       });
 
@@ -584,13 +1010,910 @@ class RemoteControlServer extends EventEmitter {
    * Handle a command from a mobile client
    */
   private handleCommand(command: RemoteCommand): void {
-    // Forward command to control window
-    if (this.controlWindow && !this.controlWindow.isDestroyed()) {
-      this.controlWindow.webContents.send('remote:command', command);
+    // Check if control window is available and not destroyed
+    const controlWindowAvailable = this.controlWindow && !this.controlWindow.isDestroyed();
+
+    // Commands that can be handled directly in main process
+    const directHandleCommands = [
+      'slide:next', 'slide:prev', 'slide:goto', 'slide:blank',
+      'setlist:select', 'library:selectSong', 'library:addSong',
+      'library:selectBible', 'library:addBible',
+      'library:selectPresentation', 'library:addPresentation',
+      'mode:set'
+    ];
+
+    // Commands that MUST be handled directly (ControlPanel doesn't support them)
+    const alwaysDirectCommands = [
+      'library:selectPresentation', 'library:addPresentation'
+    ];
+
+    // Commands that should be handled directly when content was loaded directly
+    const contentRelatedCommands = [
+      'slide:next', 'slide:prev', 'slide:goto', 'slide:blank', 'setlist:select', 'mode:set'
+    ];
+
+    const canHandleDirectly = directHandleCommands.includes(command.type);
+    let mustHandleDirectly = alwaysDirectCommands.includes(command.type);
+    const isContentCommand = contentRelatedCommands.includes(command.type);
+
+    // Check if setlist:select is for a presentation - must handle directly
+    // because ControlPanel doesn't properly support presentation slide navigation
+    if (command.type === 'setlist:select' && command.payload?.id) {
+      const item = this.currentState.fullSetlist?.find((i: any) => i.id === command.payload.id);
+      if (item?.type === 'presentation') {
+        mustHandleDirectly = true;
+      }
+    }
+
+    // Handle directly if:
+    // - Command must always be handled directly (presentations), OR
+    // - Command can be handled directly AND ControlPanel not active, OR
+    // - Content-related command AND content was loaded directly (even if ControlPanel is active)
+    const shouldHandleDirectly = mustHandleDirectly ||
+      (canHandleDirectly && !this.commandHandlerActive) ||
+      (isContentCommand && this.directlyLoadedContent);
+
+    if (shouldHandleDirectly) {
+      // Handle directly in main process
+      this.handleCommandDirectly(command).then(handled => {
+        console.log(`[RemoteControlServer] Direct handling of ${command.type}: ${handled ? 'success' : 'failed'}`);
+      }).catch(err => {
+        console.error(`[RemoteControlServer] Error handling ${command.type}:`, err);
+      });
+    } else if (this.commandHandlerActive && controlWindowAvailable) {
+      // ControlPanel is active - let it handle the command
+      console.log(`[RemoteControlServer] Forwarding ${command.type} to ControlPanel`);
+      this.controlWindow!.webContents.send('remote:command', command);
+    } else if (controlWindowAvailable) {
+      // Forward to control window for any other commands
+      this.controlWindow!.webContents.send('remote:command', command);
+    } else {
+      console.log(`[RemoteControlServer] Cannot handle ${command.type} - no handler available`);
     }
 
     // Emit event for other handlers
     this.emit('command', command);
+  }
+
+  /**
+   * Handle commands directly in main process
+   * Returns true if the command was handled
+   */
+  private async handleCommandDirectly(command: RemoteCommand): Promise<boolean> {
+    if (!this.displayManager) {
+      console.log(`[RemoteControlServer] handleCommandDirectly: no displayManager`);
+      return false;
+    }
+
+    // Route to specific handlers
+    switch (command.type) {
+      case 'slide:next':
+      case 'slide:prev':
+      case 'slide:goto':
+      case 'slide:blank':
+        return this.handleSlideCommand(command);
+      case 'setlist:select':
+        return this.handleSetlistSelect(command);
+      case 'library:selectSong':
+      case 'library:addSong':
+        return await this.handleLibrarySongCommand(command);
+      case 'library:selectBible':
+      case 'library:addBible':
+        return await this.handleLibraryBibleCommand(command);
+      case 'library:selectPresentation':
+      case 'library:addPresentation':
+        return await this.handleLibraryPresentationCommand(command);
+      case 'mode:set':
+        return this.handleModeSet(command);
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Handle slide navigation commands
+   */
+  private handleSlideCommand(command: RemoteCommand): boolean {
+    const { fullSlides, currentSlideIndex, totalSlides, isBlank, songTitle, currentItem, displayMode, currentContentType } = this.currentState;
+
+    // Only handle if we have slide data
+    if (!fullSlides || fullSlides.length === 0) {
+      console.log(`[RemoteControlServer] handleSlideCommand: no slides available`);
+      return false;
+    }
+
+    console.log(`[RemoteControlServer] handleSlideCommand: ${command.type}, currentIndex=${currentSlideIndex}, totalSlides=${totalSlides}`);
+
+    let newIndex = currentSlideIndex;
+    let shouldBroadcast = false;
+
+    switch (command.type) {
+      case 'slide:next':
+        if (currentSlideIndex < totalSlides - 1) {
+          newIndex = currentSlideIndex + 1;
+          shouldBroadcast = true;
+        }
+        break;
+
+      case 'slide:prev':
+        if (currentSlideIndex > 0) {
+          newIndex = currentSlideIndex - 1;
+          shouldBroadcast = true;
+        }
+        break;
+
+      case 'slide:goto':
+        if (command.payload?.index !== undefined && command.payload.index >= 0 && command.payload.index < totalSlides) {
+          newIndex = command.payload.index;
+          shouldBroadcast = true;
+        }
+        break;
+
+      case 'slide:blank':
+        // Toggle blank state
+        const newBlankState = !isBlank;
+        this.currentState.isBlank = newBlankState;
+        if (newBlankState) {
+          this.displayManager!.broadcastSlide({ isBlank: true });
+        } else if (fullSlides[currentSlideIndex]) {
+          const slide = fullSlides[currentSlideIndex];
+          const nextSlide = currentSlideIndex < fullSlides.length - 1 ? fullSlides[currentSlideIndex + 1] : null;
+          this.displayManager!.broadcastSlide(this.buildSlideData(slide, nextSlide, songTitle, currentContentType || currentItem?.type, displayMode));
+        }
+        this.broadcastState(true); // Immediate for user responsiveness
+        return true;
+
+      default:
+        return false;
+    }
+
+    if (shouldBroadcast && fullSlides[newIndex]) {
+      // Update internal state
+      this.currentState.currentSlideIndex = newIndex;
+      this.currentState.isBlank = false;
+
+      // Broadcast to displays - use currentContentType for proper theme (e.g., 'prayer' for Quick Mode presentations)
+      const slide = fullSlides[newIndex];
+      const nextSlide = newIndex < fullSlides.length - 1 ? fullSlides[newIndex + 1] : null;
+      const effectiveContentType = currentContentType || currentItem?.type;
+      console.log(`[RemoteControlServer] Broadcasting slide ${newIndex} with contentType: ${effectiveContentType}, mode: ${displayMode}`);
+      this.displayManager!.broadcastSlide(this.buildSlideData(slide, nextSlide, songTitle, effectiveContentType, displayMode));
+
+      // Broadcast updated state to mobile clients (immediate for user responsiveness)
+      this.broadcastState(true);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Set up slides for the current content, creating combined slides if in original mode
+   * @param rawSlides - The raw slides array
+   * @param title - The content title
+   * @param contentType - The content type (song, bible, prayer, etc.)
+   * @param preservePosition - If true, translate the current slide index to the new mode
+   */
+  private setupSlidesForMode(rawSlides: any[], title: string, contentType: string, preservePosition: boolean = false): void {
+    // Store the current raw slide index before changing modes (for position preservation)
+    const oldMode = this.currentState.displayMode;
+    const oldIndex = this.currentState.currentSlideIndex || 0;
+    let oldRawIndex = oldIndex; // The index in raw slides
+
+    // If we were in original mode, find the raw index from the combined slide
+    if (preservePosition && oldMode === 'original' && this.combinedSlidesCache.length > 0 && oldIndex < this.combinedSlidesCache.length) {
+      const combinedSlide = this.combinedSlidesCache[oldIndex];
+      if (combinedSlide.type === 'combined' && combinedSlide.originalIndices) {
+        oldRawIndex = combinedSlide.originalIndices[0]; // First raw slide in the combined
+      } else if (combinedSlide.originalIndex !== undefined) {
+        oldRawIndex = combinedSlide.originalIndex;
+      }
+    }
+
+    // Store raw slides
+    this.rawSlidesCache = rawSlides;
+
+    // Create combined slides
+    this.combinedSlidesCache = createCombinedSlides(rawSlides);
+
+    const mode = this.currentState.displayMode;
+
+    if (mode === 'original' && this.combinedSlidesCache.length > 0) {
+      // Use combined slides for original mode
+      const combinedSlides = this.combinedSlidesCache;
+
+      // Build fullSlides from combined slides (for display broadcasting)
+      this.currentState.fullSlides = combinedSlides.map(cs => {
+        if (cs.type === 'combined' && cs.slides) {
+          // Combine the original text from all slides
+          return {
+            originalText: cs.slides.map(s => s.originalText || '').join('\n'),
+            transliteration: '',
+            translation: '',
+            verseType: cs.verseType,
+            _combined: true,
+            _originalIndices: cs.originalIndices
+          };
+        } else if (cs.slide) {
+          return {
+            originalText: cs.slide.originalText || '',
+            transliteration: '',
+            translation: '',
+            verseType: cs.verseType,
+            _combined: false,
+            _originalIndex: cs.originalIndex
+          };
+        }
+        return { originalText: '', transliteration: '', translation: '', verseType: '' };
+      });
+
+      this.currentState.totalSlides = combinedSlides.length;
+
+      // Build slides preview for mobile (combined slides show both languages)
+      this.currentState.slides = combinedSlides.map((cs, idx) => {
+        let preview: string;
+        if (cs.type === 'combined' && cs.slides) {
+          // For combined slides, show first slide's original + translation
+          const first = cs.slides[0];
+          preview = first?.originalText && first?.translation
+            ? (first.originalText || '').slice(0, 30) + ' • ' + (first.translation || '').slice(0, 30)
+            : cs.slides.map(s => (s.originalText || '').slice(0, 30)).join(' / ');
+        } else if (cs.slide) {
+          // For single slides, show both languages if available
+          preview = cs.slide.originalText && cs.slide.translation
+            ? (cs.slide.originalText || '').slice(0, 30) + ' • ' + (cs.slide.translation || '').slice(0, 30)
+            : (cs.slide.originalText || '').slice(0, 60);
+        } else {
+          preview = '';
+        }
+        return {
+          index: idx,
+          preview,
+          verseType: cs.label,
+          isCombined: cs.type === 'combined'
+        };
+      });
+    } else {
+      // Use raw slides for bilingual/translation modes
+      this.currentState.fullSlides = rawSlides;
+      this.currentState.totalSlides = rawSlides.length;
+
+      // Build slides preview for mobile (show both languages if available)
+      this.currentState.slides = rawSlides.map((slide, idx) => ({
+        index: idx,
+        preview: slide.originalText && slide.translation
+          ? (slide.originalText || '').slice(0, 30) + ' • ' + (slide.translation || '').slice(0, 30)
+          : (slide.originalText || slide.translation || '').slice(0, 60),
+        verseType: slide.verseType || `Slide ${idx + 1}`
+      }));
+    }
+
+    // Set the slide index - either translate position or reset to 0
+    if (preservePosition) {
+      let newIndex = 0;
+      if (mode === 'original' && this.combinedSlidesCache.length > 0) {
+        // Switching TO original mode - find which combined slide contains our raw index
+        for (let i = 0; i < this.combinedSlidesCache.length; i++) {
+          const cs = this.combinedSlidesCache[i];
+          if (cs.type === 'combined' && cs.originalIndices?.includes(oldRawIndex)) {
+            newIndex = i;
+            break;
+          } else if (cs.originalIndex === oldRawIndex) {
+            newIndex = i;
+            break;
+          }
+        }
+      } else {
+        // Switching TO bilingual/translation mode - use the raw index directly
+        newIndex = Math.min(oldRawIndex, rawSlides.length - 1);
+      }
+      this.currentState.currentSlideIndex = Math.max(0, newIndex);
+      console.log(`[RemoteControlServer] Mode switch: translated index ${oldIndex} (raw: ${oldRawIndex}) → ${this.currentState.currentSlideIndex}`);
+    } else {
+      this.currentState.currentSlideIndex = 0;
+    }
+
+    this.currentState.songTitle = title;
+  }
+
+  /**
+   * Build a SlideData object for display broadcasting
+   */
+  private buildSlideData(
+    slide: any,
+    nextSlide: any | null,
+    songTitle: string | undefined,
+    contentType: string | undefined,
+    displayMode: 'bilingual' | 'original' | 'translation'
+  ): any {
+    // Determine content type for theme selection
+    let mappedContentType: 'song' | 'bible' | 'prayer' | 'sermon' = 'song';
+    if (contentType === 'bible') {
+      mappedContentType = 'bible';
+    } else if (contentType === 'prayer') {
+      mappedContentType = 'prayer';
+    } else if (contentType === 'sermon') {
+      mappedContentType = 'sermon';
+    } else if (contentType === 'presentation') {
+      // Regular presentations use song theme as default
+      mappedContentType = 'song';
+    }
+
+    // For prayer/sermon content, use prayer theme field names
+    // Prayer theme expects: subtitle, subtitleTranslation, description, reference
+    if (mappedContentType === 'prayer' || mappedContentType === 'sermon') {
+      return {
+        slideData: {
+          subtitle: slide.originalText || '',
+          subtitleTranslation: slide.translation || '',
+          description: slide.description || '',
+          descriptionTranslation: slide.descriptionTranslation || '',
+          reference: slide.verseType || '',
+          // Also include original fields for compatibility
+          originalText: slide.originalText || '',
+          translation: slide.translation || ''
+        },
+        nextSlideData: nextSlide ? {
+          subtitle: nextSlide.originalText || '',
+          subtitleTranslation: nextSlide.translation || '',
+          description: nextSlide.description || '',
+          reference: nextSlide.verseType || ''
+        } : null,
+        songTitle: songTitle || '',
+        displayMode,
+        contentType: mappedContentType,
+        isBlank: false
+      };
+    }
+
+    // For Bible content, include reference fields for Bible theme
+    // Bible theme expects: originalText (hebrew), translation (english), reference, referenceEnglish
+    if (mappedContentType === 'bible') {
+      return {
+        slideData: {
+          originalText: slide.originalText || '',
+          transliteration: slide.transliteration || '',
+          translation: slide.translation || '',
+          verseType: slide.verseType || '',
+          // Bible theme reference fields
+          reference: slide.reference || slide.verseType || '',
+          referenceEnglish: slide.referenceEnglish || slide.verseType || ''
+        },
+        nextSlideData: nextSlide ? {
+          originalText: nextSlide.originalText || '',
+          transliteration: nextSlide.transliteration || '',
+          translation: nextSlide.translation || '',
+          verseType: nextSlide.verseType || '',
+          reference: nextSlide.reference || nextSlide.verseType || '',
+          referenceEnglish: nextSlide.referenceEnglish || nextSlide.verseType || ''
+        } : null,
+        songTitle: songTitle || '',
+        displayMode,
+        contentType: mappedContentType,
+        isBlank: false
+      };
+    }
+
+    // Default for songs: originalText, transliteration, translation
+    return {
+      slideData: {
+        originalText: slide.originalText || '',
+        transliteration: slide.transliteration || '',
+        translation: slide.translation || '',
+        verseType: slide.verseType || ''
+      },
+      nextSlideData: nextSlide ? {
+        originalText: nextSlide.originalText || '',
+        transliteration: nextSlide.transliteration || '',
+        translation: nextSlide.translation || '',
+        verseType: nextSlide.verseType || ''
+      } : null,
+      songTitle: songTitle || '',
+      displayMode,
+      contentType: mappedContentType,
+      isBlank: false
+    };
+  }
+
+  /**
+   * Handle setlist:select command - select an item from the setlist
+   */
+  private handleSetlistSelect(command: RemoteCommand): boolean {
+    const { fullSetlist, displayMode } = this.currentState;
+    const itemId = command.payload?.id;
+
+    if (!itemId || !fullSetlist || fullSetlist.length === 0) {
+      console.log(`[RemoteControlServer] handleSetlistSelect: no itemId or fullSetlist`);
+      return false;
+    }
+
+    const item = fullSetlist.find((s: any) => s.id === itemId);
+    if (!item) {
+      console.log(`[RemoteControlServer] handleSetlistSelect: item not found: ${itemId}`);
+      return false;
+    }
+
+    console.log(`[RemoteControlServer] handleSetlistSelect: selecting ${item.type} - ${item.title || item.song?.title || item.presentation?.title}`);
+
+    let slides: any[] = [];
+    let title = '';
+    let contentType: 'song' | 'bible' | 'prayer' | 'presentation' = 'song';
+
+    if (item.type === 'song' && item.song) {
+      slides = item.song.slides || [];
+      title = item.song.title || '';
+      contentType = 'song';
+    } else if (item.type === 'bible' && item.song) {
+      slides = item.song.slides || [];
+      title = item.song.title || item.title || '';
+      contentType = 'bible';
+    } else if (item.type === 'presentation' && item.presentation) {
+      title = item.presentation.title || '';
+      const quickModeData = item.presentation.quickModeData;
+      const quickModeType = quickModeData?.type;
+
+      // Check if it's a Quick Mode presentation (prayer/sermon)
+      if (quickModeData && quickModeData.subtitles && (quickModeType === 'prayer' || quickModeType === 'sermon')) {
+        contentType = 'prayer';
+        // Build slides from quickModeData for proper theme rendering
+        slides = quickModeData.subtitles.map((sub: any, idx: number) => ({
+          originalText: sub.subtitle || '',
+          transliteration: '',
+          translation: sub.subtitleTranslation || '',
+          verseType: sub.bibleRef?.reference || sub.description || `Point ${idx + 1}`,
+          description: sub.description || '',
+          descriptionTranslation: sub.descriptionTranslation || '',
+          bibleRef: sub.bibleRef
+        }));
+        console.log(`[RemoteControlServer] handleSetlistSelect: Built ${slides.length} slides from quickModeData for ${quickModeType}`);
+      } else {
+        // Regular presentation - extract from presentation slides
+        contentType = 'presentation';
+        slides = (item.presentation.slides || []).map((slide: any, idx: number) => {
+          const textContent = (slide.textBoxes || [])
+            .map((tb: any) => tb.text || '')
+            .filter((t: string) => t.trim())
+            .join('\n');
+          return {
+            originalText: textContent,
+            transliteration: '',
+            translation: '',
+            verseType: `Slide ${idx + 1}`
+          };
+        });
+      }
+    } else {
+      console.log(`[RemoteControlServer] handleSetlistSelect: unsupported item type: ${item.type}`);
+      return false;
+    }
+
+    if (slides.length === 0) {
+      console.log(`[RemoteControlServer] handleSetlistSelect: no slides in item`);
+      return false;
+    }
+
+    // Set up slides for the current mode (handles combined slides for original mode)
+    this.currentState.isBlank = false;
+    this.currentState.currentContentType = contentType;
+    this.setupSlidesForMode(slides, title, contentType);
+
+    this.currentState.currentItem = {
+      id: item.id,
+      type: item.type,
+      title: title,
+      slideCount: this.currentState.totalSlides
+    };
+
+    // Mark that content was loaded directly (for slide command routing)
+    this.directlyLoadedContent = true;
+
+    // Broadcast first slide to displays
+    const { fullSlides } = this.currentState;
+    if (fullSlides && fullSlides.length > 0) {
+      const nextSlide = fullSlides.length > 1 ? fullSlides[1] : null;
+      this.displayManager!.broadcastSlide(this.buildSlideData(fullSlides[0], nextSlide, title, contentType, displayMode));
+    }
+
+    // Broadcast updated state to mobile clients (immediate for user responsiveness)
+    this.broadcastState(true);
+    return true;
+  }
+
+  /**
+   * Handle library song commands (selectSong, addSong)
+   */
+  private async handleLibrarySongCommand(command: RemoteCommand): Promise<boolean> {
+    const songId = command.payload?.songId;
+    if (!songId) {
+      console.log(`[RemoteControlServer] handleLibrarySongCommand: no songId`);
+      return false;
+    }
+
+    try {
+      // Load song from database
+      const songs = await getCachedSongs();
+      const song = songs.find((s: any) => s.id === songId);
+      if (!song) {
+        console.log(`[RemoteControlServer] handleLibrarySongCommand: song not found: ${songId}`);
+        return false;
+      }
+
+      if (command.type === 'library:addSong') {
+        // Add to setlist
+        const newItem = {
+          id: crypto.randomUUID(),
+          type: 'song',
+          song: song,
+          title: song.title
+        };
+
+        if (!this.currentState.fullSetlist) {
+          this.currentState.fullSetlist = [];
+        }
+        this.currentState.fullSetlist.push(newItem);
+
+        // Update setlist summary for mobile
+        this.currentState.setlist = this.currentState.fullSetlist.map((item: any) => ({
+          id: item.id,
+          type: item.type,
+          title: item.song?.title || item.presentation?.title || item.title || item.type
+        }));
+
+        console.log(`[RemoteControlServer] Added song to setlist: ${song.title}`);
+        this.broadcastState();
+        return true;
+      } else if (command.type === 'library:selectSong') {
+        // Select and display the song
+        const rawSlides = song.slides || [];
+        if (rawSlides.length === 0) {
+          console.log(`[RemoteControlServer] handleLibrarySongCommand: song has no slides`);
+          return false;
+        }
+
+        // Set up slides for the current mode (handles combined slides for original mode)
+        this.currentState.isBlank = false;
+        this.currentState.currentContentType = 'song';
+        this.setupSlidesForMode(rawSlides, song.title || '', 'song');
+
+        this.currentState.currentItem = {
+          id: song.id,
+          type: 'song',
+          title: song.title || '',
+          slideCount: this.currentState.totalSlides
+        };
+
+        // Mark that content was loaded directly (for slide command routing)
+        this.directlyLoadedContent = true;
+
+        // Broadcast to displays
+        const { fullSlides, displayMode } = this.currentState;
+        if (fullSlides && fullSlides.length > 0) {
+          const nextSlide = fullSlides.length > 1 ? fullSlides[1] : null;
+          this.displayManager!.broadcastSlide(this.buildSlideData(fullSlides[0], nextSlide, song.title, 'song', displayMode));
+        }
+
+        console.log(`[RemoteControlServer] Selected song: ${song.title} (mode: ${displayMode}, slides: ${this.currentState.totalSlides})`);
+        this.broadcastState(true); // Immediate for user responsiveness
+        return true;
+      }
+    } catch (error) {
+      console.error(`[RemoteControlServer] handleLibrarySongCommand error:`, error);
+    }
+    return false;
+  }
+
+  /**
+   * Handle library Bible commands (selectBible, addBible)
+   */
+  private async handleLibraryBibleCommand(command: RemoteCommand): Promise<boolean> {
+    const { book, chapter, verseStart, verseEnd } = command.payload || {};
+    if (!book || !chapter) {
+      console.log(`[RemoteControlServer] handleLibraryBibleCommand: missing book or chapter`);
+      return false;
+    }
+
+    try {
+      // Load Bible verses
+      const result = await getBibleVerses(book, chapter);
+      if (!result || !result.verses || result.verses.length === 0) {
+        console.log(`[RemoteControlServer] handleLibraryBibleCommand: no verses found`);
+        return false;
+      }
+
+      // Convert verses to slides format
+      // Include reference fields for Bible theme compatibility
+      let slides = result.verses.map((verse: any) => ({
+        originalText: verse.hebrew || '',
+        transliteration: '',
+        translation: verse.english || '',
+        verseType: `${book} ${chapter}:${verse.verseNumber}`,
+        // Bible theme reference fields
+        reference: verse.hebrewRef || `${book} ${chapter}:${verse.verseNumber}`,
+        referenceEnglish: `${book} ${chapter}:${verse.verseNumber}`
+      }));
+
+      // Filter slides if verse range is specified
+      if (verseStart) {
+        const endVerse = verseEnd || verseStart;
+        slides = slides.filter((s: any) => {
+          const verseMatch = s.verseType?.match(/:(\d+)$/);
+          const verseNum = verseMatch ? parseInt(verseMatch[1]) : 0;
+          return verseNum >= verseStart && verseNum <= endVerse;
+        });
+      }
+
+      const filteredSlides = slides;
+
+      // Build title
+      let title = `${book} ${chapter}`;
+      if (verseStart) {
+        title += `:${verseStart}`;
+        if (verseEnd && verseEnd > verseStart) {
+          title += `-${verseEnd}`;
+        }
+      }
+
+      const biblePassage = {
+        id: crypto.randomUUID(),
+        title: title,
+        slides: filteredSlides
+      };
+
+      if (command.type === 'library:addBible') {
+        // Add to setlist
+        const newItem = {
+          id: crypto.randomUUID(),
+          type: 'bible',
+          song: biblePassage,
+          title: title
+        };
+
+        if (!this.currentState.fullSetlist) {
+          this.currentState.fullSetlist = [];
+        }
+        this.currentState.fullSetlist.push(newItem);
+
+        // Update setlist summary
+        this.currentState.setlist = this.currentState.fullSetlist.map((item: any) => ({
+          id: item.id,
+          type: item.type,
+          title: item.song?.title || item.presentation?.title || item.title || item.type
+        }));
+
+        console.log(`[RemoteControlServer] Added Bible to setlist: ${title}`);
+        this.broadcastState();
+        return true;
+      } else if (command.type === 'library:selectBible') {
+        // Select and display
+        const slides = filteredSlides;
+
+        // Update state
+        this.currentState.fullSlides = slides;
+        this.currentState.songTitle = title;
+        this.currentState.currentSlideIndex = 0;
+        this.currentState.totalSlides = slides.length;
+        this.currentState.isBlank = false;
+        this.currentState.currentContentType = 'bible';
+        this.currentState.currentItem = {
+          id: biblePassage.id,
+          type: 'bible',
+          title: title,
+          slideCount: slides.length
+        };
+
+        // Mark that content was loaded directly (for slide command routing)
+        this.directlyLoadedContent = true;
+
+        // Build slides preview (show both languages if available)
+        this.currentState.slides = slides.map((slide: any, idx: number) => ({
+          index: idx,
+          preview: slide.originalText && slide.translation
+            ? (slide.originalText || '').slice(0, 30) + ' • ' + (slide.translation || '').slice(0, 30)
+            : (slide.originalText || slide.translation || '').slice(0, 60),
+          verseType: slide.verseType || `Verse ${idx + 1}`
+        }));
+
+        // Broadcast to displays
+        const nextSlide = slides.length > 1 ? slides[1] : null;
+        this.displayManager!.broadcastSlide(this.buildSlideData(slides[0], nextSlide, title, 'bible', this.currentState.displayMode));
+
+        console.log(`[RemoteControlServer] Selected Bible: ${title}`);
+        this.broadcastState(true); // Immediate for user responsiveness
+        return true;
+      }
+    } catch (error) {
+      console.error(`[RemoteControlServer] handleLibraryBibleCommand error:`, error);
+    }
+    return false;
+  }
+
+  /**
+   * Handle library presentation commands (selectPresentation, addPresentation)
+   */
+  private async handleLibraryPresentationCommand(command: RemoteCommand): Promise<boolean> {
+    const presentationId = command.payload?.presentationId;
+    if (!presentationId) {
+      console.log(`[RemoteControlServer] handleLibraryPresentationCommand: no presentationId`);
+      return false;
+    }
+
+    try {
+      // Load presentation from database
+      const presentation = await getPresentation(presentationId);
+      if (!presentation) {
+        console.log(`[RemoteControlServer] handleLibraryPresentationCommand: presentation not found: ${presentationId}`);
+        return false;
+      }
+
+      // Determine content type based on quickModeData
+      let contentType: 'song' | 'bible' | 'prayer' | 'presentation' = 'presentation';
+      const quickModeType = presentation.quickModeData?.type;
+      if (quickModeType === 'prayer' || quickModeType === 'sermon') {
+        contentType = 'prayer';
+      }
+
+      let slides: any[] = [];
+
+      // Check if this is a Quick Mode presentation (prayer/sermon)
+      if (presentation.quickModeData && presentation.quickModeData.subtitles) {
+        // Build slides from quickModeData for proper theme rendering
+        const subtitles = presentation.quickModeData.subtitles;
+        slides = subtitles.map((item: any, idx: number) => {
+          // Format: subtitle is the main text (Hebrew), subtitleTranslation is translation
+          // description is additional text, bibleRef is the reference
+          return {
+            originalText: item.subtitle || '',
+            transliteration: '',
+            translation: item.subtitleTranslation || '',
+            verseType: item.bibleRef?.reference || item.description || `Point ${idx + 1}`,
+            // Include additional data for richer rendering
+            description: item.description || '',
+            descriptionTranslation: item.descriptionTranslation || '',
+            bibleRef: item.bibleRef
+          };
+        });
+        console.log(`[RemoteControlServer] Built ${slides.length} slides from quickModeData for ${quickModeType}`);
+      } else {
+        // Regular presentation - extract text from textBoxes
+        slides = (presentation.slides || []).map((slide: any, idx: number) => {
+          const textContent = (slide.textBoxes || [])
+            .map((tb: any) => tb.text || '')
+            .filter((t: string) => t.trim())
+            .join('\n');
+
+          return {
+            originalText: textContent,
+            transliteration: '',
+            translation: '',
+            verseType: `Slide ${idx + 1}`,
+            _presentationSlide: slide
+          };
+        });
+      }
+
+      if (slides.length === 0) {
+        console.log(`[RemoteControlServer] handleLibraryPresentationCommand: presentation has no slides`);
+        return false;
+      }
+
+      if (command.type === 'library:addPresentation') {
+        // Add to setlist
+        const newItem = {
+          id: crypto.randomUUID(),
+          type: 'presentation',
+          presentation: presentation,
+          title: presentation.title
+        };
+
+        if (!this.currentState.fullSetlist) {
+          this.currentState.fullSetlist = [];
+        }
+        this.currentState.fullSetlist.push(newItem);
+
+        // Update setlist summary for mobile
+        this.currentState.setlist = this.currentState.fullSetlist.map((item: any) => ({
+          id: item.id,
+          type: item.type,
+          title: item.song?.title || item.presentation?.title || item.title || item.type
+        }));
+
+        console.log(`[RemoteControlServer] Added presentation to setlist: ${presentation.title}`);
+        console.log(`[RemoteControlServer] Setlist now has ${this.currentState.setlist.length} items:`,
+          this.currentState.setlist.map((s: any) => s.title).join(', '));
+
+        // Sync to ControlPanel so it knows about the new item
+        if (this.controlWindow && !this.controlWindow.isDestroyed()) {
+          console.log(`[RemoteControlServer] Sending addToSetlist to ControlPanel:`, newItem.title);
+          this.controlWindow.webContents.send('remote:addToSetlist', newItem);
+        } else {
+          console.log(`[RemoteControlServer] Cannot send to ControlPanel - window not available`);
+        }
+
+        this.broadcastState(true); // Immediate for UI update
+        return true;
+      } else if (command.type === 'library:selectPresentation') {
+        // Select and display the presentation
+        this.currentState.fullSlides = slides;
+        this.currentState.songTitle = presentation.title || '';
+        this.currentState.currentSlideIndex = 0;
+        this.currentState.totalSlides = slides.length;
+        this.currentState.isBlank = false;
+        this.currentState.currentContentType = contentType;
+        this.currentState.currentItem = {
+          id: presentation.id,
+          type: 'presentation',
+          title: presentation.title || '',
+          slideCount: slides.length
+        };
+
+        // Mark that content was loaded directly (for slide command routing)
+        this.directlyLoadedContent = true;
+
+        // Build slides preview (show both languages if available)
+        this.currentState.slides = slides.map((slide: any, idx: number) => ({
+          index: idx,
+          preview: slide.originalText && slide.translation
+            ? (slide.originalText || '').slice(0, 30) + ' • ' + (slide.translation || '').slice(0, 30)
+            : (slide.originalText || slide.translation || '').slice(0, 60),
+          verseType: slide.verseType || `Slide ${idx + 1}`
+        }));
+
+        // Broadcast to displays - use the correct contentType for theme selection
+        const nextSlide = slides.length > 1 ? slides[1] : null;
+        this.displayManager!.broadcastSlide(this.buildSlideData(slides[0], nextSlide, presentation.title, contentType, this.currentState.displayMode));
+
+        console.log(`[RemoteControlServer] Selected presentation: ${presentation.title} (contentType: ${contentType})`);
+        this.broadcastState(true);
+        return true;
+      }
+    } catch (error) {
+      console.error(`[RemoteControlServer] handleLibraryPresentationCommand error:`, error);
+    }
+    return false;
+  }
+
+  /**
+   * Handle mode:set command - change display mode
+   */
+  private handleModeSet(command: RemoteCommand): boolean {
+    const newMode = command.payload?.mode as 'bilingual' | 'original' | 'translation';
+    if (!newMode || !['bilingual', 'original', 'translation'].includes(newMode)) {
+      console.log(`[RemoteControlServer] handleModeSet: invalid mode: ${newMode}`);
+      return false;
+    }
+
+    console.log(`[RemoteControlServer] handleModeSet: changing to ${newMode}`);
+
+    const oldMode = this.currentState.displayMode;
+    this.currentState.displayMode = newMode;
+
+    // If we have cached slides, reconfigure for the new mode
+    if (this.rawSlidesCache.length > 0) {
+      const { songTitle, currentContentType, isBlank } = this.currentState;
+      // Preserve the current position when switching modes
+      this.setupSlidesForMode(this.rawSlidesCache, songTitle || '', currentContentType || 'song', true);
+
+      // Broadcast the current slide with new mode (if not blank)
+      if (!isBlank && this.currentState.fullSlides && this.currentState.fullSlides.length > 0) {
+        const idx = this.currentState.currentSlideIndex;
+        const slide = this.currentState.fullSlides[idx];
+        const nextSlide = idx < this.currentState.fullSlides.length - 1 ? this.currentState.fullSlides[idx + 1] : null;
+        this.displayManager!.broadcastSlide(this.buildSlideData(slide, nextSlide, songTitle, currentContentType, newMode));
+      }
+    } else {
+      // No cached slides - just re-broadcast current slide with new mode
+      const { fullSlides, currentSlideIndex, songTitle, currentItem, isBlank } = this.currentState;
+
+      if (!isBlank && fullSlides && fullSlides.length > 0 && fullSlides[currentSlideIndex]) {
+        const slide = fullSlides[currentSlideIndex];
+        const nextSlide = currentSlideIndex < fullSlides.length - 1 ? fullSlides[currentSlideIndex + 1] : null;
+        this.displayManager!.broadcastSlide(this.buildSlideData(slide, nextSlide, songTitle, currentItem?.type, newMode));
+      }
+    }
+
+    // Broadcast updated state to mobile clients
+    this.broadcastState(true);
+    return true;
   }
 
   /**

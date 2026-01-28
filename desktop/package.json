@@ -91,14 +91,6 @@
       {
         "from": "resources/fonts",
         "to": "fonts"
-      },
-      {
-        "from": "resources/seed-database.sqlite",
-        "to": "seed-database.sqlite"
-      },
-      {
-        "from": "resources/seed-media",
-        "to": "seed-media"
       }
     ],
     "asarUnpack": [

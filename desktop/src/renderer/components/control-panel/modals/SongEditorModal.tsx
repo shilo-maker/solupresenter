@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../../../styles/controlPanelStyles';
 
@@ -72,6 +72,48 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
     return '';
   });
   const [tagInput, setTagInput] = useState('');
+  const expressTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Section markers for express mode
+  const sectionMarkers = [
+    { label: 'Verse', marker: '[Verse]' },
+    { label: 'V1', marker: '[Verse1]' },
+    { label: 'V2', marker: '[Verse2]' },
+    { label: 'V3', marker: '[Verse3]' },
+    { label: 'Chorus', marker: '[Chorus]' },
+    { label: 'Pre', marker: '[PreChorus]' },
+    { label: 'Bridge', marker: '[Bridge]' },
+    { label: 'Intro', marker: '[Intro]' },
+    { label: 'Outro', marker: '[Outro]' },
+    { label: 'Tag', marker: '[Tag]' },
+  ];
+
+  // Insert section marker at cursor position
+  const insertSectionMarker = (marker: string) => {
+    const textarea = expressTextareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = expressText;
+
+    // Add newlines if needed for proper formatting
+    let insertText = marker;
+    if (start > 0 && text[start - 1] !== '\n') {
+      insertText = '\n' + insertText;
+    }
+    insertText += '\n';
+
+    const newText = text.substring(0, start) + insertText + text.substring(end);
+    setExpressText(newText);
+
+    // Restore focus and set cursor after inserted text
+    setTimeout(() => {
+      textarea.focus();
+      const newCursorPos = start + insertText.length;
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  };
 
   // Check if language needs transliteration structure
   const isTransliterationLanguage = editingSong.originalLanguage === 'he' || editingSong.originalLanguage === 'ar';
@@ -203,9 +245,27 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
     setEditingSong({ ...editingSong, tags: editingSong.tags.filter(tag => tag !== tagToRemove) });
   };
 
+  // Check if song has valid content
+  const hasValidContent = useMemo(() => {
+    if (expressMode) {
+      // In express mode, check if express text has actual content
+      const parsed = parseExpressText();
+      return parsed.some(slide => slide.originalText.trim());
+    } else {
+      // In standard mode, check if any slide has content
+      return editingSong.slides.some(slide => slide.originalText.trim());
+    }
+  }, [expressMode, expressText, editingSong.slides]);
+
+  // Check if song is valid for saving
+  const canSave = editingSong.title.trim() && hasValidContent;
+
   // Save handler
   const handleSave = async () => {
-    if (!editingSong.title.trim()) return;
+    if (!editingSong.title.trim()) {
+      alert('Please enter a song title');
+      return;
+    }
 
     let slidesToSave = editingSong.slides;
     if (expressMode) {
@@ -401,7 +461,44 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
                 )}
               </div>
             </div>
+            {/* Section Marker Buttons */}
+            <div style={{
+              display: 'flex',
+              gap: '6px',
+              marginBottom: '8px',
+              flexWrap: 'wrap'
+            }}>
+              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', alignSelf: 'center', marginRight: '4px' }}>Insert:</span>
+              {sectionMarkers.map(({ label, marker }) => (
+                <button
+                  key={marker}
+                  onClick={() => insertSectionMarker(marker)}
+                  style={{
+                    background: 'rgba(102, 126, 234, 0.2)',
+                    border: '1px solid rgba(102, 126, 234, 0.4)',
+                    borderRadius: '4px',
+                    padding: '4px 8px',
+                    color: '#a0b0ff',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem',
+                    fontWeight: 500,
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.background = 'rgba(102, 126, 234, 0.4)';
+                    e.currentTarget.style.color = '#ffffff';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.background = 'rgba(102, 126, 234, 0.2)';
+                    e.currentTarget.style.color = '#a0b0ff';
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <textarea
+              ref={expressTextareaRef}
               value={expressText}
               onChange={(e) => setExpressText(e.target.value)}
               placeholder={isTransliterationLanguage
@@ -642,14 +739,14 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
           </button>
           <button
             onClick={handleSave}
-            disabled={!editingSong.title.trim()}
+            disabled={!canSave}
             style={{
-              background: editingSong.title.trim() ? 'linear-gradient(135deg, #28a745 0%, #20c997 100%)' : 'rgba(255,255,255,0.1)',
+              background: canSave ? 'linear-gradient(135deg, #28a745 0%, #20c997 100%)' : 'rgba(255,255,255,0.1)',
               border: 'none',
               borderRadius: '8px',
               padding: '10px 24px',
               color: 'white',
-              cursor: editingSong.title.trim() ? 'pointer' : 'not-allowed',
+              cursor: canSave ? 'pointer' : 'not-allowed',
               fontWeight: 600
             }}
           >

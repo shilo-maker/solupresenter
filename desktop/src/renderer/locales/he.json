@@ -116,7 +116,15 @@
     "pin": "קוד PIN",
     "uiScale": "גודל ממשק",
     "uiScaleDescription": "התאם את גודל הכפתורים, הטקסט והפקדים",
-    "resetToDefault": "אפס ל-100%"
+    "resetToDefault": "אפס ל-100%",
+    "themeImportExport": "ייבוא / ייצוא ערכות נושא",
+    "themeImportExportDescription": "ייצא את כל ערכות הנושא המותאמות אישית (שירים, תנ\"ך, תפילה, במה ו-OBS) לקובץ JSON לגיבוי או העברה למכשיר אחר.",
+    "exportThemes": "ייצא ערכות נושא",
+    "importThemes": "ייבא ערכות נושא",
+    "themeExportSuccess": "ערכות הנושא יוצאו בהצלחה!",
+    "themeExportError": "ייצוא ערכות הנושא נכשל. נסה שוב.",
+    "themeImportError": "ייבוא ערכות הנושא נכשל. ודא שהקובץ הוא ייצוא ערכות נושא תקין.",
+    "themeImportNote": "הערה: ערכות נושא מובנות לא מיוצאות. ייבוא ידלג על ערכות נושא שכבר קיימות עם אותו שם."
   },
   "songs": {
     "title": "שירים",
@@ -384,6 +392,7 @@
     "primary": "ראשי",
     "viewer": "צופים",
     "stage": "במה",
+    "start": "התחל",
     "viewerThemes": "ערכות נושא לצופים",
     "stageMonitorThemes": "ערכות נושא לבמה",
     "songsTheme": "ערכת שירים",
@@ -500,6 +509,39 @@
     "delete": "מחק",
     "addToSetlist": "הוסף לרשימה",
     "removeFromSetlist": "הסר מהרשימה",
-    "searchPresentations": "חפש מצגות..."
+    "searchPresentations": "חפש מצגות...",
+    "themes": "ערכות נושא",
+    "globalThemes": "ערכות נושא גלובליות",
+    "slides": "שקופיות",
+    "arrangement": {
+      "arr": "סידור",
+      "enterArrangementMode": "מצב סידור",
+      "exitArrangementMode": "צא ממצב סידור",
+      "selectArrangement": "-- בחר סידור --",
+      "newArrangement": "סידור חדש",
+      "namePlaceholder": "שם הסידור...",
+      "confirmDelete": "למחוק סידור זה?",
+      "availableSections": "מקטעים זמינים",
+      "noSections": "אין מקטעים בשיר זה",
+      "arrangementOrder": "סדר הסידור",
+      "missingSections": "מקטעים חסרים",
+      "dragSectionsHere": "גרור מקטעים לכאן לבניית הסידור",
+      "selectOrCreate": "בחר סידור או צור חדש"
+    }
+  },
+  "displaySettings": {
+    "title": "הגדרות מסך",
+    "displayType": "סוג מסך",
+    "themeSettings": "הגדרות ערכת נושא",
+    "themeDescription": "השאר כ\"השתמש בגלובלי\" כדי להשתמש בערכת הנושא מההגדרות, או בחר ערכת נושא מותאמת למסך זה.",
+    "startDisplay": "הפעל מסך",
+    "applyChanges": "החל שינויים"
+  },
+  "displayThemeOverrides": {
+    "useGlobal": "-- השתמש בגלובלי --",
+    "songsTheme": "ערכת שירים",
+    "bibleTheme": "ערכת תנ\"ך",
+    "prayerTheme": "ערכת תפילה",
+    "stageTheme": "ערכת במה"
   }
 }

@@ -73,7 +73,8 @@ export function useThemeManager(
       const colors = typeof theme.colors === 'string' ? JSON.parse(theme.colors) : theme.colors;
       const elements = typeof theme.elements === 'string' ? JSON.parse(theme.elements) : theme.elements;
       const currentSlideText = typeof theme.currentSlideText === 'string' ? JSON.parse(theme.currentSlideText) : theme.currentSlideText;
-      window.electronAPI.applyStageTheme({ colors, elements, currentSlideText });
+      const nextSlideText = typeof theme.nextSlideText === 'string' ? JSON.parse(theme.nextSlideText) : theme.nextSlideText;
+      window.electronAPI.applyStageTheme({ colors, elements, currentSlideText, nextSlideText });
       setSelectedStageTheme(theme);
       window.electronAPI.saveSelectedThemeId('stage', theme.id);
     } catch (error) {

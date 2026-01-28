@@ -252,15 +252,32 @@ export function useRemoteControl(
       }
     });
 
+    // Build full slide data for direct broadcasting by main process
+    // This allows remote control to work even when ControlPanel is not mounted
+    let fullSlides: any[] = [];
+    let songTitle = '';
+
+    if (selectedPresentation) {
+      fullSlides = selectedPresentation.slides || [];
+      songTitle = selectedPresentation.title || '';
+    } else if (selectedSong) {
+      fullSlides = selectedSong.slides || [];
+      songTitle = selectedSong.title || '';
+    }
+
     // Update remote control state
     window.electronAPI.remoteControl.updateState({
       currentItem,
       currentSlideIndex: slideIndex,
       totalSlides,
+      currentContentType,
       displayMode,
       isBlank,
       setlist: setlistSummary,
       slides,
+      fullSlides,
+      fullSetlist: setlist,  // Full setlist with song/presentation data for direct handling
+      songTitle,
       activeTools,
       onlineViewerCount: viewerCount,
       activeMedia: activeMedia ? { type: activeMedia.type, name: activeMedia.url.split('/').pop() || 'Media' } : null,
@@ -287,6 +304,16 @@ export function useRemoteControl(
       } : null
     });
   }, [selectedSong, selectedPresentation, currentSlideIndex, currentPresentationSlideIndex, displayMode, isBlank, setlist, currentContentType, viewerCount, combinedSlidesData, selectedCombinedIndex, activeMedia, activeAudio, audioStatus, audioTargetVolume, videoStatus, videoVolume, youtubeOnDisplay, activeYoutubeVideo, youtubePlaying, youtubeCurrentTime, youtubeDuration]);
+
+  // Tell main process when ControlPanel mounts/unmounts for command handling
+  useEffect(() => {
+    window.electronAPI.remoteControl.setCommandHandlerActive(true);
+    console.log('[useRemoteControl] Command handler registered');
+    return () => {
+      window.electronAPI.remoteControl.setCommandHandlerActive(false);
+      console.log('[useRemoteControl] Command handler unregistered');
+    };
+  }, []); // Only run on mount/unmount
 
   // Remote Control: Listen for commands from mobile remote
   useEffect(() => {
@@ -616,4 +643,50 @@ export function useRemoteControl(
 
     return unsubscribe;
   }, [nextSlide, prevSlide, goToSlide, toggleBlank, setlist, songs, selectedSong, selectedPresentation, currentSlideIndex, currentPresentationSlideIndex, displayMode, currentContentType, sendCurrentSlide, selectCombinedSlide, combinedSlidesData, handlePlayAudio, activeAudio, audioTargetVolume, activeMedia, youtubeOnDisplay, youtubeCurrentTime, youtubePlaying, activeYoutubeVideo, setSelectedSong, setSelectedPresentation, setCurrentSlideIndex, setCurrentPresentationSlideIndex, setCurrentContentType, setIsBlank, setLiveState, setDisplayMode, setSetlist, setActiveMedia, setActiveAudio, setActiveAudioSetlistId, setAudioStatus, setAudioTargetVolume, setVideoStatus, setVideoVolume, setYoutubePlaying, setYoutubeOnDisplay, setActiveYoutubeVideo, setYoutubeCurrentTime, setYoutubeDuration, audioRef, previewVideoRef]);
+
+  // Remote Control: Listen for direct setlist additions from remote
+  useEffect(() => {
+    console.log('[useRemoteControl] Setting up onAddToSetlist listener');
+    const unsubscribe = window.electronAPI.remoteControl.onAddToSetlist((item) => {
+      console.log('[useRemoteControl] Received addToSetlist:', item.type, item.title);
+      setSetlist(prev => {
+        // Check if item already exists (by id) to avoid duplicates
+        if (prev.some(existing => existing.id === item.id)) {
+          console.log('[useRemoteControl] Item already exists, skipping');
+          return prev;
+        }
+        console.log('[useRemoteControl] Adding item to setlist, new length:', prev.length + 1);
+        return [...prev, item];
+      });
+    });
+    return () => {
+      console.log('[useRemoteControl] Cleaning up onAddToSetlist listener');
+      unsubscribe();
+    };
+  }, [setSetlist]);
+
+  // Remote Control: Sync setlist from server on mount (in case items were added while on different page)
+  useEffect(() => {
+    const syncSetlist = async () => {
+      try {
+        const serverSetlist = await window.electronAPI.remoteControl.getServerSetlist();
+        if (serverSetlist && serverSetlist.length > 0) {
+          console.log('[useRemoteControl] Syncing setlist from server:', serverSetlist.length, 'items');
+          setSetlist(prev => {
+            // Merge server items that we don't have
+            const existingIds = new Set(prev.map(item => item.id));
+            const newItems = serverSetlist.filter((item: any) => !existingIds.has(item.id));
+            if (newItems.length > 0) {
+              console.log('[useRemoteControl] Adding', newItems.length, 'items from server');
+              return [...prev, ...newItems];
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        console.error('[useRemoteControl] Error syncing setlist from server:', err);
+      }
+    };
+    syncSetlist();
+  }, [setSetlist]);
 }

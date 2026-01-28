@@ -22,6 +22,7 @@ interface SlideData {
   transliteration?: string;
   translation?: string;
   translationOverflow?: string;
+  originalLanguage?: string; // Song's original language - used to determine single-language rendering
   reference?: string;  // Bible verse reference (e.g., "Genesis 1:1") or Hebrew reference for prayer
   referenceTranslation?: string; // English reference for prayer
   referenceEnglish?: string; // English reference for Bible themes (e.g., "Genesis 1:1")
@@ -650,9 +651,22 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
 
     if (!slideData) return null;
 
+    // Check if this is a single-language song
+    const lang = slideData.originalLanguage;
+    const isSingleLang = lang && lang !== 'he' && lang !== 'ar';
+
     switch (lineType) {
       case 'original':
       case 'hebrew':  // Bible theme compatibility
+        // For single-language songs, combine all text fields into one display
+        if (isSingleLang) {
+          const lines: string[] = [];
+          if (slideData.originalText) lines.push(slideData.originalText);
+          if (slideData.transliteration) lines.push(slideData.transliteration);
+          if (slideData.translation) lines.push(slideData.translation);
+          if (slideData.translationOverflow) lines.push(slideData.translationOverflow);
+          return lines.length > 0 ? lines.join('\n') : null;
+        }
         // In original-only mode with combined slides, show all combined slides' original text
         // combinedSlides already contains all slides (including the first), so don't add mainText
         if (displayMode === 'original' && combinedSlides && combinedSlides.length > 0) {
@@ -663,9 +677,13 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
         }
         return slideData.originalText || null;
       case 'transliteration':
+        // For single-language songs, this is handled in 'original' above
+        if (isSingleLang) return null;
         return slideData.transliteration || null;
       case 'translation':
       case 'english':  // Bible theme compatibility
+        // For single-language songs, this is handled in 'original' above
+        if (isSingleLang) return null;
         // Combine translation with overflow if present
         if (slideData.translationOverflow) {
           return `${slideData.translation || ''}\n${slideData.translationOverflow}`;
@@ -698,8 +716,33 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
     }
   };
 
+  // Check if this is a single-language song (not Hebrew/Arabic that needs transliteration)
+  const isSingleLanguageSong = useMemo(() => {
+    if (!slideData?.originalLanguage) return false;
+    const lang = slideData.originalLanguage;
+    // Hebrew and Arabic use transliteration, all others are single-language
+    return lang !== 'he' && lang !== 'ar';
+  }, [slideData?.originalLanguage]);
+
   // Check if line should be visible based on display mode
   const shouldShowLine = (lineType: string): boolean => {
+    // For single-language songs, only show 'original' line (which will contain all text)
+    if (isSingleLanguageSong) {
+      switch (lineType) {
+        case 'original':
+        case 'hebrew':
+          return true;
+        case 'transliteration':
+        case 'translation':
+        case 'translationOverflow':
+        case 'english':
+          return false; // Hide these - content is combined into 'original'
+        default:
+          // Allow other line types (reference, title, etc.) to follow normal rules
+          break;
+      }
+    }
+
     switch (lineType) {
       case 'original':
       case 'hebrew':  // Bible theme compatibility
@@ -820,6 +863,26 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
       // Check for per-line background (OBS overlay style)
       const hasLineBackground = !!style?.backgroundColor;
 
+      // Check if this is a reference line that may have border styling
+      const isReferenceLine = lineType === 'reference' || lineType === 'referenceEnglish' || lineType === 'referenceTranslation';
+
+      // Build border styles for reference lines
+      const borderStyles: React.CSSProperties = {};
+      if (isReferenceLine && style) {
+        const borderColor = style.borderColor || '#ffffff';
+        if (style.borderTop) borderStyles.borderTop = `${style.borderTop}px solid ${borderColor}`;
+        if (style.borderRight) borderStyles.borderRight = `${style.borderRight}px solid ${borderColor}`;
+        if (style.borderBottom) borderStyles.borderBottom = `${style.borderBottom}px solid ${borderColor}`;
+        if (style.borderLeft) borderStyles.borderLeft = `${style.borderLeft}px solid ${borderColor}`;
+        // Apply individual corner radii or fallback to single borderRadius
+        const hasCornerRadii = style.borderRadiusTopLeft || style.borderRadiusTopRight || style.borderRadiusBottomRight || style.borderRadiusBottomLeft;
+        if (hasCornerRadii) {
+          borderStyles.borderRadius = `${style.borderRadiusTopLeft ?? 0}px ${style.borderRadiusTopRight ?? 0}px ${style.borderRadiusBottomRight ?? 0}px ${style.borderRadiusBottomLeft ?? 0}px`;
+        } else if (style.borderRadius) {
+          borderStyles.borderRadius = `${style.borderRadius}px`;
+        }
+      }
+
       // Check if this is a combined slides scenario (original line with multiple slides)
       const hasCombinedContent = (lineType === 'original' || lineType === 'hebrew') &&
                                   combinedSlides && combinedSlides.length > 1;
@@ -853,8 +916,9 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
             paddingLeft: `${position.paddingLeft ?? 0}px`,
             paddingRight: `${position.paddingRight ?? 0}px`,
             boxSizing: 'border-box',
-            zIndex: 2,
-            overflow: useAutoHeight ? 'visible' : 'hidden'
+            zIndex: isReferenceLine ? 10 : 2,
+            overflow: useAutoHeight ? 'visible' : 'hidden',
+            ...borderStyles
           }}
         >
           <div

@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   identifyDisplays: (displayId?: number) => ipcRenderer.invoke('displays:identify', displayId),
   moveControlWindow: (targetDisplayId: number) => ipcRenderer.invoke('displays:moveControlWindow', targetDisplayId),
   getControlWindowDisplay: () => ipcRenderer.invoke('displays:getControlWindowDisplay'),
+  sendStageMessage: (displayId: number, message: string) => ipcRenderer.invoke('displays:sendStageMessage', displayId, message),
 
   // ============ OBS Browser Source Server ============
   startOBSServer: () => ipcRenderer.invoke('obs:start'),
@@ -104,6 +105,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateSong: (id: string, data: any) => ipcRenderer.invoke('db:songs:update', id, data),
   deleteSong: (id: string) => ipcRenderer.invoke('db:songs:delete', id),
   importSongs: (backendUrl: string) => ipcRenderer.invoke('db:songs:import', backendUrl),
+  exportSongsJSON: () => ipcRenderer.invoke('db:songs:exportJSON'),
+  importSongsJSON: (jsonData: string) => ipcRenderer.invoke('db:songs:importJSON', jsonData),
+
+  // ============ Theme Export/Import ============
+  exportThemesJSON: () => ipcRenderer.invoke('db:themes:exportJSON'),
+  importThemesJSON: (jsonData: string) => ipcRenderer.invoke('db:themes:importJSON', jsonData),
+
+  // ============ File System / Dialogs ============
+  showSaveDialog: (options: { defaultPath?: string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke('dialog:saveFile', options),
+  showOpenDialog: (options: { filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke('dialog:openFile', options),
+  writeFile: (filePath: string, content: string) => ipcRenderer.invoke('fs:writeFile', filePath, content),
+  readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
 
   // ============ Database - Setlists ============
   getSetlists: () => ipcRenderer.invoke('db:setlists:getAll'),
@@ -255,11 +268,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getStatus: () => ipcRenderer.invoke('remoteControl:getStatus'),
     getQRCode: () => ipcRenderer.invoke('remoteControl:getQRCode'),
     updateState: (state: any) => ipcRenderer.send('remoteControl:updateState', state),
+    setCommandHandlerActive: (active: boolean) => ipcRenderer.send('remoteControl:setCommandHandlerActive', active),
     onCommand: (callback: (command: any) => void) => {
       const handler = (_: any, command: any) => callback(command);
       ipcRenderer.on('remote:command', handler);
       return () => ipcRenderer.removeListener('remote:command', handler);
-    }
+    },
+    onAddToSetlist: (callback: (item: any) => void) => {
+      const handler = (_: any, item: any) => {
+        console.log('[preload] Received remote:addToSetlist');
+        callback(item);
+      };
+      ipcRenderer.on('remote:addToSetlist', handler);
+      return () => ipcRenderer.removeListener('remote:addToSetlist', handler);
+    },
+    // Get current setlist from server (for sync on mount)
+    getServerSetlist: () => ipcRenderer.invoke('remoteControl:getSetlist')
   },
 
   // ============ UI Scaling ============
@@ -286,6 +310,7 @@ declare global {
       identifyDisplays: (displayId?: number) => Promise<boolean>;
       moveControlWindow: (targetDisplayId: number) => Promise<boolean>;
       getControlWindowDisplay: () => Promise<number | null>;
+      sendStageMessage: (displayId: number, message: string) => Promise<boolean>;
 
       // OBS Browser Source Server
       startOBSServer: () => Promise<{ success: boolean; url?: string; port?: number; error?: string }>;
@@ -364,6 +389,25 @@ declare global {
       updateSong: (id: string, data: any) => Promise<any>;
       deleteSong: (id: string) => Promise<boolean>;
       importSongs: (backendUrl: string) => Promise<{ imported: number; updated: number; errors: number }>;
+      exportSongsJSON: () => Promise<string>;
+      importSongsJSON: (jsonData: string) => Promise<{ imported: number; skipped: number; errors: number }>;
+
+      // Theme Export/Import
+      exportThemesJSON: () => Promise<string>;
+      importThemesJSON: (jsonData: string) => Promise<{
+        viewerThemes: { imported: number; skipped: number; errors: number };
+        stageThemes: { imported: number; skipped: number; errors: number };
+        bibleThemes: { imported: number; skipped: number; errors: number };
+        prayerThemes: { imported: number; skipped: number; errors: number };
+        obsThemes: { imported: number; skipped: number; errors: number };
+        total: { imported: number; skipped: number; errors: number };
+      }>;
+
+      // File System / Dialogs
+      showSaveDialog: (options: { defaultPath?: string; filters?: { name: string; extensions: string[] }[] }) => Promise<{ canceled: boolean; filePath?: string }>;
+      showOpenDialog: (options: { filters?: { name: string; extensions: string[] }[] }) => Promise<{ canceled: boolean; filePaths: string[] }>;
+      writeFile: (filePath: string, content: string) => Promise<boolean>;
+      readFile: (filePath: string) => Promise<string>;
 
       // Database - Setlists
       getSetlists: () => Promise<any[]>;
@@ -590,6 +634,10 @@ declare global {
           isBlank?: boolean;
           setlist?: Array<{ id: string; type: string; title: string }>;
           slides?: Array<{ index: number; preview: string; verseType?: string; isCombined?: boolean }>;
+          fullSlides?: Array<any>;  // Full slide data for direct broadcasting by main process
+          fullSetlist?: Array<any>; // Full setlist with song/presentation data for direct handling
+          songTitle?: string;       // Current song/content title for display
+          currentContentType?: 'song' | 'bible' | 'prayer' | 'presentation';
           activeTools?: string[];
           onlineViewerCount?: number;
           activeMedia?: { type: 'image' | 'video'; name: string } | null;
@@ -597,7 +645,10 @@ declare global {
           activeVideo?: { name: string; isPlaying: boolean; currentTime: number; duration: number; volume: number } | null;
           activeYoutube?: { videoId: string; title: string; isPlaying: boolean; currentTime: number; duration: number } | null;
         }) => void;
+        setCommandHandlerActive: (active: boolean) => void;
         onCommand: (callback: (command: { type: string; payload?: any }) => void) => () => void;
+        onAddToSetlist: (callback: (item: any) => void) => () => void;
+        getServerSetlist: () => Promise<any[]>;
       };
 
       // UI Scaling

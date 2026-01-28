@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface Theme {
@@ -21,6 +21,12 @@ interface ThemeOverride {
   themeId: string;
 }
 
+interface OBSTheme {
+  id: string;
+  name: string;
+  type?: 'songs' | 'bible' | 'prayer';
+}
+
 interface DisplayThemeOverrideModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -30,9 +36,28 @@ interface DisplayThemeOverrideModalProps {
   bibleThemes: Theme[];
   prayerThemes: Theme[];
   onOverrideChanged: () => void;
+  /** Optional: Show settings only for a specific display */
+  selectedDisplayId?: number | 'obs' | null;
+  /** OBS themes for OBS mode */
+  obsThemes?: OBSTheme[];
+  selectedOBSSongsTheme?: OBSTheme | null;
+  selectedOBSBibleTheme?: OBSTheme | null;
+  selectedOBSPrayerTheme?: OBSTheme | null;
+  onApplyOBSTheme?: (theme: OBSTheme) => void;
 }
 
-const DisplayThemeOverrideModal: React.FC<DisplayThemeOverrideModalProps> = ({
+// Helper function moved outside component - doesn't depend on any state/props
+const getThemeTypesForDisplay = (display: Display): Array<'viewer' | 'stage' | 'bible' | 'prayer'> => {
+  if (display.assignedType === 'stage') {
+    return ['stage'];
+  } else if (display.assignedType === 'viewer') {
+    return ['viewer', 'bible', 'prayer'];
+  }
+  // Not assigned - show all options for future assignment
+  return ['viewer', 'stage', 'bible', 'prayer'];
+};
+
+const DisplayThemeOverrideModal = memo<DisplayThemeOverrideModalProps>(({
   isOpen,
   onClose,
   displays,
@@ -40,21 +65,30 @@ const DisplayThemeOverrideModal: React.FC<DisplayThemeOverrideModalProps> = ({
   stageThemes,
   bibleThemes,
   prayerThemes,
-  onOverrideChanged
+  onOverrideChanged,
+  selectedDisplayId,
+  obsThemes = [],
+  selectedOBSSongsTheme,
+  selectedOBSBibleTheme,
+  selectedOBSPrayerTheme,
+  onApplyOBSTheme
 }) => {
   const { t } = useTranslation();
   const [overrides, setOverrides] = useState<ThemeOverride[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Load existing overrides
   const loadOverrides = useCallback(async () => {
     try {
+      setError(null);
       const data = await window.electronAPI.displayThemeOverrides.getAll();
       setOverrides(data);
-    } catch (error) {
-      console.error('Failed to load display theme overrides:', error);
+    } catch (err) {
+      console.error('Failed to load display theme overrides:', err);
+      setError(t('displayThemeOverrides.loadError', 'Failed to load theme overrides'));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (isOpen) {
@@ -69,12 +103,13 @@ const DisplayThemeOverrideModal: React.FC<DisplayThemeOverrideModalProps> = ({
   };
 
   // Handle theme selection change
-  const handleThemeChange = async (
+  const handleThemeChange = useCallback(async (
     displayId: number,
     themeType: 'viewer' | 'stage' | 'bible' | 'prayer',
     themeId: string
   ) => {
     setLoading(true);
+    setError(null);
     try {
       if (themeId === '') {
         // Remove override (use global theme)
@@ -85,42 +120,29 @@ const DisplayThemeOverrideModal: React.FC<DisplayThemeOverrideModalProps> = ({
       }
       await loadOverrides();
       onOverrideChanged();
-    } catch (error) {
-      console.error('Failed to update display theme override:', error);
+    } catch (err) {
+      console.error('Failed to update display theme override:', err);
+      setError(t('displayThemeOverrides.updateError', 'Failed to update theme override. Please try again.'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadOverrides, onOverrideChanged, t]);
+
+  // Memoized theme map for efficient lookups
+  const themesMap = useMemo(() => ({
+    viewer: themes,
+    stage: stageThemes,
+    bible: bibleThemes,
+    prayer: prayerThemes
+  }), [themes, stageThemes, bibleThemes, prayerThemes]);
 
   // Get themes for a specific type
-  const getThemesForType = (themeType: 'viewer' | 'stage' | 'bible' | 'prayer'): Theme[] => {
-    switch (themeType) {
-      case 'viewer':
-        return themes;
-      case 'stage':
-        return stageThemes;
-      case 'bible':
-        return bibleThemes;
-      case 'prayer':
-        return prayerThemes;
-      default:
-        return [];
-    }
-  };
-
-  // Get the relevant theme types for a display based on its assigned type
-  const getThemeTypesForDisplay = (display: Display): Array<'viewer' | 'stage' | 'bible' | 'prayer'> => {
-    if (display.assignedType === 'stage') {
-      return ['stage'];
-    } else if (display.assignedType === 'viewer') {
-      return ['viewer', 'bible', 'prayer'];
-    }
-    // Not assigned - show all options for future assignment
-    return ['viewer', 'stage', 'bible', 'prayer'];
-  };
+  const getThemesForType = useCallback((themeType: 'viewer' | 'stage' | 'bible' | 'prayer'): Theme[] => {
+    return themesMap[themeType] || [];
+  }, [themesMap]);
 
   // Get display name for theme type
-  const getThemeTypeName = (themeType: 'viewer' | 'stage' | 'bible' | 'prayer'): string => {
+  const getThemeTypeName = useCallback((themeType: 'viewer' | 'stage' | 'bible' | 'prayer'): string => {
     switch (themeType) {
       case 'viewer':
         return t('displayThemeOverrides.songsTheme', 'Songs Theme');
@@ -133,11 +155,37 @@ const DisplayThemeOverrideModal: React.FC<DisplayThemeOverrideModalProps> = ({
       default:
         return themeType;
     }
-  };
+  }, [t]);
 
   if (!isOpen) return null;
 
-  const assignedDisplays = displays.filter(d => d.isAssigned);
+  // Determine which displays to show
+  const isOBSMode = selectedDisplayId === 'obs';
+  const isSingleDisplayMode = selectedDisplayId !== undefined && selectedDisplayId !== null && !isOBSMode;
+
+  let displayList: Display[];
+  if (isOBSMode) {
+    // OBS mode - create a virtual display for OBS
+    displayList = [];
+  } else if (isSingleDisplayMode) {
+    // Single display mode - show only the selected display
+    const targetDisplay = displays.find(d => d.id === selectedDisplayId);
+    displayList = targetDisplay ? [targetDisplay] : [];
+  } else {
+    // Show all assigned displays
+    displayList = displays.filter(d => d.isAssigned);
+  }
+
+  // Get title based on mode
+  const getTitle = () => {
+    if (isOBSMode) {
+      return t('displayThemeOverrides.obsTitle', 'OBS Theme Settings');
+    }
+    if (isSingleDisplayMode && displayList.length > 0) {
+      return t('displayThemeOverrides.displayTitle', 'Theme Settings - {{displayName}}', { displayName: displayList[0].label });
+    }
+    return t('displayThemeOverrides.title', 'Per-Display Theme Overrides');
+  };
 
   return (
     <div
@@ -174,7 +222,7 @@ const DisplayThemeOverrideModal: React.FC<DisplayThemeOverrideModalProps> = ({
           marginBottom: '20px'
         }}>
           <h2 style={{ margin: 0, color: 'white', fontSize: '1.25rem' }}>
-            {t('displayThemeOverrides.title', 'Per-Display Theme Overrides')}
+            {getTitle()}
           </h2>
           <button
             onClick={onClose}
@@ -198,17 +246,192 @@ const DisplayThemeOverrideModal: React.FC<DisplayThemeOverrideModalProps> = ({
         </div>
 
         {/* Description */}
-        <p style={{
-          color: 'rgba(255,255,255,0.7)',
-          fontSize: '0.85rem',
-          marginBottom: '20px',
-          lineHeight: 1.5
-        }}>
-          {t('displayThemeOverrides.description', 'Configure specific themes for individual displays. When set to "Use Global", the display will use whatever theme is selected in the main theme selector.')}
-        </p>
+        {!isOBSMode && (
+          <p style={{
+            color: 'rgba(255,255,255,0.7)',
+            fontSize: '0.85rem',
+            marginBottom: '20px',
+            lineHeight: 1.5
+          }}>
+            {isSingleDisplayMode
+              ? t('displayThemeOverrides.singleDescription', 'Override the global theme for this display. When set to "Use Global", it will use the theme from Settings.')
+              : t('displayThemeOverrides.description', 'Configure specific themes for individual displays. When set to "Use Global", the display will use whatever theme is selected in the main theme selector.')}
+          </p>
+        )}
+        {isOBSMode && (
+          <p style={{
+            color: 'rgba(255,255,255,0.7)',
+            fontSize: '0.85rem',
+            marginBottom: '20px',
+            lineHeight: 1.5
+          }}>
+            {t('displayThemeOverrides.obsDescription', 'OBS themes are configured in the Global Themes section of Settings. Per-display overrides are not available for OBS.')}
+          </p>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div style={{
+            padding: '10px 16px',
+            background: 'rgba(220, 53, 69, 0.2)',
+            border: '1px solid rgba(220, 53, 69, 0.5)',
+            borderRadius: '8px',
+            marginBottom: '16px',
+            color: '#ff6b6b',
+            fontSize: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            {error}
+          </div>
+        )}
 
         {/* Display List */}
-        {assignedDisplays.length === 0 ? (
+        {isOBSMode ? (
+          <div style={{
+            background: 'rgba(23, 162, 184, 0.1)',
+            borderRadius: '12px',
+            border: '1px solid rgba(23, 162, 184, 0.3)',
+            padding: '16px'
+          }}>
+            {/* OBS Header */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              marginBottom: '16px'
+            }}>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                background: 'rgba(23, 162, 184, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#17a2b8" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              </div>
+              <div>
+                <div style={{ color: 'white', fontWeight: 500 }}>OBS Browser Source</div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>
+                  {t('displayThemeOverrides.obsGlobalThemes', 'Global OBS Themes')}
+                </div>
+              </div>
+            </div>
+
+            {/* OBS Theme Selectors */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {/* OBS Songs Theme */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', minWidth: '100px' }}>
+                  {t('controlPanel.obsSongsTheme', 'OBS Songs')}:
+                </label>
+                <select
+                  value={selectedOBSSongsTheme?.id || ''}
+                  onChange={(e) => {
+                    const theme = obsThemes.find(t => t.id === e.target.value);
+                    if (theme && onApplyOBSTheme) onApplyOBSTheme(theme);
+                  }}
+                  style={{
+                    flex: 1,
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(102, 126, 234, 0.4)',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
+                    color: 'white',
+                    fontSize: '0.85rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="" style={{ background: '#1e1e32' }}>
+                    {t('common.selectTheme', 'Select...')}
+                  </option>
+                  {obsThemes.filter(t => t.type === 'songs').map(theme => (
+                    <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
+                      {theme.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* OBS Bible Theme */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', minWidth: '100px' }}>
+                  {t('controlPanel.obsBibleTheme', 'OBS Bible')}:
+                </label>
+                <select
+                  value={selectedOBSBibleTheme?.id || ''}
+                  onChange={(e) => {
+                    const theme = obsThemes.find(t => t.id === e.target.value);
+                    if (theme && onApplyOBSTheme) onApplyOBSTheme(theme);
+                  }}
+                  style={{
+                    flex: 1,
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(76, 175, 80, 0.4)',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
+                    color: 'white',
+                    fontSize: '0.85rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="" style={{ background: '#1e1e32' }}>
+                    {t('common.selectTheme', 'Select...')}
+                  </option>
+                  {obsThemes.filter(t => t.type === 'bible').map(theme => (
+                    <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
+                      {theme.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* OBS Prayer Theme */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', minWidth: '100px' }}>
+                  {t('controlPanel.obsPrayerTheme', 'OBS Prayer')}:
+                </label>
+                <select
+                  value={selectedOBSPrayerTheme?.id || ''}
+                  onChange={(e) => {
+                    const theme = obsThemes.find(t => t.id === e.target.value);
+                    if (theme && onApplyOBSTheme) onApplyOBSTheme(theme);
+                  }}
+                  style={{
+                    flex: 1,
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(6, 182, 212, 0.4)',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
+                    color: 'white',
+                    fontSize: '0.85rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="" style={{ background: '#1e1e32' }}>
+                    {t('common.selectTheme', 'Select...')}
+                  </option>
+                  {obsThemes.filter(t => t.type === 'prayer').map(theme => (
+                    <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
+                      {theme.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        ) : displayList.length === 0 ? (
           <div style={{
             padding: '40px 20px',
             textAlign: 'center',
@@ -228,12 +451,14 @@ const DisplayThemeOverrideModal: React.FC<DisplayThemeOverrideModalProps> = ({
               <line x1="12" y1="17" x2="12" y2="21" />
             </svg>
             <p style={{ margin: 0 }}>
-              {t('displayThemeOverrides.noDisplays', 'No displays are currently active. Open a viewer or stage display to configure per-display themes.')}
+              {isSingleDisplayMode
+                ? t('displayThemeOverrides.displayNotFound', 'Display not found or not active.')
+                : t('displayThemeOverrides.noDisplays', 'No displays are currently active. Open a viewer or stage display to configure per-display themes.')}
             </p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {assignedDisplays.map((display, index) => (
+            {displayList.map((display, index) => (
               <div
                 key={display.id}
                 style={{
@@ -351,6 +576,8 @@ const DisplayThemeOverrideModal: React.FC<DisplayThemeOverrideModalProps> = ({
       </div>
     </div>
   );
-};
+});
+
+DisplayThemeOverrideModal.displayName = 'DisplayThemeOverrideModal';
 
 export default DisplayThemeOverrideModal;

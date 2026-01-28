@@ -116,7 +116,15 @@
     "pin": "PIN",
     "uiScale": "Interface Size",
     "uiScaleDescription": "Adjust the size of buttons, text, and controls",
-    "resetToDefault": "Reset to 100%"
+    "resetToDefault": "Reset to 100%",
+    "themeImportExport": "Theme Import / Export",
+    "themeImportExportDescription": "Export all your custom themes (Songs, Bible, Prayer, Stage, and OBS themes) to a JSON file for backup or transfer to another device.",
+    "exportThemes": "Export Themes",
+    "importThemes": "Import Themes",
+    "themeExportSuccess": "Themes exported successfully!",
+    "themeExportError": "Failed to export themes. Please try again.",
+    "themeImportError": "Failed to import themes. Please check that the file is a valid theme export.",
+    "themeImportNote": "Note: Built-in themes are not exported. Importing will skip themes that already exist with the same name."
   },
   "songs": {
     "title": "Songs",
@@ -384,6 +392,7 @@
     "primary": "Primary",
     "viewer": "Viewer",
     "stage": "Stage",
+    "start": "Start",
     "viewerThemes": "Viewer Themes",
     "stageMonitorThemes": "Stage Monitor Themes",
     "songsTheme": "Songs Theme",
@@ -500,6 +509,39 @@
     "delete": "Delete",
     "addToSetlist": "Add to Setlist",
     "removeFromSetlist": "Remove from Setlist",
-    "searchPresentations": "Search presentations..."
+    "searchPresentations": "Search presentations...",
+    "themes": "Themes",
+    "globalThemes": "Global Themes",
+    "slides": "slides",
+    "arrangement": {
+      "arr": "Arr",
+      "enterArrangementMode": "Arrangement Mode",
+      "exitArrangementMode": "Exit Arrangement Mode",
+      "selectArrangement": "-- Select Arrangement --",
+      "newArrangement": "New Arrangement",
+      "namePlaceholder": "Arrangement name...",
+      "confirmDelete": "Delete this arrangement?",
+      "availableSections": "Available Sections",
+      "noSections": "No sections in this song",
+      "arrangementOrder": "Arrangement Order",
+      "missingSections": "Missing sections",
+      "dragSectionsHere": "Drag sections here to build your arrangement",
+      "selectOrCreate": "Select an arrangement or create a new one"
+    }
+  },
+  "displaySettings": {
+    "title": "Display Settings",
+    "displayType": "Display Type",
+    "themeSettings": "Theme Settings",
+    "themeDescription": "Leave as \"Use Global\" to use the theme from Settings, or choose a custom theme for this display.",
+    "startDisplay": "Start Display",
+    "applyChanges": "Apply Changes"
+  },
+  "displayThemeOverrides": {
+    "useGlobal": "-- Use Global --",
+    "songsTheme": "Songs Theme",
+    "bibleTheme": "Bible Theme",
+    "prayerTheme": "Prayer Theme",
+    "stageTheme": "Stage Theme"
   }
 }

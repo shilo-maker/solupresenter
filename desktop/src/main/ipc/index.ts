@@ -59,9 +59,10 @@ function checkRateLimit(key: string, maxCallsPerSecond: number): boolean {
   limiter.lastCall = now;
   return true;
 }
-import { getSongs, getSong, createSong, updateSong, deleteSong, importSongsFromBackend } from '../database/songs';
+import { getSongs, getSong, createSong, updateSong, deleteSong, importSongsFromBackend, exportSongsToJSON, importSongsFromJSON } from '../database/songs';
 import { getSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist } from '../database/setlists';
 import { getThemes, getTheme, createTheme, updateTheme, deleteTheme } from '../database/themes';
+import { exportThemesToJSON, importThemesFromJSON } from '../database/themeExportImport';
 import { getStageThemes, getStageTheme, createStageTheme, updateStageTheme, deleteStageTheme, duplicateStageTheme, setDefaultStageTheme } from '../database/stageThemes';
 import { getBibleThemes, getBibleTheme, createBibleTheme, updateBibleTheme, deleteBibleTheme, getDefaultBibleTheme } from '../database/bibleThemes';
 import { getOBSThemes, getOBSTheme, createOBSTheme, updateOBSTheme, deleteOBSTheme, getDefaultOBSTheme, OBSThemeType } from '../database/obsThemes';
@@ -106,6 +107,9 @@ export function setSocketControlWindow(window: import('electron').BrowserWindow)
 export function registerIpcHandlers(displayManager: DisplayManager): void {
   mediaManager = new MediaManager();
   socketService = new SocketService();
+
+  // Set displayManager reference for remote control server (for direct slide broadcasting)
+  remoteControlServer.setDisplayManager(displayManager);
 
   // Initialize auth service
   authService.initialize().catch(err => console.error('Auth init failed:', err));
@@ -193,6 +197,17 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     } catch (error) {
       console.error('[IPC displays:getControlWindowDisplay] Error:', error);
       return null;
+    }
+  });
+
+  // Send a message to a specific stage display
+  ipcMain.handle('displays:sendStageMessage', (event, displayId: number, message: string) => {
+    try {
+      displayManager.sendStageMessage(displayId, message);
+      return true;
+    } catch (error) {
+      console.error('[IPC displays:sendStageMessage] Error:', error);
+      return false;
     }
   });
 
@@ -962,6 +977,74 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
       return await importSongsFromBackend(backendUrl);
     } catch (error) {
       console.error('IPC db:songs:import error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:songs:exportJSON', async () => {
+    try {
+      return await exportSongsToJSON();
+    } catch (error) {
+      console.error('IPC db:songs:exportJSON error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:songs:importJSON', async (event, jsonData: string) => {
+    try {
+      if (!jsonData || typeof jsonData !== 'string') {
+        throw new Error('Invalid JSON data');
+      }
+      return await importSongsFromJSON(jsonData);
+    } catch (error) {
+      console.error('IPC db:songs:importJSON error:', error);
+      throw error;
+    }
+  });
+
+  // ============ Theme Export/Import ============
+  ipcMain.handle('db:themes:exportJSON', async () => {
+    try {
+      return await exportThemesToJSON();
+    } catch (error) {
+      console.error('IPC db:themes:exportJSON error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:themes:importJSON', async (event, jsonData: string) => {
+    try {
+      if (!jsonData || typeof jsonData !== 'string') {
+        throw new Error('Invalid JSON data');
+      }
+      return await importThemesFromJSON(jsonData);
+    } catch (error) {
+      console.error('IPC db:themes:importJSON error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('fs:writeFile', async (event, filePath: string, content: string) => {
+    try {
+      if (!filePath || typeof filePath !== 'string') {
+        throw new Error('Invalid file path');
+      }
+      fs.writeFileSync(filePath, content, 'utf-8');
+      return true;
+    } catch (error) {
+      console.error('IPC fs:writeFile error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('fs:readFile', async (event, filePath: string) => {
+    try {
+      if (!filePath || typeof filePath !== 'string') {
+        throw new Error('Invalid file path');
+      }
+      return fs.readFileSync(filePath, 'utf-8');
+    } catch (error) {
+      console.error('IPC fs:readFile error:', error);
       throw error;
     }
   });
@@ -1953,6 +2036,14 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     remoteControlServer.updateState(state);
   });
 
+  ipcMain.on('remoteControl:setCommandHandlerActive', (event, active: boolean) => {
+    remoteControlServer.setCommandHandlerActive(active);
+  });
+
+  ipcMain.handle('remoteControl:getSetlist', () => {
+    return remoteControlServer.getSetlist();
+  });
+
   // Set control window reference for remote control
   if (controlWindowRef) {
     remoteControlServer.setControlWindow(controlWindowRef);
@@ -1965,6 +2056,13 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     stage: (id: string) => queryOne('SELECT * FROM stage_themes WHERE id = ?', [id]),
     bible: (id: string) => queryOne('SELECT * FROM bible_themes WHERE id = ?', [id]),
     prayer: (id: string) => queryOne('SELECT * FROM prayer_themes WHERE id = ?', [id])
+  });
+
+  // Set up default theme resolvers to load default themes when none are set
+  displayManager.setDefaultThemeResolvers({
+    viewer: () => queryOne('SELECT * FROM viewer_themes WHERE isDefault = 1'),
+    bible: () => queryOne('SELECT * FROM bible_themes WHERE isDefault = 1'),
+    prayer: () => queryOne('SELECT * FROM prayer_themes WHERE isDefault = 1')
   });
 
   // ============ Display Theme Overrides ============

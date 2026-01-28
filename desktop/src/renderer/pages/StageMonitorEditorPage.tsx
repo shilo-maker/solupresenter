@@ -6,7 +6,11 @@ import {
   StageColorPanel,
   StageColors,
   StageElementConfig,
-  StageCurrentSlideText
+  StageCurrentSlideText,
+  StageNextSlideText,
+  StageSelectedElement,
+  StageTextStyle,
+  PreviewTexts
 } from '../components/stage-monitor-editor';
 
 interface StageMonitorTheme {
@@ -24,6 +28,7 @@ interface StageMonitorTheme {
     nextSlideArea: StageElementConfig;
   };
   currentSlideText: StageCurrentSlideText;
+  nextSlideText: StageNextSlideText;
 }
 
 const DEFAULT_THEME: Omit<StageMonitorTheme, 'id'> = {
@@ -73,9 +78,86 @@ const DEFAULT_THEME: Omit<StageMonitorTheme, 'id'> = {
     }
   },
   currentSlideText: {
-    original: { visible: true, color: '#ffffff', fontSize: 100, fontWeight: 'bold', opacity: 1 },
-    transliteration: { visible: true, color: '#888888', fontSize: 70, fontWeight: '400', opacity: 1 },
-    translation: { visible: true, color: '#ffffff', fontSize: 70, fontWeight: '400', opacity: 0.9 }
+    original: {
+      visible: true,
+      color: '#ffffff',
+      fontSize: 100,
+      fontWeight: 'bold',
+      opacity: 1,
+      x: 5, y: 20, width: 58, height: 15,
+      alignH: 'center',
+      alignV: 'center',
+      positionMode: 'absolute',
+      autoHeight: false,
+      growDirection: 'down'
+    },
+    transliteration: {
+      visible: true,
+      color: '#888888',
+      fontSize: 70,
+      fontWeight: '400',
+      opacity: 1,
+      x: 5, y: 40, width: 58, height: 12,
+      alignH: 'center',
+      alignV: 'center',
+      positionMode: 'absolute',
+      autoHeight: false,
+      growDirection: 'down'
+    },
+    translation: {
+      visible: true,
+      color: '#ffffff',
+      fontSize: 70,
+      fontWeight: '400',
+      opacity: 0.9,
+      x: 5, y: 55, width: 58, height: 12,
+      alignH: 'center',
+      alignV: 'center',
+      positionMode: 'absolute',
+      autoHeight: false,
+      growDirection: 'down'
+    }
+  },
+  nextSlideText: {
+    original: {
+      visible: true,
+      color: '#ffffff',
+      fontSize: 100,
+      fontWeight: 'bold',
+      opacity: 0.8,
+      x: 70, y: 25, width: 26, height: 12,
+      alignH: 'center',
+      alignV: 'center',
+      positionMode: 'absolute',
+      autoHeight: false,
+      growDirection: 'down'
+    },
+    transliteration: {
+      visible: true,
+      color: '#888888',
+      fontSize: 70,
+      fontWeight: '400',
+      opacity: 0.7,
+      x: 70, y: 40, width: 26, height: 10,
+      alignH: 'center',
+      alignV: 'center',
+      positionMode: 'absolute',
+      autoHeight: false,
+      growDirection: 'down'
+    },
+    translation: {
+      visible: true,
+      color: '#ffffff',
+      fontSize: 70,
+      fontWeight: '400',
+      opacity: 0.7,
+      x: 70, y: 52, width: 26, height: 10,
+      alignH: 'center',
+      alignV: 'center',
+      positionMode: 'absolute',
+      autoHeight: false,
+      growDirection: 'down'
+    }
   }
 };
 
@@ -89,25 +171,53 @@ const StageMonitorEditorPage: React.FC = () => {
     ...DEFAULT_THEME
   });
 
-  const [selectedElement, setSelectedElement] = useState<'header' | 'clock' | 'songTitle' | 'currentSlide' | 'nextSlide' | null>(null);
+  const [selectedElement, setSelectedElement] = useState<StageSelectedElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<'elements' | 'colors' | 'resolution'>('elements');
+  const [previewTexts, setPreviewTexts] = useState<PreviewTexts>({
+    original: 'הללויה',
+    transliteration: 'Hallelujah',
+    translation: 'Praise the Lord'
+  });
 
   // Load theme if editing existing
   useEffect(() => {
     if (themeId) {
       window.electronAPI.getStageTheme(themeId).then((loadedTheme: any) => {
         if (loadedTheme) {
+          // Merge with defaults to ensure all position properties exist
+          const mergedCurrentSlideText = {
+            original: { ...DEFAULT_THEME.currentSlideText.original, ...(loadedTheme.currentSlideText?.original || {}) },
+            transliteration: { ...DEFAULT_THEME.currentSlideText.transliteration, ...(loadedTheme.currentSlideText?.transliteration || {}) },
+            translation: { ...DEFAULT_THEME.currentSlideText.translation, ...(loadedTheme.currentSlideText?.translation || {}) }
+          };
+
+          const mergedNextSlideText = {
+            original: { ...DEFAULT_THEME.nextSlideText.original, ...(loadedTheme.nextSlideText?.original || {}) },
+            transliteration: { ...DEFAULT_THEME.nextSlideText.transliteration, ...(loadedTheme.nextSlideText?.transliteration || {}) },
+            translation: { ...DEFAULT_THEME.nextSlideText.translation, ...(loadedTheme.nextSlideText?.translation || {}) }
+          };
+
+          // Deep merge elements to ensure all properties exist
+          const mergedElements = {
+            header: { ...DEFAULT_THEME.elements.header, ...(loadedTheme.elements?.header || {}) },
+            clock: { ...DEFAULT_THEME.elements.clock, ...(loadedTheme.elements?.clock || {}) },
+            songTitle: { ...DEFAULT_THEME.elements.songTitle, ...(loadedTheme.elements?.songTitle || {}) },
+            currentSlideArea: { ...DEFAULT_THEME.elements.currentSlideArea, ...(loadedTheme.elements?.currentSlideArea || {}) },
+            nextSlideArea: { ...DEFAULT_THEME.elements.nextSlideArea, ...(loadedTheme.elements?.nextSlideArea || {}) }
+          };
+
           setTheme({
             id: loadedTheme.id || '',
             name: loadedTheme.name || 'Untitled Theme',
             isBuiltIn: loadedTheme.isBuiltIn ?? false,
             isDefault: loadedTheme.isDefault ?? false,
             canvasDimensions: loadedTheme.canvasDimensions || { width: 1920, height: 1080 },
-            colors: loadedTheme.colors || DEFAULT_THEME.colors,
-            elements: loadedTheme.elements || DEFAULT_THEME.elements,
-            currentSlideText: loadedTheme.currentSlideText || DEFAULT_THEME.currentSlideText
+            colors: { ...DEFAULT_THEME.colors, ...(loadedTheme.colors || {}) },
+            elements: mergedElements,
+            currentSlideText: mergedCurrentSlideText,
+            nextSlideText: mergedNextSlideText
           });
         }
       }).catch((error) => {
@@ -127,7 +237,7 @@ const StageMonitorEditorPage: React.FC = () => {
     setHasChanges(true);
   }, []);
 
-  const handleTextStyleChange = useCallback((lineType: string, updates: any) => {
+  const handleTextStyleChange = useCallback((lineType: string, updates: Partial<StageTextStyle>) => {
     setTheme(prev => ({
       ...prev,
       currentSlideText: {
@@ -138,12 +248,30 @@ const StageMonitorEditorPage: React.FC = () => {
     setHasChanges(true);
   }, []);
 
+  const handleNextTextStyleChange = useCallback((lineType: string, updates: Partial<StageTextStyle>) => {
+    setTheme(prev => ({
+      ...prev,
+      nextSlideText: {
+        ...prev.nextSlideText,
+        [lineType]: { ...prev.nextSlideText[lineType as keyof StageNextSlideText], ...updates }
+      }
+    }));
+    setHasChanges(true);
+  }, []);
+
   const handleColorsChange = useCallback((colors: StageColors) => {
     setTheme(prev => ({ ...prev, colors }));
     setHasChanges(true);
   }, []);
 
-  const handleSave = async () => {
+  const handleSave = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    if (isSaving || theme.isBuiltIn) return;
+
     setIsSaving(true);
     try {
       const themeData = {
@@ -151,19 +279,38 @@ const StageMonitorEditorPage: React.FC = () => {
         canvasDimensions: theme.canvasDimensions,
         colors: theme.colors,
         elements: theme.elements,
-        currentSlideText: theme.currentSlideText
+        currentSlideText: theme.currentSlideText,
+        nextSlideText: theme.nextSlideText
       };
+
+      console.log('Saving stage theme...', theme.id ? 'update' : 'create', themeData);
+
+      let savedThemeId = theme.id;
 
       if (theme.id) {
         await window.electronAPI.updateStageTheme(theme.id, themeData);
+        console.log('Stage theme updated successfully');
       } else {
         const created = await window.electronAPI.createStageTheme(themeData);
-        setTheme(prev => ({ ...prev, id: created.id }));
+        console.log('Stage theme created:', created);
+        if (created && created.id) {
+          savedThemeId = created.id;
+          setTheme(prev => ({ ...prev, id: created.id }));
+        }
       }
+
+      // Apply the theme immediately to the stage display
+      const fullTheme = {
+        id: savedThemeId,
+        ...themeData
+      };
+      await window.electronAPI.applyStageTheme(fullTheme);
+      console.log('Stage theme applied to display');
+
       setHasChanges(false);
     } catch (error) {
       console.error('Failed to save stage theme:', error);
-      alert('Failed to save stage theme');
+      alert('Failed to save stage theme: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsSaving(false);
     }
@@ -176,12 +323,44 @@ const StageMonitorEditorPage: React.FC = () => {
     navigate('/');
   };
 
+  // Check if selected element is a text line (current or next slide)
+  const isCurrentTextLineSelected = selectedElement === 'original' || selectedElement === 'transliteration' || selectedElement === 'translation';
+  const isNextTextLineSelected = selectedElement === 'nextOriginal' || selectedElement === 'nextTransliteration' || selectedElement === 'nextTranslation';
+  const isTextLineSelected = isCurrentTextLineSelected || isNextTextLineSelected;
+
+  // Check if selected element is a stage element (not text line)
+  const isStageElementSelected = selectedElement && !isTextLineSelected;
+
   const getSelectedElementConfig = () => {
-    if (!selectedElement) return null;
+    if (!selectedElement || isTextLineSelected) return null;
     const elementKey = selectedElement === 'currentSlide' ? 'currentSlideArea' :
                        selectedElement === 'nextSlide' ? 'nextSlideArea' :
                        selectedElement;
     return theme.elements[elementKey as keyof typeof theme.elements];
+  };
+
+  const getSelectedTextStyle = (): StageTextStyle | null => {
+    if (!isTextLineSelected) return null;
+    if (isCurrentTextLineSelected) {
+      return theme.currentSlideText[selectedElement as keyof StageCurrentSlideText];
+    } else {
+      // Map nextOriginal -> original, nextTransliteration -> transliteration, etc.
+      const lineType = selectedElement!.replace('next', '').toLowerCase() as keyof StageNextSlideText;
+      return theme.nextSlideText[lineType];
+    }
+  };
+
+  const getTextStyleChangeHandler = () => {
+    if (isCurrentTextLineSelected) {
+      return handleTextStyleChange;
+    } else if (isNextTextLineSelected) {
+      // Map nextOriginal -> original, etc. for the handler
+      return (updates: Partial<StageTextStyle>) => {
+        const lineType = selectedElement!.replace('next', '').charAt(0).toLowerCase() + selectedElement!.replace('next', '').slice(1);
+        handleNextTextStyleChange(lineType, updates);
+      };
+    }
+    return undefined;
   };
 
   return (
@@ -203,6 +382,7 @@ const StageMonitorEditorPage: React.FC = () => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <button
+            type="button"
             onClick={handleBack}
             style={{
               padding: '8px 16px',
@@ -253,15 +433,18 @@ const StageMonitorEditorPage: React.FC = () => {
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
+            type="button"
             onClick={handleSave}
-            disabled={isSaving || theme.isBuiltIn}
+            disabled={isSaving || theme.isBuiltIn || !hasChanges}
             style={{
               padding: '10px 24px',
               borderRadius: '6px',
               border: 'none',
-              background: theme.isBuiltIn ? 'rgba(255,255,255,0.1)' : '#ec4899',
-              color: theme.isBuiltIn ? 'rgba(255,255,255,0.5)' : 'white',
-              cursor: theme.isBuiltIn ? 'not-allowed' : 'pointer',
+              background: theme.isBuiltIn ? 'rgba(255,255,255,0.1)' :
+                         !hasChanges ? 'rgba(236,72,153,0.3)' : '#ec4899',
+              color: theme.isBuiltIn ? 'rgba(255,255,255,0.5)' :
+                     !hasChanges ? 'rgba(255,255,255,0.5)' : 'white',
+              cursor: (theme.isBuiltIn || !hasChanges) ? 'not-allowed' : 'pointer',
               fontWeight: 600
             }}
           >
@@ -289,10 +472,15 @@ const StageMonitorEditorPage: React.FC = () => {
             currentSlideArea={theme.elements.currentSlideArea}
             currentSlideText={theme.currentSlideText}
             nextSlideArea={theme.elements.nextSlideArea}
+            nextSlideText={theme.nextSlideText}
             selectedElement={selectedElement}
             onSelectElement={setSelectedElement}
             onElementChange={handleElementChange}
+            onTextStyleChange={handleTextStyleChange}
+            onNextTextStyleChange={handleNextTextStyleChange}
+            previewTexts={previewTexts}
           />
+
         </div>
 
         {/* Right Panel - Properties */}
@@ -315,6 +503,7 @@ const StageMonitorEditorPage: React.FC = () => {
               { id: 'resolution', label: 'Resolution' }
             ].map(tab => (
               <button
+                type="button"
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
                 style={{
@@ -337,18 +526,46 @@ const StageMonitorEditorPage: React.FC = () => {
           <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
             {activeTab === 'elements' && (
               <div>
-                {selectedElement && getSelectedElementConfig() ? (
+                {/* Stage Element Properties */}
+                {isStageElementSelected && getSelectedElementConfig() ? (
                   <StagePropertiesPanel
-                    elementType={selectedElement}
+                    elementType={selectedElement as 'header' | 'clock' | 'songTitle' | 'currentSlide' | 'nextSlide'}
                     element={getSelectedElementConfig()!}
-                    textStyles={selectedElement === 'currentSlide' ? theme.currentSlideText : undefined}
                     onElementChange={(updates) => {
                       const elementKey = selectedElement === 'currentSlide' ? 'currentSlideArea' :
                                         selectedElement === 'nextSlide' ? 'nextSlideArea' :
                                         selectedElement;
                       handleElementChange(elementKey, updates);
                     }}
-                    onTextStyleChange={selectedElement === 'currentSlide' ? handleTextStyleChange : undefined}
+                  />
+                ) : isTextLineSelected && getSelectedTextStyle() ? (
+                  /* Text Line Properties */
+                  <StagePropertiesPanel
+                    elementType={selectedElement as 'original' | 'transliteration' | 'translation' | 'nextOriginal' | 'nextTransliteration' | 'nextTranslation'}
+                    textStyle={getSelectedTextStyle()!}
+                    onTextStyleChange={(updates) => {
+                      if (isCurrentTextLineSelected) {
+                        handleTextStyleChange(selectedElement!, updates);
+                      } else {
+                        // Map nextOriginal -> original, nextTransliteration -> transliteration, etc.
+                        const lineType = selectedElement!.replace('next', '').charAt(0).toLowerCase() + selectedElement!.replace('next', '').slice(1);
+                        handleNextTextStyleChange(lineType, updates);
+                      }
+                    }}
+                    previewText={
+                      selectedElement === 'original' || selectedElement === 'nextOriginal' ? previewTexts.original :
+                      selectedElement === 'transliteration' || selectedElement === 'nextTransliteration' ? previewTexts.transliteration :
+                      previewTexts.translation
+                    }
+                    onPreviewTextChange={(text) => {
+                      if (selectedElement === 'original' || selectedElement === 'nextOriginal') {
+                        setPreviewTexts(prev => ({ ...prev, original: text }));
+                      } else if (selectedElement === 'transliteration' || selectedElement === 'nextTransliteration') {
+                        setPreviewTexts(prev => ({ ...prev, transliteration: text }));
+                      } else {
+                        setPreviewTexts(prev => ({ ...prev, translation: text }));
+                      }
+                    }}
                   />
                 ) : (
                   <div style={{
@@ -395,9 +612,12 @@ const StageMonitorEditorPage: React.FC = () => {
                     { label: '1080p', width: 1920, height: 1080 },
                     { label: '720p', width: 1280, height: 720 },
                     { label: '4K', width: 3840, height: 2160 },
-                    { label: '4:3', width: 1440, height: 1080 }
+                    { label: '4:3', width: 1440, height: 1080 },
+                    { label: 'Vertical', width: 1080, height: 1920 },
+                    { label: 'Vertical 4K', width: 2160, height: 3840 }
                   ].map(preset => (
                     <button
+                      type="button"
                       key={preset.label}
                       onClick={() => {
                         setTheme(prev => ({
@@ -430,7 +650,92 @@ const StageMonitorEditorPage: React.FC = () => {
                   ))}
                 </div>
 
+                {/* Custom Resolution */}
                 <div style={{
+                  marginTop: '16px',
+                  padding: '12px',
+                  background: 'rgba(0,0,0,0.2)',
+                  borderRadius: '6px'
+                }}>
+                  <div style={{
+                    fontSize: '12px',
+                    color: 'rgba(255,255,255,0.7)',
+                    marginBottom: '8px',
+                    fontWeight: 500
+                  }}>
+                    Custom Resolution
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>
+                        Width
+                      </label>
+                      <input
+                        type="number"
+                        value={theme.canvasDimensions.width}
+                        onChange={(e) => {
+                          const width = parseInt(e.target.value) || 1920;
+                          setTheme(prev => ({
+                            ...prev,
+                            canvasDimensions: { ...prev.canvasDimensions, width: Math.max(320, Math.min(7680, width)) }
+                          }));
+                          setHasChanges(true);
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          borderRadius: '4px',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          background: 'rgba(0,0,0,0.3)',
+                          color: 'white',
+                          fontSize: '13px'
+                        }}
+                        min={320}
+                        max={7680}
+                      />
+                    </div>
+                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '16px', paddingTop: '16px' }}>×</div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>
+                        Height
+                      </label>
+                      <input
+                        type="number"
+                        value={theme.canvasDimensions.height}
+                        onChange={(e) => {
+                          const height = parseInt(e.target.value) || 1080;
+                          setTheme(prev => ({
+                            ...prev,
+                            canvasDimensions: { ...prev.canvasDimensions, height: Math.max(240, Math.min(4320, height)) }
+                          }));
+                          setHasChanges(true);
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          borderRadius: '4px',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          background: 'rgba(0,0,0,0.3)',
+                          color: 'white',
+                          fontSize: '13px'
+                        }}
+                        min={240}
+                        max={4320}
+                      />
+                    </div>
+                  </div>
+                  <div style={{
+                    marginTop: '8px',
+                    fontSize: '10px',
+                    color: 'rgba(255,255,255,0.4)',
+                    textAlign: 'center'
+                  }}>
+                    Aspect ratio: {(theme.canvasDimensions.width / theme.canvasDimensions.height).toFixed(2)}:1
+                  </div>
+                </div>
+
+                <div style={{
+                  marginTop: '12px',
                   padding: '8px',
                   background: 'rgba(0,0,0,0.2)',
                   borderRadius: '4px',

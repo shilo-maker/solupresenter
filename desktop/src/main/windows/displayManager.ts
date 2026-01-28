@@ -107,6 +107,13 @@ export class DisplayManager {
     prayer?: (id: string) => any;
   } = {};
 
+  // Default theme resolver callbacks - set from IPC to get default themes from database
+  private defaultThemeResolvers: {
+    viewer?: () => any;
+    bible?: () => any;
+    prayer?: () => any;
+  } = {};
+
   // Track ALL current presentation state for late-joining displays
   private currentViewerTheme: any = null;
   private currentStageTheme: any = null;
@@ -241,15 +248,14 @@ export class DisplayManager {
         managed.window.webContents.send('stageTheme:update', themeToSend);
       }
 
-      // Slide data (stage monitors also show slides, with activeTheme)
+      // Slide data (stage monitors also show slides, with activeTheme respecting overrides)
       if (this.currentSlideData) {
         const contentType = this.currentSlideData.contentType || 'song';
-        let activeTheme = this.currentViewerTheme;
-        if (contentType === 'bible') {
-          activeTheme = this.currentBibleTheme;
-        } else if (contentType === 'prayer' || contentType === 'sermon') {
-          activeTheme = this.currentPrayerTheme;
-        }
+        let activeTheme = this.currentStageTheme; // Stage monitors use stage theme
+        let themeType: DisplayThemeType = 'stage';
+        // Note: Stage monitors typically use stage theme, but we support overrides
+        // Apply per-display override if available
+        activeTheme = this.getThemeForDisplay(managed.id, themeType, activeTheme);
         managed.window.webContents.send('slide:update', { ...this.currentSlideData, activeTheme });
       }
 
@@ -571,10 +577,44 @@ export class DisplayManager {
     if (contentType === 'bible') {
       globalTheme = this.currentBibleTheme;
       themeType = 'bible';
+      // Load default Bible theme if not set
+      if (!globalTheme && this.defaultThemeResolvers.bible) {
+        globalTheme = this.defaultThemeResolvers.bible();
+        if (globalTheme) {
+          this.currentBibleTheme = globalTheme;
+          log.debug(' Loaded default Bible theme:', globalTheme.name);
+          console.log('[DisplayManager] Bible theme loaded:', {
+            name: globalTheme.name,
+            hasBackgroundBoxes: !!globalTheme.backgroundBoxes,
+            backgroundBoxesCount: globalTheme.backgroundBoxes?.length || 0,
+            lineOrder: globalTheme.lineOrder,
+            hasLineStyles: !!globalTheme.lineStyles,
+            hasLinePositions: !!globalTheme.linePositions
+          });
+        }
+      }
     } else if (contentType === 'prayer' || contentType === 'sermon') {
       globalTheme = this.currentPrayerTheme;
       themeType = 'prayer';
+      // Load default Prayer theme if not set
+      if (!globalTheme && this.defaultThemeResolvers.prayer) {
+        globalTheme = this.defaultThemeResolvers.prayer();
+        if (globalTheme) {
+          this.currentPrayerTheme = globalTheme;
+          log.debug(' Loaded default Prayer theme:', globalTheme.name);
+        }
+      }
+    } else {
+      // Load default Viewer theme if not set
+      if (!globalTheme && this.defaultThemeResolvers.viewer) {
+        globalTheme = this.defaultThemeResolvers.viewer();
+        if (globalTheme) {
+          this.currentViewerTheme = globalTheme;
+          log.debug(' Loaded default Viewer theme:', globalTheme.name);
+        }
+      }
     }
+
 
     // Send to each display with its appropriate theme (respecting overrides)
     for (const managed of this.displays.values()) {
@@ -886,6 +926,19 @@ export class DisplayManager {
   }
 
   /**
+   * Send a message to a specific stage display
+   */
+  sendStageMessage(displayId: number, message: string): void {
+    const managed = this.displays.get(displayId);
+    if (managed && managed.window && !managed.window.isDestroyed() && managed.type === 'stage') {
+      managed.window.webContents.send('stage:message', { text: message, timestamp: Date.now() });
+      log.debug(' sendStageMessage: sent to display', displayId, ':', message);
+    } else {
+      log.warn(' sendStageMessage: display not found or not a stage display:', displayId);
+    }
+  }
+
+  /**
    * Broadcast YouTube command to all display windows
    */
   broadcastYoutube(command: { type: string; videoId?: string; title?: string; currentTime?: number; isPlaying?: boolean }): void {
@@ -978,6 +1031,18 @@ export class DisplayManager {
   }
 
   /**
+   * Set callbacks to get default themes from the database
+   * These are used when no theme has been explicitly set for a content type
+   */
+  setDefaultThemeResolvers(resolvers: {
+    viewer?: () => any;
+    bible?: () => any;
+    prayer?: () => any;
+  }): void {
+    this.defaultThemeResolvers = resolvers;
+  }
+
+  /**
    * Get the theme to apply for a specific display, considering overrides
    */
   private getThemeForDisplay(displayId: number, themeType: DisplayThemeType, globalTheme: any): any {
@@ -1033,6 +1098,69 @@ export class DisplayManager {
     // Re-broadcast prayer themes
     if (this.currentPrayerTheme) {
       this.broadcastPrayerTheme(this.currentPrayerTheme);
+    }
+
+    // IMPORTANT: Also re-broadcast current slide data with updated activeTheme
+    // Without this, the slide content would still have the old theme until a new slide is selected
+    if (this.currentSlideData) {
+      const contentType = this.currentSlideData.contentType || 'song';
+      let globalTheme = this.currentViewerTheme;
+      let themeType: DisplayThemeType = 'viewer';
+      if (contentType === 'bible') {
+        globalTheme = this.currentBibleTheme;
+        themeType = 'bible';
+        // Load default Bible theme if not set
+        if (!globalTheme && this.defaultThemeResolvers.bible) {
+          globalTheme = this.defaultThemeResolvers.bible();
+          if (globalTheme) {
+            this.currentBibleTheme = globalTheme;
+          }
+        }
+      } else if (contentType === 'prayer' || contentType === 'sermon') {
+        globalTheme = this.currentPrayerTheme;
+        themeType = 'prayer';
+        // Load default Prayer theme if not set
+        if (!globalTheme && this.defaultThemeResolvers.prayer) {
+          globalTheme = this.defaultThemeResolvers.prayer();
+          if (globalTheme) {
+            this.currentPrayerTheme = globalTheme;
+          }
+        }
+      } else {
+        // Load default viewer theme if not set
+        if (!globalTheme && this.defaultThemeResolvers.viewer) {
+          globalTheme = this.defaultThemeResolvers.viewer();
+          if (globalTheme) {
+            this.currentViewerTheme = globalTheme;
+          }
+        }
+      }
+
+      // Send to each display with its appropriate theme (respecting overrides)
+      for (const managed of this.displays.values()) {
+        try {
+          if (managed.window && !managed.window.isDestroyed()) {
+            let activeTheme = globalTheme;
+            let displayThemeType: DisplayThemeType = themeType;
+
+            // Stage monitors use stage theme
+            if (managed.type === 'stage') {
+              activeTheme = this.currentStageTheme;
+              displayThemeType = 'stage';
+            }
+
+            // Get the theme for this specific display (may have override)
+            activeTheme = this.getThemeForDisplay(managed.id, displayThemeType, activeTheme);
+            const slideWithTheme = {
+              ...this.currentSlideData,
+              activeTheme
+            };
+            managed.window.webContents.send('slide:update', slideWithTheme);
+          }
+        } catch (error) {
+          log.debug('Window destroyed during rebroadcastAllThemes slide update:', error);
+        }
+      }
     }
   }
 

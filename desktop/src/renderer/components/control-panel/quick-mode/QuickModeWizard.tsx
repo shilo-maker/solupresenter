@@ -1,5 +1,6 @@
-import React, { memo, useState, useRef, useEffect } from 'react';
+import React, { memo, useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { hebrewBookNames, numberToHebrew } from '../../../utils/bibleUtils';
 
 // ========== Types ==========
 
@@ -120,33 +121,6 @@ const generateQuickModeId = (): string => {
 };
 
 const containsHebrew = (text: string): boolean => /[\u0590-\u05FF]/.test(text);
-
-const hebrewBookNames: Record<string, string> = {
-  'בראשית': 'Genesis', 'שמות': 'Exodus', 'ויקרא': 'Leviticus',
-  'במדבר': 'Numbers', 'דברים': 'Deuteronomy', 'יהושע': 'Joshua',
-  'שופטים': 'Judges', 'שמואל א': 'I Samuel', 'שמואל ב': 'II Samuel',
-  'מלכים א': 'I Kings', 'מלכים ב': 'II Kings', 'ישעיהו': 'Isaiah',
-  'ישעיה': 'Isaiah', 'ירמיהו': 'Jeremiah', 'ירמיה': 'Jeremiah',
-  'יחזקאל': 'Ezekiel', 'הושע': 'Hosea', 'יואל': 'Joel', 'עמוס': 'Amos',
-  'עובדיה': 'Obadiah', 'יונה': 'Jonah', 'מיכה': 'Micah', 'נחום': 'Nahum',
-  'חבקוק': 'Habakkuk', 'צפניה': 'Zephaniah', 'חגי': 'Haggai',
-  'זכריה': 'Zechariah', 'מלאכי': 'Malachi', 'תהילים': 'Psalms',
-  'תהלים': 'Psalms', 'משלי': 'Proverbs', 'איוב': 'Job',
-  'שיר השירים': 'Song of Songs', 'רות': 'Ruth', 'איכה': 'Lamentations',
-  'קהלת': 'Ecclesiastes', 'אסתר': 'Esther', 'דניאל': 'Daniel',
-  'עזרא': 'Ezra', 'נחמיה': 'Nehemiah', 'דברי הימים א': 'I Chronicles',
-  'דברי הימים ב': 'II Chronicles',
-  'מתי': 'Matthew', 'מרקוס': 'Mark', 'לוקס': 'Luke', 'יוחנן': 'John',
-  'מעשי השליחים': 'Acts', 'מעשים': 'Acts', 'רומים': 'Romans',
-  'קורינתים א': '1 Corinthians', 'קורינתים ב': '2 Corinthians',
-  'גלטים': 'Galatians', 'אפסים': 'Ephesians', 'פיליפים': 'Philippians',
-  'קולוסים': 'Colossians', 'תסלוניקים א': '1 Thessalonians',
-  'תסלוניקים ב': '2 Thessalonians', 'טימותיאוס א': '1 Timothy',
-  'טימותיאוס ב': '2 Timothy', 'טיטוס': 'Titus', 'פילימון': 'Philemon',
-  'עברים': 'Hebrews', 'יעקב': 'James', 'פטרוס א': '1 Peter',
-  'פטרוס ב': '2 Peter', 'יוחנן א': '1 John', 'יוחנן ב': '2 John',
-  'יוחנן ג': '3 John', 'יהודה': 'Jude', 'התגלות': 'Revelation', 'חזון': 'Revelation'
-};
 
 const hebrewToNumber = (hebrewStr: string): number | null => {
   const cleaned = hebrewStr.replace(/[""״׳']/g, '');
@@ -383,8 +357,9 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
   const [step, setStep] = useState(initialStep);
   const [type, setType] = useState<'sermon' | 'prayer' | 'announcements' | null>(initialType);
   const [title, setTitle] = useState('');
+  const [titleTranslation, setTitleTranslation] = useState('');
   const [subtitles, setSubtitles] = useState<QuickModeSubtitle[]>([{ subtitle: '', description: '' }]);
-  const [generateTranslation, setGenerateTranslation] = useState(false);
+  const [translationMode, setTranslationMode] = useState<'none' | 'auto' | 'manual'>('none');
   const [creating, setCreating] = useState(false);
 
   // Bible picker state
@@ -399,6 +374,8 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
   const [booksLoading, setBooksLoading] = useState(false);
   const [bibleNoMatch, setBibleNoMatch] = useState(false);
   const [bibleIsHebrew, setBibleIsHebrew] = useState(false);
+  const [showBibleSuggestions, setShowBibleSuggestions] = useState(false);
+  const [selectedBibleSuggestionIndex, setSelectedBibleSuggestionIndex] = useState(-1);
 
   // Refs
   const bibleSearchRef = useRef<string>('');
@@ -413,11 +390,25 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
     }
   }, [step]);
 
+  // Check if form has unsaved changes
+  const hasUnsavedChanges = (): boolean => {
+    // Check if user has entered any data
+    if (title.trim()) return true;
+    if (subtitles.some(s => s.subtitle.trim() || s.description.trim() || s.bibleRef)) return true;
+    if (type && step > 1) return true;
+    return false;
+  };
+
   // Reset wizard
-  const resetWizard = () => {
+  const resetWizard = (skipConfirmation = false) => {
+    if (!skipConfirmation && hasUnsavedChanges()) {
+      const confirmed = window.confirm('You have unsaved changes. Are you sure you want to discard them?');
+      if (!confirmed) return;
+    }
     setStep(1);
     setType(null);
     setTitle('');
+    setTitleTranslation('');
     setSubtitles([{ subtitle: '', description: '' }]);
     setBiblePickerIndex(null);
     setBibleSearch('');
@@ -430,14 +421,92 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
     setBibleNoMatch(false);
     setBibleLoading(false);
     setBibleIsHebrew(false);
-    setGenerateTranslation(false);
+    setTranslationMode('none');
     setCreating(false);
     onClose();
   };
 
-  // Bible search handler
-  const handleBibleSearch = async (query: string) => {
+  // Generate Bible autocomplete suggestions
+  const bibleSuggestions = useMemo(() => {
+    const input = bibleSearch.trim().toLowerCase();
+    if (!input || input.length < 1 || !bibleBooks || bibleBooks.length === 0) return [];
+
+    const results: Array<{ display: string; value: string; bookName: string; chapter: number }> = [];
+    const maxSuggestions = 8;
+
+    // Check if input contains a number (chapter reference)
+    const arabicMatch = input.match(/^(.+?)\s+(\d+)$/);
+    const hebrewMatch = input.match(/^(.+?)\s+([א-ת]+)$/);
+
+    let bookPart = input;
+    let chapterPart: number | null = null;
+
+    if (arabicMatch) {
+      bookPart = arabicMatch[1].trim();
+      chapterPart = parseInt(arabicMatch[2]);
+    } else if (hebrewMatch) {
+      bookPart = hebrewMatch[1].trim();
+      const hebrewNum = hebrewMatch[2];
+      const hebrewValues: Record<string, number> = {
+        'א': 1, 'ב': 2, 'ג': 3, 'ד': 4, 'ה': 5, 'ו': 6, 'ז': 7, 'ח': 8, 'ט': 9,
+        'י': 10, 'כ': 20, 'ל': 30, 'מ': 40, 'נ': 50
+      };
+      let total = 0;
+      for (const char of hebrewNum) {
+        if (hebrewValues[char]) total += hebrewValues[char];
+      }
+      if (total > 0) chapterPart = total;
+    }
+
+    for (const book of bibleBooks) {
+      if (results.length >= maxSuggestions) break;
+
+      const englishLower = book.name.toLowerCase();
+      const hebrewName = book.hebrewName || '';
+
+      const matchesEnglish = englishLower.startsWith(bookPart) || englishLower.includes(bookPart);
+      const matchesHebrew = hebrewName && (hebrewName.startsWith(bookPart) || hebrewName.includes(bookPart));
+
+      let matchesHebrewMapping = false;
+      for (const [hebrew, english] of Object.entries(hebrewBookNames)) {
+        if (english.toLowerCase() === englishLower && hebrew.startsWith(bookPart)) {
+          matchesHebrewMapping = true;
+          break;
+        }
+      }
+
+      if (matchesEnglish || matchesHebrew || matchesHebrewMapping) {
+        if (chapterPart !== null && chapterPart >= 1 && chapterPart <= book.chapters) {
+          results.push({
+            display: `${book.hebrewName || book.name} ${numberToHebrew(chapterPart)} (${book.name} ${chapterPart})`,
+            value: `${book.name} ${chapterPart}`,
+            bookName: book.name,
+            chapter: chapterPart
+          });
+        } else if (chapterPart === null) {
+          const chaptersToShow = Math.min(3, book.chapters);
+          for (let ch = 1; ch <= chaptersToShow && results.length < maxSuggestions; ch++) {
+            results.push({
+              display: `${book.hebrewName || book.name} ${numberToHebrew(ch)} (${book.name} ${ch})`,
+              value: `${book.name} ${ch}`,
+              bookName: book.name,
+              chapter: ch
+            });
+          }
+        }
+      }
+    }
+
+    return results;
+  }, [bibleSearch, bibleBooks]);
+
+  // Bible search handler (called on input change)
+  const handleBibleSearch = async (query: string, fromSuggestion = false) => {
     setBibleSearch(query);
+    if (!fromSuggestion) {
+      setShowBibleSuggestions(query.trim().length > 0);
+      setSelectedBibleSuggestionIndex(-1);
+    }
     bibleSearchRef.current = query;
     const trimmed = query.trim();
 
@@ -667,15 +736,17 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
         descriptionTranslation: s.descriptionTranslation,
         bibleRef: s.bibleRef
       }));
-      let titleTranslation: string | undefined;
+      let finalTitleTranslation: string | undefined = translationMode === 'manual' ? titleTranslation : undefined;
 
       let translationFailures = 0;
-      if (generateTranslation) {
+
+      // Auto-generate translations
+      if (translationMode === 'auto') {
         if (containsHebrew(title.trim())) {
           try {
             const translation = await window.electronAPI.translate(title.trim());
             if (translation && translation !== title.trim()) {
-              titleTranslation = translation;
+              finalTitleTranslation = translation;
             }
           } catch (err) {
             console.error('Failed to translate title:', err);
@@ -727,10 +798,12 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
         }
       }
 
+      const generateTranslation = translationMode !== 'none';
+
       const quickModeData: QuickModeDataForSlides = {
         type,
         title: title.trim(),
-        titleTranslation,
+        titleTranslation: finalTitleTranslation,
         subtitles: translatedSubtitles,
         generateTranslation
       };
@@ -754,7 +827,7 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
 
       setCreating(false);
       onPresentationCreated?.();
-      resetWizard();
+      resetWizard(true); // Skip confirmation since we just saved
 
     } catch (error) {
       console.error('Failed to create presentation:', error);
@@ -764,7 +837,7 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
 
   return (
     <div
-      onClick={resetWizard}
+      onClick={() => resetWizard()}
       style={{
         position: 'fixed',
         inset: 0,
@@ -789,7 +862,7 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
       >
         {/* Progress Indicator */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-          {[1, 2, 3].map((s) => (
+          {(translationMode === 'manual' ? [1, 2, 3] : [1, 2]).map((s) => (
             <div
               key={s}
               style={{
@@ -854,7 +927,7 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
               ))}
             </div>
             <button
-              onClick={resetWizard}
+              onClick={() => resetWizard()}
               style={{
                 marginTop: '20px',
                 width: '100%',
@@ -872,89 +945,44 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
           </>
         )}
 
-        {/* Step 2: Enter Title */}
+        {/* Step 2: Title and Content */}
         {step === 2 && (
           <>
             <h2 style={{ margin: '0 0 8px 0', color: 'white', fontSize: '1.4rem' }}>
-              Enter Main Title
-            </h2>
-            <p style={{ margin: '0 0 20px 0', color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>
-              This title will appear on all slides
-            </p>
-            <input
-              ref={titleInputRef}
-              type="text"
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={type === 'sermon' ? 'e.g., Faith in Action' : type === 'prayer' ? 'e.g., Prayer Requests' : 'e.g., Church Updates'}
-              style={{
-                width: '100%',
-                padding: '14px',
-                background: 'rgba(0,0,0,0.3)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                borderRadius: '8px',
-                color: 'white',
-                fontSize: '1rem',
-                marginBottom: '20px',
-                cursor: 'text'
-              }}
-              onClick={(e) => {
-                e.currentTarget.focus();
-                window.focus();
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && title.trim()) {
-                  setStep(3);
-                }
-              }}
-            />
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={() => setStep(1)}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  borderRadius: '8px',
-                  color: 'rgba(255,255,255,0.7)',
-                  cursor: 'pointer',
-                  fontSize: '0.9rem'
-                }}
-              >
-                Back
-              </button>
-              <button
-                onClick={() => setStep(3)}
-                disabled={!title.trim()}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  background: title.trim() ? '#00d4ff' : 'rgba(0,212,255,0.3)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: title.trim() ? 'black' : 'rgba(0,0,0,0.5)',
-                  cursor: title.trim() ? 'pointer' : 'not-allowed',
-                  fontSize: '0.9rem',
-                  fontWeight: 600
-                }}
-              >
-                Next
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* Step 3: Add Subtitles */}
-        {step === 3 && (
-          <>
-            <h2 style={{ margin: '0 0 8px 0', color: 'white', fontSize: '1.4rem' }}>
-              Add {type === 'sermon' ? 'Points' : type === 'prayer' ? 'Prayer Items' : 'Announcements'}
+              {type === 'sermon' ? 'Sermon Points' : type === 'prayer' ? 'Prayer Points' : 'Announcements'}
             </h2>
             <p style={{ margin: '0 0 16px 0', color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>
-              Each item becomes a slide. Main title: <strong style={{ color: '#00d4ff' }}>{title}</strong>
+              Enter a title and add your {type === 'sermon' ? 'points' : type === 'prayer' ? 'prayer items' : 'announcements'}
             </p>
+
+            {/* Title Input */}
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginBottom: '6px', textTransform: 'uppercase' }}>
+                Main Title
+              </div>
+              <input
+                ref={titleInputRef}
+                type="text"
+                autoFocus
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={type === 'sermon' ? 'e.g., Faith in Action' : type === 'prayer' ? 'e.g., Prayer Requests' : 'e.g., Church Updates'}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  background: 'rgba(0,0,0,0.3)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  color: 'white',
+                  fontSize: '1rem',
+                  cursor: 'text'
+                }}
+                onClick={(e) => {
+                  e.currentTarget.focus();
+                  window.focus();
+                }}
+              />
+            </div>
             <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '16px' }}>
               {subtitles.map((item, index) => (
                 <div
@@ -1103,22 +1131,85 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                       border: '1px solid rgba(0,212,255,0.3)',
                       borderRadius: '6px'
                     }}>
-                      <div style={{ marginBottom: '8px' }}>
+                      <div style={{ marginBottom: '8px', position: 'relative' }}>
                         <input
                           type="text"
                           value={bibleSearch}
                           onChange={(e) => handleBibleSearch(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (!showBibleSuggestions || bibleSuggestions.length === 0) return;
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setSelectedBibleSuggestionIndex(prev => prev < bibleSuggestions.length - 1 ? prev + 1 : 0);
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setSelectedBibleSuggestionIndex(prev => prev > 0 ? prev - 1 : bibleSuggestions.length - 1);
+                            } else if (e.key === 'Enter' && selectedBibleSuggestionIndex >= 0) {
+                              e.preventDefault();
+                              const suggestion = bibleSuggestions[selectedBibleSuggestionIndex];
+                              setShowBibleSuggestions(false);
+                              setSelectedBibleSuggestionIndex(-1);
+                              handleBibleSearch(suggestion.value, true);
+                            } else if (e.key === 'Escape') {
+                              setShowBibleSuggestions(false);
+                            }
+                          }}
+                          onFocus={() => bibleSearch.trim() && setShowBibleSuggestions(true)}
+                          onBlur={() => setTimeout(() => setShowBibleSuggestions(false), 200)}
                           placeholder="e.g., John 3:16 or Psalms 23:1-6"
                           style={{
                             width: '100%',
                             padding: '8px',
                             background: 'rgba(0,0,0,0.3)',
                             border: '1px solid rgba(255,255,255,0.2)',
-                            borderRadius: '4px',
+                            borderRadius: showBibleSuggestions && bibleSuggestions.length > 0 ? '4px 4px 0 0' : '4px',
                             color: 'white',
                             fontSize: '0.85rem'
                           }}
                         />
+                        {/* Autocomplete Suggestions Dropdown */}
+                        {showBibleSuggestions && bibleSuggestions.length > 0 && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '100%',
+                              left: 0,
+                              right: 0,
+                              background: '#2a2a4a',
+                              border: '1px solid rgba(255,255,255,0.2)',
+                              borderTop: 'none',
+                              borderRadius: '0 0 4px 4px',
+                              maxHeight: '180px',
+                              overflowY: 'auto',
+                              zIndex: 1000
+                            }}
+                          >
+                            {bibleSuggestions.map((suggestion, index) => (
+                              <div
+                                key={`${suggestion.bookName}-${suggestion.chapter}`}
+                                onClick={() => { setShowBibleSuggestions(false); setSelectedBibleSuggestionIndex(-1); handleBibleSearch(suggestion.value, true); }}
+                                style={{
+                                  padding: '8px 10px',
+                                  cursor: 'pointer',
+                                  background: index === selectedBibleSuggestionIndex ? 'rgba(0,212,255,0.15)' : 'transparent',
+                                  borderBottom: index < bibleSuggestions.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px'
+                                }}
+                                onMouseEnter={() => setSelectedBibleSuggestionIndex(index)}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(0,212,255,0.6)" strokeWidth="2">
+                                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                                </svg>
+                                <span style={{ color: 'white', fontSize: '0.8rem' }}>
+                                  {suggestion.display}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       {booksLoading && (
                         <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', textAlign: 'center', padding: '10px' }}>
@@ -1348,40 +1439,194 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
               + Add Another {type === 'sermon' ? 'Point' : 'Slide'}
             </button>
 
-            {/* Generate Translation checkbox */}
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '12px',
-                background: 'rgba(0,212,255,0.1)',
-                border: '1px solid rgba(0,212,255,0.3)',
-                borderRadius: '8px',
-                marginBottom: '16px',
-                cursor: 'pointer'
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={generateTranslation}
-                onChange={(e) => setGenerateTranslation(e.target.checked)}
-                style={{
-                  width: '18px',
-                  height: '18px',
-                  cursor: 'pointer',
-                  accentColor: '#00d4ff'
-                }}
-              />
-              <div>
-                <div style={{ color: 'white', fontSize: '0.9rem', fontWeight: 500 }}>
-                  Generate English Translation
-                </div>
-                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>
-                  Translate Hebrew text to English (bilingual slides)
-                </div>
+            {/* Translation Mode Options */}
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginBottom: '8px', textTransform: 'uppercase' }}>
+                Translation Options
               </div>
-            </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {[
+                  { mode: 'none' as const, label: 'No Translation', desc: 'Single language' },
+                  { mode: 'auto' as const, label: 'Auto-Generate', desc: 'AI translation' },
+                  { mode: 'manual' as const, label: 'Manual', desc: 'Enter yourself' }
+                ].map((option) => (
+                  <button
+                    key={option.mode}
+                    onClick={() => setTranslationMode(option.mode)}
+                    style={{
+                      flex: 1,
+                      padding: '10px 8px',
+                      background: translationMode === option.mode ? 'rgba(0,212,255,0.2)' : 'rgba(255,255,255,0.05)',
+                      border: translationMode === option.mode ? '2px solid #00d4ff' : '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <div style={{ color: translationMode === option.mode ? '#00d4ff' : 'white', fontSize: '0.8rem', fontWeight: 600 }}>
+                      {option.label}
+                    </div>
+                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginTop: '2px' }}>
+                      {option.desc}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => setStep(1)}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  color: 'rgba(255,255,255,0.7)',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem'
+                }}
+              >
+                Back
+              </button>
+              <button
+                onClick={() => translationMode === 'manual' ? setStep(3) : handleCreate()}
+                disabled={!title.trim() || !subtitles.some(s => s.subtitle.trim()) || creating}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: (!title.trim() || !subtitles.some(s => s.subtitle.trim()) || creating) ? 'rgba(0,212,255,0.3)' : '#00d4ff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: (!title.trim() || !subtitles.some(s => s.subtitle.trim()) || creating) ? 'rgba(0,0,0,0.5)' : 'black',
+                  cursor: (!title.trim() || !subtitles.some(s => s.subtitle.trim()) || creating) ? 'not-allowed' : 'pointer',
+                  fontSize: '0.9rem',
+                  fontWeight: 600
+                }}
+              >
+                {creating ? 'Creating...' : translationMode === 'manual' ? 'Next: Add Translations' : `Create Presentation (${subtitles.filter(s => s.subtitle.trim()).length} slides)`}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Step 3: Manual Translations */}
+        {step === 3 && (
+          <>
+            <h2 style={{ margin: '0 0 8px 0', color: 'white', fontSize: '1.4rem' }}>
+              Add Translations
+            </h2>
+            <p style={{ margin: '0 0 16px 0', color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>
+              Enter English translations for each field
+            </p>
+
+            <div style={{ maxHeight: '350px', overflowY: 'auto', marginBottom: '16px' }}>
+              {/* Title Translation */}
+              <div style={{
+                background: 'rgba(0,0,0,0.2)',
+                borderRadius: '8px',
+                padding: '12px',
+                marginBottom: '12px',
+                border: '1px solid rgba(255,255,255,0.1)'
+              }}>
+                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginBottom: '6px', textTransform: 'uppercase' }}>
+                  Main Title Translation
+                </div>
+                <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', marginBottom: '8px', direction: containsHebrew(title) ? 'rtl' : 'ltr' }}>
+                  Original: {title}
+                </div>
+                <input
+                  type="text"
+                  value={titleTranslation}
+                  onChange={(e) => setTitleTranslation(e.target.value)}
+                  placeholder="Enter English translation..."
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    background: 'rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '6px',
+                    color: 'white',
+                    fontSize: '0.9rem'
+                  }}
+                />
+              </div>
+
+              {/* Subtitle Translations */}
+              {subtitles.filter(s => s.subtitle.trim()).map((item, index) => (
+                <div
+                  key={index}
+                  style={{
+                    background: 'rgba(0,0,0,0.2)',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    marginBottom: '10px',
+                    border: '1px solid rgba(255,255,255,0.1)'
+                  }}
+                >
+                  <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginBottom: '6px', textTransform: 'uppercase' }}>
+                    {type === 'sermon' ? `Point ${index + 1}` : `Slide ${index + 1}`} Translation
+                  </div>
+
+                  {/* Subtitle */}
+                  <div style={{ marginBottom: '10px' }}>
+                    <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '4px', direction: containsHebrew(item.subtitle) ? 'rtl' : 'ltr' }}>
+                      Subtitle: {item.subtitle}
+                    </div>
+                    <input
+                      type="text"
+                      value={item.subtitleTranslation || ''}
+                      onChange={(e) => {
+                        const realIndex = subtitles.findIndex(s => s === item);
+                        setSubtitles(prev => prev.map((s, i) =>
+                          i === realIndex ? { ...s, subtitleTranslation: e.target.value } : s
+                        ));
+                      }}
+                      placeholder="Enter subtitle translation..."
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        background: 'rgba(0,0,0,0.3)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: '6px',
+                        color: 'white',
+                        fontSize: '0.85rem'
+                      }}
+                    />
+                  </div>
+
+                  {/* Description (if exists) */}
+                  {item.description.trim() && (
+                    <div>
+                      <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '4px', direction: containsHebrew(item.description) ? 'rtl' : 'ltr' }}>
+                        Description: {item.description.length > 50 ? item.description.substring(0, 50) + '...' : item.description}
+                      </div>
+                      <input
+                        type="text"
+                        value={item.descriptionTranslation || ''}
+                        onChange={(e) => {
+                          const realIndex = subtitles.findIndex(s => s === item);
+                          setSubtitles(prev => prev.map((s, i) =>
+                            i === realIndex ? { ...s, descriptionTranslation: e.target.value } : s
+                          ));
+                        }}
+                        placeholder="Enter description translation..."
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          background: 'rgba(0,0,0,0.3)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: '6px',
+                          color: 'white',
+                          fontSize: '0.85rem'
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>
               <button
@@ -1401,15 +1646,15 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
               </button>
               <button
                 onClick={handleCreate}
-                disabled={!subtitles.some(s => s.subtitle.trim()) || creating}
+                disabled={creating}
                 style={{
                   flex: 1,
                   padding: '12px',
-                  background: (!subtitles.some(s => s.subtitle.trim()) || creating) ? 'rgba(0,212,255,0.3)' : '#00d4ff',
+                  background: creating ? 'rgba(0,212,255,0.3)' : '#00d4ff',
                   border: 'none',
                   borderRadius: '8px',
-                  color: (!subtitles.some(s => s.subtitle.trim()) || creating) ? 'rgba(0,0,0,0.5)' : 'black',
-                  cursor: (!subtitles.some(s => s.subtitle.trim()) || creating) ? 'not-allowed' : 'pointer',
+                  color: creating ? 'rgba(0,0,0,0.5)' : 'black',
+                  cursor: creating ? 'not-allowed' : 'pointer',
                   fontSize: '0.9rem',
                   fontWeight: 600
                 }}

@@ -241,20 +241,21 @@ const SongsPanel = memo<SongsPanelProps>(({
           onClick={handleNewSong}
           title="New Song"
           style={{
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'rgba(255,255,255,0.1)',
             border: 'none',
-            borderRadius: '8px',
-            width: '34px',
-            height: '34px',
+            borderRadius: '6px',
+            padding: '8px 12px',
             color: 'white',
             cursor: 'pointer',
-            fontWeight: 600,
-            fontSize: '1.2rem',
+            fontSize: '1rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            flexShrink: 0
+            flexShrink: 0,
+            transition: 'background 0.15s ease'
           }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = '#06b6d4'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
         >
           +
         </button>

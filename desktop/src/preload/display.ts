@@ -57,10 +57,22 @@ contextBridge.exposeInMainWorld('displayAPI', {
     return () => ipcRenderer.removeListener('prayerTheme:update', handler);
   },
 
+  onOBSThemeUpdate: (callback: (theme: any) => void) => {
+    const handler = (_: any, theme: any) => callback(theme);
+    ipcRenderer.on('obsTheme:update', handler);
+    return () => ipcRenderer.removeListener('obsTheme:update', handler);
+  },
+
   onYoutubeCommand: (callback: (command: any) => void) => {
     const handler = (_: any, command: any) => callback(command);
     ipcRenderer.on('youtube:command', handler);
     return () => ipcRenderer.removeListener('youtube:command', handler);
+  },
+
+  onStageMessage: (callback: (data: { text: string; timestamp: number }) => void) => {
+    const handler = (_: any, data: { text: string; timestamp: number }) => callback(data);
+    ipcRenderer.on('stage:message', handler);
+    return () => ipcRenderer.removeListener('stage:message', handler);
   },
 
   // ============ Report Status Back ============
@@ -110,7 +122,9 @@ declare global {
       onStageThemeUpdate: (callback: (theme: any) => void) => () => void;
       onBibleThemeUpdate: (callback: (theme: any) => void) => () => void;
       onPrayerThemeUpdate: (callback: (theme: any) => void) => () => void;
+      onOBSThemeUpdate: (callback: (theme: any) => void) => () => void;
       onYoutubeCommand: (callback: (command: any) => void) => () => void;
+      onStageMessage: (callback: (data: { text: string; timestamp: number }) => void) => () => void;
 
       // Report Status Back
       reportReady: () => void;

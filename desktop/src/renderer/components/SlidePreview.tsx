@@ -15,6 +15,7 @@ interface SlideData {
   transliteration?: string;
   translation?: string;
   translationOverflow?: string;  // Overflow text for long translations
+  originalLanguage?: string;  // Song's original language - used for single-language song rendering
   reference?: string;  // Bible verse reference or Hebrew reference for prayer
   referenceEnglish?: string;  // English Bible reference
   referenceTranslation?: string;  // English reference for prayer

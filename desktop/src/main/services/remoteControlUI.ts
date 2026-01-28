@@ -725,6 +725,14 @@ export function getRemoteControlUI(port: number): string {
           </svg>
           Media
         </button>
+        <button class="main-tab" data-tab="presentations">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+          Slides
+        </button>
       </div>
 
       <!-- Control Tab -->
@@ -829,6 +837,19 @@ export function getRemoteControlUI(port: number): string {
           </div>
         </div>
       </div>
+
+      <!-- Presentations Tab -->
+      <div class="tab-content" id="tab-presentations">
+        <div class="search-box">
+          <input type="text" class="search-input" id="presentation-search" placeholder="Search presentations...">
+        </div>
+        <div class="scrollable-list" id="presentations-list">
+          <div class="loading">
+            <div class="loading-spinner"></div>
+            Loading presentations...
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="loading-overlay" id="loading-overlay">
@@ -866,14 +887,25 @@ export function getRemoteControlUI(port: number): string {
       displayMode: 'bilingual',
       isBlank: false,
       setlist: [],
+      slides: [],
       activeTools: [],
-      onlineViewerCount: 0
+      onlineViewerCount: 0,
+      activeMedia: null,
+      activeAudio: null,
+      activeVideo: null,
+      activeYoutube: null
     };
 
     // Data caches
     let songsCache = null;
     let bibleBooks = null;
     let mediaCache = null;
+    let presentationsCache = null;
+
+    // Render throttling for performance
+    let renderPending = false;
+    let lastRenderTime = 0;
+    const MIN_RENDER_INTERVAL = 16; // ~60fps max
 
     // PIN Input handling
     pinDigits.forEach((input, index) => {
@@ -930,6 +962,7 @@ export function getRemoteControlUI(port: number): string {
         if (tabId === 'songs' && !songsCache) loadSongs();
         if (tabId === 'bible' && !bibleBooks) loadBibleBooks();
         if (tabId === 'media' && !mediaCache) loadMedia();
+        if (tabId === 'presentations' && !presentationsCache) loadPresentations();
       });
     });
 
@@ -958,7 +991,18 @@ export function getRemoteControlUI(port: number): string {
       });
 
       socket.on('state', (state) => {
-        updateState(state);
+        // Merge partial state updates (server may omit unchanged arrays)
+        const mergedState = { ...currentState };
+        for (const key in state) {
+          if (state[key] !== undefined) {
+            mergedState[key] = state[key];
+          }
+        }
+        // Debug: log setlist changes
+        if (state.setlist) {
+          console.log('[Remote] Received setlist update:', state.setlist.length, 'items');
+        }
+        updateState(mergedState);
       });
 
       socket.on('session_expired', () => {
@@ -983,7 +1027,29 @@ export function getRemoteControlUI(port: number): string {
     }
 
     function updateState(state) {
-      currentState = { ...currentState, ...state };
+      currentState = state;
+
+      // Throttle rendering to prevent excessive DOM updates
+      const now = Date.now();
+      if (renderPending) return;
+
+      const timeSinceLastRender = now - lastRenderTime;
+      if (timeSinceLastRender < MIN_RENDER_INTERVAL) {
+        renderPending = true;
+        setTimeout(() => {
+          renderPending = false;
+          lastRenderTime = Date.now();
+          doRender();
+        }, MIN_RENDER_INTERVAL - timeSinceLastRender);
+        return;
+      }
+
+      lastRenderTime = now;
+      doRender();
+    }
+
+    function doRender() {
+      const state = currentState;
 
       if (state.activeYoutube) {
         currentTitle.textContent = state.activeYoutube.title || 'YouTube Video';
@@ -1584,6 +1650,59 @@ export function getRemoteControlUI(port: number): string {
       return mins + ':' + secs.toString().padStart(2, '0');
     }
 
+    // Presentations
+    function loadPresentations() {
+      const presentationsList = document.getElementById('presentations-list');
+      presentationsList.innerHTML = '<div class="loading"><div class="loading-spinner"></div>Loading presentations...</div>';
+
+      socket.emit('getPresentations', (result) => {
+        if (result.error) {
+          presentationsList.innerHTML = '<div class="empty-state">Failed to load presentations</div>';
+          return;
+        }
+        presentationsCache = result.presentations;
+        renderPresentations(presentationsCache);
+      });
+    }
+
+    function renderPresentations(presentations) {
+      const presentationsList = document.getElementById('presentations-list');
+      if (!presentations || presentations.length === 0) {
+        presentationsList.innerHTML = '<div class="empty-state">No presentations found</div>';
+        return;
+      }
+
+      presentationsList.innerHTML = presentations.map(p => {
+        const typeIcon = p.quickModeType === 'prayer' ? '&#128591;' : p.quickModeType === 'sermon' ? '&#128220;' : '&#128200;';
+        const typeLabel = p.quickModeType || 'presentation';
+        return '<div class="list-item" data-presentation-id="' + escapeHtml(String(p.id)) + '">' +
+          '<div class="item-icon tool">' + typeIcon + '</div>' +
+          '<div class="item-details">' +
+            '<div class="item-name">' + escapeHtml(p.title) + '</div>' +
+            '<div class="item-meta">' + escapeHtml(typeLabel) + ' &bull; ' + p.slideCount + ' slides</div>' +
+          '</div>' +
+          '<button class="add-btn" data-action="add-presentation">+ Add</button>' +
+        '</div>';
+      }).join('');
+
+      presentationsList.querySelectorAll('.list-item').forEach(el => {
+        el.querySelector('.add-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          sendCommand('library:addPresentation', { presentationId: el.dataset.presentationId });
+        });
+        el.addEventListener('click', () => {
+          sendCommand('library:selectPresentation', { presentationId: el.dataset.presentationId });
+        });
+      });
+    }
+
+    document.getElementById('presentation-search').addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase();
+      if (!presentationsCache) return;
+      const filtered = presentationsCache.filter(p => p.title.toLowerCase().includes(query));
+      renderPresentations(filtered);
+    });
+
     // Navigation
     document.getElementById('prev-btn').addEventListener('click', () => sendCommand('slide:prev', {}));
     document.getElementById('next-btn').addEventListener('click', () => sendCommand('slide:next', {}));
@@ -1597,6 +1716,7 @@ export function getRemoteControlUI(port: number): string {
       if (type === 'song') return 'song';
       if (type === 'bible') return 'bible';
       if (type === 'media' || type === 'youtube') return 'media';
+      if (type === 'presentation') return 'tool';
       return 'tool';
     }
 
@@ -1606,6 +1726,7 @@ export function getRemoteControlUI(port: number): string {
         case 'bible': return '&#128214;';
         case 'media': return '&#127909;';
         case 'youtube': return '&#9658;';
+        case 'presentation': return '&#128200;';
         case 'countdown': return '&#9201;';
         case 'announcement': return '&#128227;';
         default: return '&#9734;';

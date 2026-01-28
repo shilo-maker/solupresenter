@@ -8322,10 +8322,12 @@ function PresenterMode() {
                       const after = val.slice(pos);
                       const insert = `[${tag}]\n`;
                       const needsNewline = before.length > 0 && !before.endsWith('\n');
+                      const scrollTop = ta.scrollTop;
                       ta.value = before + (needsNewline ? '\n' : '') + insert + after;
                       const newPos = (needsNewline ? before.length + 1 : before.length) + insert.length;
                       ta.focus();
                       ta.selectionStart = ta.selectionEnd = newPos;
+                      ta.scrollTop = scrollTop;
                     }}
                     style={{
                       padding: '3px 10px',

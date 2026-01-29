@@ -127,9 +127,11 @@ function PresenterMode() {
   // Song express edit modal state
   const [showSongEditModal, setShowSongEditModal] = useState(false);
   const [editingSong, setEditingSong] = useState(null);
+  const [editSongLoading, setEditSongLoading] = useState(false);
   const [editSongSaving, setEditSongSaving] = useState(false);
   const editTextareaRef = useRef(null);
   const editExpressTextRef = useRef('');
+  const songCacheRef = useRef(new Map()); // Cache full song data for instant edit
 
   // Image search state
   const [imageSearchResults, setImageSearchResults] = useState([]);
@@ -1764,6 +1766,8 @@ function PresenterMode() {
         // Join as operator and listen for join confirmation with quickSlideText
         socketService.operatorJoinRoom(user.id, response.data.room.id);
 
+        // Remove any previous listener before adding new one (prevents accumulation on re-runs)
+        socketService.removeListener('operator:joined');
         // Listen for operator:joined event to restore quickSlideText
         socketService.onOperatorJoined((data) => {
           if (data.quickSlideText) {
@@ -1784,6 +1788,7 @@ function PresenterMode() {
     fetchPresentations();
 
     return () => {
+      socketService.removeListener('operator:joined');
       socketService.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1916,7 +1921,7 @@ function PresenterMode() {
     });
   };
 
-  const fetchSongs = async () => {
+  const fetchSongs = useCallback(async () => {
     setSongsLoading(true);
     try {
       const response = await api.get('/api/songs');
@@ -1929,9 +1934,9 @@ function PresenterMode() {
     } finally {
       setSongsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchPresentations = async () => {
+  const fetchPresentations = useCallback(async () => {
     setPresentationsLoading(true);
     try {
       const response = await presentationAPI.getAll();
@@ -1942,9 +1947,9 @@ function PresenterMode() {
     } finally {
       setPresentationsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchMedia = async () => {
+  const fetchMedia = useCallback(async () => {
     setMediaLoading(true);
     try {
       const response = await api.get('/api/media');
@@ -1956,7 +1961,7 @@ function PresenterMode() {
     } finally {
       setMediaLoading(false);
     }
-  };
+  }, []);
 
   const handleBackgroundChange = (backgroundUrl) => {
     setSelectedBackground(backgroundUrl);
@@ -1969,7 +1974,7 @@ function PresenterMode() {
     }
   };
 
-  const fetchPublicRooms = async () => {
+  const fetchPublicRooms = useCallback(async () => {
     try {
       const response = await publicRoomAPI.getMyRooms();
       const rooms = response.data.publicRooms || [];
@@ -1986,7 +1991,7 @@ function PresenterMode() {
     } catch (error) {
       console.error('Error fetching public rooms:', error);
     }
-  };
+  }, [room?.id]);
 
   const handlePublicRoomChange = async (publicRoomId) => {
     if (!room) return;
@@ -2373,7 +2378,7 @@ function PresenterMode() {
     };
   }, [youtubePlaying, youtubeOnDisplay, room]);
 
-  const handleSearch = (query) => {
+  const handleSearch = useCallback((query) => {
     setSearchQuery(query);
 
     if (activeResourcePanel === 'songs') {
@@ -2381,9 +2386,8 @@ function PresenterMode() {
       if (query.trim() === '') {
         setSearchResults(allSongs); // allSongs is already sorted
       } else {
+        const searchTerm = query.toLowerCase();
         const filtered = allSongs.filter(song => {
-          const searchTerm = query.toLowerCase();
-
           // Check if title matches
           if (song.title.toLowerCase().includes(searchTerm)) {
             return true;
@@ -2530,7 +2534,7 @@ function PresenterMode() {
         setImageSearchResults(filtered);
       }
     }
-  };
+  }, [activeResourcePanel, allSongs, media]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addToSetlist = (song) => {
     setSetlist([...setlist, { type: 'song', data: song }]);
@@ -3412,32 +3416,69 @@ function PresenterMode() {
   };
 
   // Song express edit helpers
+  // Convert full song data to express text format
+  const songToExpressText = useCallback((fullSong) => {
+    let lastVt = '';
+    return (fullSong.slides || []).map(slide => {
+      const lines = [];
+      if (slide.verseType && slide.verseType !== lastVt) {
+        lines.push(`[${slide.verseType}]`);
+        lastVt = slide.verseType;
+      }
+      lines.push(slide.originalText);
+      if (slide.transliteration) lines.push(slide.transliteration);
+      if (slide.translation) lines.push(slide.translation);
+      if (slide.translationOverflow) lines.push(slide.translationOverflow);
+      return lines.join('\n');
+    }).join('\n\n');
+  }, []);
+
   const openSongEditModal = useCallback(async (song) => {
-    try {
-      const response = await api.get(`/api/songs/${song.id || song._id}`);
-      const fullSong = response.data.song;
-      setEditingSong(fullSong);
-      // Convert slides to express text
-      let lastVt = '';
-      const expText = (fullSong.slides || []).map(slide => {
-        const lines = [];
-        if (slide.verseType && slide.verseType !== lastVt) {
-          lines.push(`[${slide.verseType}]`);
-          lastVt = slide.verseType;
-        }
-        lines.push(slide.originalText);
-        if (slide.transliteration) lines.push(slide.transliteration);
-        if (slide.translation) lines.push(slide.translation);
-        if (slide.translationOverflow) lines.push(slide.translationOverflow);
-        return lines.join('\n');
-      }).join('\n\n');
-      editExpressTextRef.current = expText;
+    const songId = song.id || song._id;
+
+    // Songs already have slides from initial fetch — use directly if available
+    if (song.slides && song.slides.length > 0) {
+      setEditingSong(song);
+      editExpressTextRef.current = songToExpressText(song);
       setShowSongEditModal(true);
+      setEditSongLoading(false);
+      return;
+    }
+
+    // Check cache for previously fetched full song data
+    const cached = songCacheRef.current.get(songId);
+    if (cached) {
+      setEditingSong(cached);
+      editExpressTextRef.current = songToExpressText(cached);
+      setShowSongEditModal(true);
+      setEditSongLoading(false);
+      return;
+    }
+
+    // Fallback: fetch from API (show modal immediately with loading state)
+    setEditingSong({ title: song.title, _id: songId });
+    editExpressTextRef.current = '';
+    setShowSongEditModal(true);
+    setEditSongLoading(true);
+    try {
+      const response = await api.get(`/api/songs/${songId}`);
+      const fullSong = response.data.song;
+      songCacheRef.current.set(songId, fullSong);
+      setEditingSong(fullSong);
+      const expText = songToExpressText(fullSong);
+      editExpressTextRef.current = expText;
+      if (editTextareaRef.current) {
+        editTextareaRef.current.value = expText;
+      }
     } catch (error) {
       console.error('Error loading song for edit:', error);
+      setShowSongEditModal(false);
+      setEditingSong(null);
       setToast({ show: true, message: 'Failed to load song', variant: 'danger' });
+    } finally {
+      setEditSongLoading(false);
     }
-  }, []);
+  }, [songToExpressText]);
 
   const saveSongFromExpressEdit = useCallback(async () => {
     const song = editingSong;
@@ -3482,6 +3523,8 @@ function PresenterMode() {
         slides: parsedSlides,
         tags: song.tags || []
       });
+      // Invalidate cache for this song so next edit picks up fresh data
+      songCacheRef.current.delete(songId);
       setShowSongEditModal(false);
       setEditingSong(null);
       setToast({ show: true, message: t('songs.songUpdatedSuccess'), variant: 'success' });
@@ -8348,31 +8391,38 @@ function PresenterMode() {
                 ))}
               </div>
               <div style={{ padding: '16px', flex: 1, overflow: 'auto', minHeight: 0 }}>
-                <textarea
-                  ref={editTextareaRef}
-                  rows={18}
-                  defaultValue={editExpressTextRef.current}
-                  dir={(editingSong?.originalLanguage === 'he' || editingSong?.originalLanguage === 'ar') ? 'rtl' : 'ltr'}
-                  style={{
-                    width: '100%',
-                    fontFamily: 'monospace',
-                    fontSize: '0.9rem',
-                    background: '#0d0d1a',
-                    color: 'white',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    borderRadius: '6px',
-                    padding: '10px',
-                    resize: 'vertical',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                />
+                {editSongLoading ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: 'rgba(255,255,255,0.5)' }}>
+                    <div className="spinner-border spinner-border-sm" role="status" style={{ marginRight: '8px' }} />
+                    {t('common.loading')}
+                  </div>
+                ) : (
+                  <textarea
+                    ref={editTextareaRef}
+                    rows={18}
+                    defaultValue={editExpressTextRef.current}
+                    dir={(editingSong?.originalLanguage === 'he' || editingSong?.originalLanguage === 'ar') ? 'rtl' : 'ltr'}
+                    style={{
+                      width: '100%',
+                      fontFamily: 'monospace',
+                      fontSize: '0.9rem',
+                      background: '#0d0d1a',
+                      color: 'white',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      borderRadius: '6px',
+                      padding: '10px',
+                      resize: 'vertical',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                )}
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
                 <Button variant="outline-light" size="sm" onClick={() => { setShowSongEditModal(false); setEditingSong(null); }}>
                   {t('common.cancel')}
                 </Button>
-                <Button variant="primary" size="sm" onClick={saveSongFromExpressEdit} disabled={editSongSaving}>
+                <Button variant="primary" size="sm" onClick={saveSongFromExpressEdit} disabled={editSongSaving || editSongLoading}>
                   {editSongSaving ? (t('songs.saving') || 'Saving...') : t('common.save')}
                 </Button>
               </div>

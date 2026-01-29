@@ -54,7 +54,7 @@ function Register() {
         <Card>
           <Card.Body>
             <div className="mb-3">
-              <Link to="/" style={{ textDecoration: 'none', color: '#666', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <Link to="/" style={{ textDecoration: 'none', color: '#a1a1aa', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
                 ← {t('common.back')}
               </Link>
             </div>

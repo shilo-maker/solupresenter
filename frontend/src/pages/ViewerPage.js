@@ -2688,7 +2688,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
               }}
             >
               <span style={{ color: 'white', fontSize: '0.9rem' }}>{t('viewer.originalText')}</span>
-              <span style={{ color: showOriginal ? '#28a745' : '#999', fontSize: '1.2rem' }}>
+              <span style={{ color: showOriginal ? '#10b981' : '#71717a', fontSize: '1.2rem' }}>
                 {showOriginal ? '✓' : '○'}
               </span>
             </div>
@@ -2707,7 +2707,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
               }}
             >
               <span style={{ color: 'white', fontSize: '0.9rem' }}>{t('viewer.transliteration')}</span>
-              <span style={{ color: showTransliteration ? '#28a745' : '#999', fontSize: '1.2rem' }}>
+              <span style={{ color: showTransliteration ? '#10b981' : '#71717a', fontSize: '1.2rem' }}>
                 {showTransliteration ? '✓' : '○'}
               </span>
             </div>
@@ -2726,7 +2726,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
               }}
             >
               <span style={{ color: 'white', fontSize: '0.9rem' }}>{t('viewer.translation')}</span>
-              <span style={{ color: showTranslation ? '#28a745' : '#999', fontSize: '1.2rem' }}>
+              <span style={{ color: showTranslation ? '#10b981' : '#71717a', fontSize: '1.2rem' }}>
                 {showTranslation ? '✓' : '○'}
               </span>
             </div>

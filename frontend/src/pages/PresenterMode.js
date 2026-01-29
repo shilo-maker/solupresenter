@@ -4242,16 +4242,16 @@ function PresenterMode() {
                       gap: '10px',
                       padding: '12px 16px',
                       cursor: 'pointer',
-                      background: !selectedPublicRoom ? '#f0f7ff' : 'white',
-                      borderLeft: !selectedPublicRoom ? '3px solid #0d6efd' : '3px solid transparent'
+                      background: !selectedPublicRoom ? 'rgba(6, 182, 212, 0.1)' : '#18181b',
+                      borderLeft: !selectedPublicRoom ? '3px solid #06b6d4' : '3px solid transparent'
                     }}
                   >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill={!selectedPublicRoom ? '#0d6efd' : '#666'}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill={!selectedPublicRoom ? '#06b6d4' : '#71717a'}>
                       <path d="M12 2C9.24 2 7 4.24 7 7v5H6c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v5H9V7c0-1.66 1.34-3 3-3z"/>
                     </svg>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: '500', color: !selectedPublicRoom ? '#0d6efd' : '#333' }}>{t('presenter.privateRoom')}</div>
-                      <div style={{ fontSize: '0.8rem', color: '#666' }}>{t('presenter.pin')}: {roomPin}</div>
+                      <div style={{ fontWeight: '500', color: !selectedPublicRoom ? '#06b6d4' : '#fafafa' }}>{t('presenter.privateRoom')}</div>
+                      <div style={{ fontSize: '0.8rem', color: '#a1a1aa' }}>{t('presenter.pin')}: {roomPin}</div>
                     </div>
                     {!selectedPublicRoom && <Badge bg="primary" style={{ fontSize: '0.65rem' }}>{t('presenter.active')}</Badge>}
                   </div>
@@ -4267,16 +4267,16 @@ function PresenterMode() {
                         gap: '10px',
                         padding: '12px 16px',
                         cursor: 'pointer',
-                        background: selectedPublicRoom?.id === pr.id ? '#f0fff4' : 'white',
-                        borderLeft: selectedPublicRoom?.id === pr.id ? '3px solid #28a745' : '3px solid transparent'
+                        background: selectedPublicRoom?.id === pr.id ? 'rgba(16, 185, 129, 0.1)' : '#18181b',
+                        borderLeft: selectedPublicRoom?.id === pr.id ? '3px solid #10b981' : '3px solid transparent'
                       }}
                     >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill={selectedPublicRoom?.id === pr.id ? '#28a745' : '#666'}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill={selectedPublicRoom?.id === pr.id ? '#10b981' : '#71717a'}>
                         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
                       </svg>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: '500', color: selectedPublicRoom?.id === pr.id ? '#28a745' : '#333' }}>{pr.name}</div>
-                        <div style={{ fontSize: '0.8rem', color: '#666' }}>{t('presenter.publicRoom')}</div>
+                        <div style={{ fontWeight: '500', color: selectedPublicRoom?.id === pr.id ? '#10b981' : '#fafafa' }}>{pr.name}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#a1a1aa' }}>{t('presenter.publicRoom')}</div>
                       </div>
                       {selectedPublicRoom?.id === pr.id && <Badge bg="success" style={{ fontSize: '0.65rem' }}>{t('presenter.active')}</Badge>}
                     </div>
@@ -4287,10 +4287,10 @@ function PresenterMode() {
                     onClick={() => { navigate('/settings'); setShowRoomSelector(false); }}
                     style={{
                       padding: '10px 16px',
-                      borderTop: '1px solid #eee',
+                      borderTop: '1px solid rgba(255, 255, 255, 0.06)',
                       textAlign: 'center',
                       cursor: 'pointer',
-                      color: '#0d6efd',
+                      color: '#06b6d4',
                       fontSize: '0.85rem'
                     }}
                   >
@@ -4714,8 +4714,8 @@ function PresenterMode() {
                             }}
                             onMouseEnter={(e) => {
                               if (!isSelected) {
-                                e.currentTarget.style.borderColor = '#FF8C42';
-                                e.currentTarget.style.background = 'rgba(255,140,66,0.2)';
+                                e.currentTarget.style.borderColor = '#06b6d4';
+                                e.currentTarget.style.background = 'rgba(6,182,212,0.2)';
                               }
                             }}
                             onMouseLeave={(e) => {
@@ -5329,7 +5329,7 @@ function PresenterMode() {
                         onMouseEnter={(e) => {
                           if (!isSelected) {
                             e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                            e.currentTarget.style.borderColor = 'rgba(255, 140, 66, 0.5)';
+                            e.currentTarget.style.borderColor = 'rgba(6, 182, 212, 0.5)';
                           }
                         }}
                         onMouseLeave={(e) => {
@@ -5869,12 +5869,12 @@ function PresenterMode() {
                   <span style={{
                     fontSize: '1.05rem',
                     fontWeight: '600',
-                    color: '#2D3748',
-                    background: 'linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%)',
+                    color: '#fafafa',
+                    background: 'linear-gradient(135deg, rgba(6,182,212,0.15) 0%, rgba(8,145,178,0.15) 100%)',
                     padding: '6px 14px',
                     borderRadius: '8px',
-                    border: '1px solid #FED7AA',
-                    boxShadow: '0 1px 3px rgba(255, 140, 66, 0.1)',
+                    border: '1px solid rgba(6, 182, 212, 0.3)',
+                    boxShadow: '0 1px 3px rgba(6, 182, 212, 0.1)',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -5914,7 +5914,7 @@ function PresenterMode() {
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = 'rgba(255,255,255,0.2)';
-                  e.currentTarget.style.color = '#FF8C42';
+                  e.currentTarget.style.color = '#06b6d4';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'transparent';
@@ -6067,13 +6067,13 @@ function PresenterMode() {
                     }}
                     onMouseEnter={(e) => {
                       if (setlist.length > 0) {
-                        e.currentTarget.style.background = '#FFF7ED';
-                        e.currentTarget.style.color = '#FF8C42';
+                        e.currentTarget.style.background = 'rgba(6, 182, 212, 0.1)';
+                        e.currentTarget.style.color = '#06b6d4';
                       }
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.color = setlist.length === 0 ? '#A0AEC0' : '#2D3748';
+                      e.currentTarget.style.color = setlist.length === 0 ? '#71717a' : '#fafafa';
                     }}
                   >
                     <span style={{ fontSize: '1.1rem' }}>📝</span> {t('presenter.saveAs')}
@@ -6410,7 +6410,7 @@ function PresenterMode() {
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.transform = 'translateX(2px)';
-                          e.currentTarget.style.borderColor = '#FF8C42';
+                          e.currentTarget.style.borderColor = '#06b6d4';
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.transform = 'translateX(0)';
@@ -7556,20 +7556,20 @@ function PresenterMode() {
               <h6 style={{ fontWeight: 'bold', marginBottom: '12px' }}>{t('presenter.navigation')}</h6>
               <div style={{ display: 'grid', gap: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>→</kbd> {t('presenter.rightArrow')}</span>
-                  <span style={{ color: '#666' }}>{t('presenter.nextSlide')}</span>
+                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#27272a', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }}>→</kbd> {t('presenter.rightArrow')}</span>
+                  <span style={{ color: '#a1a1aa' }}>{t('presenter.nextSlide')}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>←</kbd> {t('presenter.leftArrow')}</span>
-                  <span style={{ color: '#666' }}>{t('presenter.previousSlide')}</span>
+                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#27272a', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }}>←</kbd> {t('presenter.leftArrow')}</span>
+                  <span style={{ color: '#a1a1aa' }}>{t('presenter.previousSlide')}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>↓</kbd> {t('presenter.downArrow')}</span>
-                  <span style={{ color: '#666' }}>{t('presenter.nextSong')}</span>
+                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#27272a', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }}>↓</kbd> {t('presenter.downArrow')}</span>
+                  <span style={{ color: '#a1a1aa' }}>{t('presenter.nextSong')}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>↑</kbd> {t('presenter.upArrow')}</span>
-                  <span style={{ color: '#666' }}>{t('presenter.previousSong')}</span>
+                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#27272a', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }}>↑</kbd> {t('presenter.upArrow')}</span>
+                  <span style={{ color: '#a1a1aa' }}>{t('presenter.previousSong')}</span>
                 </div>
               </div>
             </div>
@@ -7578,13 +7578,13 @@ function PresenterMode() {
               <h6 style={{ fontWeight: 'bold', marginBottom: '12px' }}>{t('presenter.displayControl')}</h6>
               <div style={{ display: 'grid', gap: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>Space</kbd> or <kbd style={{ padding: '2px 8px', backgroundColor: '#f0f0f0', borderRadius: '4px', border: '1px solid #ccc' }}>B</kbd></span>
-                  <span style={{ color: '#666' }}>{t('presenter.toggleBlankScreen')}</span>
+                  <span><kbd style={{ padding: '2px 8px', backgroundColor: '#27272a', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }}>Space</kbd> or <kbd style={{ padding: '2px 8px', backgroundColor: '#27272a', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }}>B</kbd></span>
+                  <span style={{ color: '#a1a1aa' }}>{t('presenter.toggleBlankScreen')}</span>
                 </div>
               </div>
             </div>
 
-            <div style={{ marginTop: '20px', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px', fontSize: '0.85rem', color: '#666' }}>
+            <div style={{ marginTop: '20px', padding: '12px', backgroundColor: '#27272a', borderRadius: '8px', fontSize: '0.85rem', color: '#a1a1aa' }}>
               <strong>{t('presenter.tip')}:</strong> {t('presenter.keyboardTip')}
             </div>
           </div>

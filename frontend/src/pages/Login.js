@@ -98,14 +98,14 @@ function Login() {
         <Card>
           <Card.Body>
             <div className="mb-3">
-              <Link to="/" style={{ textDecoration: 'none', color: '#666', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <Link to="/" style={{ textDecoration: 'none', color: '#a1a1aa', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
                 ← {t('common.back')}
               </Link>
             </div>
             <div className="text-center mb-4">
               <img src="/new_cast_logo.png" alt="SoluCast Logo" style={{ maxWidth: '150px', height: 'auto', marginBottom: '0.8rem' }} />
               <div style={{
-                color: '#333',
+                color: '#fafafa',
                 fontWeight: '600',
                 fontSize: '1.5rem',
                 letterSpacing: '1px',
@@ -114,7 +114,7 @@ function Login() {
                 SoluCast
               </div>
               <div style={{
-                color: '#666',
+                color: '#a1a1aa',
                 fontWeight: '300',
                 fontSize: '0.75rem',
                 letterSpacing: '2px',

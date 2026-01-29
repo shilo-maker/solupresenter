@@ -19,9 +19,9 @@ const LoadingFallback = () => {
       justifyContent: 'center',
       alignItems: 'center',
       height: '100vh',
-      backgroundColor: '#1a202c',
+      backgroundColor: '#09090b',
       fontSize: '1.2rem',
-      color: '#4a5568',
+      color: '#a1a1aa',
       opacity: 0.8
     }}>
       {t('common.loading')}

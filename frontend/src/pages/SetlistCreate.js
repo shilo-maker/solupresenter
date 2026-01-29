@@ -262,8 +262,8 @@ function SetlistCreate() {
                   const [, month, day] = setlistDate.split('-');
                   const formattedDate = `${day}/${month}`;
                   return (
-                    <div style={{ padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
-                      <small style={{ color: '#666' }}>
+                    <div style={{ padding: '10px', backgroundColor: '#27272a', borderRadius: '6px' }}>
+                      <small style={{ color: '#a1a1aa' }}>
                         <strong>Setlist name:</strong> {formattedDate} {setlistTime} {setlistVenue}
                       </small>
                     </div>

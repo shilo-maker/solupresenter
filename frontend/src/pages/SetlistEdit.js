@@ -338,7 +338,7 @@ function SetlistEdit() {
                           cursor: 'grab',
                           opacity: draggedIndex === index ? 0.5 : 1,
                           transition: 'opacity 0.2s',
-                          backgroundColor: draggedIndex === index ? '#f0f0f0' : 'transparent'
+                          backgroundColor: draggedIndex === index ? '#27272a' : 'transparent'
                         }}
                       >
                         <div className="d-flex align-items-center flex-grow-1">
@@ -527,7 +527,7 @@ function SetlistEdit() {
                 </div>
 
                 {bibleLoading && (
-                  <div style={{ textAlign: 'center', padding: '10px', color: '#666' }}>
+                  <div style={{ textAlign: 'center', padding: '10px', color: '#a1a1aa' }}>
                     Loading verses...
                   </div>
                 )}

@@ -1,37 +1,42 @@
-// Modern Design System for SoluCast
+// Modern Design System for SoluCast - Dark Cyan Theme
 export const colors = {
-  // Primary gradient (Teal/Cyan)
-  primary: 'linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%)',
-  primarySolid: '#14b8a6',
+  // Primary gradient (Cyan)
+  primary: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
+  primarySolid: '#06b6d4',
   primaryDark: '#0891b2',
 
   // Success gradient (green)
-  success: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
-  successSolid: '#11998e',
+  success: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+  successSolid: '#10b981',
 
   // Danger gradient (red)
-  danger: 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)',
-  dangerSolid: '#eb3349',
+  danger: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+  dangerSolid: '#ef4444',
 
-  // Warning gradient (amber - not primary color)
+  // Warning gradient (amber)
   warning: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
   warningSolid: '#f59e0b',
 
-  // Info gradient (light cyan)
-  info: 'linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)',
-  infoSolid: '#22d3ee',
+  // Info gradient (blue)
+  info: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+  infoSolid: '#3b82f6',
 
-  // Neutrals
-  dark: '#2d3748',
-  gray: '#718096',
-  lightGray: '#e2e8f0',
-  background: '#f7fafc',
-  white: '#ffffff',
+  // Neutrals (dark theme)
+  dark: '#fafafa',
+  gray: '#a1a1aa',
+  lightGray: 'rgba(255, 255, 255, 0.06)',
+  background: '#09090b',
+  white: '#18181b',
+
+  // Surfaces
+  surface: '#18181b',
+  elevated: '#27272a',
+  hoverBg: '#3f3f46',
 
   // Text colors
-  textDark: '#1a202c',
-  textMedium: '#4a5568',
-  textLight: '#a0aec0',
+  textDark: '#fafafa',
+  textMedium: '#a1a1aa',
+  textLight: '#71717a',
 };
 
 export const typography = {
@@ -73,11 +78,11 @@ export const borderRadius = {
 };
 
 export const shadows = {
-  sm: '0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08)',
-  md: '0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06)',
-  lg: '0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05)',
-  xl: '0 20px 25px rgba(0, 0, 0, 0.15), 0 10px 10px rgba(0, 0, 0, 0.04)',
-  inner: 'inset 0 2px 4px rgba(0, 0, 0, 0.06)',
+  sm: '0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2)',
+  md: '0 4px 6px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.15)',
+  lg: '0 10px 15px rgba(0, 0, 0, 0.25), 0 4px 6px rgba(0, 0, 0, 0.12)',
+  xl: '0 20px 25px rgba(0, 0, 0, 0.35), 0 10px 10px rgba(0, 0, 0, 0.12)',
+  inner: 'inset 0 2px 4px rgba(0, 0, 0, 0.15)',
 };
 
 // Modern button styles
@@ -90,7 +95,7 @@ export const buttonStyles = {
     padding: `${spacing.sm} ${spacing.lg}`,
     fontSize: typography.base,
     fontWeight: typography.semibold,
-    boxShadow: '0 2px 8px rgba(20, 184, 166, 0.4)',
+    boxShadow: '0 2px 8px rgba(6, 182, 212, 0.4)',
     transition: 'all 0.2s ease',
     cursor: 'pointer',
     fontFamily: typography.fontFamily,
@@ -104,7 +109,7 @@ export const buttonStyles = {
     padding: `${spacing.sm} ${spacing.lg}`,
     fontSize: typography.base,
     fontWeight: typography.semibold,
-    boxShadow: '0 2px 8px rgba(17, 153, 142, 0.4)',
+    boxShadow: '0 2px 8px rgba(16, 185, 129, 0.4)',
     transition: 'all 0.2s ease',
     cursor: 'pointer',
     fontFamily: typography.fontFamily,
@@ -118,7 +123,7 @@ export const buttonStyles = {
     padding: `${spacing.sm} ${spacing.lg}`,
     fontSize: typography.base,
     fontWeight: typography.semibold,
-    boxShadow: '0 2px 8px rgba(235, 51, 73, 0.4)',
+    boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)',
     transition: 'all 0.2s ease',
     cursor: 'pointer',
     fontFamily: typography.fontFamily,
@@ -154,20 +159,24 @@ export const buttonStyles = {
 // Card styles
 export const cardStyles = {
   base: {
-    background: colors.white,
+    background: colors.surface,
     borderRadius: borderRadius.lg,
     boxShadow: shadows.md,
+    border: '1px solid rgba(255, 255, 255, 0.06)',
     padding: spacing.xl,
     transition: 'all 0.2s ease',
+    color: colors.textDark,
   },
 
   hover: {
-    background: colors.white,
+    background: colors.surface,
     borderRadius: borderRadius.lg,
     boxShadow: shadows.md,
+    border: '1px solid rgba(255, 255, 255, 0.06)',
     padding: spacing.xl,
     transition: 'all 0.2s ease',
     cursor: 'pointer',
+    color: colors.textDark,
     ':hover': {
       boxShadow: shadows.lg,
       transform: 'translateY(-2px)',
@@ -179,7 +188,9 @@ export const cardStyles = {
 export const inputStyles = {
   base: {
     borderRadius: borderRadius.md,
-    border: `2px solid ${colors.lightGray}`,
+    border: '1px solid rgba(255, 255, 255, 0.06)',
+    background: colors.elevated,
+    color: colors.textDark,
     padding: `${spacing.sm} ${spacing.md}`,
     fontSize: typography.base,
     fontFamily: typography.fontFamily,
@@ -187,7 +198,7 @@ export const inputStyles = {
     ':focus': {
       outline: 'none',
       borderColor: colors.primarySolid,
-      boxShadow: `0 0 0 3px rgba(20, 184, 166, 0.1)`,
+      boxShadow: '0 0 0 3px rgba(6, 182, 212, 0.2)',
     },
   },
 };

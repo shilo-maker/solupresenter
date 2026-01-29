@@ -15,6 +15,7 @@ interface KeyboardShortcutsCallbacks {
 
 interface KeyboardShortcutsDeps {
   displayMode: DisplayMode;
+  isRTL?: boolean;
 }
 
 export function useKeyboardShortcuts(
@@ -32,7 +33,7 @@ export function useKeyboardShortcuts(
     setLiveState
   } = callbacks;
 
-  const { displayMode } = deps;
+  const { displayMode, isRTL = false } = deps;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -56,12 +57,24 @@ export function useKeyboardShortcuts(
       }
 
       // Arrow keys for slide navigation
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      // In RTL (Hebrew), left/right arrows are reversed for horizontal navigation
+      // Up/Down arrows remain the same (vertical is universal)
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        isRTL ? prevSlide() : nextSlide();
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        isRTL ? nextSlide() : prevSlide();
+        return;
+      }
+      if (e.key === 'ArrowDown') {
         e.preventDefault();
         nextSlide();
         return;
       }
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      if (e.key === 'ArrowUp') {
         e.preventDefault();
         prevSlide();
         return;
@@ -96,5 +109,5 @@ export function useKeyboardShortcuts(
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [nextSlide, prevSlide, toggleBlank, setShowKeyboardHelp, setShowQuickSlideModal, setDisplayMode, setIsBlank, setLiveState, displayMode]);
+  }, [nextSlide, prevSlide, toggleBlank, setShowKeyboardHelp, setShowQuickSlideModal, setDisplayMode, setIsBlank, setLiveState, displayMode, isRTL]);
 }

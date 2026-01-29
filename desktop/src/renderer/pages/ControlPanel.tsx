@@ -1802,7 +1802,7 @@ const ControlPanel: React.FC = () => {
       setIsBlank,
       setLiveState
     },
-    { displayMode }
+    { displayMode, isRTL }
   );
 
   // Remote Control hook - handles state sync and command processing

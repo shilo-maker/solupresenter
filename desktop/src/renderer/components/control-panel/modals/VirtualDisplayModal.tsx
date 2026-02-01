@@ -7,6 +7,7 @@ interface VirtualDisplayModalProps {
   onAdd: (name: string, type: 'viewer' | 'stage') => void;
   isLoading?: boolean;
   error?: string | null;
+  userPrefix?: string;
 }
 
 const VirtualDisplayModal = memo<VirtualDisplayModalProps>(({
@@ -14,7 +15,8 @@ const VirtualDisplayModal = memo<VirtualDisplayModalProps>(({
   onClose,
   onAdd,
   isLoading = false,
-  error = null
+  error = null,
+  userPrefix = 'user'
 }) => {
   const { t } = useTranslation();
   const [name, setName] = useState('');
@@ -36,8 +38,8 @@ const VirtualDisplayModal = memo<VirtualDisplayModalProps>(({
       .replace(/\s+/g, '-')
       .replace(/-+/g, '-')
       .replace(/^-+|-+$/g, '');
-    return base ? `desktop-${base}` : '';
-  }, [name]);
+    return base ? `${userPrefix}-virtual-${base}` : '';
+  }, [name, userPrefix]);
 
   const url = useMemo(() => {
     if (!slug) return '';

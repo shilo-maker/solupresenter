@@ -2040,7 +2040,8 @@ const ControlPanel: React.FC = () => {
     setVirtualDisplayLoading(true);
     setVirtualDisplayError(null);
     try {
-      const slug = `desktop-${name.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '')}`;
+      const userPrefix = authState.user?.email?.split('@')[0]?.toLowerCase().replace(/[^\w-]/g, '') || 'user';
+      const slug = `${userPrefix}-virtual-${name.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '')}`;
       const publicRoom = await window.electronAPI.createPublicRoom(slug);
       if (!publicRoom) {
         setVirtualDisplayError('Failed to create public room');
@@ -3222,6 +3223,7 @@ const ControlPanel: React.FC = () => {
         onAdd={handleAddVirtualDisplay}
         isLoading={virtualDisplayLoading}
         error={virtualDisplayError}
+        userPrefix={authState.user?.email?.split('@')[0]?.toLowerCase().replace(/[^\w-]/g, '') || 'user'}
       />
       </React.Suspense>
 

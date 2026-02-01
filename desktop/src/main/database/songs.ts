@@ -56,6 +56,76 @@ export async function getSong(id: string): Promise<any | null> {
   return queryOne('SELECT * FROM songs WHERE id = ?', [id]);
 }
 
+/**
+ * Get a single song by its remoteId (backend ID)
+ */
+export async function getSongByRemoteId(remoteId: string): Promise<any | null> {
+  return queryOne('SELECT * FROM songs WHERE remoteId = ?', [remoteId]);
+}
+
+/**
+ * Get a single song by title (case-insensitive)
+ */
+export async function getSongByTitle(title: string): Promise<any | null> {
+  return queryOne('SELECT * FROM songs WHERE title = ? COLLATE NOCASE LIMIT 1', [title]);
+}
+
+/**
+ * Batch-resolve songs by remoteId with title fallback.
+ * Accepts an array of { remoteId, title } pairs and returns a map of index -> song.
+ * This avoids N sequential IPC calls when loading an online setlist.
+ */
+export async function batchResolveSongs(items: Array<{ remoteId?: string; title?: string }>): Promise<Record<number, any>> {
+  const result: Record<number, any> = {};
+
+  // First pass: collect all remoteIds and titles for batch lookup
+  const remoteIds = new Set<string>();
+  const titles = new Set<string>();
+  for (const item of items) {
+    if (item.remoteId) remoteIds.add(item.remoteId);
+    if (item.title) titles.add(item.title);
+  }
+
+  // Batch fetch all songs matching any of the remoteIds
+  const songsByRemoteId: Record<string, any> = {};
+  if (remoteIds.size > 0) {
+    const placeholders = Array.from(remoteIds).map(() => '?').join(',');
+    const rows = queryAll(
+      `SELECT * FROM songs WHERE remoteId IN (${placeholders})`,
+      Array.from(remoteIds)
+    );
+    for (const row of rows) {
+      if (row.remoteId) songsByRemoteId[row.remoteId] = row;
+    }
+  }
+
+  // Batch fetch all songs matching any of the titles (case-insensitive)
+  const songsByTitle: Record<string, any> = {};
+  if (titles.size > 0) {
+    const placeholders = Array.from(titles).map(() => '?').join(',');
+    const rows = queryAll(
+      `SELECT * FROM songs WHERE title COLLATE NOCASE IN (${placeholders})`,
+      Array.from(titles)
+    );
+    for (const row of rows) {
+      const key = row.title?.toLowerCase();
+      if (key && !songsByTitle[key]) songsByTitle[key] = row;
+    }
+  }
+
+  // Resolve each item: prefer remoteId match, fall back to title
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    let song = item.remoteId ? songsByRemoteId[item.remoteId] : undefined;
+    if (!song && item.title) {
+      song = songsByTitle[item.title.toLowerCase()];
+    }
+    if (song) result[i] = song;
+  }
+
+  return result;
+}
+
 // Constants for input validation
 const MAX_TITLE_LENGTH = 500;
 const MAX_AUTHOR_LENGTH = 255;

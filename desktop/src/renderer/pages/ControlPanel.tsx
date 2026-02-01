@@ -3001,6 +3001,7 @@ const ControlPanel: React.FC = () => {
           onClose={() => setShowLoadModal(false)}
           onLoad={tryLoadSetlist}
           onDelete={deleteSetlistById}
+          isLoggedIn={authState.isAuthenticated}
         />
         </React.Suspense>
       )}

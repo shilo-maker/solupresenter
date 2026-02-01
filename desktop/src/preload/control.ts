@@ -223,6 +223,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createPublicRoom: (name: string) => ipcRenderer.invoke('online:createPublicRoom', name),
   linkPublicRoom: (publicRoomId: string) => ipcRenderer.invoke('online:linkPublicRoom', publicRoomId),
   unlinkPublicRoom: (publicRoomId: string) => ipcRenderer.invoke('online:unlinkPublicRoom', publicRoomId),
+  fetchOnlineSetlists: () => ipcRenderer.invoke('online:fetchSetlists'),
+  fetchOnlineSetlist: (id: string) => ipcRenderer.invoke('online:fetchSetlist', id),
+  getSongByRemoteId: (remoteId: string) => ipcRenderer.invoke('db:songs:getByRemoteId', remoteId),
+  getSongByTitle: (title: string) => ipcRenderer.invoke('db:songs:getByTitle', title),
+  batchResolveSongs: (items: Array<{ remoteId?: string; title?: string }>) => ipcRenderer.invoke('db:songs:batchResolve', items),
   generateQRCode: (url: string) => ipcRenderer.invoke('qrcode:generate', url),
   onViewerCountChanged: (callback: (count: number) => void) => {
     const handler = (_: any, count: number) => callback(count);
@@ -591,6 +596,11 @@ declare global {
       createPublicRoom: (name: string) => Promise<{ id: string; name: string; slug: string } | null>;
       linkPublicRoom: (publicRoomId: string) => Promise<boolean>;
       unlinkPublicRoom: (publicRoomId: string) => Promise<boolean>;
+      fetchOnlineSetlists: () => Promise<any[]>;
+      fetchOnlineSetlist: (id: string) => Promise<any | null>;
+      getSongByRemoteId: (remoteId: string) => Promise<any | null>;
+      getSongByTitle: (title: string) => Promise<any | null>;
+      batchResolveSongs: (items: Array<{ remoteId?: string; title?: string }>) => Promise<Record<number, any>>;
       generateQRCode: (url: string) => Promise<string | null>;
       onViewerCountChanged: (callback: (count: number) => void) => () => void;
       onOnlineStatusChanged: (callback: (status: any) => void) => () => void;

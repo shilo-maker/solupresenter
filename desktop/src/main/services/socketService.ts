@@ -702,6 +702,56 @@ export class SocketService {
   }
 
   /**
+   * Fetch user's online setlists from the backend
+   */
+  async fetchOnlineSetlists(): Promise<any[]> {
+    if (!this.token || !this.status.serverUrl) {
+      return [];
+    }
+
+    try {
+      this.axiosAbortController = new AbortController();
+      const response = await axios.get(`${this.status.serverUrl}/api/setlists`, {
+        headers: {
+          'Authorization': `Bearer ${this.token}`
+        },
+        timeout: AXIOS_TIMEOUT,
+        signal: this.axiosAbortController.signal
+      });
+
+      return response.data?.setlists || response.data || [];
+    } catch (error: any) {
+      console.error('Failed to fetch online setlists:', error.response?.data || error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch a single online setlist by ID (with populated song data)
+   */
+  async fetchOnlineSetlist(id: string): Promise<any | null> {
+    if (!this.token || !this.status.serverUrl) {
+      return null;
+    }
+
+    try {
+      this.axiosAbortController = new AbortController();
+      const response = await axios.get(`${this.status.serverUrl}/api/setlists/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${this.token}`
+        },
+        timeout: AXIOS_TIMEOUT,
+        signal: this.axiosAbortController.signal
+      });
+
+      return response.data?.setlist || response.data || null;
+    } catch (error: any) {
+      console.error('Failed to fetch online setlist:', error.response?.data || error.message);
+      return null;
+    }
+  }
+
+  /**
    * Clear all cached state (call when intentionally disconnecting)
    */
   clearCachedState(): void {

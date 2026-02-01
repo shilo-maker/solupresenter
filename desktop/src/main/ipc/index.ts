@@ -59,7 +59,7 @@ function checkRateLimit(key: string, maxCallsPerSecond: number): boolean {
   limiter.lastCall = now;
   return true;
 }
-import { getSongs, getSong, createSong, updateSong, deleteSong, importSongsFromBackend, exportSongsToJSON, importSongsFromJSON } from '../database/songs';
+import { getSongs, getSong, createSong, updateSong, deleteSong, importSongsFromBackend, exportSongsToJSON, importSongsFromJSON, getSongByRemoteId, getSongByTitle, batchResolveSongs } from '../database/songs';
 import { getSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist } from '../database/setlists';
 import { getThemes, getTheme, createTheme, updateTheme, deleteTheme } from '../database/themes';
 import { exportThemesToJSON, importThemesFromJSON } from '../database/themeExportImport';
@@ -1920,6 +1920,63 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   });
 
   // ============ Online Mode (with Auth Integration) ============
+
+  ipcMain.handle('online:fetchSetlists', async () => {
+    try {
+      return await socketService.fetchOnlineSetlists();
+    } catch (error) {
+      console.error('IPC online:fetchSetlists error:', error);
+      return [];
+    }
+  });
+
+  ipcMain.handle('online:fetchSetlist', async (event, id: string) => {
+    if (!id || typeof id !== 'string') {
+      return null;
+    }
+    try {
+      return await socketService.fetchOnlineSetlist(id);
+    } catch (error) {
+      console.error('IPC online:fetchSetlist error:', error);
+      return null;
+    }
+  });
+
+  ipcMain.handle('db:songs:getByRemoteId', async (event, remoteId: string) => {
+    if (!remoteId || typeof remoteId !== 'string') {
+      return null;
+    }
+    try {
+      return await getSongByRemoteId(remoteId);
+    } catch (error) {
+      console.error('IPC db:songs:getByRemoteId error:', error);
+      return null;
+    }
+  });
+
+  ipcMain.handle('db:songs:getByTitle', async (event, title: string) => {
+    if (!title || typeof title !== 'string') {
+      return null;
+    }
+    try {
+      return await getSongByTitle(title);
+    } catch (error) {
+      console.error('IPC db:songs:getByTitle error:', error);
+      return null;
+    }
+  });
+
+  ipcMain.handle('db:songs:batchResolve', async (event, items: Array<{ remoteId?: string; title?: string }>) => {
+    if (!Array.isArray(items)) {
+      return {};
+    }
+    try {
+      return await batchResolveSongs(items);
+    } catch (error) {
+      console.error('IPC db:songs:batchResolve error:', error);
+      return {};
+    }
+  });
 
   ipcMain.handle('online:connectWithAuth', async () => {
     const token = authService.getToken();

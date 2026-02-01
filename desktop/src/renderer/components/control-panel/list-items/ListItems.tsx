@@ -43,6 +43,9 @@ export const SongItem = memo<SongItemProps>(({
   const [isHovered, setIsHovered] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
+  const hoverBg = isSelected ? 'rgba(6,182,212,0.2)' : 'rgba(255,255,255,0.06)';
+  const defaultBg = isSelected ? 'rgba(6,182,212,0.2)' : 'transparent';
+
   const containerStyle = useMemo(() => ({
     padding: '10px 12px',
     cursor: 'grab' as const,
@@ -54,6 +57,7 @@ export const SongItem = memo<SongItemProps>(({
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
     position: 'relative' as const,
+    transition: 'background 0.15s ease',
   }), [isSelected, isDragged]);
 
   const menuButtonStyle = useMemo(() => ({
@@ -93,8 +97,8 @@ export const SongItem = memo<SongItemProps>(({
       onDragEnd={onDragEnd}
       onClick={() => onSelect(song)}
       onDoubleClick={() => onDoubleClick(song)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => { setIsHovered(false); setShowMenu(false); }}
+      onMouseEnter={(e) => { setIsHovered(true); e.currentTarget.style.background = hoverBg; }}
+      onMouseLeave={(e) => { setIsHovered(false); setShowMenu(false); e.currentTarget.style.background = defaultBg; }}
       style={containerStyle}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -187,15 +191,19 @@ export const PresentationItem = memo<PresentationItemProps>(({
   const [isHovered, setIsHovered] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
+  const hoverBg = isSelected ? 'rgba(6,182,212,0.2)' : 'rgba(255,255,255,0.06)';
+  const defaultBg = isSelected ? 'rgba(6,182,212,0.2)' : 'transparent';
+
   const containerStyle = useMemo(() => ({
     display: 'flex' as const,
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
     padding: '10px 12px',
     cursor: 'pointer' as const,
-    background: isSelected ? 'rgba(0, 212, 255, 0.2)' : 'transparent',
-    borderLeft: isSelected ? '3px solid #00d4ff' : '3px solid transparent',
-    borderBottom: '1px solid rgba(255,255,255,0.05)'
+    background: isSelected ? 'rgba(6,182,212,0.2)' : 'transparent',
+    borderLeft: isSelected ? '3px solid #06b6d4' : '3px solid transparent',
+    borderBottom: '1px solid rgba(255,255,255,0.05)',
+    transition: 'background 0.15s ease',
   }), [isSelected]);
 
   const menuButtonStyle = useMemo(() => ({
@@ -247,8 +255,8 @@ export const PresentationItem = memo<PresentationItemProps>(({
       onDragStart={(e) => onDragStart(e, presentation)}
       onClick={() => onSelect(presentation)}
       onDoubleClick={() => onDoubleClick(presentation)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => { setIsHovered(false); setShowMenu(false); }}
+      onMouseEnter={(e) => { setIsHovered(true); e.currentTarget.style.background = hoverBg; }}
+      onMouseLeave={(e) => { setIsHovered(false); setShowMenu(false); e.currentTarget.style.background = defaultBg; }}
       style={containerStyle}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -338,6 +346,9 @@ export const ThemeItem = memo<ThemeItemProps>(({
   const [isHovered, setIsHovered] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
+  const hoverBg = isSelected ? `${accentColor}30` : 'rgba(255,255,255,0.06)';
+  const defaultBg = isSelected ? `${accentColor}30` : colors.background.card;
+
   const containerStyle = useMemo(() => ({
     display: 'flex' as const,
     alignItems: 'center' as const,
@@ -349,6 +360,7 @@ export const ThemeItem = memo<ThemeItemProps>(({
     cursor: 'pointer' as const,
     border: isSelected ? `1px solid ${accentColor}` : '1px solid transparent',
     position: 'relative' as const,
+    transition: 'background 0.15s ease',
   }), [isSelected, accentColor]);
 
   const menuButtonStyle = useMemo(() => ({
@@ -381,8 +393,8 @@ export const ThemeItem = memo<ThemeItemProps>(({
   return (
     <div
       onClick={onSelect}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => { setIsHovered(false); setShowMenu(false); }}
+      onMouseEnter={(e) => { setIsHovered(true); e.currentTarget.style.background = hoverBg; }}
+      onMouseLeave={(e) => { setIsHovered(false); setShowMenu(false); e.currentTarget.style.background = defaultBg; }}
       style={containerStyle}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

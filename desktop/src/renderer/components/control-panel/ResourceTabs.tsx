@@ -47,14 +47,14 @@ const ResourceTabs: React.FC<ResourceTabsProps> = memo(({
           style={tabStyles.tab(activeTab === tab.id)}
           onMouseEnter={(e) => {
             if (activeTab !== tab.id) {
-              e.currentTarget.style.background = 'rgba(102, 126, 234, 0.15)';
-              e.currentTarget.style.color = 'rgba(255,255,255,0.8)';
+              e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+              e.currentTarget.style.color = '#e4e4e7';
             }
           }}
           onMouseLeave={(e) => {
             if (activeTab !== tab.id) {
               e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.color = 'rgba(255,255,255,0.6)';
+              e.currentTarget.style.color = colors.text.muted;
             }
           }}
         >

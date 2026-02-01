@@ -89,7 +89,6 @@ const PrayerThemeEditorPage = lazy(() => import('./pages/PrayerThemeEditorPage')
 const OBSSongsThemeEditorPage = lazy(() => import('./pages/OBSSongsThemeEditorPage'));
 const OBSBibleThemeEditorPage = lazy(() => import('./pages/OBSBibleThemeEditorPage'));
 const OBSPrayerThemeEditorPage = lazy(() => import('./pages/OBSPrayerThemeEditorPage'));
-const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 // Loading fallback - uses CSS classes from index.html for consistent style
 const LoadingFallback: React.FC = () => (
@@ -113,9 +112,6 @@ const App: React.FC = () => {
                 <Routes>
                   {/* Control panel (main window) */}
                   <Route path="/" element={<ControlPanel />} />
-
-                  {/* Settings */}
-                  <Route path="/settings" element={<SettingsPage />} />
 
                   {/* Display windows */}
                   <Route path="/display/viewer" element={<DisplayViewer />} />

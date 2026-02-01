@@ -16,6 +16,7 @@ interface KeyboardShortcutsCallbacks {
 interface KeyboardShortcutsDeps {
   displayMode: DisplayMode;
   isRTL?: boolean;
+  disabled?: boolean;
 }
 
 export function useKeyboardShortcuts(
@@ -33,10 +34,13 @@ export function useKeyboardShortcuts(
     setLiveState
   } = callbacks;
 
-  const { displayMode, isRTL = false } = deps;
+  const { displayMode, isRTL = false, disabled = false } = deps;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore when shortcuts are disabled (e.g. settings overlay is open)
+      if (disabled) return;
+
       // Ignore if typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
@@ -109,5 +113,5 @@ export function useKeyboardShortcuts(
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [nextSlide, prevSlide, toggleBlank, setShowKeyboardHelp, setShowQuickSlideModal, setDisplayMode, setIsBlank, setLiveState, displayMode, isRTL]);
+  }, [nextSlide, prevSlide, toggleBlank, setShowKeyboardHelp, setShowQuickSlideModal, setDisplayMode, setIsBlank, setLiveState, displayMode, isRTL, disabled]);
 }

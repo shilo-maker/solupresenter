@@ -32,6 +32,9 @@ const SongItem = memo<SongItemProps>(({
   const [isHovered, setIsHovered] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
+  const hoverBg = isSelected ? 'rgba(6,182,212,0.2)' : 'rgba(255,255,255,0.06)';
+  const defaultBg = isSelected ? 'rgba(6,182,212,0.2)' : 'transparent';
+
   const containerStyle = useMemo(() => ({
     padding: '10px 12px',
     cursor: 'grab' as const,
@@ -43,6 +46,7 @@ const SongItem = memo<SongItemProps>(({
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
     position: 'relative' as const,
+    transition: 'background 0.15s ease',
   }), [isSelected, isDragged]);
 
   const menuButtonStyle = useMemo(() => ({
@@ -82,8 +86,8 @@ const SongItem = memo<SongItemProps>(({
       onDragEnd={onDragEnd}
       onClick={() => onSelect(song)}
       onDoubleClick={() => onDoubleClick(song)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => { setIsHovered(false); setShowMenu(false); }}
+      onMouseEnter={(e) => { setIsHovered(true); e.currentTarget.style.background = hoverBg; }}
+      onMouseLeave={(e) => { setIsHovered(false); setShowMenu(false); e.currentTarget.style.background = defaultBg; }}
       style={containerStyle}
     >
       <div style={{ flex: 1, minWidth: 0 }}>

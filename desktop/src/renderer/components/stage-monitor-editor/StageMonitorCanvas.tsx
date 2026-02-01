@@ -49,6 +49,14 @@ export interface StageTextStyle {
   // Auto height
   autoHeight?: boolean;
   growDirection?: 'up' | 'down';
+  // Text shadow properties
+  textShadowColor?: string;
+  textShadowBlur?: number;
+  textShadowOffsetX?: number;
+  textShadowOffsetY?: number;
+  // Text stroke/outline properties
+  textStrokeWidth?: number;
+  textStrokeColor?: string;
 }
 
 export interface StageCurrentSlideText {
@@ -104,6 +112,23 @@ const TEXT_LINE_COLORS: Record<string, string> = {
   nextTransliteration: '#f59e0b',
   nextTranslation: '#28a745'
 };
+
+function buildStageTextShadow(style?: StageTextStyle): string {
+  if (!style?.textShadowColor && style?.textShadowBlur === undefined
+      && style?.textShadowOffsetX === undefined && style?.textShadowOffsetY === undefined) {
+    return '2px 2px 4px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.5)';
+  }
+  const color = style.textShadowColor || 'rgba(0,0,0,0.8)';
+  const blur = style.textShadowBlur ?? 4;
+  const ox = style.textShadowOffsetX ?? 2;
+  const oy = style.textShadowOffsetY ?? 2;
+  return `${ox}px ${oy}px ${blur}px ${color}`;
+}
+
+function buildStageTextStroke(style?: StageTextStyle): string | undefined {
+  if (!style?.textStrokeWidth) return undefined;
+  return `${style.textStrokeWidth}px ${style.textStrokeColor || '#000000'}`;
+}
 
 const StageMonitorCanvas: React.FC<StageMonitorCanvasProps> = ({
   canvasDimensions,
@@ -557,7 +582,10 @@ const StageMonitorCanvas: React.FC<StageMonitorCanvasProps> = ({
                   opacity: currentSlideText?.original?.opacity ?? 1,
                   direction: 'rtl',
                   textAlign: getTextAlign(currentSlideText?.original?.alignH),
-                  lineHeight: 1.3
+                  lineHeight: 1.3,
+                  textShadow: buildStageTextShadow(currentSlideText?.original),
+                  WebkitTextStroke: buildStageTextStroke(currentSlideText?.original),
+                  paintOrder: 'stroke fill'
                 }}
               >
                 {displayTexts.original}
@@ -597,7 +625,10 @@ const StageMonitorCanvas: React.FC<StageMonitorCanvasProps> = ({
                   color: currentSlideText?.transliteration?.color || colors?.secondary || '#888',
                   opacity: currentSlideText?.transliteration?.opacity ?? 1,
                   textAlign: getTextAlign(currentSlideText?.transliteration?.alignH),
-                  lineHeight: 1.3
+                  lineHeight: 1.3,
+                  textShadow: buildStageTextShadow(currentSlideText?.transliteration),
+                  WebkitTextStroke: buildStageTextStroke(currentSlideText?.transliteration),
+                  paintOrder: 'stroke fill'
                 }}
               >
                 {displayTexts.transliteration}
@@ -637,7 +668,10 @@ const StageMonitorCanvas: React.FC<StageMonitorCanvasProps> = ({
                   color: currentSlideText?.translation?.color || colors?.text || '#ffffff',
                   opacity: currentSlideText?.translation?.opacity ?? 0.9,
                   textAlign: getTextAlign(currentSlideText?.translation?.alignH),
-                  lineHeight: 1.3
+                  lineHeight: 1.3,
+                  textShadow: buildStageTextShadow(currentSlideText?.translation),
+                  WebkitTextStroke: buildStageTextStroke(currentSlideText?.translation),
+                  paintOrder: 'stroke fill'
                 }}
               >
                 {displayTexts.translation}
@@ -720,7 +754,10 @@ const StageMonitorCanvas: React.FC<StageMonitorCanvasProps> = ({
                   opacity: nextSlideText?.original?.opacity ?? 0.8,
                   direction: 'rtl',
                   textAlign: getTextAlign(nextSlideText?.original?.alignH),
-                  lineHeight: 1.3
+                  lineHeight: 1.3,
+                  textShadow: buildStageTextShadow(nextSlideText?.original),
+                  WebkitTextStroke: buildStageTextStroke(nextSlideText?.original),
+                  paintOrder: 'stroke fill'
                 }}
               >
                 {displayTexts.original}
@@ -760,7 +797,10 @@ const StageMonitorCanvas: React.FC<StageMonitorCanvasProps> = ({
                   color: nextSlideText?.transliteration?.color || colors?.secondary || '#888',
                   opacity: nextSlideText?.transliteration?.opacity ?? 0.7,
                   textAlign: getTextAlign(nextSlideText?.transliteration?.alignH),
-                  lineHeight: 1.3
+                  lineHeight: 1.3,
+                  textShadow: buildStageTextShadow(nextSlideText?.transliteration),
+                  WebkitTextStroke: buildStageTextStroke(nextSlideText?.transliteration),
+                  paintOrder: 'stroke fill'
                 }}
               >
                 {displayTexts.transliteration}
@@ -800,7 +840,10 @@ const StageMonitorCanvas: React.FC<StageMonitorCanvasProps> = ({
                   color: nextSlideText?.translation?.color || colors?.text || '#ffffff',
                   opacity: nextSlideText?.translation?.opacity ?? 0.7,
                   textAlign: getTextAlign(nextSlideText?.translation?.alignH),
-                  lineHeight: 1.3
+                  lineHeight: 1.3,
+                  textShadow: buildStageTextShadow(nextSlideText?.translation),
+                  WebkitTextStroke: buildStageTextStroke(nextSlideText?.translation),
+                  paintOrder: 'stroke fill'
                 }}
               >
                 {displayTexts.translation}

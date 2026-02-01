@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { parseBibleSearch } from '../utils/bibleUtils';
+import { toHebrewNumerals } from '../utils/hebrewUtils';
 
 interface BibleBook {
   name: string;
@@ -92,7 +93,7 @@ export function useBibleState(callbacks: UseBibleStateCallbacks): UseBibleStateR
       // Create a Bible passage that acts like a song
       const passage: Song = {
         id: `bible-${book}-${chapter}`,
-        title: `${bookData?.hebrewName || book} ${chapter}`,
+        title: `${bookData?.hebrewName || book} ${toHebrewNumerals(chapter)} (${chapter})`,
         slides: response.slides.map((slide: any, idx: number) => ({
           originalText: slide.originalText,
           transliteration: '',

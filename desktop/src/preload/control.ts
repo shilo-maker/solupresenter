@@ -220,6 +220,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getViewerCount: () => ipcRenderer.invoke('online:getViewerCount'),
   getPublicRooms: () => ipcRenderer.invoke('online:getPublicRooms'),
   switchToPublicRoom: (publicRoomId: string | null) => ipcRenderer.invoke('online:switchToPublicRoom', publicRoomId),
+  createPublicRoom: (name: string) => ipcRenderer.invoke('online:createPublicRoom', name),
+  linkPublicRoom: (publicRoomId: string) => ipcRenderer.invoke('online:linkPublicRoom', publicRoomId),
+  unlinkPublicRoom: (publicRoomId: string) => ipcRenderer.invoke('online:unlinkPublicRoom', publicRoomId),
+  generateQRCode: (url: string) => ipcRenderer.invoke('qrcode:generate', url),
   onViewerCountChanged: (callback: (count: number) => void) => {
     const handler = (_: any, count: number) => callback(count);
     ipcRenderer.on('online:viewerCount', handler);
@@ -584,6 +588,10 @@ declare global {
       getViewerCount: () => Promise<number>;
       getPublicRooms: () => Promise<Array<{ id: string; name: string; slug: string }>>;
       switchToPublicRoom: (publicRoomId: string | null) => Promise<boolean>;
+      createPublicRoom: (name: string) => Promise<{ id: string; name: string; slug: string } | null>;
+      linkPublicRoom: (publicRoomId: string) => Promise<boolean>;
+      unlinkPublicRoom: (publicRoomId: string) => Promise<boolean>;
+      generateQRCode: (url: string) => Promise<string | null>;
       onViewerCountChanged: (callback: (count: number) => void) => () => void;
       onOnlineStatusChanged: (callback: (status: any) => void) => () => void;
 

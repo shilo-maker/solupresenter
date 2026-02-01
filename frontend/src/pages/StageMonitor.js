@@ -241,6 +241,23 @@ function StageMonitor({ remotePin, remoteConfig }) {
     const showTransliteration = transliterationStyle.visible !== false && displayMode === 'bilingual';
     const showTranslation = translationStyle.visible !== false && displayMode === 'bilingual';
 
+    // Build text shadow/stroke from theme style
+    const getTextShadow = (s) => {
+      if (!s?.textShadowColor && s?.textShadowBlur === undefined
+          && s?.textShadowOffsetX === undefined && s?.textShadowOffsetY === undefined) {
+        return theme === 'dark' && !customTheme ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none';
+      }
+      const c = s.textShadowColor || 'rgba(0,0,0,0.8)';
+      const b = s.textShadowBlur ?? 4;
+      const ox = s.textShadowOffsetX ?? 2;
+      const oy = s.textShadowOffsetY ?? 2;
+      return `${ox}px ${oy}px ${b}px ${c}`;
+    };
+    const getTextStroke = (s) => {
+      if (!s?.textStrokeWidth) return undefined;
+      return `${s.textStrokeWidth}px ${s.textStrokeColor || '#000000'}`;
+    };
+
     return (
       <div style={{
         display: 'flex',
@@ -260,7 +277,9 @@ function StageMonitor({ remotePin, remoteConfig }) {
             unicodeBidi: 'plaintext',
             textAlign: 'center',
             lineHeight: 1.3,
-            textShadow: theme === 'dark' && !customTheme ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none'
+            textShadow: getTextShadow(originalStyle),
+            WebkitTextStroke: getTextStroke(originalStyle),
+            paintOrder: 'stroke fill'
           }}>
             {slideData.originalText}
           </div>
@@ -276,7 +295,10 @@ function StageMonitor({ remotePin, remoteConfig }) {
             direction: getTextDirection(slideData.transliteration),
             unicodeBidi: 'plaintext',
             textAlign: 'center',
-            lineHeight: 1.3
+            lineHeight: 1.3,
+            textShadow: getTextShadow(transliterationStyle),
+            WebkitTextStroke: getTextStroke(transliterationStyle),
+            paintOrder: 'stroke fill'
           }}>
             {slideData.transliteration}
           </div>
@@ -292,7 +314,10 @@ function StageMonitor({ remotePin, remoteConfig }) {
             direction: getTextDirection(slideData.translation),
             unicodeBidi: 'plaintext',
             textAlign: 'center',
-            lineHeight: 1.3
+            lineHeight: 1.3,
+            textShadow: getTextShadow(translationStyle),
+            WebkitTextStroke: getTextStroke(translationStyle),
+            paintOrder: 'stroke fill'
           }}>
             {slideData.translation}
             {slideData.translationOverflow && (

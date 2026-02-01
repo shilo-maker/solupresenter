@@ -59,6 +59,8 @@ const MediaPanel = memo<MediaPanelProps>(({
       }}>
         <button
           onClick={() => setActiveMediaSubTab('library')}
+          onMouseEnter={(e) => { if (activeMediaSubTab !== 'library') e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
+          onMouseLeave={(e) => { if (activeMediaSubTab !== 'library') e.currentTarget.style.background = 'transparent'; }}
           style={{
             flex: 1,
             padding: '8px 12px',
@@ -85,6 +87,8 @@ const MediaPanel = memo<MediaPanelProps>(({
         </button>
         <button
           onClick={() => setActiveMediaSubTab('links')}
+          onMouseEnter={(e) => { if (activeMediaSubTab !== 'links') e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
+          onMouseLeave={(e) => { if (activeMediaSubTab !== 'links') e.currentTarget.style.background = 'transparent'; }}
           style={{
             flex: 1,
             padding: '8px 12px',

@@ -6,16 +6,20 @@ import { BrowserWindow } from 'electron';
 import { EventEmitter } from 'events';
 import { getRemoteControlUI } from './remoteControlUI';
 import { getSongs } from '../database/songs';
-import { getAllMediaItems } from '../database/media';
+import { getAllMediaItems, getMediaItem } from '../database/media';
 import { getBibleBooks, getBibleVerses } from './bibleService';
 import { getPresentations, getPresentation } from '../database/presentations';
+import { getThemes, getTheme } from '../database/themes';
+import { getStageThemes, getStageTheme } from '../database/stageThemes';
+import { getBibleThemes, getBibleTheme } from '../database/bibleThemes';
+import { getPrayerThemes, getPrayerTheme } from '../database/prayerThemes';
+import { getSelectedThemeIds, saveSelectedThemeId } from '../database/index';
 import type { DisplayManager } from '../windows/displayManager';
 
 const FIREWALL_RULE_NAME = 'SoluCast Remote Control';
 
 const DEFAULT_PORT = 45680;
 const MAX_PORT_RETRIES = 10;
-const PIN_LENGTH = 4;
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const MAX_COMMANDS_PER_SECOND = 20;
 const MAX_AUTH_ATTEMPTS = 5;
@@ -31,7 +35,7 @@ const VALID_COMMANDS = new Set([
   'library:addPresentation', 'library:selectPresentation',
   'media:stop',
   'audio:play', 'audio:pause', 'audio:stop', 'audio:volume', 'audio:seek',
-  'video:play', 'video:pause', 'video:stop', 'video:seek', 'video:volume',
+  'video:play', 'video:pause', 'video:stop', 'video:seek', 'video:volume', 'video:mute',
   'youtube:play', 'youtube:pause', 'youtube:stop', 'youtube:seek'
 ]);
 
@@ -144,6 +148,52 @@ async function getCachedPresentations(): Promise<any[]> {
   const presentations = await getPresentations();
   presentationsCache.entry = { data: presentations, timestamp: now };
   return presentations;
+}
+
+// Theme caches
+const themesCache: { entry: CacheEntry<any[]> | null } = { entry: null };
+const stageThemesCache: { entry: CacheEntry<any[]> | null } = { entry: null };
+const bibleThemesCache: { entry: CacheEntry<any[]> | null } = { entry: null };
+const prayerThemesCache: { entry: CacheEntry<any[]> | null } = { entry: null };
+
+async function getCachedThemes(): Promise<any[]> {
+  const now = Date.now();
+  if (themesCache.entry && (now - themesCache.entry.timestamp) < CACHE_TTL_MS) {
+    return themesCache.entry.data;
+  }
+  const themes = await getThemes();
+  themesCache.entry = { data: themes, timestamp: now };
+  return themes;
+}
+
+function getCachedStageThemes(): any[] {
+  const now = Date.now();
+  if (stageThemesCache.entry && (now - stageThemesCache.entry.timestamp) < CACHE_TTL_MS) {
+    return stageThemesCache.entry.data;
+  }
+  const themes = getStageThemes();
+  stageThemesCache.entry = { data: themes, timestamp: now };
+  return themes;
+}
+
+async function getCachedBibleThemes(): Promise<any[]> {
+  const now = Date.now();
+  if (bibleThemesCache.entry && (now - bibleThemesCache.entry.timestamp) < CACHE_TTL_MS) {
+    return bibleThemesCache.entry.data;
+  }
+  const themes = await getBibleThemes();
+  bibleThemesCache.entry = { data: themes, timestamp: now };
+  return themes;
+}
+
+async function getCachedPrayerThemes(): Promise<any[]> {
+  const now = Date.now();
+  if (prayerThemesCache.entry && (now - prayerThemesCache.entry.timestamp) < CACHE_TTL_MS) {
+    return prayerThemesCache.entry.data;
+  }
+  const themes = await getPrayerThemes();
+  prayerThemesCache.entry = { data: themes, timestamp: now };
+  return themes;
 }
 
 // Invalidate songs cache (call when songs are modified)
@@ -637,6 +687,13 @@ class RemoteControlServer extends EventEmitter {
   }
 
   /**
+   * Get current state (for reading without modification)
+   */
+  getCurrentState(): RemoteControlState {
+    return this.currentState;
+  }
+
+  /**
    * Update state and broadcast to all authenticated clients
    */
   updateState(state: Partial<RemoteControlState>): void {
@@ -805,8 +862,9 @@ class RemoteControlServer extends EventEmitter {
           this.authenticatedSockets.add(socket.id);
           this.resetSessionTimeout(socket.id);
           socket.emit('authenticated', { success: true });
-          // Send current state immediately
-          socket.emit('state', this.currentState);
+          // Send current state immediately (strip fullSlides/fullSetlist - mobile clients don't need them)
+          const { fullSlides: _fs, fullSetlist: _fsl, ...stateForClient } = this.currentState;
+          socket.emit('state', stateForClient);
           console.log(`[RemoteControlServer] Client authenticated: ${socket.id}`);
         } else {
           // Increment failed attempts
@@ -851,6 +909,7 @@ class RemoteControlServer extends EventEmitter {
 
       // Handle data requests (only from authenticated clients)
       socket.on('getSongs', async (callback: (data: any) => void) => {
+        if (typeof callback !== 'function') return;
         if (!this.authenticatedSockets.has(socket.id)) {
           callback({ error: 'Not authenticated' });
           return;
@@ -874,6 +933,7 @@ class RemoteControlServer extends EventEmitter {
       });
 
       socket.on('getSongDetails', async (songId: string, callback: (data: any) => void) => {
+        if (typeof callback !== 'function') return;
         if (!this.authenticatedSockets.has(socket.id)) {
           callback({ error: 'Not authenticated' });
           return;
@@ -894,6 +954,7 @@ class RemoteControlServer extends EventEmitter {
       });
 
       socket.on('getBibleBooks', async (callback: (data: any) => void) => {
+        if (typeof callback !== 'function') return;
         if (!this.authenticatedSockets.has(socket.id)) {
           callback({ error: 'Not authenticated' });
           return;
@@ -909,6 +970,7 @@ class RemoteControlServer extends EventEmitter {
       });
 
       socket.on('getBibleChapter', async (data: { book: string; chapter: number }, callback: (data: any) => void) => {
+        if (typeof callback !== 'function') return;
         if (!this.authenticatedSockets.has(socket.id)) {
           callback({ error: 'Not authenticated' });
           return;
@@ -924,6 +986,7 @@ class RemoteControlServer extends EventEmitter {
       });
 
       socket.on('getMedia', (callback: (data: any) => void) => {
+        if (typeof callback !== 'function') return;
         if (!this.authenticatedSockets.has(socket.id)) {
           callback({ error: 'Not authenticated' });
           return;
@@ -936,7 +999,6 @@ class RemoteControlServer extends EventEmitter {
             id: m.id,
             name: m.name,
             type: m.type,
-            thumbnailPath: m.thumbnailPath,
             duration: m.duration
           }));
           callback({ media: simplifiedMedia });
@@ -947,6 +1009,7 @@ class RemoteControlServer extends EventEmitter {
       });
 
       socket.on('getPresentations', async (callback: (data: any) => void) => {
+        if (typeof callback !== 'function') return;
         if (!this.authenticatedSockets.has(socket.id)) {
           callback({ error: 'Not authenticated' });
           return;
@@ -966,6 +1029,198 @@ class RemoteControlServer extends EventEmitter {
         } catch (error) {
           console.error('[RemoteControlServer] Error fetching presentations:', error);
           callback({ error: 'Failed to fetch presentations' });
+        }
+      });
+
+      // Display handlers
+      socket.on('getDisplays', (callback: (data: any) => void) => {
+        if (typeof callback !== 'function') return;
+        if (!this.authenticatedSockets.has(socket.id)) {
+          callback({ error: 'Not authenticated' });
+          return;
+        }
+        this.resetSessionTimeout(socket.id);
+        try {
+          if (!this.displayManager) {
+            callback({ error: 'Display manager not available' });
+            return;
+          }
+          const displays = this.displayManager.getAllDisplays();
+          callback({ displays });
+        } catch (error) {
+          console.error('[RemoteControlServer] Error fetching displays:', error);
+          callback({ error: 'Failed to fetch displays' });
+        }
+      });
+
+      socket.on('openDisplay', (data: { displayId: number; type: 'viewer' | 'stage' }, callback: (data: any) => void) => {
+        if (typeof callback !== 'function') return;
+        if (!this.authenticatedSockets.has(socket.id)) {
+          callback({ error: 'Not authenticated' });
+          return;
+        }
+        this.resetSessionTimeout(socket.id);
+        try {
+          if (!this.displayManager) {
+            callback({ error: 'Display manager not available' });
+            return;
+          }
+          if (typeof data?.displayId !== 'number' || !data?.type || !['viewer', 'stage'].includes(data.type)) {
+            callback({ error: 'Invalid parameters' });
+            return;
+          }
+          const success = this.displayManager.openDisplayWindow(data.displayId, data.type);
+          callback({ success });
+        } catch (error) {
+          console.error('[RemoteControlServer] Error opening display:', error);
+          callback({ error: 'Failed to open display' });
+        }
+      });
+
+      socket.on('closeDisplay', (data: { displayId: number }, callback: (data: any) => void) => {
+        if (typeof callback !== 'function') return;
+        if (!this.authenticatedSockets.has(socket.id)) {
+          callback({ error: 'Not authenticated' });
+          return;
+        }
+        this.resetSessionTimeout(socket.id);
+        try {
+          if (!this.displayManager) {
+            callback({ error: 'Display manager not available' });
+            return;
+          }
+          if (typeof data?.displayId !== 'number') {
+            callback({ error: 'Invalid parameters' });
+            return;
+          }
+          this.displayManager.closeDisplayWindow(data.displayId);
+          callback({ success: true });
+        } catch (error) {
+          console.error('[RemoteControlServer] Error closing display:', error);
+          callback({ error: 'Failed to close display' });
+        }
+      });
+
+      socket.on('identifyDisplays', (data: { displayId?: number }, callback: (data: any) => void) => {
+        if (typeof callback !== 'function') return;
+        if (!this.authenticatedSockets.has(socket.id)) {
+          callback({ error: 'Not authenticated' });
+          return;
+        }
+        this.resetSessionTimeout(socket.id);
+        try {
+          if (!this.displayManager) {
+            callback({ error: 'Display manager not available' });
+            return;
+          }
+          this.displayManager.identifyDisplays(data?.displayId);
+          callback({ success: true });
+        } catch (error) {
+          console.error('[RemoteControlServer] Error identifying displays:', error);
+          callback({ error: 'Failed to identify displays' });
+        }
+      });
+
+      // Theme handlers
+      socket.on('getThemes', async (callback: (data: any) => void) => {
+        if (typeof callback !== 'function') return;
+        if (!this.authenticatedSockets.has(socket.id)) {
+          callback({ error: 'Not authenticated' });
+          return;
+        }
+        this.resetSessionTimeout(socket.id);
+        try {
+          const [viewerThemes, bibleThemes, prayerThemes] = await Promise.all([
+            getCachedThemes(),
+            getCachedBibleThemes(),
+            getCachedPrayerThemes()
+          ]);
+          const stageThemes = getCachedStageThemes();
+          const selectedIds = getSelectedThemeIds();
+          callback({
+            viewer: viewerThemes.map((t: any) => ({ id: t.id, name: t.name })),
+            stage: stageThemes.map((t: any) => ({ id: t.id, name: t.name })),
+            bible: bibleThemes.map((t: any) => ({ id: t.id, name: t.name })),
+            prayer: prayerThemes.map((t: any) => ({ id: t.id, name: t.name })),
+            selectedIds: {
+              viewer: selectedIds.viewerThemeId,
+              stage: selectedIds.stageThemeId,
+              bible: selectedIds.bibleThemeId,
+              prayer: selectedIds.prayerThemeId
+            }
+          });
+        } catch (error) {
+          console.error('[RemoteControlServer] Error fetching themes:', error);
+          callback({ error: 'Failed to fetch themes' });
+        }
+      });
+
+      socket.on('selectTheme', async (data: { themeType: 'viewer' | 'stage' | 'bible' | 'prayer'; themeId: string }, callback: (data: any) => void) => {
+        if (typeof callback !== 'function') return;
+        if (!this.authenticatedSockets.has(socket.id)) {
+          callback({ error: 'Not authenticated' });
+          return;
+        }
+        this.resetSessionTimeout(socket.id);
+        try {
+          if (!data?.themeType || !data?.themeId?.trim() || !['viewer', 'stage', 'bible', 'prayer'].includes(data.themeType)) {
+            callback({ error: 'Invalid parameters' });
+            return;
+          }
+          if (!this.displayManager) {
+            callback({ error: 'Display manager not available' });
+            return;
+          }
+
+          // Fetch single theme by ID and broadcast to displays
+          let theme: any = null;
+          switch (data.themeType) {
+            case 'viewer':
+              theme = await getTheme(data.themeId);
+              if (theme) this.displayManager.broadcastTheme(theme);
+              break;
+            case 'stage':
+              theme = getStageTheme(data.themeId);
+              if (theme) this.displayManager.broadcastStageTheme(theme);
+              break;
+            case 'bible':
+              theme = await getBibleTheme(data.themeId);
+              if (theme) this.displayManager.broadcastBibleTheme(theme);
+              break;
+            case 'prayer':
+              theme = await getPrayerTheme(data.themeId);
+              if (theme) this.displayManager.broadcastPrayerTheme(theme);
+              break;
+          }
+
+          if (!theme) {
+            callback({ error: 'Theme not found' });
+            return;
+          }
+
+          // Save selection to database (after confirming theme exists)
+          saveSelectedThemeId(data.themeType, data.themeId);
+
+          // Selectively invalidate only the changed theme type cache
+          switch (data.themeType) {
+            case 'viewer': themesCache.entry = null; break;
+            case 'stage': stageThemesCache.entry = null; break;
+            case 'bible': bibleThemesCache.entry = null; break;
+            case 'prayer': prayerThemesCache.entry = null; break;
+          }
+
+          // Notify ControlPanel so it can sync its theme state
+          if (this.controlWindow && !this.controlWindow.isDestroyed()) {
+            this.controlWindow.webContents.send('remote:themeSelected', {
+              themeType: data.themeType,
+              themeId: data.themeId
+            });
+          }
+
+          callback({ success: true });
+        } catch (error) {
+          console.error('[RemoteControlServer] Error selecting theme:', error);
+          callback({ error: 'Failed to select theme' });
         }
       });
 
@@ -1018,6 +1273,7 @@ class RemoteControlServer extends EventEmitter {
       'slide:next', 'slide:prev', 'slide:goto', 'slide:blank',
       'setlist:select', 'library:selectSong', 'library:addSong',
       'library:selectBible', 'library:addBible',
+      'library:selectMedia', 'library:addMedia',
       'library:selectPresentation', 'library:addPresentation',
       'mode:set'
     ];
@@ -1100,6 +1356,9 @@ class RemoteControlServer extends EventEmitter {
       case 'library:selectBible':
       case 'library:addBible':
         return await this.handleLibraryBibleCommand(command);
+      case 'library:selectMedia':
+      case 'library:addMedia':
+        return await this.handleLibraryMediaCommand(command);
       case 'library:selectPresentation':
       case 'library:addPresentation':
         return await this.handleLibraryPresentationCommand(command);
@@ -1482,6 +1741,58 @@ class RemoteControlServer extends EventEmitter {
           };
         });
       }
+    } else if (item.type === 'media' && item.mediaPath && item.mediaType) {
+      // Media items (image/video) don't have slides - display directly
+      if (item.mediaType === 'audio') {
+        // Audio requires ControlPanel renderer - cannot handle directly
+        console.log(`[RemoteControlServer] handleSetlistSelect: audio requires ControlPanel`);
+        return false;
+      }
+
+      const encodedPath = item.mediaPath
+        .replace(/\\/g, '/')
+        .split('/')
+        .map((segment: string) => encodeURIComponent(segment))
+        .join('/');
+      const mediaUrl = `media://file/${encodedPath}`;
+
+      // Update state
+      const mediaName = item.mediaName || item.title || 'Media';
+      this.currentState.activeMedia = { type: item.mediaType as 'image' | 'video', name: mediaName };
+      this.currentState.isBlank = false;
+      this.currentState.currentItem = {
+        id: item.id,
+        type: 'media',
+        title: mediaName,
+        slideCount: 0
+      };
+
+      // Set activeVideo for video type so remote UI shows controls
+      if (item.mediaType === 'video') {
+        this.currentState.activeVideo = {
+          name: mediaName,
+          isPlaying: false,
+          currentTime: 0,
+          duration: item.mediaDuration || 0,
+          volume: 1
+        };
+      } else {
+        this.currentState.activeVideo = null;
+      }
+      this.currentState.activeAudio = null;
+      this.currentState.activeYoutube = null;
+
+      this.currentState.slides = [];
+      this.currentState.fullSlides = [];
+      this.currentState.totalSlides = 0;
+      this.currentState.currentSlideIndex = 0;
+
+      // Broadcast to displays
+      this.displayManager!.broadcastMedia({ type: item.mediaType as 'image' | 'video', path: mediaUrl });
+
+      console.log(`[RemoteControlServer] handleSetlistSelect: displayed media ${item.mediaName || item.title}`);
+      this.broadcastState(true);
+      return true;
     } else {
       console.log(`[RemoteControlServer] handleSetlistSelect: unsupported item type: ${item.type}`);
       return false;
@@ -1598,6 +1909,111 @@ class RemoteControlServer extends EventEmitter {
       }
     } catch (error) {
       console.error(`[RemoteControlServer] handleLibrarySongCommand error:`, error);
+    }
+    return false;
+  }
+
+  /**
+   * Handle library media commands (selectMedia, addMedia)
+   */
+  private async handleLibraryMediaCommand(command: RemoteCommand): Promise<boolean> {
+    const mediaId = command.payload?.mediaId;
+    if (!mediaId) {
+      console.log(`[RemoteControlServer] handleLibraryMediaCommand: no mediaId`);
+      return false;
+    }
+
+    try {
+      const media = getMediaItem(mediaId);
+      if (!media) {
+        console.log(`[RemoteControlServer] handleLibraryMediaCommand: media not found: ${mediaId}`);
+        return false;
+      }
+
+      if (command.type === 'library:addMedia') {
+        // Add to setlist
+        const newItem = {
+          id: crypto.randomUUID(),
+          type: 'media',
+          mediaType: media.type,
+          mediaPath: media.processedPath || media.originalPath,
+          mediaDuration: media.duration,
+          mediaName: media.name,
+          thumbnailPath: media.thumbnailPath,
+          title: media.name
+        };
+
+        if (!this.currentState.fullSetlist) {
+          this.currentState.fullSetlist = [];
+        }
+        this.currentState.fullSetlist.push(newItem);
+
+        // Update setlist summary for mobile
+        this.currentState.setlist = this.currentState.fullSetlist.map((item: any) => ({
+          id: item.id,
+          type: item.type,
+          title: item.song?.title || item.presentation?.title || item.title || item.type
+        }));
+
+        console.log(`[RemoteControlServer] Added media to setlist: ${media.name}`);
+        this.broadcastState();
+        return true;
+      } else if (command.type === 'library:selectMedia') {
+        // Audio cannot be displayed on screen directly from main process - requires ControlPanel renderer
+        if (media.type === 'audio') {
+          console.log(`[RemoteControlServer] handleLibraryMediaCommand: audio requires ControlPanel, forwarding`);
+          return false;
+        }
+
+        // Display the image/video directly
+        const filePath = media.processedPath || media.originalPath;
+        const encodedPath = filePath
+          .replace(/\\/g, '/')
+          .split('/')
+          .map((segment: string) => encodeURIComponent(segment))
+          .join('/');
+        const mediaUrl = `media://file/${encodedPath}`;
+
+        // Update state
+        this.currentState.activeMedia = { type: media.type, name: media.name };
+        this.currentState.isBlank = false;
+        this.currentState.currentItem = {
+          id: media.id,
+          type: 'media',
+          title: media.name,
+          slideCount: 0
+        };
+
+        // Set activeVideo for video type so remote UI shows controls
+        if (media.type === 'video') {
+          this.currentState.activeVideo = {
+            name: media.name,
+            isPlaying: false,
+            currentTime: 0,
+            duration: media.duration || 0,
+            volume: 1
+          };
+        } else {
+          this.currentState.activeVideo = null;
+        }
+        this.currentState.activeAudio = null;
+        this.currentState.activeYoutube = null;
+
+        // Clear slides since media doesn't have slides
+        this.currentState.slides = [];
+        this.currentState.fullSlides = [];
+        this.currentState.totalSlides = 0;
+        this.currentState.currentSlideIndex = 0;
+
+        // Broadcast to displays
+        this.displayManager!.broadcastMedia({ type: media.type, path: mediaUrl });
+
+        console.log(`[RemoteControlServer] Selected media: ${media.name} (${media.type})`);
+        this.broadcastState(true);
+        return true;
+      }
+    } catch (error) {
+      console.error(`[RemoteControlServer] handleLibraryMediaCommand error:`, error);
     }
     return false;
   }

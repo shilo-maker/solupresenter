@@ -606,6 +606,11 @@ export function useRemoteControl(
             }
           }
           break;
+        case 'video:mute':
+          if (command.payload?.muted !== undefined) {
+            window.electronAPI.muteVideo(!!command.payload.muted);
+          }
+          break;
         // YouTube controls
         case 'youtube:play':
           if (youtubeOnDisplay) {

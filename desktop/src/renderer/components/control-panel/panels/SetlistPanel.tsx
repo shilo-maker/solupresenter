@@ -1418,7 +1418,7 @@ const SetlistPanel = memo<SetlistPanelProps>(({
               <div style={{
                 position: 'absolute',
                 top: '100%',
-                left: 0,
+                ...(isRTL ? { left: 0 } : { right: 0 }),
                 marginTop: '4px',
                 background: 'rgba(30,30,50,0.98)',
                 borderRadius: '8px',

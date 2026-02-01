@@ -311,12 +311,12 @@ const BottomRowPanel = memo<BottomRowPanelProps>(({
               </svg>
             </button>
 
-            {/* Dropdown menu - appears below the button, anchored to the right */}
+            {/* Dropdown menu - appears below the button, anchored toward the panel interior */}
             {showArrDropdown && (
               <div style={{
                 position: 'absolute',
                 top: '100%',
-                right: 0,
+                ...(isRTL ? { left: 0 } : { right: 0 }),
                 minWidth: '180px',
                 backgroundColor: '#1E1E2E',
                 border: '1px solid rgba(255,255,255,0.15)',

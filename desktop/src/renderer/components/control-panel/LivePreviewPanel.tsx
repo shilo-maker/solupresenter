@@ -1,4 +1,4 @@
-import React, { memo, useRef, useCallback } from 'react';
+import React, { memo, useRef, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import SlidePreview from '../SlidePreview';
 
@@ -96,6 +96,28 @@ const LivePreviewPanel = memo<LivePreviewPanelProps>(({
 }) => {
   const { t } = useTranslation();
   const lastVideoTimeUpdateRef = useRef<number>(0);
+  const glowStyleRef = useRef<HTMLStyleElement | null>(null);
+
+  // Inject glow animation keyframes once
+  useEffect(() => {
+    if (!glowStyleRef.current) {
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes glowRotate {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `;
+      document.head.appendChild(style);
+      glowStyleRef.current = style;
+    }
+    return () => {
+      if (glowStyleRef.current) {
+        document.head.removeChild(glowStyleRef.current);
+        glowStyleRef.current = null;
+      }
+    };
+  }, []);
 
   // Calculate aspect ratio from viewer display
   const viewerDisplay = displays.find(d => d.assignedType === 'viewer');
@@ -150,18 +172,42 @@ const LivePreviewPanel = memo<LivePreviewPanelProps>(({
 
       {/* Main Preview Screen */}
       <div style={{ flex: 1, padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0, overflow: 'hidden', containerType: 'size' } as React.CSSProperties}>
-        <div
-          style={{
-            width: `min(100%, calc(100cqh * ${arWidth} / ${arHeight}))`,
-            height: `min(100%, calc(100cqw * ${arHeight} / ${arWidth}))`,
-            aspectRatio,
-            background: '#000',
-            borderRadius: '8px',
-            position: 'relative',
-            overflow: 'hidden',
-            border: isBlank ? '3px solid #dc3545' : `3px solid ${getVerseTypeColor(currentSlide?.verseType) || 'rgba(255,255,255,0.2)'}`
-          }}
-        >
+        {(() => {
+          const rawColor = isBlank ? '#dc3545' : (getVerseTypeColor(currentSlide?.verseType) || '');
+          const glowColor = (rawColor && rawColor !== 'transparent') ? rawColor : '#aaaaaa';
+          return (
+        <div style={{
+          width: `min(100%, calc(100cqh * ${arWidth} / ${arHeight}))`,
+          height: `min(100%, calc(100cqw * ${arHeight} / ${arWidth}))`,
+          aspectRatio,
+          borderRadius: '10px',
+          position: 'relative',
+          overflow: 'hidden',
+          padding: '3px',
+          boxShadow: `0 0 15px ${glowColor}44, 0 0 30px ${glowColor}22`
+        }}>
+          {/* Animated rotating gradient border */}
+          <div style={{
+            position: 'absolute',
+            top: '-50%',
+            left: '-50%',
+            width: '200%',
+            height: '200%',
+            background: `conic-gradient(from 0deg, ${glowColor}, ${glowColor}33, ${glowColor}, ${glowColor}33, ${glowColor})`,
+            animation: 'glowRotate 3s linear infinite',
+            zIndex: 0
+          }} />
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              background: '#000',
+              borderRadius: '7px',
+              position: 'relative',
+              overflow: 'hidden',
+              zIndex: 1
+            }}
+          >
           {/* Status indicator */}
           <div style={{
             position: 'absolute',
@@ -269,6 +315,7 @@ const LivePreviewPanel = memo<LivePreviewPanelProps>(({
                     maxHeight: '100%',
                     objectFit: 'contain'
                   }}
+                  muted
                   controls
                   onTimeUpdate={(e) => {
                     const video = e.currentTarget;
@@ -325,7 +372,10 @@ const LivePreviewPanel = memo<LivePreviewPanelProps>(({
               combinedSlides={getCombinedSlides()}
             />
           )}
+          </div>
         </div>
+          );
+        })()}
       </div>
     </div>
   );

@@ -66,6 +66,53 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
+// Create or get an existing public room by name (for virtual displays)
+router.post('/create-or-get', authenticateToken, async (req, res) => {
+  try {
+    const { name } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Room name is required' });
+    }
+
+    // Generate slug from name
+    const slug = name
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    if (!slug) {
+      return res.status(400).json({ error: 'Room name must contain at least one letter or number' });
+    }
+
+    // Check if slug already exists
+    const existing = await PublicRoom.findOne({ where: { slug } });
+    if (existing) {
+      // If same owner, return existing room
+      if (existing.ownerId === req.user.id) {
+        return res.json({ publicRoom: existing });
+      }
+      // Different owner - error
+      return res.status(400).json({ error: 'A room with this name already exists. Please choose a different name.' });
+    }
+
+    // Create new public room
+    const publicRoom = await PublicRoom.create({
+      name: name.trim(),
+      slug,
+      ownerId: req.user.id
+    });
+
+    res.status(201).json({ publicRoom });
+  } catch (error) {
+    console.error('Error creating/getting public room:', error);
+    res.status(500).json({ error: 'Failed to create public room' });
+  }
+});
+
 // Delete a public room
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {

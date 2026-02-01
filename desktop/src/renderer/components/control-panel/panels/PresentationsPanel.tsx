@@ -28,15 +28,19 @@ const PresentationItem = memo<PresentationItemProps>(({
   const [isHovered, setIsHovered] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
+  const hoverBg = isSelected ? 'rgba(6,182,212,0.2)' : 'rgba(255,255,255,0.06)';
+  const defaultBg = isSelected ? 'rgba(6,182,212,0.2)' : 'transparent';
+
   const containerStyle = useMemo(() => ({
     display: 'flex' as const,
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
     padding: '10px 12px',
     cursor: 'pointer' as const,
-    background: isSelected ? 'rgba(0, 212, 255, 0.2)' : 'transparent',
-    borderLeft: isSelected ? '3px solid #00d4ff' : '3px solid transparent',
-    borderBottom: '1px solid rgba(255,255,255,0.05)'
+    background: isSelected ? 'rgba(6,182,212,0.2)' : 'transparent',
+    borderLeft: isSelected ? '3px solid #06b6d4' : '3px solid transparent',
+    borderBottom: '1px solid rgba(255,255,255,0.05)',
+    transition: 'background 0.15s ease',
   }), [isSelected]);
 
   const menuButtonStyle = useMemo(() => ({
@@ -88,8 +92,8 @@ const PresentationItem = memo<PresentationItemProps>(({
       onDragStart={(e) => onDragStart(e, presentation)}
       onClick={() => onSelect(presentation)}
       onDoubleClick={() => onDoubleClick(presentation)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => { setIsHovered(false); setShowMenu(false); }}
+      onMouseEnter={(e) => { setIsHovered(true); e.currentTarget.style.background = hoverBg; }}
+      onMouseLeave={(e) => { setIsHovered(false); setShowMenu(false); e.currentTarget.style.background = defaultBg; }}
       style={containerStyle}
     >
       <div style={{ flex: 1, minWidth: 0 }}>

@@ -3,7 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { colors } from '../../styles/controlPanelStyles';
 import BroadcastSelector from '../BroadcastSelector';
 import DisplayThemeOverrideModal from './modals/DisplayThemeOverrideModal';
-import { DisplaySettingsModal, OBSSettingsModal } from './modals';
+import DisplaySettingsModal from './modals/DisplaySettingsModal';
+import OBSSettingsModal from './modals/OBSSettingsModal';
+import AboutModal from './modals/AboutModal';
 import DisplayItem from './DisplayItem';
 import logoImage from '../../assets/logo.png';
 
@@ -25,6 +27,14 @@ interface AuthState {
   isAuthenticated: boolean;
   user: { email?: string } | null;
   serverUrl: string;
+}
+
+export interface VirtualDisplay {
+  id: string;
+  name: string;
+  slug: string;
+  type: 'viewer' | 'stage';
+  url: string;
 }
 
 export interface HeaderBarProps {
@@ -95,6 +105,12 @@ export interface HeaderBarProps {
 
   // Theme override callback
   onThemeOverrideChanged?: () => void;
+
+  // Virtual displays
+  virtualDisplays?: VirtualDisplay[];
+  onAddVirtualDisplay?: () => void;
+  onRemoveVirtualDisplay?: (id: string) => void;
+  onCopyVirtualDisplayUrl?: (url: string) => void;
 }
 
 const HeaderBar = memo<HeaderBarProps>(({
@@ -143,7 +159,11 @@ const HeaderBar = memo<HeaderBarProps>(({
   onToggleOBSServer,
   onConnectOnline,
   onLogout,
-  onThemeOverrideChanged
+  onThemeOverrideChanged,
+  virtualDisplays = [],
+  onAddVirtualDisplay,
+  onRemoveVirtualDisplay,
+  onCopyVirtualDisplayUrl
 }) => {
   const { t, i18n } = useTranslation();
   const isRTL = i18n.language === 'he';
@@ -154,16 +174,61 @@ const HeaderBar = memo<HeaderBarProps>(({
   const [showDisplaySettingsModal, setShowDisplaySettingsModal] = useState(false);
   const [displayForSettings, setDisplayForSettings] = useState<Display | null>(null);
   const [showOBSSettingsModal, setShowOBSSettingsModal] = useState(false);
+  const [showAboutModal, setShowAboutModal] = useState(false);
+  const [vdUrlCopiedId, setVdUrlCopiedId] = useState<string | null>(null);
+  const [vdQrCode, setVdQrCode] = useState<{ id: string; dataUrl: string } | null>(null);
+  const vdQrCodeRef = useRef<string | null>(null);
   const obsUrlCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const vdCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Cleanup timeout on unmount
+  // Shared hover handlers — DOM-only, zero re-renders
+  const btnHoverIn = useCallback((e: React.MouseEvent<HTMLButtonElement | HTMLDivElement>) => {
+    e.currentTarget.style.background = 'rgba(255,255,255,0.18)';
+  }, []);
+  const btnHoverOut = useCallback((e: React.MouseEvent<HTMLButtonElement | HTMLDivElement>) => {
+    e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+  }, []);
+  const itemHoverIn = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+  }, []);
+  const itemHoverOut = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+  }, []);
+  const obsItemHoverOut = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+  }, []);
+  const menuItemIn = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+  }, []);
+  const menuItemOut = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.background = 'transparent';
+  }, []);
+  const primaryBtnHoverOut = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.background = colors.button.primary;
+  }, []);
+  const displayBtnHoverOut = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.background = assignedDisplays.length > 0 || onlineConnected ? colors.button.success : 'rgba(255,255,255,0.1)';
+  }, [assignedDisplays.length, onlineConnected]);
+
+  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (obsUrlCopyTimeoutRef.current) {
         clearTimeout(obsUrlCopyTimeoutRef.current);
       }
+      if (vdCopyTimeoutRef.current) {
+        clearTimeout(vdCopyTimeoutRef.current);
+      }
     };
   }, []);
+
+  // Clear QR code state when display panel closes
+  useEffect(() => {
+    if (!showDisplayPanel) {
+      setVdQrCode(null);
+      vdQrCodeRef.current = null;
+    }
+  }, [showDisplayPanel]);
 
   // Memoized callback for sending stage messages (passed to DisplayItem)
   const handleSendStageMessage = useCallback(async (displayId: number, message: string) => {
@@ -199,6 +264,35 @@ const HeaderBar = memo<HeaderBarProps>(({
     setShowOBSSettingsModal(false);
   }, []);
 
+  const handleCopyVdUrl = useCallback((id: string, url: string) => {
+    if (onCopyVirtualDisplayUrl) {
+      onCopyVirtualDisplayUrl(url);
+    } else {
+      navigator.clipboard.writeText(url);
+    }
+    setVdUrlCopiedId(id);
+    if (vdCopyTimeoutRef.current) clearTimeout(vdCopyTimeoutRef.current);
+    vdCopyTimeoutRef.current = setTimeout(() => setVdUrlCopiedId(null), 2000);
+  }, [onCopyVirtualDisplayUrl]);
+
+  const handleShowVdQr = useCallback(async (id: string, url: string) => {
+    // Toggle off if same QR is showing
+    if (vdQrCodeRef.current === id) {
+      vdQrCodeRef.current = null;
+      setVdQrCode(null);
+      return;
+    }
+    vdQrCodeRef.current = id;
+    try {
+      const dataUrl = await window.electronAPI.generateQRCode(url);
+      if (dataUrl && vdQrCodeRef.current === id) {
+        setVdQrCode({ id, dataUrl });
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const handleOBSApplyTheme = useCallback((themeType: 'songs' | 'bible' | 'prayer', theme: Theme | null) => {
     if (onApplyOBSTheme && theme) {
       onApplyOBSTheme(theme);
@@ -230,13 +324,14 @@ const HeaderBar = memo<HeaderBarProps>(({
 
   return (
     <header style={{
-      padding: '12px 20px',
+      padding: '16px 24px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
       borderBottom: '1px solid rgba(255,255,255,0.1)'
     }}>
-      {/* Left - Display Button with Online Status */}
+      {/* Left - Display & Theme Buttons */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
       <div data-panel="display" style={{ position: 'relative' }}>
         <button
           onClick={() => onShowDisplayPanelChange(!showDisplayPanel)}
@@ -250,9 +345,12 @@ const HeaderBar = memo<HeaderBarProps>(({
             display: 'flex',
             flexDirection: isRTL ? 'row-reverse' : 'row',
             alignItems: 'center',
-            gap: '10px'
+            gap: '10px',
+            transition: 'background 0.15s ease'
           }}
           title={onlineConnected ? `${t('controlPanel.online', 'Online')} (${viewerCount})` : t('controlPanel.offline', 'Offline')}
+          onMouseEnter={btnHoverIn}
+          onMouseLeave={displayBtnHoverOut}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
             <rect x="2" y="3" width="20" height="14" rx="2" ry="2" fill="none" stroke="white" strokeWidth="2"/>
@@ -462,6 +560,202 @@ const HeaderBar = memo<HeaderBarProps>(({
               </div>
             </div>
 
+            {/* Virtual Displays Section */}
+            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <h4 style={{ margin: 0, color: 'white', fontSize: '0.85rem' }}>
+                  {t('virtualDisplays.title', 'Virtual Displays')}
+                </h4>
+                {authState.isAuthenticated && onlineConnected && onAddVirtualDisplay && (
+                  <button
+                    onClick={onAddVirtualDisplay}
+                    style={{
+                      background: 'rgba(6, 182, 212, 0.2)',
+                      border: '1px solid rgba(6, 182, 212, 0.4)',
+                      borderRadius: '4px',
+                      padding: '4px 8px',
+                      color: '#06b6d4',
+                      cursor: 'pointer',
+                      fontSize: '0.7rem'
+                    }}
+                  >
+                    + {t('common.add', 'Add')}
+                  </button>
+                )}
+              </div>
+
+              {virtualDisplays.length === 0 ? (
+                <div style={{
+                  padding: '12px',
+                  background: 'rgba(255,255,255,0.03)',
+                  borderRadius: '8px',
+                  textAlign: 'center'
+                }}>
+                  {!authState.isAuthenticated ? (
+                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
+                      {t('virtualDisplays.loginRequired', 'Login required to add virtual displays')}
+                    </div>
+                  ) : !onlineConnected ? (
+                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
+                      {t('virtualDisplays.connectRequired', 'Connect online to add virtual displays')}
+                    </div>
+                  ) : onAddVirtualDisplay ? (
+                    <button
+                      onClick={onAddVirtualDisplay}
+                      style={{
+                        background: '#06b6d4',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '8px 16px',
+                        color: 'white',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: 500
+                      }}
+                    >
+                      {t('virtualDisplays.addFirst', 'Add Virtual Display')}
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                virtualDisplays.map(vd => (
+                  <div
+                    key={vd.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      padding: '8px 10px',
+                      background: vd.type === 'viewer' ? 'rgba(76, 175, 80, 0.08)' : 'rgba(156, 39, 176, 0.08)',
+                      borderRadius: '8px',
+                      marginBottom: '6px',
+                      border: vd.type === 'viewer' ? '1px solid rgba(76, 175, 80, 0.2)' : '1px solid rgba(156, 39, 176, 0.2)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', flex: 1, minWidth: 0 }}>
+                      {/* Globe icon */}
+                      <div style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '6px',
+                        background: vd.type === 'viewer' ? 'rgba(76, 175, 80, 0.2)' : 'rgba(156, 39, 176, 0.2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        marginTop: '2px'
+                      }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={vd.type === 'viewer' ? '#4caf50' : '#9c27b0'} strokeWidth="2">
+                          <circle cx="12" cy="12" r="10"/>
+                          <line x1="2" y1="12" x2="22" y2="12"/>
+                          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                        </svg>
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          <span style={{ color: 'white', fontWeight: 500, fontSize: '0.8rem' }}>{vd.name}</span>
+                          <span style={{
+                            fontSize: '0.6rem',
+                            padding: '1px 5px',
+                            borderRadius: '3px',
+                            background: vd.type === 'viewer' ? 'rgba(76, 175, 80, 0.3)' : 'rgba(156, 39, 176, 0.3)',
+                            color: vd.type === 'viewer' ? '#4caf50' : '#9c27b0',
+                            fontWeight: 600
+                          }}>
+                            {vd.type === 'viewer' ? t('virtualDisplays.viewer', 'Viewer') : t('virtualDisplays.stageMonitor', 'Stage')}
+                          </span>
+                        </div>
+                        <div style={{
+                          color: 'rgba(255,255,255,0.4)',
+                          fontSize: '0.65rem',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          marginTop: '2px'
+                        }}>
+                          {vd.url}
+                        </div>
+                        {/* QR Code popover */}
+                        {vdQrCode?.id === vd.id && (
+                          <div style={{
+                            marginTop: '8px',
+                            padding: '8px',
+                            background: 'white',
+                            borderRadius: '8px',
+                            display: 'inline-block'
+                          }}>
+                            <img src={vdQrCode.dataUrl} alt="QR Code" style={{ width: '150px', height: '150px', display: 'block' }} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0, marginLeft: '6px' }}>
+                      {/* Copy URL */}
+                      <button
+                        onClick={() => handleCopyVdUrl(vd.id, vd.url)}
+                        title={t('common.copyUrl', 'Copy URL')}
+                        style={{
+                          background: 'rgba(255,255,255,0.1)',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '4px 6px',
+                          color: vdUrlCopiedId === vd.id ? '#4caf50' : 'rgba(255,255,255,0.6)',
+                          cursor: 'pointer',
+                          fontSize: '0.65rem'
+                        }}
+                      >
+                        {vdUrlCopiedId === vd.id ? '✓' : (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                          </svg>
+                        )}
+                      </button>
+                      {/* QR Code */}
+                      <button
+                        onClick={() => handleShowVdQr(vd.id, vd.url)}
+                        title={t('common.qrCode', 'QR Code')}
+                        style={{
+                          background: vdQrCode?.id === vd.id ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255,255,255,0.1)',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '4px 6px',
+                          color: 'rgba(255,255,255,0.6)',
+                          cursor: 'pointer',
+                          fontSize: '0.65rem'
+                        }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm11-2h2v2h-2v-2zm-2 4h2v2h-2v-2zm2 2h2v2h-2v-2zm2-2h2v2h-2v-2zm0 4h2v2h-2v-2z"/>
+                        </svg>
+                      </button>
+                      {/* Delete */}
+                      {onRemoveVirtualDisplay && (
+                        <button
+                          onClick={() => onRemoveVirtualDisplay(vd.id)}
+                          title={t('common.delete', 'Delete')}
+                          style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 6px',
+                            color: 'rgba(220, 53, 69, 0.7)',
+                            cursor: 'pointer',
+                            fontSize: '0.65rem'
+                          }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
             {/* Online Broadcast Section - Hidden for now
             <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
               <h4 style={{ margin: '0 0 12px 0', color: 'white', fontSize: '0.9rem' }}>{t('controlPanel.onlineBroadcast', 'Online Broadcast')}</h4>
@@ -480,7 +774,7 @@ const HeaderBar = memo<HeaderBarProps>(({
       </div>
 
       {/* Theme Menu Button */}
-      <div data-panel="theme" style={{ position: 'relative', marginLeft: '12px' }}>
+      <div data-panel="theme" style={{ position: 'relative' }}>
         <button
           onClick={() => onShowThemePanelChange(!showThemePanel)}
           style={{
@@ -496,6 +790,8 @@ const HeaderBar = memo<HeaderBarProps>(({
             gap: '10px'
           }}
           title={t('controlPanel.themes', 'Themes')}
+          onMouseEnter={btnHoverIn}
+          onMouseLeave={btnHoverOut}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
             <circle cx="12" cy="12" r="10"/>
@@ -579,6 +875,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                   <div
                     key={theme.id}
                     onClick={() => onApplyViewerTheme(theme)}
+                    onMouseEnter={selectedTheme?.id !== theme.id ? itemHoverIn : undefined}
+                    onMouseLeave={selectedTheme?.id !== theme.id ? itemHoverOut : undefined}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -587,7 +885,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                       borderRadius: '4px',
                       background: selectedTheme?.id === theme.id ? 'rgba(33, 150, 243, 0.3)' : 'rgba(255,255,255,0.05)',
                       border: selectedTheme?.id === theme.id ? '1px solid rgba(33, 150, 243, 0.5)' : '1px solid transparent',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      transition: 'background 0.15s ease'
                     }}
                   >
                     <span style={{ color: 'white', fontSize: '0.8rem' }}>{theme.name}</span>
@@ -660,6 +959,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                   <div
                     key={theme.id}
                     onClick={() => onApplyBibleTheme(theme)}
+                    onMouseEnter={selectedBibleTheme?.id !== theme.id ? itemHoverIn : undefined}
+                    onMouseLeave={selectedBibleTheme?.id !== theme.id ? itemHoverOut : undefined}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -668,7 +969,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                       borderRadius: '4px',
                       background: selectedBibleTheme?.id === theme.id ? 'rgba(156, 39, 176, 0.3)' : 'rgba(255,255,255,0.05)',
                       border: selectedBibleTheme?.id === theme.id ? '1px solid rgba(156, 39, 176, 0.5)' : '1px solid transparent',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      transition: 'background 0.15s ease'
                     }}
                   >
                     <span style={{ color: 'white', fontSize: '0.8rem' }}>{theme.name}</span>
@@ -740,6 +1042,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                   <div
                     key={theme.id}
                     onClick={() => onApplyPrayerTheme(theme)}
+                    onMouseEnter={selectedPrayerTheme?.id !== theme.id ? itemHoverIn : undefined}
+                    onMouseLeave={selectedPrayerTheme?.id !== theme.id ? itemHoverOut : undefined}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -748,7 +1052,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                       borderRadius: '4px',
                       background: selectedPrayerTheme?.id === theme.id ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255,255,255,0.05)',
                       border: selectedPrayerTheme?.id === theme.id ? '1px solid rgba(255, 152, 0, 0.5)' : '1px solid transparent',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      transition: 'background 0.15s ease'
                     }}
                   >
                     <span style={{ color: 'white', fontSize: '0.8rem' }}>{theme.name}</span>
@@ -821,6 +1126,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                   <div
                     key={theme.id}
                     onClick={() => onApplyStageTheme(theme)}
+                    onMouseEnter={selectedStageTheme?.id !== theme.id ? itemHoverIn : undefined}
+                    onMouseLeave={selectedStageTheme?.id !== theme.id ? itemHoverOut : undefined}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -829,7 +1136,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                       borderRadius: '4px',
                       background: selectedStageTheme?.id === theme.id ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255,255,255,0.05)',
                       border: selectedStageTheme?.id === theme.id ? '1px solid rgba(76, 175, 80, 0.5)' : '1px solid transparent',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      transition: 'background 0.15s ease'
                     }}
                   >
                     <span style={{ color: 'white', fontSize: '0.8rem' }}>{theme.name}</span>
@@ -919,6 +1227,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                     <div
                       key={theme.id}
                       onClick={() => onApplyOBSTheme && onApplyOBSTheme({ ...theme, type: theme.type || 'songs' })}
+                      onMouseEnter={selectedOBSSongsTheme?.id !== theme.id ? itemHoverIn : undefined}
+                      onMouseLeave={selectedOBSSongsTheme?.id !== theme.id ? obsItemHoverOut : undefined}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -927,7 +1237,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                         borderRadius: '4px',
                         background: selectedOBSSongsTheme?.id === theme.id ? 'rgba(23, 162, 184, 0.3)' : 'rgba(255,255,255,0.03)',
                         border: selectedOBSSongsTheme?.id === theme.id ? '1px solid rgba(23, 162, 184, 0.5)' : '1px solid transparent',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        transition: 'background 0.15s ease'
                       }}
                     >
                       <span style={{ color: 'white', fontSize: '0.75rem' }}>{theme.name}</span>
@@ -978,6 +1289,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                     <div
                       key={theme.id}
                       onClick={() => onApplyOBSTheme && onApplyOBSTheme({ ...theme, type: theme.type || 'bible' })}
+                      onMouseEnter={selectedOBSBibleTheme?.id !== theme.id ? itemHoverIn : undefined}
+                      onMouseLeave={selectedOBSBibleTheme?.id !== theme.id ? obsItemHoverOut : undefined}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -986,7 +1299,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                         borderRadius: '4px',
                         background: selectedOBSBibleTheme?.id === theme.id ? 'rgba(23, 162, 184, 0.3)' : 'rgba(255,255,255,0.03)',
                         border: selectedOBSBibleTheme?.id === theme.id ? '1px solid rgba(23, 162, 184, 0.5)' : '1px solid transparent',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        transition: 'background 0.15s ease'
                       }}
                     >
                       <span style={{ color: 'white', fontSize: '0.75rem' }}>{theme.name}</span>
@@ -1037,6 +1351,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                     <div
                       key={theme.id}
                       onClick={() => onApplyOBSTheme && onApplyOBSTheme({ ...theme, type: theme.type || 'prayer' })}
+                      onMouseEnter={selectedOBSPrayerTheme?.id !== theme.id ? itemHoverIn : undefined}
+                      onMouseLeave={selectedOBSPrayerTheme?.id !== theme.id ? obsItemHoverOut : undefined}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -1045,7 +1361,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                         borderRadius: '4px',
                         background: selectedOBSPrayerTheme?.id === theme.id ? 'rgba(23, 162, 184, 0.3)' : 'rgba(255,255,255,0.03)',
                         border: selectedOBSPrayerTheme?.id === theme.id ? '1px solid rgba(23, 162, 184, 0.5)' : '1px solid transparent',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        transition: 'background 0.15s ease'
                       }}
                     >
                       <span style={{ color: 'white', fontSize: '0.75rem' }}>{theme.name}</span>
@@ -1074,6 +1391,7 @@ const HeaderBar = memo<HeaderBarProps>(({
           </div>
         )}
       </div>
+      </div>
 
       {/* Center spacer */}
       <div style={{ flex: 1 }} />
@@ -1086,6 +1404,8 @@ const HeaderBar = memo<HeaderBarProps>(({
             <div style={{ position: 'relative' }}>
               <button
                 onClick={() => onShowUserMenuChange(!showUserMenu)}
+                onMouseEnter={btnHoverIn}
+                onMouseLeave={primaryBtnHoverOut}
                 style={{
                   background: colors.button.primary,
                   border: 'none',
@@ -1094,7 +1414,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  transition: 'background 0.15s ease'
                 }}
               >
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="white">
@@ -1134,8 +1455,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                     <button
                       onClick={() => { onNavigateToSettings(); onShowUserMenuChange(false); }}
                       style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: 'white', cursor: 'pointer', fontSize: '0.85rem', textAlign: isRTL ? 'right' : 'left' }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                      onMouseEnter={menuItemIn}
+                      onMouseLeave={menuItemOut}
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <circle cx="12" cy="12" r="3" />
@@ -1147,8 +1468,8 @@ const HeaderBar = memo<HeaderBarProps>(({
                     <button
                       onClick={() => { onLogout(); onShowUserMenuChange(false); }}
                       style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: '#dc3545', cursor: 'pointer', fontSize: '0.85rem', textAlign: isRTL ? 'right' : 'left' }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                      onMouseEnter={menuItemIn}
+                      onMouseLeave={menuItemOut}
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -1165,6 +1486,8 @@ const HeaderBar = memo<HeaderBarProps>(({
         ) : (
           <button
             onClick={onShowAuthModal}
+            onMouseEnter={btnHoverIn}
+            onMouseLeave={primaryBtnHoverOut}
             style={{
               background: colors.button.primary,
               border: 'none',
@@ -1176,7 +1499,8 @@ const HeaderBar = memo<HeaderBarProps>(({
               alignItems: 'center',
               gap: '6px',
               fontSize: '0.85rem',
-              fontWeight: 500
+              fontWeight: 500,
+              transition: 'background 0.15s ease'
             }}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="white">
@@ -1190,6 +1514,8 @@ const HeaderBar = memo<HeaderBarProps>(({
         <button
           onClick={onNavigateToSettings}
           title={t('nav.settings')}
+          onMouseEnter={btnHoverIn}
+          onMouseLeave={btnHoverOut}
           style={{
             background: 'rgba(255,255,255,0.1)',
             border: 'none',
@@ -1199,7 +1525,8 @@ const HeaderBar = memo<HeaderBarProps>(({
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            transition: 'background 0.15s ease'
           }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1209,8 +1536,10 @@ const HeaderBar = memo<HeaderBarProps>(({
         </button>
 
         <button
-          onClick={onShowKeyboardHelp}
-          title="Keyboard Shortcuts (? or F1)"
+          onClick={() => setShowAboutModal(true)}
+          title="About SoluPresenter"
+          onMouseEnter={btnHoverIn}
+          onMouseLeave={btnHoverOut}
           style={{
             background: 'rgba(255,255,255,0.1)',
             border: 'none',
@@ -1221,14 +1550,15 @@ const HeaderBar = memo<HeaderBarProps>(({
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
-            fontSize: '0.8rem'
+            fontSize: '0.8rem',
+            transition: 'background 0.15s ease'
           }}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
-            <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286zm1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94z"/>
+            <path d="M8.93 6.588l-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
           </svg>
-          ?
+          About
         </button>
         <img src={logoImage} alt="SoluCast" style={{ height: '32px', objectFit: 'contain' }} />
       </div>
@@ -1279,6 +1609,11 @@ const HeaderBar = memo<HeaderBarProps>(({
         onApplyTheme={handleOBSApplyTheme}
         onStart={onToggleOBSServer}
       />
+
+      {/* About Modal */}
+      {showAboutModal && (
+        <AboutModal onClose={() => setShowAboutModal(false)} />
+      )}
     </header>
   );
 });

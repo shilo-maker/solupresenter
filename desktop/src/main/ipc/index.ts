@@ -886,17 +886,47 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.on('video:timeUpdate', (event, time: number, duration: number) => {
     throttledVideoTimeUpdate(time, duration);
+    // Also update remote control server's activeVideo state
+    const currentState = remoteControlServer.getCurrentState?.();
+    if (currentState?.activeMedia?.type === 'video') {
+      remoteControlServer.updateState({
+        activeVideo: {
+          name: currentState.activeMedia.name || 'Video',
+          isPlaying: currentState.activeVideo?.isPlaying ?? true,
+          currentTime: time,
+          duration: duration,
+          volume: currentState.activeVideo?.volume ?? 1
+        }
+      } as Partial<RemoteControlState>);
+    }
   });
 
   ipcMain.on('video:ended', () => {
     if (controlWindowRef && !controlWindowRef.isDestroyed()) {
       controlWindowRef.webContents.send('video:ended');
     }
+    // Also update remote control server
+    remoteControlServer.updateState({
+      activeVideo: null
+    } as Partial<RemoteControlState>);
   });
 
   ipcMain.on('video:playing', (event, playing: boolean) => {
     if (controlWindowRef && !controlWindowRef.isDestroyed()) {
       controlWindowRef.webContents.send('video:playing', playing);
+    }
+    // Also update remote control server's activeVideo state
+    const currentState = remoteControlServer.getCurrentState?.();
+    if (currentState?.activeMedia?.type === 'video') {
+      remoteControlServer.updateState({
+        activeVideo: {
+          name: currentState.activeMedia.name || 'Video',
+          isPlaying: playing,
+          currentTime: currentState.activeVideo?.currentTime ?? 0,
+          duration: currentState.activeVideo?.duration ?? 0,
+          volume: currentState.activeVideo?.volume ?? 1
+        }
+      } as Partial<RemoteControlState>);
     }
   });
 
@@ -1736,6 +1766,58 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     } catch (error) {
       console.error('IPC online:switchToPublicRoom error:', error);
       throw error;
+    }
+  });
+
+  ipcMain.handle('online:createPublicRoom', async (event, name: string) => {
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      throw new Error('Room name is required');
+    }
+    try {
+      return await socketService.createPublicRoom(name);
+    } catch (error) {
+      console.error('IPC online:createPublicRoom error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('online:linkPublicRoom', async (event, publicRoomId: string) => {
+    if (!publicRoomId || typeof publicRoomId !== 'string') {
+      throw new Error('Public room ID is required');
+    }
+    try {
+      return await socketService.linkPublicRoom(publicRoomId);
+    } catch (error) {
+      console.error('IPC online:linkPublicRoom error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('online:unlinkPublicRoom', async (event, publicRoomId: string) => {
+    if (!publicRoomId || typeof publicRoomId !== 'string') {
+      throw new Error('Public room ID is required');
+    }
+    try {
+      return await socketService.unlinkPublicRoom(publicRoomId);
+    } catch (error) {
+      console.error('IPC online:unlinkPublicRoom error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('qrcode:generate', async (event, url: string) => {
+    if (!url || typeof url !== 'string') {
+      return null;
+    }
+    try {
+      return await QRCode.toDataURL(url, {
+        width: 200,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' }
+      });
+    } catch (error) {
+      console.error('IPC qrcode:generate error:', error);
+      return null;
     }
   });
 

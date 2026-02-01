@@ -90,6 +90,7 @@ function createControlWindow(): void {
     icon: iconPath,
     show: false, // Don't show until ready
     backgroundColor: '#09090b', // Match app background to prevent white flash
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'control.js'),
       contextIsolation: true,
@@ -97,6 +98,8 @@ function createControlWindow(): void {
       sandbox: false
     }
   });
+
+  controlWindow.setMenu(null);
 
   // Show window with smooth fade when ready to display
   controlWindow.once('ready-to-show', () => {

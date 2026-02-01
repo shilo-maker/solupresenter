@@ -174,8 +174,8 @@ export function getRemoteControlUI(port: number): string {
 
     .main-tab {
       flex: 1;
-      padding: 12px 8px;
-      font-size: 12px;
+      padding: 12px 4px;
+      font-size: 11px;
       font-weight: 500;
       background: transparent;
       border: none;
@@ -186,6 +186,10 @@ export function getRemoteControlUI(port: number): string {
       align-items: center;
       gap: 4px;
       transition: all 0.2s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
     }
 
     .main-tab.active {
@@ -657,6 +661,117 @@ export function getRemoteControlUI(port: number): string {
       cursor: pointer;
       border: none;
     }
+
+    /* Settings Tab Styles */
+    .settings-section {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .settings-action-btn {
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+    }
+
+    .settings-btn-gray { background: rgba(255,255,255,0.15); }
+    .settings-btn-gray:active { background: rgba(255,255,255,0.25); }
+
+    .display-item {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+
+    .display-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .display-item-name {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .display-item-meta {
+      font-size: 12px;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 8px;
+    }
+
+    .display-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .display-actions button {
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+    }
+
+    .display-actions .btn-viewer { background: rgba(6,182,212,0.3); color: #06b6d4; }
+    .display-actions .btn-viewer:active { background: rgba(6,182,212,0.5); }
+    .display-actions .btn-stage { background: rgba(139,92,246,0.3); color: #a78bfa; }
+    .display-actions .btn-stage:active { background: rgba(139,92,246,0.5); }
+    .display-actions .btn-close { background: rgba(239,68,68,0.3); color: #f87171; }
+    .display-actions .btn-close:active { background: rgba(239,68,68,0.5); }
+    .display-actions .btn-identify { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); }
+    .display-actions .btn-identify:active { background: rgba(255,255,255,0.2); }
+
+    .theme-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .theme-row label {
+      font-size: 13px;
+      font-weight: 600;
+      min-width: 60px;
+      color: rgba(255,255,255,0.8);
+    }
+
+    .theme-row select {
+      flex: 1;
+      padding: 8px 10px;
+      font-size: 13px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      color: white;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23fff' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 28px;
+    }
+
+    .theme-row select option {
+      background: #1a1a2e;
+      color: white;
+    }
+
+    .theme-row select:focus {
+      border-color: #06b6d4;
+    }
   </style>
 </head>
 <body>
@@ -732,6 +847,13 @@ export function getRemoteControlUI(port: number): string {
             <line x1="12" y1="17" x2="12" y2="21"/>
           </svg>
           Slides
+        </button>
+        <button class="main-tab" data-tab="settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          Settings
         </button>
       </div>
 
@@ -850,6 +972,29 @@ export function getRemoteControlUI(port: number): string {
           </div>
         </div>
       </div>
+
+      <!-- Settings Tab -->
+      <div class="tab-content" id="tab-settings">
+        <div style="flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px;">
+          <!-- Displays Section -->
+          <div class="settings-section">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <span style="font-weight:700; font-size:16px;">Displays</span>
+              <div style="display:flex; gap:6px;">
+                <button id="identify-all-btn" class="settings-action-btn settings-btn-gray">Identify All</button>
+                <button id="refresh-displays-btn" class="settings-action-btn settings-btn-gray">Refresh</button>
+              </div>
+            </div>
+            <div id="displays-list">Loading...</div>
+          </div>
+
+          <!-- Themes Section -->
+          <div class="settings-section" style="margin-top:16px;">
+            <span style="font-weight:700; font-size:16px; display:block; margin-bottom:12px;">Themes</span>
+            <div id="themes-section">Loading...</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="loading-overlay" id="loading-overlay">
@@ -963,6 +1108,7 @@ export function getRemoteControlUI(port: number): string {
         if (tabId === 'bible' && !bibleBooks) loadBibleBooks();
         if (tabId === 'media' && !mediaCache) loadMedia();
         if (tabId === 'presentations' && !presentationsCache) loadPresentations();
+        if (tabId === 'settings') { loadDisplays(); loadThemes(); }
       });
     });
 
@@ -1012,6 +1158,10 @@ export function getRemoteControlUI(port: number): string {
 
       socket.on('disconnect', () => {
         updateConnectionStatus(false);
+        // Clear any pending Settings tab loading states
+        if (displaysListEl && displaysListEl.querySelector('.loading')) { displaysListEl.innerHTML = '<div class="empty-state">Disconnected</div>'; }
+        if (themesSectionEl && themesSectionEl.querySelector('.loading')) { themesSectionEl.innerHTML = '<div class="empty-state">Disconnected</div>'; }
+        displaysBusy = false;
       });
 
       socket.on('connect_error', () => {
@@ -1024,6 +1174,13 @@ export function getRemoteControlUI(port: number): string {
       if (socket && socket.connected) {
         socket.emit('command', { type, payload });
       }
+    }
+
+    var volumeThrottleTimer = null;
+    function sendVolumeCommand(type, volume) {
+      if (volumeThrottleTimer) return;
+      sendCommand(type, { volume: volume });
+      volumeThrottleTimer = setTimeout(function() { volumeThrottleTimer = null; }, 50);
     }
 
     function updateState(state) {
@@ -1053,24 +1210,24 @@ export function getRemoteControlUI(port: number): string {
 
       if (state.activeYoutube) {
         currentTitle.textContent = state.activeYoutube.title || 'YouTube Video';
-        const mins = Math.floor(state.activeYoutube.currentTime / 60);
-        const secs = Math.floor(state.activeYoutube.currentTime % 60);
-        const totalMins = Math.floor(state.activeYoutube.duration / 60);
-        const totalSecs = Math.floor(state.activeYoutube.duration % 60);
+        const mins = Math.floor((state.activeYoutube.currentTime || 0) / 60);
+        const secs = Math.floor((state.activeYoutube.currentTime || 0) % 60);
+        const totalMins = Math.floor((state.activeYoutube.duration || 0) / 60);
+        const totalSecs = Math.floor((state.activeYoutube.duration || 0) % 60);
         slideInfo.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs + ' / ' + totalMins + ':' + (totalSecs < 10 ? '0' : '') + totalSecs;
       } else if (state.activeVideo) {
         currentTitle.textContent = state.activeVideo.name || 'Video';
-        const mins = Math.floor(state.activeVideo.currentTime / 60);
-        const secs = Math.floor(state.activeVideo.currentTime % 60);
-        const totalMins = Math.floor(state.activeVideo.duration / 60);
-        const totalSecs = Math.floor(state.activeVideo.duration % 60);
+        const mins = Math.floor((state.activeVideo.currentTime || 0) / 60);
+        const secs = Math.floor((state.activeVideo.currentTime || 0) % 60);
+        const totalMins = Math.floor((state.activeVideo.duration || 0) / 60);
+        const totalSecs = Math.floor((state.activeVideo.duration || 0) % 60);
         slideInfo.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs + ' / ' + totalMins + ':' + (totalSecs < 10 ? '0' : '') + totalSecs;
       } else if (state.activeAudio) {
         currentTitle.textContent = state.activeAudio.name || 'Audio';
-        const mins = Math.floor(state.activeAudio.currentTime / 60);
-        const secs = Math.floor(state.activeAudio.currentTime % 60);
-        const totalMins = Math.floor(state.activeAudio.duration / 60);
-        const totalSecs = Math.floor(state.activeAudio.duration % 60);
+        const mins = Math.floor((state.activeAudio.currentTime || 0) / 60);
+        const secs = Math.floor((state.activeAudio.currentTime || 0) % 60);
+        const totalMins = Math.floor((state.activeAudio.duration || 0) / 60);
+        const totalSecs = Math.floor((state.activeAudio.duration || 0) % 60);
         slideInfo.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs + ' / ' + totalMins + ':' + (totalSecs < 10 ? '0' : '') + totalSecs;
       } else if (state.activeMedia) {
         currentTitle.textContent = state.activeMedia.name || 'Media';
@@ -1098,16 +1255,16 @@ export function getRemoteControlUI(port: number): string {
 
       // Show YouTube controls when YouTube is active
       if (activeYoutube) {
-        const mins = Math.floor(activeYoutube.currentTime / 60);
-        const secs = Math.floor(activeYoutube.currentTime % 60);
-        const totalMins = Math.floor(activeYoutube.duration / 60);
-        const totalSecs = Math.floor(activeYoutube.duration % 60);
+        const mins = Math.floor((activeYoutube.currentTime || 0) / 60);
+        const secs = Math.floor((activeYoutube.currentTime || 0) % 60);
+        const totalMins = Math.floor((activeYoutube.duration || 0) / 60);
+        const totalSecs = Math.floor((activeYoutube.duration || 0) % 60);
         const progress = activeYoutube.duration > 0 ? (activeYoutube.currentTime / activeYoutube.duration) * 100 : 0;
 
         slidesGrid.innerHTML =
           '<div style="grid-column: 1/-1; display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px;">' +
             '<div style="font-size: 48px; color: #FF0000;">&#9658;</div>' +
-            '<div style="font-size: 16px; font-weight: 600; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis;">' + escapeHtml(activeYoutube.title) + '</div>' +
+            '<div style="font-size: 16px; font-weight: 600; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis;">' + escapeHtml(activeYoutube.title || 'YouTube Video') + '</div>' +
             '<div style="font-size: 14px; color: rgba(255,255,255,0.6);">' + mins + ':' + (secs < 10 ? '0' : '') + secs + ' / ' + totalMins + ':' + (totalSecs < 10 ? '0' : '') + totalSecs + '</div>' +
             '<div style="width: 100%; max-width: 280px; height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; overflow: hidden; cursor: pointer;" id="youtube-progress-bar">' +
               '<div style="width: ' + progress + '%; height: 100%; background: linear-gradient(90deg, #FF0000, #CC0000); transition: width 0.3s;"></div>' +
@@ -1131,6 +1288,7 @@ export function getRemoteControlUI(port: number): string {
         document.getElementById('youtube-progress-bar').addEventListener('click', (e) => {
           const bar = document.getElementById('youtube-progress-bar');
           if (!bar) return;
+          if (!activeYoutube.duration) return;
           const rect = bar.getBoundingClientRect();
           const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
           const seekTime = percent * activeYoutube.duration;
@@ -1141,17 +1299,17 @@ export function getRemoteControlUI(port: number): string {
 
       // Show video controls when video is active
       if (activeVideo) {
-        const mins = Math.floor(activeVideo.currentTime / 60);
-        const secs = Math.floor(activeVideo.currentTime % 60);
-        const totalMins = Math.floor(activeVideo.duration / 60);
-        const totalSecs = Math.floor(activeVideo.duration % 60);
+        const mins = Math.floor((activeVideo.currentTime || 0) / 60);
+        const secs = Math.floor((activeVideo.currentTime || 0) % 60);
+        const totalMins = Math.floor((activeVideo.duration || 0) / 60);
+        const totalSecs = Math.floor((activeVideo.duration || 0) % 60);
         const progress = activeVideo.duration > 0 ? (activeVideo.currentTime / activeVideo.duration) * 100 : 0;
-        const volumePercent = Math.round((activeVideo.volume || 1) * 100);
+        const volumePercent = Math.round((activeVideo.volume != null ? activeVideo.volume : 1) * 100);
 
         slidesGrid.innerHTML =
           '<div style="grid-column: 1/-1; display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px;">' +
             '<div style="font-size: 48px;">&#127909;</div>' +
-            '<div style="font-size: 16px; font-weight: 600; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis;">' + escapeHtml(activeVideo.name) + '</div>' +
+            '<div style="font-size: 16px; font-weight: 600; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis;">' + escapeHtml(activeVideo.name || 'Video') + '</div>' +
             '<div style="font-size: 14px; color: rgba(255,255,255,0.6);">' + mins + ':' + (secs < 10 ? '0' : '') + secs + ' / ' + totalMins + ':' + (totalSecs < 10 ? '0' : '') + totalSecs + '</div>' +
             '<div style="width: 100%; max-width: 280px; height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; overflow: hidden; cursor: pointer;" id="video-progress-bar">' +
               '<div style="width: ' + progress + '%; height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); transition: width 0.3s;"></div>' +
@@ -1180,11 +1338,12 @@ export function getRemoteControlUI(port: number): string {
         document.getElementById('video-volume').addEventListener('input', (e) => {
           const vol = parseInt(e.target.value);
           document.getElementById('video-volume-label').textContent = vol + '%';
-          sendCommand('video:volume', { volume: vol / 100 });
+          sendVolumeCommand('video:volume', vol / 100);
         });
         document.getElementById('video-progress-bar').addEventListener('click', (e) => {
           const bar = document.getElementById('video-progress-bar');
           if (!bar) return;
+          if (!activeVideo.duration) return;
           const rect = bar.getBoundingClientRect();
           const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
           const seekTime = percent * activeVideo.duration;
@@ -1195,17 +1354,17 @@ export function getRemoteControlUI(port: number): string {
 
       // Show audio controls when audio is active
       if (activeAudio) {
-        const mins = Math.floor(activeAudio.currentTime / 60);
-        const secs = Math.floor(activeAudio.currentTime % 60);
-        const totalMins = Math.floor(activeAudio.duration / 60);
-        const totalSecs = Math.floor(activeAudio.duration % 60);
+        const mins = Math.floor((activeAudio.currentTime || 0) / 60);
+        const secs = Math.floor((activeAudio.currentTime || 0) % 60);
+        const totalMins = Math.floor((activeAudio.duration || 0) / 60);
+        const totalSecs = Math.floor((activeAudio.duration || 0) % 60);
         const progress = activeAudio.duration > 0 ? (activeAudio.currentTime / activeAudio.duration) * 100 : 0;
-        const volumePercent = Math.round(activeAudio.volume * 100);
+        const volumePercent = Math.round((activeAudio.volume != null ? activeAudio.volume : 1) * 100);
 
         slidesGrid.innerHTML =
           '<div style="grid-column: 1/-1; display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px;">' +
             '<div style="font-size: 48px;">&#127925;</div>' +
-            '<div style="font-size: 16px; font-weight: 600; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis;">' + escapeHtml(activeAudio.name) + '</div>' +
+            '<div style="font-size: 16px; font-weight: 600; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis;">' + escapeHtml(activeAudio.name || 'Audio') + '</div>' +
             '<div style="font-size: 14px; color: rgba(255,255,255,0.6);">' + mins + ':' + (secs < 10 ? '0' : '') + secs + ' / ' + totalMins + ':' + (totalSecs < 10 ? '0' : '') + totalSecs + '</div>' +
             '<div style="width: 100%; max-width: 280px; height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; overflow: hidden; cursor: pointer;" id="audio-progress-bar">' +
               '<div style="width: ' + progress + '%; height: 100%; background: linear-gradient(90deg, #9C27B0, #E91E63); transition: width 0.3s;"></div>' +
@@ -1234,11 +1393,12 @@ export function getRemoteControlUI(port: number): string {
         document.getElementById('audio-volume').addEventListener('input', (e) => {
           const vol = parseInt(e.target.value);
           document.getElementById('audio-volume-label').textContent = vol + '%';
-          sendCommand('audio:volume', { volume: vol / 100 });
+          sendVolumeCommand('audio:volume', vol / 100);
         });
         document.getElementById('audio-progress-bar').addEventListener('click', (e) => {
           const bar = document.getElementById('audio-progress-bar');
           if (!bar) return;
+          if (!activeAudio.duration) return;
           const rect = bar.getBoundingClientRect();
           const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
           const seekTime = percent * activeAudio.duration;
@@ -1255,7 +1415,7 @@ export function getRemoteControlUI(port: number): string {
           '<div style="grid-column: 1/-1; display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px;">' +
             '<div style="font-size: 48px;">' + icon + '</div>' +
             '<div style="font-size: 18px; font-weight: 600;">' + typeLabel + ' Playing</div>' +
-            '<div style="font-size: 14px; color: rgba(255,255,255,0.6);">' + escapeHtml(activeMedia.name) + '</div>' +
+            '<div style="font-size: 14px; color: rgba(255,255,255,0.6);">' + escapeHtml(activeMedia.name || 'Media') + '</div>' +
             '<button id="stop-media-btn" style="margin-top: 16px; padding: 12px 32px; background: linear-gradient(135deg, #ef4444, #dc2626); border: none; border-radius: 8px; color: white; font-size: 16px; font-weight: 600; cursor: pointer;">' +
               '&#9632; Stop Media' +
             '</button>' +
@@ -1320,6 +1480,10 @@ export function getRemoteControlUI(port: number): string {
     // Songs
     function loadSongs() {
       const songsList = document.getElementById('songs-list');
+      if (!socket || !socket.connected) {
+        songsList.innerHTML = '<div class="empty-state">Not connected</div>';
+        return;
+      }
       songsList.innerHTML = '<div class="loading"><div class="loading-spinner"></div>Loading songs...</div>';
 
       socket.emit('getSongs', (result) => {
@@ -1343,7 +1507,7 @@ export function getRemoteControlUI(port: number): string {
         '<div class="list-item" data-song-id="' + escapeHtml(String(song.id)) + '">' +
           '<div class="item-icon song">&#9835;</div>' +
           '<div class="item-details">' +
-            '<div class="item-name">' + escapeHtml(song.title) + '</div>' +
+            '<div class="item-name">' + escapeHtml(song.title || 'Untitled') + '</div>' +
             '<div class="item-meta">' + escapeHtml(song.author || '') + ' &bull; ' + song.slideCount + ' slides</div>' +
           '</div>' +
           '<button class="add-btn" data-action="add-song">+ Add</button>' +
@@ -1365,7 +1529,7 @@ export function getRemoteControlUI(port: number): string {
       const query = e.target.value.toLowerCase();
       if (!songsCache) return;
       const filtered = songsCache.filter(s =>
-        s.title.toLowerCase().includes(query) ||
+        (s.title && s.title.toLowerCase().includes(query)) ||
         (s.author && s.author.toLowerCase().includes(query))
       );
       renderSongs(filtered);
@@ -1373,6 +1537,7 @@ export function getRemoteControlUI(port: number): string {
 
     // Bible
     function loadBibleBooks() {
+      if (!socket || !socket.connected) return;
       socket.emit('getBibleBooks', (result) => {
         if (result.error) return;
         bibleBooks = result.books;
@@ -1406,6 +1571,7 @@ export function getRemoteControlUI(port: number): string {
       const versesDiv = document.getElementById('bible-verses');
 
       if (!book || !chapter) return;
+      if (!socket || !socket.connected) return;
 
       versesDiv.innerHTML = '<div class="loading"><div class="loading-spinner"></div>Loading...</div>';
 
@@ -1594,6 +1760,10 @@ export function getRemoteControlUI(port: number): string {
     // Media
     function loadMedia() {
       const mediaList = document.getElementById('media-list');
+      if (!socket || !socket.connected) {
+        mediaList.innerHTML = '<div class="empty-state">Not connected</div>';
+        return;
+      }
       mediaList.innerHTML = '<div class="loading"><div class="loading-spinner"></div>Loading media...</div>';
 
       socket.emit('getMedia', (result) => {
@@ -1618,7 +1788,7 @@ export function getRemoteControlUI(port: number): string {
         return '<div class="list-item" data-media-id="' + escapeHtml(String(m.id)) + '">' +
           '<div class="item-icon media">' + typeIcon + '</div>' +
           '<div class="item-details">' +
-            '<div class="item-name">' + escapeHtml(m.name) + '</div>' +
+            '<div class="item-name">' + escapeHtml(m.name || 'Untitled') + '</div>' +
             '<div class="item-meta">' + escapeHtml(m.type || '') + (m.duration ? ' &bull; ' + formatDuration(m.duration) : '') + '</div>' +
           '</div>' +
           '<button class="add-btn" data-action="add-media">+ Add</button>' +
@@ -1639,7 +1809,7 @@ export function getRemoteControlUI(port: number): string {
     document.getElementById('media-search').addEventListener('input', (e) => {
       const query = e.target.value.toLowerCase();
       if (!mediaCache) return;
-      const filtered = mediaCache.filter(m => m.name.toLowerCase().includes(query));
+      const filtered = mediaCache.filter(m => m.name && m.name.toLowerCase().includes(query));
       renderMedia(filtered);
     });
 
@@ -1653,6 +1823,10 @@ export function getRemoteControlUI(port: number): string {
     // Presentations
     function loadPresentations() {
       const presentationsList = document.getElementById('presentations-list');
+      if (!socket || !socket.connected) {
+        presentationsList.innerHTML = '<div class="empty-state">Not connected</div>';
+        return;
+      }
       presentationsList.innerHTML = '<div class="loading"><div class="loading-spinner"></div>Loading presentations...</div>';
 
       socket.emit('getPresentations', (result) => {
@@ -1678,7 +1852,7 @@ export function getRemoteControlUI(port: number): string {
         return '<div class="list-item" data-presentation-id="' + escapeHtml(String(p.id)) + '">' +
           '<div class="item-icon tool">' + typeIcon + '</div>' +
           '<div class="item-details">' +
-            '<div class="item-name">' + escapeHtml(p.title) + '</div>' +
+            '<div class="item-name">' + escapeHtml(p.title || 'Untitled') + '</div>' +
             '<div class="item-meta">' + escapeHtml(typeLabel) + ' &bull; ' + p.slideCount + ' slides</div>' +
           '</div>' +
           '<button class="add-btn" data-action="add-presentation">+ Add</button>' +
@@ -1699,8 +1873,161 @@ export function getRemoteControlUI(port: number): string {
     document.getElementById('presentation-search').addEventListener('input', (e) => {
       const query = e.target.value.toLowerCase();
       if (!presentationsCache) return;
-      const filtered = presentationsCache.filter(p => p.title.toLowerCase().includes(query));
+      const filtered = presentationsCache.filter(p => p.title && p.title.toLowerCase().includes(query));
       renderPresentations(filtered);
+    });
+
+    // Settings: Displays
+    var displaysBusy = false;
+    var displaysListEl = document.getElementById('displays-list');
+
+    function loadDisplays() {
+      displaysBusy = false;
+      displaysListEl.innerHTML = '<div class="loading"><div class="loading-spinner"></div>Loading displays...</div>';
+      if (!socket || !socket.connected) {
+        displaysListEl.innerHTML = '<div class="empty-state">Not connected</div>';
+        return;
+      }
+      socket.emit('getDisplays', (result) => {
+        if (result.error) {
+          displaysListEl.innerHTML = '<div class="empty-state">Failed to load displays</div>';
+          return;
+        }
+        renderDisplays(result.displays);
+      });
+    }
+
+    function renderDisplays(displays) {
+      displaysBusy = false;
+      if (!displays || displays.length === 0) {
+        displaysListEl.innerHTML = '<div class="empty-state">No displays found</div>';
+        return;
+      }
+
+      displaysListEl.innerHTML = displays.map(d => {
+        const statusLabel = d.isAssigned ? (d.assignedType === 'viewer' ? 'Viewer' : 'Stage') : 'Not assigned';
+        const statusColor = d.isAssigned ? (d.assignedType === 'viewer' ? '#06b6d4' : '#a78bfa') : 'rgba(255,255,255,0.5)';
+        return '<div class="display-item">' +
+          '<div class="display-item-header">' +
+            '<span class="display-item-name">' + escapeHtml(d.label || ('Display ' + d.id)) + (d.isPrimary ? ' (Primary)' : '') + '</span>' +
+            '<span style="font-size:12px; color:' + statusColor + '; font-weight:600;">' + statusLabel + '</span>' +
+          '</div>' +
+          '<div class="display-item-meta">' + (d.bounds ? (d.bounds.width + 'x' + d.bounds.height) : 'Unknown') + ' &bull; Scale ' + (d.scaleFactor || 1) + 'x</div>' +
+          '<div class="display-actions">' +
+            (d.isAssigned
+              ? '<button class="btn-close" data-action="close" data-id="' + escapeHtml(String(d.id)) + '">Close</button>'
+              : '<button class="btn-viewer" data-action="open-viewer" data-id="' + escapeHtml(String(d.id)) + '">Open Viewer</button>' +
+                '<button class="btn-stage" data-action="open-stage" data-id="' + escapeHtml(String(d.id)) + '">Open Stage</button>'
+            ) +
+            '<button class="btn-identify" data-action="identify" data-id="' + escapeHtml(String(d.id)) + '">Identify</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    // Event delegation: single listener on container handles all display buttons
+    displaysListEl.addEventListener('click', (e) => {
+      var btn = e.target.closest('button');
+      if (!btn || !btn.dataset.action) return;
+      var action = btn.dataset.action;
+      var displayId = parseInt(btn.dataset.id);
+      if (isNaN(displayId)) return;
+      if (action === 'identify') {
+        if (socket && socket.connected) socket.emit('identifyDisplays', { displayId }, () => {});
+        return;
+      }
+      if (displaysBusy || !socket || !socket.connected) return;
+      displaysBusy = true;
+      if (action === 'open-viewer') {
+        socket.emit('openDisplay', { displayId, type: 'viewer' }, (result) => {
+          if (result && result.error) { alert('Failed to open viewer: ' + result.error); }
+          loadDisplays();
+        });
+      } else if (action === 'open-stage') {
+        socket.emit('openDisplay', { displayId, type: 'stage' }, (result) => {
+          if (result && result.error) { alert('Failed to open stage: ' + result.error); }
+          loadDisplays();
+        });
+      } else if (action === 'close') {
+        socket.emit('closeDisplay', { displayId }, (result) => {
+          if (result && result.error) { alert('Failed to close display: ' + result.error); }
+          loadDisplays();
+        });
+      }
+    });
+
+    document.getElementById('identify-all-btn').addEventListener('click', () => {
+      if (socket && socket.connected) socket.emit('identifyDisplays', {}, () => {});
+    });
+    document.getElementById('refresh-displays-btn').addEventListener('click', () => {
+      if (!displaysBusy) loadDisplays();
+    });
+
+    // Settings: Themes
+    var themesData = null;
+    var themesSectionEl = document.getElementById('themes-section');
+
+    function loadThemes(forceRefresh) {
+      if (themesData && !forceRefresh) {
+        renderThemes(themesData);
+        return;
+      }
+      if (!socket || !socket.connected) {
+        themesSectionEl.innerHTML = '<div class="empty-state">Not connected</div>';
+        return;
+      }
+      themesSectionEl.innerHTML = '<div class="loading"><div class="loading-spinner"></div>Loading themes...</div>';
+      socket.emit('getThemes', (result) => {
+        if (result.error) {
+          themesSectionEl.innerHTML = '<div class="empty-state">Failed to load themes</div>';
+          return;
+        }
+        themesData = result;
+        renderThemes(result);
+      });
+    }
+
+    function renderThemes(data) {
+      var categories = [
+        { key: 'viewer', label: 'Song' },
+        { key: 'stage', label: 'Stage' },
+        { key: 'bible', label: 'Bible' },
+        { key: 'prayer', label: 'Prayer' }
+      ];
+
+      themesSectionEl.innerHTML = categories.map(cat => {
+        var themes = data[cat.key] || [];
+        var selectedId = data.selectedIds ? data.selectedIds[cat.key] : null;
+        var options = themes.map(t =>
+          '<option value="' + escapeHtml(t.id || '') + '"' + (t.id === selectedId ? ' selected' : '') + '>' + escapeHtml(t.name || 'Untitled') + '</option>'
+        ).join('');
+        return '<div class="theme-row">' +
+          '<label>' + cat.label + '</label>' +
+          '<select data-theme-type="' + cat.key + '">' + options + '</select>' +
+        '</div>';
+      }).join('');
+    }
+
+    // Event delegation: single listener on container handles all theme selects
+    themesSectionEl.addEventListener('change', (e) => {
+      var sel = e.target;
+      if (sel.tagName !== 'SELECT' || !sel.dataset.themeType) return;
+      var themeType = sel.dataset.themeType;
+      var themeId = sel.value;
+      var previousValue = (themesData && themesData.selectedIds) ? themesData.selectedIds[themeType] : null;
+      if (!socket || !socket.connected) return;
+      socket.emit('selectTheme', { themeType, themeId }, (result) => {
+        if (result && result.error) {
+          alert('Failed to apply theme: ' + result.error);
+          if (previousValue) { sel.value = previousValue; }
+        } else {
+          // Update cached selectedId and invalidate full cache for next tab visit
+          if (themesData && themesData.selectedIds) {
+            themesData.selectedIds[themeType] = themeId;
+          }
+          themesData = null;
+        }
+      });
     });
 
     // Navigation
@@ -1760,7 +2087,7 @@ export function getRemoteControlUI(port: number): string {
 
     function escapeHtml(text) {
       const div = document.createElement('div');
-      div.textContent = text;
+      div.textContent = text != null ? text : '';
       return div.innerHTML;
     }
 

@@ -399,6 +399,81 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         />
       </div>
 
+      {/* Text Shadow */}
+      <div style={sectionStyle}>
+        <label style={labelStyle}>Text Shadow</label>
+        <div style={rowStyle}>
+          <input
+            type="color"
+            value={style.textShadowColor || '#000000'}
+            onChange={(e) => onStyleChange({ ...style, textShadowColor: e.target.value })}
+            style={{ width: '50px', height: '36px', padding: '2px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          />
+          <input
+            type="text"
+            value={style.textShadowColor || '#000000'}
+            onChange={(e) => onStyleChange({ ...style, textShadowColor: e.target.value })}
+            style={{ ...inputStyle, flex: 1 }}
+          />
+        </div>
+        <label style={{ ...labelStyle, fontSize: '11px', marginTop: '8px' }}>Blur: {style.textShadowBlur ?? 4}px</label>
+        <input
+          type="range"
+          min="0"
+          max="20"
+          value={style.textShadowBlur ?? 4}
+          onChange={(e) => onStyleChange({ ...style, textShadowBlur: parseInt(e.target.value) })}
+          style={{ width: '100%', accentColor: lineColor }}
+        />
+        <label style={{ ...labelStyle, fontSize: '11px', marginTop: '8px' }}>Offset X: {style.textShadowOffsetX ?? 2}px</label>
+        <input
+          type="range"
+          min="-10"
+          max="10"
+          value={style.textShadowOffsetX ?? 2}
+          onChange={(e) => onStyleChange({ ...style, textShadowOffsetX: parseInt(e.target.value) })}
+          style={{ width: '100%', accentColor: lineColor }}
+        />
+        <label style={{ ...labelStyle, fontSize: '11px', marginTop: '8px' }}>Offset Y: {style.textShadowOffsetY ?? 2}px</label>
+        <input
+          type="range"
+          min="-10"
+          max="10"
+          value={style.textShadowOffsetY ?? 2}
+          onChange={(e) => onStyleChange({ ...style, textShadowOffsetY: parseInt(e.target.value) })}
+          style={{ width: '100%', accentColor: lineColor }}
+        />
+      </div>
+
+      {/* Text Stroke */}
+      <div style={sectionStyle}>
+        <label style={labelStyle}>Text Stroke</label>
+        <label style={{ ...labelStyle, fontSize: '11px' }}>Width: {style.textStrokeWidth ?? 0}px</label>
+        <input
+          type="range"
+          min="0"
+          max="5"
+          step="0.5"
+          value={style.textStrokeWidth ?? 0}
+          onChange={(e) => onStyleChange({ ...style, textStrokeWidth: parseFloat(e.target.value) })}
+          style={{ width: '100%', accentColor: lineColor }}
+        />
+        <div style={{ ...rowStyle, marginTop: '8px' }}>
+          <input
+            type="color"
+            value={style.textStrokeColor || '#000000'}
+            onChange={(e) => onStyleChange({ ...style, textStrokeColor: e.target.value })}
+            style={{ width: '50px', height: '36px', padding: '2px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          />
+          <input
+            type="text"
+            value={style.textStrokeColor || '#000000'}
+            onChange={(e) => onStyleChange({ ...style, textStrokeColor: e.target.value })}
+            style={{ ...inputStyle, flex: 1 }}
+          />
+        </div>
+      </div>
+
       {/* Horizontal Alignment */}
       <div style={sectionStyle}>
         <label style={labelStyle}>Horizontal Alignment</label>

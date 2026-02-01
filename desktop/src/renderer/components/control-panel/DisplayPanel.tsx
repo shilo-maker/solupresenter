@@ -1,7 +1,7 @@
 import React, { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { colors, buttonStyles, dropdownStyles, panelStyles, flexStyles } from '../../styles/controlPanelStyles';
-import { DisplaySettingsModal } from './modals';
+import DisplaySettingsModal from './modals/DisplaySettingsModal';
 
 interface Theme {
   id: string;

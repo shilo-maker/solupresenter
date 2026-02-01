@@ -299,6 +299,94 @@ export class SocketService {
   }
 
   /**
+   * Create or get a public room by name (for virtual displays)
+   */
+  async createPublicRoom(name: string): Promise<{ id: string; name: string; slug: string } | null> {
+    if (!this.token || !this.status.serverUrl) {
+      return null;
+    }
+
+    try {
+      this.axiosAbortController = new AbortController();
+      const response = await axios.post(
+        `${this.status.serverUrl}/api/public-rooms/create-or-get`,
+        { name },
+        {
+          headers: {
+            'Authorization': `Bearer ${this.token}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: AXIOS_TIMEOUT,
+          signal: this.axiosAbortController.signal
+        }
+      );
+
+      return response.data?.publicRoom || null;
+    } catch (error: any) {
+      console.error('Failed to create public room:', error.response?.data || error.message);
+      throw new Error(error.response?.data?.error || 'Failed to create public room');
+    }
+  }
+
+  /**
+   * Link a public room to the current active room
+   */
+  async linkPublicRoom(publicRoomId: string): Promise<boolean> {
+    if (!this.status.roomId || !this.token || !this.status.serverUrl) {
+      return false;
+    }
+
+    try {
+      this.axiosAbortController = new AbortController();
+      await axios.post(
+        `${this.status.serverUrl}/api/rooms/${this.status.roomId}/link-public-room`,
+        { publicRoomId },
+        {
+          headers: {
+            'Authorization': `Bearer ${this.token}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: AXIOS_TIMEOUT,
+          signal: this.axiosAbortController.signal
+        }
+      );
+      return true;
+    } catch (error: any) {
+      console.error('Failed to link public room:', error.response?.data || error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Unlink a public room from the current active room
+   */
+  async unlinkPublicRoom(publicRoomId: string): Promise<boolean> {
+    if (!this.status.roomId || !this.token || !this.status.serverUrl) {
+      return false;
+    }
+
+    try {
+      this.axiosAbortController = new AbortController();
+      await axios.post(
+        `${this.status.serverUrl}/api/rooms/${this.status.roomId}/unlink-public-room`,
+        { publicRoomId },
+        {
+          headers: {
+            'Authorization': `Bearer ${this.token}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: AXIOS_TIMEOUT,
+          signal: this.axiosAbortController.signal
+        }
+      );
+      return true;
+    } catch (error: any) {
+      console.error('Failed to unlink public room:', error.response?.data || error.message);
+      return false;
+    }
+  }
+
+  /**
    * Get current connection status
    */
   getStatus(): OnlineStatus {

@@ -14,3 +14,5 @@ export { default as UnsavedChangesModal } from './UnsavedChangesModal';
 export { default as SetlistContextMenu } from './SetlistContextMenu';
 export { default as DisplaySettingsModal } from './DisplaySettingsModal';
 export { default as OBSSettingsModal } from './OBSSettingsModal';
+export { default as AboutModal } from './AboutModal';
+export { default as VirtualDisplayModal } from './VirtualDisplayModal';

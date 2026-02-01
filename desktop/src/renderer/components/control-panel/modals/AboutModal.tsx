@@ -1,0 +1,253 @@
+import React, { memo, useCallback } from 'react';
+import logoImage from '../../../assets/logo.png';
+
+interface AboutModalProps {
+  onClose: () => void;
+}
+
+const PILLARS = [
+  {
+    icon: '\u{1F525}',
+    title: 'House of Prayer',
+    desc: 'Raising up day and night worship and prayer in the land of Israel'
+  },
+  {
+    icon: '\u{1F3B5}',
+    title: 'Create Culture',
+    desc: 'Producing original Hebrew worship music, media, and creative arts'
+  },
+  {
+    icon: '\u{1F4D6}',
+    title: 'Teach & Equip',
+    desc: 'Training and discipling believers in Israel and the nations'
+  },
+  {
+    icon: '\u{1F30D}',
+    title: 'Out of Zion',
+    desc: 'Taking the word of the Lord from Jerusalem to the nations'
+  }
+];
+
+const GlobeIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm7.5-6.923c-.67.204-1.335.82-1.887 1.855A7.97 7.97 0 0 0 5.145 4H7.5V1.077zM4.09 4a9.267 9.267 0 0 1 .64-1.539 6.7 6.7 0 0 1 .597-.933A7.025 7.025 0 0 0 2.255 4H4.09zm-.582 3.5c.03-.877.138-1.718.312-2.5H1.674a6.958 6.958 0 0 0-.656 2.5h2.49zM4.847 5a12.5 12.5 0 0 0-.338 2.5H7.5V5H4.847zM8.5 5v2.5h2.99a12.495 12.495 0 0 0-.337-2.5H8.5zM4.51 8.5a12.5 12.5 0 0 0 .337 2.5H7.5V8.5H4.51zm3.99 0V11h2.653c.187-.765.306-1.608.338-2.5H8.5zM5.145 12c.138.386.295.744.468 1.068.552 1.035 1.218 1.65 1.887 1.855V12H5.145zm.182 2.472a6.696 6.696 0 0 1-.597-.933A9.268 9.268 0 0 1 4.09 12H2.255a7.024 7.024 0 0 0 3.072 2.472zM3.82 11a13.652 13.652 0 0 1-.312-2.5h-2.49c.062.89.291 1.733.656 2.5H3.82zm6.853 3.472A7.024 7.024 0 0 0 13.745 12H11.91a9.27 9.27 0 0 1-.64 1.539 6.688 6.688 0 0 1-.597.933zM8.5 12v2.923c.67-.204 1.335-.82 1.887-1.855.173-.324.33-.682.468-1.068H8.5zm3.68-1h2.146c.365-.767.594-1.61.656-2.5h-2.49a13.65 13.65 0 0 1-.312 2.5zm2.802-3.5a6.959 6.959 0 0 0-.656-2.5H12.18c.174.782.282 1.623.312 2.5h2.49zM11.27 2.461c.247.464.462.98.64 1.539h1.835a7.024 7.024 0 0 0-3.072-2.472c.218.284.418.598.597.933zM10.855 4a7.966 7.966 0 0 0-.468-1.068C9.835 1.897 9.17 1.282 8.5 1.077V4h2.355z"/>
+  </svg>
+);
+
+const YouTubeIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.007 2.007 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.007 2.007 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31.4 31.4 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.007 2.007 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A99.788 99.788 0 0 1 7.858 2h.193zM6.4 5.209v4.818l4.157-2.408L6.4 5.209z"/>
+  </svg>
+);
+
+const InstagramIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M8 0C5.829 0 5.556.01 4.703.048 3.85.088 3.269.222 2.76.42a3.917 3.917 0 0 0-1.417.923A3.927 3.927 0 0 0 .42 2.76C.222 3.268.087 3.85.048 4.7.01 5.555 0 5.827 0 8.001c0 2.172.01 2.444.048 3.297.04.852.174 1.433.372 1.942.205.526.478.972.923 1.417.444.445.89.719 1.416.923.51.198 1.09.333 1.942.372C5.555 15.99 5.827 16 8 16s2.444-.01 3.298-.048c.851-.04 1.434-.174 1.943-.372a3.916 3.916 0 0 0 1.416-.923c.445-.445.718-.891.923-1.417.197-.509.332-1.09.372-1.942C15.99 10.445 16 10.173 16 8s-.01-2.445-.048-3.299c-.04-.851-.175-1.433-.372-1.941a3.926 3.926 0 0 0-.923-1.417A3.911 3.911 0 0 0 13.24.42c-.51-.198-1.092-.333-1.943-.372C10.443.01 10.172 0 7.998 0h.003zm-.717 1.442h.718c2.136 0 2.389.007 3.232.046.78.035 1.204.166 1.486.275.373.145.64.319.92.599.28.28.453.546.598.92.11.281.24.705.275 1.485.039.843.047 1.096.047 3.231s-.008 2.389-.047 3.232c-.035.78-.166 1.203-.275 1.485a2.47 2.47 0 0 1-.599.919c-.28.28-.546.453-.92.598-.28.11-.704.24-1.485.276-.843.038-1.096.047-3.232.047s-2.39-.009-3.233-.047c-.78-.036-1.203-.166-1.485-.276a2.478 2.478 0 0 1-.92-.598 2.48 2.48 0 0 1-.6-.92c-.109-.281-.24-.705-.275-1.485-.038-.843-.046-1.096-.046-3.233 0-2.136.008-2.388.046-3.231.036-.78.166-1.204.276-1.486.145-.373.319-.64.599-.92.28-.28.546-.453.92-.598.282-.11.705-.24 1.485-.276.738-.034 1.024-.044 2.515-.045v.002zm4.988 1.328a.96.96 0 1 0 0 1.92.96.96 0 0 0 0-1.92zm-4.27 1.122a4.109 4.109 0 1 0 0 8.217 4.109 4.109 0 0 0 0-8.217zm0 1.441a2.667 2.667 0 1 1 0 5.334 2.667 2.667 0 0 1 0-5.334z"/>
+  </svg>
+);
+
+const SOCIAL_LINKS = [
+  { label: 'Website', url: 'https://soluisrael.org', Icon: GlobeIcon },
+  { label: 'YouTube', url: 'https://youtube.com/@SOLUIsrael', Icon: YouTubeIcon },
+  { label: 'Instagram', url: 'https://instagram.com/soluisrael', Icon: InstagramIcon }
+] as const;
+
+const GIVE_URL = 'https://soluisrael.org/give';
+
+// Static styles hoisted out of render
+const overlayStyle: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(0,0,0,0.85)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 10001
+};
+
+const contentStyle: React.CSSProperties = {
+  background: 'linear-gradient(135deg, rgba(24,24,27,0.98), rgba(15,15,18,0.98))',
+  borderRadius: '20px',
+  padding: '32px',
+  position: 'relative',
+  width: '480px',
+  maxHeight: '90vh',
+  overflowY: 'auto',
+  border: '1px solid rgba(255,255,255,0.1)',
+  boxShadow: '0 25px 80px rgba(0,0,0,0.6), 0 0 40px rgba(6,182,212,0.1)'
+};
+
+const visionBoxStyle: React.CSSProperties = {
+  background: 'rgba(6,182,212,0.08)',
+  borderRadius: '12px',
+  padding: '16px',
+  marginBottom: '20px',
+  border: '1px solid rgba(6,182,212,0.15)'
+};
+
+const pillarCardStyle: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.03)',
+  borderRadius: '10px',
+  padding: '12px',
+  border: '1px solid rgba(255,255,255,0.06)'
+};
+
+const socialBtnStyle: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.06)',
+  border: '1px solid rgba(255,255,255,0.08)',
+  borderRadius: '8px',
+  padding: '8px 14px',
+  color: '#a1a1aa',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  fontSize: '0.8rem',
+  transition: 'all 0.2s'
+};
+
+const ctaBtnStyle: React.CSSProperties = {
+  width: '100%',
+  background: 'linear-gradient(135deg, #06b6d4, #0891b2)',
+  border: 'none',
+  borderRadius: '10px',
+  padding: '12px',
+  color: '#fff',
+  cursor: 'pointer',
+  fontSize: '0.9rem',
+  fontWeight: 600,
+  transition: 'all 0.2s',
+  boxShadow: '0 4px 15px rgba(6,182,212,0.3)'
+};
+
+const closeBtnStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: '16px',
+  right: '16px',
+  background: 'rgba(255,255,255,0.1)',
+  border: 'none',
+  borderRadius: '8px',
+  padding: '6px 10px',
+  color: '#a1a1aa',
+  cursor: 'pointer',
+  fontSize: '1rem'
+};
+
+const AboutModal = memo<AboutModalProps>(({ onClose }) => {
+  const openLink = useCallback((url: string) => {
+    window.electronAPI.openExternal(url);
+  }, []);
+
+  const handleSocialEnter = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.background = 'rgba(6,182,212,0.15)';
+    e.currentTarget.style.color = '#06b6d4';
+    e.currentTarget.style.borderColor = 'rgba(6,182,212,0.3)';
+  }, []);
+
+  const handleSocialLeave = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+    e.currentTarget.style.color = '#a1a1aa';
+    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+  }, []);
+
+  const handleCtaEnter = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.boxShadow = '0 6px 20px rgba(6,182,212,0.5)';
+    e.currentTarget.style.transform = 'translateY(-1px)';
+  }, []);
+
+  const handleCtaLeave = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.boxShadow = '0 4px 15px rgba(6,182,212,0.3)';
+    e.currentTarget.style.transform = 'translateY(0)';
+  }, []);
+
+  const handleGive = useCallback(() => openLink(GIVE_URL), [openLink]);
+
+  return (
+    <div onClick={onClose} style={overlayStyle}>
+      <div onClick={(e) => e.stopPropagation()} style={contentStyle}>
+        {/* Header with logo */}
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <img
+            src={logoImage}
+            alt="Solu Israel"
+            style={{ height: '64px', objectFit: 'contain', marginBottom: '12px', filter: 'brightness(1.1)' }}
+          />
+          <h2 style={{ color: '#fafafa', margin: '0 0 4px 0', fontSize: '1.4rem', fontWeight: 600 }}>
+            SoluPresenter
+          </h2>
+          <p style={{ color: '#71717a', margin: 0, fontSize: '0.85rem' }}>
+            by Solu Israel Ministry
+          </p>
+        </div>
+
+        {/* Vision */}
+        <div style={visionBoxStyle}>
+          <p style={{ color: '#a1a1aa', margin: 0, fontSize: '0.85rem', lineHeight: 1.6, textAlign: 'center', fontStyle: 'italic' }}>
+            "A voice calling in the wilderness, prepare the way of the Lord"
+          </p>
+          <p style={{ color: '#71717a', margin: '6px 0 0 0', fontSize: '0.75rem', textAlign: 'center' }}>
+            Isaiah 40:3 — SOLU: from the Hebrew command to "build up a highway"
+          </p>
+        </div>
+
+        {/* 4 Pillars */}
+        <div style={{ marginBottom: '20px' }}>
+          <h4 style={{ color: '#a1a1aa', margin: '0 0 12px 0', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
+            Four Pillars
+          </h4>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            {PILLARS.map((pillar, idx) => (
+              <div key={idx} style={pillarCardStyle}>
+                <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>{pillar.icon}</div>
+                <div style={{ color: '#fafafa', fontSize: '0.8rem', fontWeight: 500, marginBottom: '2px' }}>
+                  {pillar.title}
+                </div>
+                <div style={{ color: '#71717a', fontSize: '0.7rem', lineHeight: 1.4 }}>
+                  {pillar.desc}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Social Links */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '20px' }}>
+          {SOCIAL_LINKS.map((link) => (
+            <button
+              key={link.label}
+              onClick={() => openLink(link.url)}
+              style={socialBtnStyle}
+              onMouseEnter={handleSocialEnter}
+              onMouseLeave={handleSocialLeave}
+            >
+              <link.Icon />
+              {link.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Support CTA */}
+        <button
+          onClick={handleGive}
+          style={ctaBtnStyle}
+          onMouseEnter={handleCtaEnter}
+          onMouseLeave={handleCtaLeave}
+        >
+          Support Our Ministry
+        </button>
+        <p style={{ color: '#71717a', fontSize: '0.7rem', textAlign: 'center', margin: '8px 0 0 0' }}>
+          soluisrael.org/give
+        </p>
+
+        {/* Close button */}
+        <button onClick={onClose} style={closeBtnStyle}>
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+});
+
+AboutModal.displayName = 'AboutModal';
+
+export default AboutModal;

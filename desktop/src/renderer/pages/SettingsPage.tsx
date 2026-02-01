@@ -18,9 +18,10 @@ interface RemoteControlStatus {
   clients: number;
 }
 
-export default function SettingsPage() {
+export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const goBack = onBack || (() => navigate('/'));
   const { settings, updateSetting, resetSettings, isSyncing } = useSettings();
   const [authState, setAuthState] = useState<AuthState | null>(null);
   const [appVersion, setAppVersion] = useState('');
@@ -251,7 +252,7 @@ export default function SettingsPage() {
         }}
       >
         <button
-          onClick={() => navigate('/')}
+          onClick={() => goBack()}
           style={{
             background: 'rgba(255,255,255,0.1)',
             border: 'none',
@@ -606,7 +607,7 @@ export default function SettingsPage() {
                 {t('settings.notLoggedIn')}
               </div>
               <button
-                onClick={() => navigate('/')}
+                onClick={() => goBack()}
                 style={{
                   padding: '12px 24px',
                   background: 'rgba(6, 182, 212, 0.2)',

@@ -360,6 +360,81 @@ const StagePropertiesPanel: React.FC<StagePropertiesPanelProps> = ({
           />
         </div>
 
+        {/* Text Shadow */}
+        <div style={sectionStyle}>
+          <label style={labelStyle}>Text Shadow</label>
+          <div style={rowStyle}>
+            <input
+              type="color"
+              value={textStyle.textShadowColor || '#000000'}
+              onChange={(e) => onTextStyleChange({ textShadowColor: e.target.value })}
+              style={{ width: '50px', height: '36px', padding: '2px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+            />
+            <input
+              type="text"
+              value={textStyle.textShadowColor || '#000000'}
+              onChange={(e) => onTextStyleChange({ textShadowColor: e.target.value })}
+              style={{ ...inputStyle, flex: 1 }}
+            />
+          </div>
+          <label style={{ ...labelStyle, fontSize: '11px', marginTop: '8px' }}>Blur: {textStyle.textShadowBlur ?? 4}px</label>
+          <input
+            type="range"
+            min="0"
+            max="20"
+            value={textStyle.textShadowBlur ?? 4}
+            onChange={(e) => onTextStyleChange({ textShadowBlur: parseInt(e.target.value) })}
+            style={{ width: '100%', accentColor: config.color }}
+          />
+          <label style={{ ...labelStyle, fontSize: '11px', marginTop: '8px' }}>Offset X: {textStyle.textShadowOffsetX ?? 2}px</label>
+          <input
+            type="range"
+            min="-10"
+            max="10"
+            value={textStyle.textShadowOffsetX ?? 2}
+            onChange={(e) => onTextStyleChange({ textShadowOffsetX: parseInt(e.target.value) })}
+            style={{ width: '100%', accentColor: config.color }}
+          />
+          <label style={{ ...labelStyle, fontSize: '11px', marginTop: '8px' }}>Offset Y: {textStyle.textShadowOffsetY ?? 2}px</label>
+          <input
+            type="range"
+            min="-10"
+            max="10"
+            value={textStyle.textShadowOffsetY ?? 2}
+            onChange={(e) => onTextStyleChange({ textShadowOffsetY: parseInt(e.target.value) })}
+            style={{ width: '100%', accentColor: config.color }}
+          />
+        </div>
+
+        {/* Text Stroke */}
+        <div style={sectionStyle}>
+          <label style={labelStyle}>Text Stroke</label>
+          <label style={{ ...labelStyle, fontSize: '11px' }}>Width: {textStyle.textStrokeWidth ?? 0}px</label>
+          <input
+            type="range"
+            min="0"
+            max="5"
+            step="0.5"
+            value={textStyle.textStrokeWidth ?? 0}
+            onChange={(e) => onTextStyleChange({ textStrokeWidth: parseFloat(e.target.value) })}
+            style={{ width: '100%', accentColor: config.color }}
+          />
+          <div style={{ ...rowStyle, marginTop: '8px' }}>
+            <input
+              type="color"
+              value={textStyle.textStrokeColor || '#000000'}
+              onChange={(e) => onTextStyleChange({ textStrokeColor: e.target.value })}
+              style={{ width: '50px', height: '36px', padding: '2px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+            />
+            <input
+              type="text"
+              value={textStyle.textStrokeColor || '#000000'}
+              onChange={(e) => onTextStyleChange({ textStrokeColor: e.target.value })}
+              style={{ ...inputStyle, flex: 1 }}
+            />
+          </div>
+        </div>
+
         {/* Horizontal Alignment */}
         <div style={sectionStyle}>
           <label style={labelStyle}>Horizontal Alignment</label>

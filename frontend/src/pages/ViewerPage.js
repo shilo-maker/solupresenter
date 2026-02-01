@@ -1061,17 +1061,42 @@ function ViewerPage({ remotePin, remoteConfig }) {
   };
 
   // Theme styling helper functions
+  const buildThemeTextShadow = (style) => {
+    if (!style?.textShadowColor && style?.textShadowBlur === undefined
+        && style?.textShadowOffsetX === undefined && style?.textShadowOffsetY === undefined) {
+      return undefined; // No theme shadow configured, let caller use its default
+    }
+    const color = style.textShadowColor || 'rgba(0,0,0,0.8)';
+    const blur = style.textShadowBlur ?? 4;
+    const ox = style.textShadowOffsetX ?? 2;
+    const oy = style.textShadowOffsetY ?? 2;
+    return `${ox}px ${oy}px ${blur}px ${color}`;
+  };
+
+  const buildThemeTextStroke = (style) => {
+    if (!style?.textStrokeWidth) return undefined;
+    return `${style.textStrokeWidth}px ${style.textStrokeColor || '#000000'}`;
+  };
+
   const getThemeLineStyle = (lineType) => {
     if (!viewerTheme?.lineStyles?.[lineType]) {
       return {};
     }
     const style = viewerTheme.lineStyles[lineType];
-    return {
+    const result = {
       fontSize: style.fontSize ? `${style.fontSize}%` : undefined,
       fontWeight: style.fontWeight || undefined,
       color: style.color || undefined,
       opacity: style.opacity !== undefined ? style.opacity : undefined
     };
+    const shadow = buildThemeTextShadow(style);
+    if (shadow) result.textShadow = shadow;
+    const stroke = buildThemeTextStroke(style);
+    if (stroke) {
+      result.WebkitTextStroke = stroke;
+      result.paintOrder = 'stroke fill';
+    }
+    return result;
   };
 
   const isLineVisible = (lineType) => {
@@ -1284,7 +1309,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
                 fontWeight: themeLineStyle.fontWeight || '400',
                 color: themeLineStyle.color || textColor,
                 opacity: themeLineStyle.opacity !== undefined ? themeLineStyle.opacity : 1,
-                textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                textShadow: themeLineStyle.textShadow || '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                WebkitTextStroke: themeLineStyle.WebkitTextStroke,
                 direction: getTextDirection(text),
                 unicodeBidi: 'plaintext',
                 textAlign: alignH,
@@ -1798,7 +1824,9 @@ function ViewerPage({ remotePin, remoteConfig }) {
                       wordWrap: 'break-word',
                       overflowWrap: 'break-word',
                       color: textColor,
-                      textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                      textShadow: buildThemeTextShadow(viewerTheme?.lineStyles?.original) || '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                      WebkitTextStroke: buildThemeTextStroke(viewerTheme?.lineStyles?.original),
+                      paintOrder: 'stroke fill',
                       direction: getTextDirection(combinedSlide.originalText),
                       unicodeBidi: 'plaintext',
                       textAlign: isBible ? 'right' : 'center'
@@ -1819,7 +1847,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
                 wordWrap: 'break-word',
                 overflowWrap: 'break-word',
                 color: textColor,
-                textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                textShadow: buildThemeTextShadow(viewerTheme?.lineStyles?.original) || '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                WebkitTextStroke: buildThemeTextStroke(viewerTheme?.lineStyles?.original),
                 direction: getTextDirection(slide.originalText),
                 unicodeBidi: 'plaintext',
                 textAlign: isBible ? 'right' : 'center'
@@ -1860,7 +1889,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
                     overflowWrap: 'break-word',
                     color: themeLineStyle.color || textColor,
                     opacity: themeLineStyle.opacity !== undefined ? themeLineStyle.opacity : 1,
-                    textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                    textShadow: themeLineStyle.textShadow || '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                    WebkitTextStroke: themeLineStyle.WebkitTextStroke,
                     direction: getTextDirection(slide.originalText),
                     unicodeBidi: 'plaintext',
                     textAlign: isBible ? 'right' : 'center'
@@ -1887,7 +1917,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
                     overflowWrap: 'break-word',
                     color: themeLineStyle.color || textColor,
                     opacity: themeLineStyle.opacity !== undefined ? themeLineStyle.opacity : (isTransliterationLanguage ? 0.95 : 1),
-                    textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                    textShadow: themeLineStyle.textShadow || '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                    WebkitTextStroke: themeLineStyle.WebkitTextStroke,
                     direction: getTextDirection(slide.transliteration),
                     unicodeBidi: 'plaintext'
                   }}>
@@ -1919,7 +1950,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
                       overflowWrap: 'break-word',
                       color: themeLineStyle.color || (isBible ? '#FFD700' : textColor),
                       opacity: themeLineStyle.opacity !== undefined ? themeLineStyle.opacity : (isTransliterationLanguage ? 0.95 : 1),
-                      textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                      textShadow: themeLineStyle.textShadow || '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                      WebkitTextStroke: themeLineStyle.WebkitTextStroke,
                       direction: getTextDirection(slide.translation),
                       unicodeBidi: 'plaintext',
                       textAlign: isBible ? 'left' : 'center'
@@ -1937,7 +1969,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
                         overflowWrap: 'break-word',
                         color: themeLineStyle.color || (isBible ? '#FFD700' : textColor),
                         opacity: themeLineStyle.opacity !== undefined ? themeLineStyle.opacity : (isTransliterationLanguage ? 0.95 : 1),
-                        textShadow: '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                        textShadow: themeLineStyle.textShadow || '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                        WebkitTextStroke: themeLineStyle.WebkitTextStroke,
                         direction: getTextDirection(slide.translationOverflow),
                         unicodeBidi: 'plaintext',
                         textAlign: isBible ? 'left' : 'center'

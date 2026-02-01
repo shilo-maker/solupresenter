@@ -156,6 +156,14 @@ interface LineStyle {
   borderRadiusTopRight?: number;
   borderRadiusBottomRight?: number;
   borderRadiusBottomLeft?: number;
+  // Text shadow properties
+  textShadowColor?: string;
+  textShadowBlur?: number;
+  textShadowOffsetX?: number;
+  textShadowOffsetY?: number;
+  // Text stroke/outline properties
+  textStrokeWidth?: number;
+  textStrokeColor?: string;
 }
 
 type TextureType = 'none' | 'paper' | 'parchment' | 'linen' | 'canvas' | 'noise';
@@ -262,6 +270,23 @@ const DEFAULT_SAMPLE_TEXT: Record<string, string> = {
 
 // Default text shadow for better readability against any background
 const DEFAULT_TEXT_SHADOW = '2px 2px 4px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.5)';
+
+function buildTextShadow(style?: LineStyle): string {
+  if (!style?.textShadowColor && style?.textShadowBlur === undefined
+      && style?.textShadowOffsetX === undefined && style?.textShadowOffsetY === undefined) {
+    return DEFAULT_TEXT_SHADOW;
+  }
+  const color = style.textShadowColor || 'rgba(0,0,0,0.8)';
+  const blur = style.textShadowBlur ?? 4;
+  const ox = style.textShadowOffsetX ?? 2;
+  const oy = style.textShadowOffsetY ?? 2;
+  return `${ox}px ${oy}px ${blur}px ${color}`;
+}
+
+function buildTextStroke(style?: LineStyle): string | undefined {
+  if (!style?.textStrokeWidth) return undefined;
+  return `${style.textStrokeWidth}px ${style.textStrokeColor || '#000000'}`;
+}
 
 // Display font - Heebo supports both Hebrew and Latin with consistent metrics
 const DISPLAY_FONT = "'Heebo', 'Segoe UI', sans-serif";
@@ -935,7 +960,9 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
               lineHeight: hasLineBackground ? 1.0 : 1.35,
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
-              textShadow: hasLineBackground ? '0 2px 4px rgba(0, 0, 0, 0.3)' : DEFAULT_TEXT_SHADOW,
+              textShadow: hasLineBackground ? '0 2px 4px rgba(0, 0, 0, 0.3)' : buildTextShadow(style),
+              WebkitTextStroke: buildTextStroke(style),
+              paintOrder: 'stroke fill',
               // Per-line background support
               backgroundColor: style?.backgroundColor || 'transparent',
               padding: style?.backgroundPadding || (hasLineBackground ? '0.15em 0.6em' : undefined),
@@ -977,7 +1004,9 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
             direction: isRtl ? 'rtl' : 'ltr',
             marginBottom: refHeight * 0.02, // 2% of height
             lineHeight: 1.4,
-            textShadow: DEFAULT_TEXT_SHADOW
+            textShadow: buildTextShadow(style),
+            WebkitTextStroke: buildTextStroke(style),
+            paintOrder: 'stroke fill'
           }}
         >
           {content}
@@ -1163,7 +1192,9 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
             opacity: style.opacity ?? 0.9,
             textAlign: position.alignH || 'center',
             lineHeight: 1.3,
-            textShadow: DEFAULT_TEXT_SHADOW
+            textShadow: buildTextShadow(style),
+            WebkitTextStroke: buildTextStroke(style),
+            paintOrder: 'stroke fill'
           }}
         >
           {slideData.reference}
@@ -1227,7 +1258,9 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
             opacity: style.opacity ?? 0.7,
             textAlign: position.alignH || 'center',
             lineHeight: 1.3,
-            textShadow: DEFAULT_TEXT_SHADOW
+            textShadow: buildTextShadow(style),
+            WebkitTextStroke: buildTextStroke(style),
+            paintOrder: 'stroke fill'
           }}
         >
           {slideData.referenceTranslation}
@@ -1312,7 +1345,9 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
             opacity: style?.opacity ?? 0.9,
             textAlign: position.alignH || 'center',
             lineHeight: 1.3,
-            textShadow: DEFAULT_TEXT_SHADOW
+            textShadow: buildTextShadow(style),
+            WebkitTextStroke: buildTextStroke(style),
+            paintOrder: 'stroke fill'
           }}
         >
           {slideData.referenceEnglish}

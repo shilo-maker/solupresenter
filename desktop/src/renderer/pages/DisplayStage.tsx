@@ -64,6 +64,14 @@ interface StageTextStyle {
   // Auto height
   autoHeight?: boolean;
   growDirection?: 'up' | 'down';
+  // Text shadow properties
+  textShadowColor?: string;
+  textShadowBlur?: number;
+  textShadowOffsetX?: number;
+  textShadowOffsetY?: number;
+  // Text stroke/outline properties
+  textStrokeWidth?: number;
+  textStrokeColor?: string;
 }
 
 interface StageTheme {
@@ -115,6 +123,23 @@ const DEFAULT_THEME: StageTheme = {
 };
 
 // Tool state interfaces
+function buildStageTextShadow(style?: StageTextStyle): string {
+  if (!style?.textShadowColor && style?.textShadowBlur === undefined
+      && style?.textShadowOffsetX === undefined && style?.textShadowOffsetY === undefined) {
+    return '2px 2px 4px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.5)';
+  }
+  const color = style.textShadowColor || 'rgba(0,0,0,0.8)';
+  const blur = style.textShadowBlur ?? 4;
+  const ox = style.textShadowOffsetX ?? 2;
+  const oy = style.textShadowOffsetY ?? 2;
+  return `${ox}px ${oy}px ${blur}px ${color}`;
+}
+
+function buildStageTextStroke(style?: StageTextStyle): string | undefined {
+  if (!style?.textStrokeWidth) return undefined;
+  return `${style.textStrokeWidth}px ${style.textStrokeColor || '#000000'}`;
+}
+
 interface CountdownState {
   active: boolean;
   remaining: string;
@@ -747,6 +772,9 @@ const DisplayStage: React.FC = () => {
                 direction: 'rtl',
                 lineHeight: currentSlideText.original.autoHeight ? 0.9 : 1.3,
                 textAlign: currentSlideText.original.alignH || 'center',
+                textShadow: buildStageTextShadow(currentSlideText.original),
+                WebkitTextStroke: buildStageTextStroke(currentSlideText.original),
+                paintOrder: 'stroke fill',
                 boxSizing: 'border-box',
                 padding: 0,
                 margin: 0
@@ -781,6 +809,9 @@ const DisplayStage: React.FC = () => {
                 opacity: currentSlideText.transliteration.opacity,
                 lineHeight: currentSlideText.transliteration.autoHeight ? 0.9 : 1.3,
                 textAlign: currentSlideText.transliteration.alignH || 'center',
+                textShadow: buildStageTextShadow(currentSlideText.transliteration),
+                WebkitTextStroke: buildStageTextStroke(currentSlideText.transliteration),
+                paintOrder: 'stroke fill',
                 boxSizing: 'border-box',
                 padding: 0,
                 margin: 0
@@ -815,6 +846,9 @@ const DisplayStage: React.FC = () => {
                 opacity: currentSlideText.translation.opacity,
                 lineHeight: currentSlideText.translation.autoHeight ? 0.9 : 1.3,
                 textAlign: currentSlideText.translation.alignH || 'center',
+                textShadow: buildStageTextShadow(currentSlideText.translation),
+                WebkitTextStroke: buildStageTextStroke(currentSlideText.translation),
+                paintOrder: 'stroke fill',
                 boxSizing: 'border-box',
                 padding: 0,
                 margin: 0
@@ -854,7 +888,10 @@ const DisplayStage: React.FC = () => {
                 opacity: currentSlideText.original.opacity,
                 marginBottom: '1vh',
                 direction: 'rtl',
-                lineHeight: 1.3
+                lineHeight: 1.3,
+                textShadow: buildStageTextShadow(currentSlideText.original),
+                WebkitTextStroke: buildStageTextStroke(currentSlideText.original),
+                paintOrder: 'stroke fill'
               }}
             >
               {currentSlide.title}
@@ -867,7 +904,10 @@ const DisplayStage: React.FC = () => {
                 fontWeight: currentSlideText.translation.fontWeight as any,
                 color: currentSlideText.translation.color,
                 opacity: currentSlideText.translation.opacity,
-                marginBottom: '2vh'
+                marginBottom: '2vh',
+                textShadow: buildStageTextShadow(currentSlideText.translation),
+                WebkitTextStroke: buildStageTextStroke(currentSlideText.translation),
+                paintOrder: 'stroke fill'
               }}
             >
               {currentSlide.titleTranslation}
@@ -882,7 +922,10 @@ const DisplayStage: React.FC = () => {
                 opacity: 0.9,
                 marginBottom: '0.5vh',
                 direction: 'rtl',
-                lineHeight: 1.3
+                lineHeight: 1.3,
+                textShadow: buildStageTextShadow(currentSlideText.original),
+                WebkitTextStroke: buildStageTextStroke(currentSlideText.original),
+                paintOrder: 'stroke fill'
               }}
             >
               {currentSlide.subtitle}
@@ -895,7 +938,10 @@ const DisplayStage: React.FC = () => {
                 fontWeight: currentSlideText.translation.fontWeight as any,
                 color: currentSlideText.translation.color,
                 opacity: 0.8,
-                marginBottom: '2vh'
+                marginBottom: '2vh',
+                textShadow: buildStageTextShadow(currentSlideText.translation),
+                WebkitTextStroke: buildStageTextStroke(currentSlideText.translation),
+                paintOrder: 'stroke fill'
               }}
             >
               {currentSlide.subtitleTranslation}
@@ -910,7 +956,10 @@ const DisplayStage: React.FC = () => {
                 opacity: 0.85,
                 marginBottom: '0.5vh',
                 direction: 'rtl',
-                lineHeight: 1.4
+                lineHeight: 1.4,
+                textShadow: buildStageTextShadow(currentSlideText.original),
+                WebkitTextStroke: buildStageTextStroke(currentSlideText.original),
+                paintOrder: 'stroke fill'
               }}
             >
               {currentSlide.description}
@@ -923,7 +972,10 @@ const DisplayStage: React.FC = () => {
                 fontWeight: currentSlideText.translation.fontWeight as any,
                 color: currentSlideText.translation.color,
                 opacity: 0.75,
-                marginBottom: '2vh'
+                marginBottom: '2vh',
+                textShadow: buildStageTextShadow(currentSlideText.translation),
+                WebkitTextStroke: buildStageTextStroke(currentSlideText.translation),
+                paintOrder: 'stroke fill'
               }}
             >
               {currentSlide.descriptionTranslation}
@@ -1014,6 +1066,9 @@ const DisplayStage: React.FC = () => {
                 direction: 'rtl',
                 lineHeight: theme.nextSlideText.original.autoHeight ? 0.9 : 1.3,
                 textAlign: theme.nextSlideText.original.alignH || 'center',
+                textShadow: buildStageTextShadow(theme.nextSlideText.original),
+                WebkitTextStroke: buildStageTextStroke(theme.nextSlideText.original),
+                paintOrder: 'stroke fill',
                 boxSizing: 'border-box',
                 padding: 0,
                 margin: 0
@@ -1048,6 +1103,9 @@ const DisplayStage: React.FC = () => {
                 opacity: theme.nextSlideText.transliteration.opacity,
                 lineHeight: theme.nextSlideText.transliteration.autoHeight ? 0.9 : 1.3,
                 textAlign: theme.nextSlideText.transliteration.alignH || 'center',
+                textShadow: buildStageTextShadow(theme.nextSlideText.transliteration),
+                WebkitTextStroke: buildStageTextStroke(theme.nextSlideText.transliteration),
+                paintOrder: 'stroke fill',
                 boxSizing: 'border-box',
                 padding: 0,
                 margin: 0
@@ -1082,6 +1140,9 @@ const DisplayStage: React.FC = () => {
                 opacity: theme.nextSlideText.translation.opacity,
                 lineHeight: theme.nextSlideText.translation.autoHeight ? 0.9 : 1.3,
                 textAlign: theme.nextSlideText.translation.alignH || 'center',
+                textShadow: buildStageTextShadow(theme.nextSlideText.translation),
+                WebkitTextStroke: buildStageTextStroke(theme.nextSlideText.translation),
+                paintOrder: 'stroke fill',
                 boxSizing: 'border-box',
                 padding: 0,
                 margin: 0
@@ -1121,7 +1182,10 @@ const DisplayStage: React.FC = () => {
                 direction: 'rtl',
                 color: theme.nextSlideText.original.color,
                 opacity: theme.nextSlideText.original.opacity,
-                lineHeight: 1.3
+                lineHeight: 1.3,
+                textShadow: buildStageTextShadow(theme.nextSlideText.original),
+                WebkitTextStroke: buildStageTextStroke(theme.nextSlideText.original),
+                paintOrder: 'stroke fill'
               }}
             >
               {nextSlide.title}
@@ -1134,7 +1198,10 @@ const DisplayStage: React.FC = () => {
                 fontWeight: theme.nextSlideText.translation.fontWeight as any,
                 color: theme.nextSlideText.translation.color,
                 opacity: theme.nextSlideText.translation.opacity,
-                marginBottom: '0.5vh'
+                marginBottom: '0.5vh',
+                textShadow: buildStageTextShadow(theme.nextSlideText.translation),
+                WebkitTextStroke: buildStageTextStroke(theme.nextSlideText.translation),
+                paintOrder: 'stroke fill'
               }}
             >
               {nextSlide.titleTranslation}
@@ -1148,7 +1215,10 @@ const DisplayStage: React.FC = () => {
                 direction: 'rtl',
                 color: theme.nextSlideText.transliteration.color,
                 opacity: theme.nextSlideText.transliteration.opacity,
-                marginTop: '0.5vh'
+                marginTop: '0.5vh',
+                textShadow: buildStageTextShadow(theme.nextSlideText.transliteration),
+                WebkitTextStroke: buildStageTextStroke(theme.nextSlideText.transliteration),
+                paintOrder: 'stroke fill'
               }}
             >
               {nextSlide.subtitle}

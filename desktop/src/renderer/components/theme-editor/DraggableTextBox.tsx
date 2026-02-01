@@ -75,6 +75,14 @@ export interface LineStyle {
   borderRadiusTopRight?: number;
   borderRadiusBottomRight?: number;
   borderRadiusBottomLeft?: number;
+  // Text shadow properties
+  textShadowColor?: string;
+  textShadowBlur?: number;
+  textShadowOffsetX?: number;
+  textShadowOffsetY?: number;
+  // Text stroke/outline properties
+  textStrokeWidth?: number;
+  textStrokeColor?: string;
 }
 
 interface DraggableTextBoxProps {
@@ -893,7 +901,12 @@ const DraggableTextBox: React.FC<DraggableTextBoxProps> = ({
               padding: 0,
               margin: 0,
               fontFamily: 'inherit',
-              lineHeight: 1.4
+              lineHeight: 1.4,
+              textShadow: (style.textShadowColor || style.textShadowBlur !== undefined || style.textShadowOffsetX !== undefined || style.textShadowOffsetY !== undefined)
+                ? `${style.textShadowOffsetX ?? 2}px ${style.textShadowOffsetY ?? 2}px ${style.textShadowBlur ?? 4}px ${style.textShadowColor || 'rgba(0,0,0,0.8)'}`
+                : '2px 2px 4px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.5)',
+              WebkitTextStroke: style.textStrokeWidth ? `${style.textStrokeWidth}px ${style.textStrokeColor || '#000000'}` : undefined,
+              paintOrder: 'stroke fill'
             }}
           />
         ) : (
@@ -912,6 +925,11 @@ const DraggableTextBox: React.FC<DraggableTextBoxProps> = ({
               width: style.backgroundColor ? 'auto' : '100%',
               display: style.backgroundColor ? 'inline-block' : 'block',
               lineHeight: 1.4,
+              textShadow: (style.textShadowColor || style.textShadowBlur !== undefined || style.textShadowOffsetX !== undefined || style.textShadowOffsetY !== undefined)
+                ? `${style.textShadowOffsetX ?? 2}px ${style.textShadowOffsetY ?? 2}px ${style.textShadowBlur ?? 4}px ${style.textShadowColor || 'rgba(0,0,0,0.8)'}`
+                : '2px 2px 4px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.5)',
+              WebkitTextStroke: style.textStrokeWidth ? `${style.textStrokeWidth}px ${style.textStrokeColor || '#000000'}` : undefined,
+              paintOrder: 'stroke fill',
               // Per-line background support
               backgroundColor: style.backgroundColor || 'transparent',
               ...(style.backgroundOpacity !== undefined && style.backgroundColor

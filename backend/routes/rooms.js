@@ -418,12 +418,6 @@ router.post('/:id/link-public-room', authenticateToken, async (req, res) => {
     // Reset viewer count since all viewers are being disconnected
     await Room.update({ viewerCount: 0 }, { where: { id: room.id } });
 
-    // First, unlink any existing public room from this room
-    await PublicRoom.update(
-      { activeRoomId: null },
-      { where: { activeRoomId: room.id } }
-    );
-
     // If publicRoomId is provided, link the new public room
     if (publicRoomId) {
       const publicRoom = await PublicRoom.findOne({
@@ -447,6 +441,48 @@ router.post('/:id/link-public-room', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error linking public room:', error);
     res.status(500).json({ error: 'Failed to link public room' });
+  }
+});
+
+// Unlink a specific public room from this room
+router.post('/:id/unlink-public-room', authenticateToken, async (req, res) => {
+  try {
+    const room = await Room.findByPk(req.params.id);
+
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    if (room.operatorId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { publicRoomId } = req.body;
+
+    if (publicRoomId) {
+      // Unlink a specific public room
+      const publicRoom = await PublicRoom.findOne({
+        where: { id: publicRoomId, ownerId: req.user.id, activeRoomId: room.id }
+      });
+
+      if (publicRoom) {
+        publicRoom.activeRoomId = null;
+        await publicRoom.save();
+      }
+
+      res.json({ message: 'Public room unlinked successfully' });
+    } else {
+      // Unlink all public rooms from this room
+      await PublicRoom.update(
+        { activeRoomId: null },
+        { where: { activeRoomId: room.id } }
+      );
+
+      res.json({ message: 'All public rooms unlinked successfully' });
+    }
+  } catch (error) {
+    console.error('Error unlinking public room:', error);
+    res.status(500).json({ error: 'Failed to unlink public room' });
   }
 });
 

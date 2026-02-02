@@ -1456,7 +1456,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
 
       // Rotating message display (legacy single message format)
       if (toolsData.type === 'rotatingMessage') {
-        const { text } = toolsData.rotatingMessage || {};
+        const text = toolsData.text || '';
         return (
           <div style={{
             ...toolsStyle,

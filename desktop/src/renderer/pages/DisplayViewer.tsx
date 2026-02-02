@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, memo, useMemo } from 'react';
+import React, { useState, useEffect, useRef, memo, useMemo, useCallback } from 'react';
 import SlideRenderer from '../components/SlideRenderer';
 import { useSettings } from '../contexts/SettingsContext';
 import { createLogger } from '../utils/debug';
@@ -1079,6 +1079,11 @@ const DisplayViewer: React.FC = () => {
     });
   };
 
+  // Stable callback for HTML capture (avoids re-triggering SlideRenderer's useEffect on every render)
+  const handleHtmlCapture = useCallback((html: string, refWidth: number, refHeight: number) => {
+    window.displayAPI.reportRenderedHtml(html, refWidth, refHeight);
+  }, []);
+
   // Check if we should use absolute positioning
   const useAbsolutePositioning = theme?.linePositions !== null && theme?.linePositions !== undefined;
 
@@ -1768,9 +1773,7 @@ const DisplayViewer: React.FC = () => {
         fillContainer={true}
         presentationSlide={presentationSlide}
         combinedSlides={combinedSlides}
-        onHtmlCapture={(html, refWidth, refHeight) => {
-          window.displayAPI.reportRenderedHtml(html, refWidth, refHeight);
-        }}
+        onHtmlCapture={handleHtmlCapture}
       />
       {/* Overlay tools on top of the slide content */}
       {renderRotatingMessages()}

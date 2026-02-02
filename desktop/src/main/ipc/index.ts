@@ -302,7 +302,8 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
         }
       }
 
-      // Buffer briefly to wait for rendered HTML from display window
+      // Buffer to wait for rendered HTML from display window (needs time for
+      // React render + useEffect + rAF + IPC round-trip, plus flow positioning settling)
       pendingSlideData = slideData;
       if (pendingSlideTimer) clearTimeout(pendingSlideTimer);
       pendingSlideTimer = setTimeout(() => {
@@ -310,7 +311,7 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
           socketService.broadcastSlide(pendingSlideData);
           pendingSlideData = null;
         }
-      }, 30);
+      }, 150);
     } catch (error) {
       console.error('[IPC slides:send] Broadcast error:', error);
     }
@@ -318,11 +319,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.on('display:renderedHtml', (_event, html: string, refWidth: number, refHeight: number) => {
     if (pendingSlideData) {
+      // Accumulate HTML updates — don't send eagerly so flow positioning can settle
       pendingSlideData.renderedHtml = html;
       pendingSlideData.renderedHtmlDimensions = { width: refWidth, height: refHeight };
-      socketService.broadcastSlide(pendingSlideData);
-      pendingSlideData = null;
-      if (pendingSlideTimer) { clearTimeout(pendingSlideTimer); pendingSlideTimer = null; }
     }
   });
 

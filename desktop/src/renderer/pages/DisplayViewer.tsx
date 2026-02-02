@@ -1401,9 +1401,6 @@ const DisplayViewer: React.FC = () => {
           backgroundImage={backgroundImage}
           isBlank={true}
           fillContainer={true}
-          onHtmlCapture={(html, refWidth, refHeight) => {
-            window.displayAPI.reportRenderedHtml(html, refWidth, refHeight);
-          }}
         />
         {renderCloseButton()}
       </div>

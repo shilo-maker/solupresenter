@@ -583,8 +583,14 @@ function ViewerPage({ remotePin, remoteConfig }) {
       if (toolData && toolData.type && toolData.active) {
         setToolsData(toolData);
       } else if (toolData && !toolData.active) {
-        // Tool was stopped
-        setToolsData(null);
+        if (toolData.type === 'announcement') {
+          // Keep data so the announcement effect can trigger the hide animation
+          setToolsData(toolData);
+          // Clear after animation completes
+          setTimeout(() => setToolsData(null), 600);
+        } else {
+          setToolsData(null);
+        }
       }
     });
 
@@ -1379,11 +1385,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
   };
 
   const renderSlide = () => {
-    // If announcement is active with countdown underneath, show countdown
-    if (toolsData?.type === 'announcement' && toolsData?.remaining) {
-      return renderCountdown();
-    }
-
     // Handle tools display (except announcements which are overlays)
     if (toolsData && toolsData.type !== 'announcement') {
       const toolsStyle = {

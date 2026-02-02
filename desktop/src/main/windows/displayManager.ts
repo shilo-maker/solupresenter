@@ -560,11 +560,11 @@ export class DisplayManager {
   /**
    * Broadcast slide data to all display windows
    */
-  broadcastSlide(slideData: SlideData): void {
+  broadcastSlide(slideData: SlideData): { contentType: string; theme: any } | null {
     // Validate input
     if (!slideData || typeof slideData !== 'object') {
       log.error(' broadcastSlide: invalid slideData');
-      return;
+      return null;
     }
 
     // Store for late-joining displays
@@ -646,6 +646,9 @@ export class DisplayManager {
     } catch (error) {
       log.debug('OBS window destroyed during broadcastSlide:', error);
     }
+
+    // Return the resolved theme so callers can forward it (e.g. to socket service)
+    return { contentType, theme: globalTheme };
   }
 
   /**

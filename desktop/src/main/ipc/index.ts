@@ -286,9 +286,18 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
       return;
     }
     try {
-      displayManager.broadcastSlide(slideData);
+      const resolved = displayManager.broadcastSlide(slideData);
       socketService.broadcastSlide(slideData);
       obsServer.updateSlide(slideData);
+
+      // Forward auto-resolved theme to online viewers (e.g. default Bible/Prayer theme loaded on first slide)
+      if (resolved?.theme) {
+        if (resolved.contentType === 'bible') {
+          socketService.broadcastBibleTheme(resolved.theme);
+        } else if (resolved.contentType === 'prayer' || resolved.contentType === 'sermon') {
+          socketService.broadcastPrayerTheme(resolved.theme);
+        }
+      }
     } catch (error) {
       console.error('[IPC slides:send] Broadcast error:', error);
     }

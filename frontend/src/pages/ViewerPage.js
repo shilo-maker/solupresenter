@@ -25,6 +25,31 @@ if (!document.getElementById('viewer-animations')) {
   document.head.appendChild(animationStyles);
 }
 
+// Pure helper functions (no component state dependency — defined once outside render cycle)
+const buildThemeTextShadow = (style) => {
+  if (!style?.textShadowColor && style?.textShadowBlur === undefined
+      && style?.textShadowOffsetX === undefined && style?.textShadowOffsetY === undefined) {
+    return undefined;
+  }
+  const color = style.textShadowColor || 'rgba(0,0,0,0.8)';
+  const blur = style.textShadowBlur ?? 4;
+  const ox = style.textShadowOffsetX ?? 2;
+  const oy = style.textShadowOffsetY ?? 2;
+  return `${ox}px ${oy}px ${blur}px ${color}`;
+};
+
+const buildThemeTextStroke = (style) => {
+  if (!style?.textStrokeWidth) return undefined;
+  return `${style.textStrokeWidth}px ${style.textStrokeColor || '#000000'}`;
+};
+
+const isHebrew = (text) => {
+  if (!text) return false;
+  return /[\u0590-\u05FF]/.test(text);
+};
+
+const getTextDirection = (text) => isHebrew(text) ? 'rtl' : 'ltr';
+
 function ViewerPage({ remotePin, remoteConfig }) {
   const { t, i18n } = useTranslation();
   const location = useLocation();
@@ -71,6 +96,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
   const rotatingMessagesIntervalRef = useRef(null);
   const announcementHideTimerRef = useRef(null);
   const announcementAnimTimerRef = useRef(null);
+  const lastToolUpdateRef = useRef(0); // Throttle high-frequency tool updates
 
   // YouTube state
   const [youtubeVideoId, setYoutubeVideoId] = useState(null);
@@ -588,6 +614,10 @@ function ViewerPage({ remotePin, remoteConfig }) {
       }
 
       if (toolData && toolData.type && toolData.active) {
+        // Throttle high-frequency updates (stopwatch sends every 100ms)
+        const now = Date.now();
+        if (now - lastToolUpdateRef.current < 200) return;
+        lastToolUpdateRef.current = now;
         setToolsData(toolData);
       } else if (toolData && !toolData.active) {
         if (toolData.type === 'announcement') {
@@ -1051,23 +1081,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
   };
 
   // Theme styling helper functions
-  const buildThemeTextShadow = (style) => {
-    if (!style?.textShadowColor && style?.textShadowBlur === undefined
-        && style?.textShadowOffsetX === undefined && style?.textShadowOffsetY === undefined) {
-      return undefined; // No theme shadow configured, let caller use its default
-    }
-    const color = style.textShadowColor || 'rgba(0,0,0,0.8)';
-    const blur = style.textShadowBlur ?? 4;
-    const ox = style.textShadowOffsetX ?? 2;
-    const oy = style.textShadowOffsetY ?? 2;
-    return `${ox}px ${oy}px ${blur}px ${color}`;
-  };
-
-  const buildThemeTextStroke = (style) => {
-    if (!style?.textStrokeWidth) return undefined;
-    return `${style.textStrokeWidth}px ${style.textStrokeColor || '#000000'}`;
-  };
-
   // Compute the active theme based on content type (Bible/Prayer themes override viewer theme)
   const activeTheme = useMemo(() => {
     if (currentSlide?.isBible && bibleTheme) return bibleTheme;
@@ -1133,7 +1146,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
   };
 
   // Get background style based on theme viewerBackground settings
-  const getViewerBackgroundStyle = () => {
+  const viewerBackgroundStyle = useMemo(() => {
     const themeType = activeTheme?.viewerBackground?.type;
     const themeColor = activeTheme?.viewerBackground?.color;
     const isGradient = backgroundImage && backgroundImage.startsWith('linear-gradient');
@@ -1181,7 +1194,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
       backgroundRepeat: 'no-repeat',
       animation: 'gradientShift 20s ease infinite'
     };
-  };
+  }, [activeTheme?.viewerBackground?.type, activeTheme?.viewerBackground?.color, backgroundImage]);
 
   // Render slide content with WYSIWYG absolute positioning (when linePositions is set)
   const renderWithAbsolutePositioning = (slide, isTransliterationLanguage, getTextDirection) => {
@@ -1797,17 +1810,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
     // Check if language needs transliteration/translation structure (Hebrew, Arabic)
     const isTransliterationLanguage = originalLanguage === 'he' || originalLanguage === 'ar';
 
-    // Detect if text contains Hebrew characters
-    const isHebrew = (text) => {
-      if (!text) return false;
-      return /[\u0590-\u05FF]/.test(text);
-    };
-
-    // Determine text direction based on content
-    const getTextDirection = (text) => {
-      return isHebrew(text) ? 'rtl' : 'ltr';
-    };
-
     // Use WYSIWYG absolute positioning if linePositions is set
     if (activeTheme?.linePositions) {
       return renderWithAbsolutePositioning(slide, isTransliterationLanguage, getTextDirection);
@@ -2415,9 +2417,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
       </div>
     );
   }
-
-  // Get theme-aware background style
-  const viewerBackgroundStyle = getViewerBackgroundStyle();
 
   return (
     <>

@@ -1589,7 +1589,7 @@ function PresenterMode() {
           };
         } else if (item.type === 'bible') {
           // Extract Bible data from the item
-          const bibleId = item.data.id; // e.g., "bible-Genesis-1"
+          const bibleId = item.data.id || item.data._id || ''; // e.g., "bible-Genesis-1"
           const parts = bibleId.replace('bible-', '').split('-');
           const book = parts.slice(0, -1).join('-'); // Book name might have hyphens
           const chapter = parseInt(parts[parts.length - 1]);
@@ -1742,7 +1742,7 @@ function PresenterMode() {
               return {
                 type: 'bible',
                 data: {
-                  _id: `bible-${item.bibleData.book}-${item.bibleData.chapter}`,
+                  id: `bible-${item.bibleData.book}-${item.bibleData.chapter}`,
                   title: item.bibleData.title,
                   slides: item.bibleData.slides,
                   isBible: true
@@ -1867,7 +1867,7 @@ function PresenterMode() {
           return {
             type: 'bible',
             data: {
-              _id: `bible-${item.bibleData.book}-${item.bibleData.chapter}`,
+              id: `bible-${item.bibleData.book}-${item.bibleData.chapter}`,
               title: item.bibleData.title,
               slides: item.bibleData.slides,
               isBible: true

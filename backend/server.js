@@ -213,6 +213,7 @@ const roomActiveTheme = new Map(); // Map of roomPin -> theme (for new viewers)
 const roomActiveBibleTheme = new Map(); // Map of roomPin -> bible theme (for new viewers)
 const roomActivePrayerTheme = new Map(); // Map of roomPin -> prayer theme (for new viewers)
 const midiBridgeSockets = new Map(); // Map of socketId -> roomPin (for MIDI bridge connections)
+const roomSetlistData = new Map(); // Map of roomPin -> setlist array (for MIDI bridges joining late)
 
 io.on('connection', (socket) => {
   // Operator joins their room
@@ -921,6 +922,12 @@ io.on('connection', (socket) => {
       midiBridgeSockets.set(socket.id, room.pin);
 
       socket.emit('midi:joined', { roomPin: room.pin });
+
+      // Send current setlist if available
+      const currentSetlist = roomSetlistData.get(room.pin);
+      if (currentSetlist) {
+        socket.emit('setlist:summary', { setlist: currentSetlist });
+      }
     } catch (error) {
       console.error('Error in midi:join:', error);
       socket.emit('midi:error', { message: 'Failed to join room' });
@@ -958,6 +965,7 @@ io.on('connection', (socket) => {
     try {
       const { roomPin, setlist } = data || {};
       if (roomPin && Array.isArray(setlist)) {
+        roomSetlistData.set(roomPin, setlist);
         io.to(`room:${roomPin}`).emit('setlist:summary', { setlist });
       }
     } catch (error) {

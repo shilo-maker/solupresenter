@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Form, Button, Alert, Spinner } from 'react-bootstrap';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { changeLanguage } from '../i18n';
 import socketService from '../services/socket';
 import ConnectionStatus from '../components/ConnectionStatus';
 import { getFullImageUrl, publicRoomAPI } from '../services/api';
+import ToolsOverlay from '../components/viewer/ToolsOverlay';
+import MirroredHtmlContent from '../components/viewer/MirroredHtmlContent';
+import AnnouncementBanner from '../components/viewer/AnnouncementBanner';
+import LocalMediaOverlay from '../components/viewer/LocalMediaOverlay';
+import ControlsPanel from '../components/viewer/ControlsPanel';
+import JoinScreen from '../components/viewer/JoinScreen';
 
 // Inject animation keyframes
 const animationStyles = document.createElement('style');
@@ -51,7 +55,7 @@ const isHebrew = (text) => {
 const getTextDirection = (text) => isHebrew(text) ? 'rtl' : 'ltr';
 
 function ViewerPage({ remotePin, remoteConfig }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const location = useLocation();
 
   // Check if this is a local presentation window (opened via Presentation API)
@@ -75,7 +79,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
   const [latency, setLatency] = useState(null);
   const [fontSize, setFontSize] = useState(100); // Percentage: 100 = normal
   const [textColor, setTextColor] = useState('white');
-  const [showColorPicker, setShowColorPicker] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const [imageUrl, setImageUrl] = useState(null); // For image-only slides
   const [localMedia, setLocalMedia] = useState(null); // For local media (Base64 images)
@@ -1018,68 +1021,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
     }
   };
 
-  // Helper to render countdown (used standalone or under announcement overlay)
-  // Desktop sends flat: { type: 'countdown', active: true, remaining: '04:30', message: '...', messageTranslation: '...' }
-  const renderCountdown = () => {
-    const message = toolsData?.message || '';
-    const messageTranslation = toolsData?.messageTranslation || '';
-    const remaining = toolsData?.remaining || '00:00';
-    const toolsStyle = {
-      width: '100%',
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: textColor,
-      textAlign: 'center'
-    };
-    return (
-      <div style={toolsStyle}>
-        {message && (
-          <div
-            key={countdownMessageKey}
-            style={{
-              fontSize: 'clamp(2rem, 5vw, 4rem)',
-              fontWeight: '300',
-              fontFamily: "'Montserrat', sans-serif",
-              marginBottom: '0.3em',
-              lineHeight: '1',
-              textShadow: '2px 2px 8px rgba(0, 0, 0, 0.8)',
-              animation: 'messageUpdate 0.5s ease-out, breathing 3s ease-in-out 0.5s infinite',
-              direction: 'rtl'
-            }}>
-            {message}
-          </div>
-        )}
-        {messageTranslation && (
-          <div style={{
-            fontSize: 'clamp(1.5rem, 3.5vw, 3rem)',
-            fontWeight: '300',
-            fontFamily: "'Montserrat', sans-serif",
-            marginBottom: '0.5em',
-            lineHeight: '1',
-            opacity: 0.8,
-            textShadow: '2px 2px 8px rgba(0, 0, 0, 0.8)'
-          }}>
-            {messageTranslation}
-          </div>
-        )}
-        <div style={{
-          fontSize: 'clamp(4rem, 15vw, 12rem)',
-          fontWeight: '300',
-          fontFamily: "'Montserrat', sans-serif",
-          letterSpacing: '-0.02em',
-          lineHeight: '1',
-          fontVariantNumeric: 'tabular-nums',
-          textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
-        }}>
-          {remaining}
-        </div>
-      </div>
-    );
-  };
-
   // Theme styling helper functions
   // Compute the active theme based on content type (Bible/Prayer themes override viewer theme)
   const activeTheme = useMemo(() => {
@@ -1396,128 +1337,13 @@ function ViewerPage({ remotePin, remoteConfig }) {
   const renderSlide = () => {
     // Handle tools display (except announcements which are overlays)
     if (toolsData && toolsData.type !== 'announcement') {
-      const toolsStyle = {
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: textColor,
-        textAlign: 'center'
-      };
-
-      // Countdown timer display
-      if (toolsData.type === 'countdown') {
-        return renderCountdown();
-      }
-
-      // Clock display — desktop sends { type: 'clock', active: true, time: '10:30:00', date: '...', format: '24h' }
-      if (toolsData.type === 'clock') {
-        return (
-          <div style={toolsStyle}>
-            <div style={{
-              fontSize: 'clamp(4rem, 15vw, 12rem)',
-              fontWeight: '200',
-              fontFamily: 'monospace',
-              letterSpacing: '0.05em',
-              textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
-            }}>
-              {toolsData.time || '--:--:--'}
-            </div>
-            {toolsData.date && (
-              <div style={{
-                fontSize: 'clamp(1.5rem, 3vw, 2.5rem)',
-                fontWeight: '300',
-                marginTop: '20px',
-                textShadow: '2px 2px 6px rgba(0, 0, 0, 0.8)'
-              }}>
-                {toolsData.date}
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      // Stopwatch display — desktop sends { type: 'stopwatch', active: true, time: '00:05.3', running: true }
-      if (toolsData.type === 'stopwatch') {
-        return (
-          <div style={toolsStyle}>
-            <div style={{
-              fontSize: 'clamp(4rem, 15vw, 12rem)',
-              fontWeight: '200',
-              fontFamily: 'monospace',
-              letterSpacing: '0.05em',
-              textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
-            }}>
-              {toolsData.time || '00:00.0'}
-            </div>
-            {toolsData.running !== undefined && (
-              <div style={{
-                fontSize: 'clamp(0.8rem, 2vw, 1.2rem)',
-                fontWeight: '300',
-                marginTop: '10px',
-                opacity: 0.6,
-                textShadow: '1px 1px 4px rgba(0, 0, 0, 0.8)'
-              }}>
-                {toolsData.running ? 'RUNNING' : 'PAUSED'}
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      // Rotating message display (legacy single message format)
-      if (toolsData.type === 'rotatingMessage') {
-        const text = toolsData.text || '';
-        return (
-          <div style={{
-            ...toolsStyle,
-            animation: 'fadeIn 0.5s ease-in-out'
-          }}>
-            <div style={{
-              fontSize: 'clamp(3rem, 10vw, 8rem)',
-              fontWeight: '300',
-              maxWidth: '90%',
-              lineHeight: 1.3,
-              textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
-            }}>
-              {text}
-            </div>
-          </div>
-        );
-      }
-
-      // Rotating messages display (desktop app format: array of messages)
-      if (toolsData.type === 'rotatingMessages' && toolsData.messages?.length > 0) {
-        const currentMessage = toolsData.messages[rotatingMessageIndex % toolsData.messages.length];
-        return (
-          <div style={{
-            ...toolsStyle,
-            animation: 'fadeIn 0.5s ease-in-out'
-          }}>
-            <div style={{
-              fontSize: 'clamp(3rem, 10vw, 8rem)',
-              fontWeight: '300',
-              maxWidth: '90%',
-              lineHeight: 1.3,
-              textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)',
-              textAlign: 'center'
-            }}>
-              {currentMessage}
-            </div>
-          </div>
-        );
-      }
-
-      // Fallback for unknown tool types - prevents falling through to "Waiting"
-      console.warn('⚠️ Unknown toolsData type:', toolsData.type);
       return (
-        <div style={toolsStyle}>
-          <div style={{ fontSize: '2rem', opacity: 0.7 }}>
-            Tool: {toolsData.type || 'unknown'}
-          </div>
-        </div>
+        <ToolsOverlay
+          toolsData={toolsData}
+          textColor={textColor}
+          countdownMessageKey={countdownMessageKey}
+          rotatingMessageIndex={rotatingMessageIndex}
+        />
       );
     }
 
@@ -1616,18 +1442,12 @@ function ViewerPage({ remotePin, remoteConfig }) {
 
     // Render mirrored HTML from desktop SlideRenderer (pixel-perfect match)
     if (renderedHtml) {
-      const refW = renderedHtmlDimensions?.width || 1920;
-      const refH = renderedHtmlDimensions?.height || 1080;
-      const scale = Math.min(viewportSize.width / refW, viewportSize.height / refH);
       return (
-        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-          <div style={{ width: refW * scale, height: refH * scale, position: 'relative', overflow: 'hidden' }}>
-            <div
-              style={{ width: refW, height: refH, transform: `scale(${scale})`, transformOrigin: 'top left', position: 'absolute', top: 0, left: 0, fontFamily: "'Heebo', 'Segoe UI', sans-serif" }}
-              dangerouslySetInnerHTML={{ __html: renderedHtml }}
-            />
-          </div>
-        </div>
+        <MirroredHtmlContent
+          renderedHtml={renderedHtml}
+          renderedHtmlDimensions={renderedHtmlDimensions}
+          viewportSize={viewportSize}
+        />
       );
     }
 
@@ -2053,368 +1873,32 @@ function ViewerPage({ remotePin, remoteConfig }) {
     );
   };
 
+  // Callbacks for JoinScreen
+  const handleJoinByPin = useCallback((pinValue, slug) => {
+    setError('');
+    if (slug) {
+      socketService.viewerJoinRoomBySlug(slug);
+    } else if (pinValue) {
+      socketService.viewerJoinRoom(pinValue);
+    }
+  }, []);
+
   if (!joined) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        background: 'linear-gradient(-45deg, #0a0a0a, #1a1a2e, #2d2d2d, #404040, #2a2a3e, #1a1a1a)',
-        backgroundSize: '400% 400%',
-        animation: 'gradientShift 15s ease infinite',
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <style>{`
-          @keyframes gradientShift {
-            0% {
-              background-position: 0% 50%;
-            }
-            50% {
-              background-position: 100% 50%;
-            }
-            100% {
-              background-position: 0% 50%;
-            }
-          }
-        `}</style>
-        {/* Language Toggle Button - Top Left */}
-        <Button
-          variant="outline-light"
-          style={{
-            position: 'absolute',
-            top: '20px',
-            left: '20px',
-            borderRadius: '6px',
-            padding: '8px 16px',
-            fontSize: '0.9rem',
-            fontWeight: '500'
-          }}
-          onClick={() => changeLanguage(i18n.language === 'he' ? 'en' : 'he')}
-        >
-          {i18n.language === 'he' ? 'English' : 'עברית'}
-        </Button>
-
-        {/* Login/Operator Button - Top Right */}
-        <Button
-          variant="light"
-          style={{
-            position: 'absolute',
-            top: '20px',
-            right: '20px',
-            borderRadius: '6px',
-            padding: '8px 20px',
-            fontSize: '1rem',
-            fontWeight: '500'
-          }}
-          onClick={() => window.location.href = localStorage.getItem('token') ? '/operator' : '/login'}
-        >
-          {localStorage.getItem('token') ? t('viewer.operator') : t('auth.login').toUpperCase()}
-        </Button>
-
-        {/* Centered Content */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          padding: '20px'
-        }}>
-          {/* SoluCast Logo */}
-          <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
-            <img
-              src="/new_cast_logo.png"
-              alt="SoluCast Logo"
-              style={{
-                maxWidth: 'clamp(125px, 20vw, 200px)',
-                height: 'auto',
-                width: '100%',
-                marginBottom: '1rem'
-              }}
-            />
-            <div style={{
-              color: 'white',
-              fontWeight: '600',
-              fontSize: '1.8rem',
-              letterSpacing: '1px',
-              marginBottom: '0.3rem'
-            }}>
-              SoluCast
-            </div>
-            <div style={{
-              color: 'rgba(255, 255, 255, 0.7)',
-              fontWeight: '300',
-              fontSize: '0.9rem',
-              letterSpacing: '2px',
-              textTransform: 'uppercase'
-            }}>
-              {t('viewer.tagline')}
-            </div>
-          </div>
-
-          {error && (
-            <Alert variant="danger" style={{ marginBottom: '15px', width: '100%', maxWidth: '320px' }}>
-              {error}
-            </Alert>
-          )}
-
-          {/* Mode Toggle */}
-          <div
-            onClick={() => setJoinMode(joinMode === 'name' ? 'pin' : 'name')}
-            style={{
-              display: 'flex',
-              flexDirection: i18n.language === 'he' ? 'row' : 'row-reverse',
-              alignItems: 'center',
-              gap: '12px',
-              marginBottom: '20px',
-              cursor: 'pointer',
-              padding: '8px 16px',
-              borderRadius: '20px',
-              background: 'rgba(255, 255, 255, 0.1)',
-              backdropFilter: 'blur(10px)'
-            }}
-          >
-            <span style={{
-              color: joinMode === 'pin' ? 'white' : 'rgba(255, 255, 255, 0.5)',
-              fontWeight: joinMode === 'pin' ? '600' : '400',
-              fontSize: '0.9rem',
-              transition: 'all 0.2s ease'
-            }}>
-              {t('viewer.code')}
-            </span>
-
-            {/* Toggle Switch */}
-            <div style={{
-              width: '44px',
-              height: '24px',
-              backgroundColor: 'rgba(255, 255, 255, 0.2)',
-              borderRadius: '12px',
-              position: 'relative',
-              transition: 'all 0.3s ease'
-            }}>
-              <div style={{
-                width: '20px',
-                height: '20px',
-                backgroundColor: 'white',
-                borderRadius: '50%',
-                position: 'absolute',
-                top: '2px',
-                left: joinMode === 'name' ? '2px' : '22px',
-                transition: 'left 0.3s ease',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
-              }} />
-            </div>
-
-            <span style={{
-              color: joinMode === 'name' ? 'white' : 'rgba(255, 255, 255, 0.5)',
-              fontWeight: joinMode === 'name' ? '600' : '400',
-              fontSize: '0.9rem',
-              transition: 'all 0.2s ease'
-            }}>
-              {t('viewer.name')}
-            </span>
-          </div>
-
-          {/* PIN Input */}
-          {joinMode === 'pin' && (
-            <div style={{ width: '100%', maxWidth: '320px' }}>
-              <div style={{
-                textAlign: 'center'
-              }}>
-                {/* PIN Input - Individual Boxes */}
-                <div
-                  onClick={() => {
-                    const input = document.querySelector('input[name="pin-input"]');
-                    if (input) input.focus();
-                  }}
-                  style={{
-                    display: 'flex',
-                    gap: '12px',
-                    justifyContent: 'center',
-                    cursor: 'text',
-                    direction: 'ltr'
-                  }}
-                >
-                  {[0, 1, 2, 3].map((index) => {
-                    const isActive = index === pin.length && pin.length < 4;
-                    const isFilled = !!pin[index];
-                    return (
-                      <div
-                        key={index}
-                        style={{
-                          width: '60px',
-                          height: '70px',
-                          background: isActive ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.08)',
-                          backdropFilter: 'blur(10px)',
-                          border: isActive ? '2px solid rgba(255, 255, 255, 0.6)' : '2px solid rgba(255, 255, 255, 0.2)',
-                          borderRadius: '12px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '2rem',
-                          fontWeight: '600',
-                          color: 'white',
-                          letterSpacing: '0',
-                          transition: 'all 0.3s ease',
-                          boxShadow: isActive ? '0 0 25px rgba(255, 255, 255, 0.3)' : (isFilled ? '0 0 20px rgba(255, 255, 255, 0.2)' : 'none'),
-                          transform: isFilled ? 'scale(1.05)' : 'scale(1)',
-                          cursor: 'text'
-                        }}
-                      >
-                        {pin[index] || ''}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Hidden actual input - auto-joins when 4 chars entered */}
-                <input
-                  type="text"
-                  name="pin-input"
-                  value={pin}
-                  onChange={(e) => {
-                    const newValue = e.target.value.toUpperCase();
-                    setPin(newValue);
-                    // Auto-join when 4 characters are entered
-                    if (newValue.length === 4) {
-                      setError('');
-                      socketService.viewerJoinRoom(newValue);
-                    }
-                  }}
-                  maxLength={4}
-                  style={{
-                    position: 'absolute',
-                    opacity: 0,
-                    pointerEvents: 'none',
-                    width: '0',
-                    height: '0',
-                    overflow: 'hidden'
-                  }}
-                  autoFocus
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Room Name Search Form */}
-          {joinMode === 'name' && (
-            <Form onSubmit={handleJoinByName} style={{ width: '100%', maxWidth: '320px' }}>
-              <div style={{
-                marginBottom: '20px',
-                textAlign: 'center'
-              }}>
-                {/* Search Input - Glassmorphic style matching code boxes */}
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type="text"
-                    placeholder={t('viewer.typeRoomName')}
-                    value={roomSearch}
-                    onChange={(e) => handleRoomSearch(e.target.value)}
-                    style={{
-                      width: '100%',
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      backdropFilter: 'blur(10px)',
-                      border: '2px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '12px',
-                      padding: '18px 20px',
-                      color: 'white',
-                      fontSize: '1.2rem',
-                      fontWeight: '500',
-                      textAlign: 'center',
-                      letterSpacing: '1px',
-                      outline: 'none',
-                      transition: 'all 0.3s ease',
-                      boxShadow: roomSearch ? '0 0 20px rgba(255, 255, 255, 0.2)' : 'none'
-                    }}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = 'rgba(255, 255, 255, 0.4)';
-                      e.target.style.boxShadow = '0 0 20px rgba(255, 255, 255, 0.2)';
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                      if (!roomSearch) e.target.style.boxShadow = 'none';
-                    }}
-                    autoFocus
-                  />
-                  {searchLoading && (
-                    <div style={{
-                      position: 'absolute',
-                      right: '16px',
-                      top: '50%',
-                      transform: 'translateY(-50%)'
-                    }}>
-                      <Spinner animation="border" size="sm" variant="light" />
-                    </div>
-                  )}
-                </div>
-
-                {/* Search Results - Click to join directly */}
-                {searchResults.length > 0 && (
-                  <div style={{
-                    marginTop: '12px',
-                    background: 'rgba(0, 0, 0, 0.5)',
-                    borderRadius: '12px',
-                    overflow: 'hidden'
-                  }}>
-                    {searchResults.map((room) => (
-                      <div
-                        key={room.id}
-                        onClick={() => {
-                          if (room.isLive) {
-                            socketService.viewerJoinRoomBySlug(room.slug);
-                          } else {
-                            setError(`"${room.name}" ${t('viewer.roomNotLive')}`);
-                          }
-                        }}
-                        style={{
-                          padding: '12px 16px',
-                          cursor: room.isLive ? 'pointer' : 'not-allowed',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          backgroundColor: 'transparent',
-                          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                          transition: 'background-color 0.2s',
-                          opacity: room.isLive ? 1 : 0.6
-                        }}
-                        onMouseEnter={(e) => {
-                          if (room.isLive) {
-                            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                        }}
-                      >
-                        <span style={{ color: 'white', fontWeight: '500' }}>{room.name}</span>
-                        <span style={{
-                          padding: '4px 8px',
-                          borderRadius: '4px',
-                          fontSize: '0.75rem',
-                          fontWeight: '600',
-                          backgroundColor: room.isLive ? '#28a745' : '#6c757d',
-                          color: 'white'
-                        }}>
-                          {room.isLive ? t('viewer.liveJoin') : t('viewer.offline')}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {roomSearch.length >= 2 && !searchLoading && searchResults.length === 0 && (
-                  <div style={{
-                    marginTop: '12px',
-                    color: 'rgba(255, 255, 255, 0.6)',
-                    fontSize: '0.9rem'
-                  }}>
-                    {t('viewer.noRoomsFound')}
-                  </div>
-                )}
-              </div>
-            </Form>
-          )}
-        </div>
-      </div>
+      <JoinScreen
+        pin={pin}
+        setPin={setPin}
+        joinMode={joinMode}
+        setJoinMode={setJoinMode}
+        roomSearch={roomSearch}
+        onRoomSearch={handleRoomSearch}
+        searchResults={searchResults}
+        searchLoading={searchLoading}
+        error={error}
+        setError={setError}
+        onJoinByName={handleJoinByName}
+        onJoinByPin={handleJoinByPin}
+      />
     );
   }
 
@@ -2553,338 +2037,26 @@ function ViewerPage({ remotePin, remoteConfig }) {
         )}
       </button>
 
-      {/* Controls Panel - Slide out from left */}
-      <div
-        ref={controlsRef}
-        style={{
-          position: 'fixed',
-          bottom: '80px',
-          left: showControls ? '20px' : '-400px',
-          width: '340px',
-          maxHeight: '70vh',
-          overflowY: 'auto',
-          backgroundColor: 'rgba(0, 0, 0, 0.85)',
-          borderRadius: '16px',
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          padding: '20px',
-          zIndex: 1000,
-          transition: 'left 0.3s ease',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
-        }}
-      >
-        <h6 style={{
-          color: 'white',
-          marginBottom: '20px',
-          fontSize: '1.1rem',
-          fontWeight: '600',
-          borderBottom: '1px solid rgba(255,255,255,0.2)',
-          paddingBottom: '10px'
-        }}>
-          {t('viewer.displaySettings')}
-        </h6>
-
-        {/* Font Size Controls */}
-        <div style={{ marginBottom: '25px' }}>
-          <label style={{
-            color: 'white',
-            fontSize: '0.9rem',
-            marginBottom: '10px',
-            display: 'block',
-            fontWeight: '500'
-          }}>
-            {t('viewer.fontSize')}
-          </label>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px'
-          }}>
-            <Button
-              size="sm"
-              variant="light"
-              onClick={() => setFontSize(Math.max(50, fontSize - 10))}
-              style={{
-                borderRadius: '8px',
-                width: '36px',
-                height: '36px',
-                padding: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 'bold',
-                fontSize: '1.2rem'
-              }}
-            >
-              −
-            </Button>
-            <div style={{
-              flex: 1,
-              textAlign: 'center',
-              color: 'white',
-              fontSize: '1.1rem',
-              fontWeight: '600',
-              backgroundColor: 'rgba(255,255,255,0.1)',
-              padding: '8px',
-              borderRadius: '8px'
-            }}>
-              {fontSize}%
-            </div>
-            <Button
-              size="sm"
-              variant="light"
-              onClick={() => setFontSize(Math.min(200, fontSize + 10))}
-              style={{
-                borderRadius: '8px',
-                width: '36px',
-                height: '36px',
-                padding: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 'bold',
-                fontSize: '1.2rem'
-              }}
-            >
-              +
-            </Button>
-          </div>
-          {fontSize !== 100 && (
-            <Button
-              size="sm"
-              variant="outline-light"
-              onClick={() => setFontSize(100)}
-              style={{
-                fontSize: '0.85rem',
-                padding: '6px 12px',
-                borderRadius: '8px',
-                marginTop: '10px',
-                width: '100%'
-              }}
-            >
-              {t('viewer.resetTo100')}
-            </Button>
-          )}
-        </div>
-
-        {/* Text Color Controls */}
-        <div style={{ marginBottom: '20px' }}>
-          <label style={{
-            color: 'white',
-            fontSize: '0.9rem',
-            marginBottom: '10px',
-            display: 'block',
-            fontWeight: '500'
-          }}>
-            {t('viewer.textColor')}
-          </label>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(6, 1fr)',
-            gap: '10px',
-            marginBottom: '12px'
-          }}>
-            {['white', '#FFD700', '#87CEEB', '#98FB98', '#FFB6C1', '#DDA0DD'].map((color) => (
-              <button
-                key={color}
-                onClick={() => setTextColor(color)}
-                title={color === 'white' ? 'White' : color}
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '8px',
-                  backgroundColor: color,
-                  border: textColor === color ? '3px solid white' : '2px solid rgba(255,255,255,0.3)',
-                  cursor: 'pointer',
-                  boxShadow: textColor === color ? '0 0 15px rgba(255,255,255,0.6)' : 'none',
-                  transition: 'all 0.2s ease'
-                }}
-              />
-            ))}
-          </div>
-
-          <Button
-            size="sm"
-            variant="outline-light"
-            onClick={() => setShowColorPicker(!showColorPicker)}
-            style={{
-              fontSize: '0.85rem',
-              padding: '6px 12px',
-              borderRadius: '8px',
-              width: '100%'
-            }}
-          >
-            {showColorPicker ? t('viewer.hide') : t('viewer.customColor')}
-          </Button>
-
-          {/* Custom Color Picker */}
-          {showColorPicker && (
-            <div style={{
-              marginTop: '12px',
-              padding: '12px',
-              backgroundColor: 'rgba(255,255,255,0.1)',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px'
-            }}>
-              <input
-                type="color"
-                value={textColor}
-                onChange={(e) => setTextColor(e.target.value)}
-                style={{
-                  width: '50px',
-                  height: '40px',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              />
-              <span style={{
-                color: 'white',
-                fontSize: '0.85rem',
-                fontFamily: 'monospace',
-                flex: 1,
-                textAlign: 'center',
-                fontWeight: '600'
-              }}>
-                {textColor.toUpperCase()}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Display Toggles */}
-        <div style={{ marginBottom: '20px' }}>
-          <label style={{
-            color: 'white',
-            fontSize: '0.9rem',
-            marginBottom: '10px',
-            display: 'block',
-            fontWeight: '500'
-          }}>
-            {t('viewer.showHideLines')}
-          </label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div
-              onClick={() => setShowOriginal(!showOriginal)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '10px 12px',
-                backgroundColor: showOriginal ? 'rgba(40, 167, 69, 0.3)' : 'rgba(255,255,255,0.1)',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                border: showOriginal ? '1px solid rgba(40, 167, 69, 0.5)' : '1px solid rgba(255,255,255,0.2)',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <span style={{ color: 'white', fontSize: '0.9rem' }}>{t('viewer.originalText')}</span>
-              <span style={{ color: showOriginal ? '#10b981' : '#71717a', fontSize: '1.2rem' }}>
-                {showOriginal ? '✓' : '○'}
-              </span>
-            </div>
-            <div
-              onClick={() => setShowTransliteration(!showTransliteration)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '10px 12px',
-                backgroundColor: showTransliteration ? 'rgba(40, 167, 69, 0.3)' : 'rgba(255,255,255,0.1)',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                border: showTransliteration ? '1px solid rgba(40, 167, 69, 0.5)' : '1px solid rgba(255,255,255,0.2)',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <span style={{ color: 'white', fontSize: '0.9rem' }}>{t('viewer.transliteration')}</span>
-              <span style={{ color: showTransliteration ? '#10b981' : '#71717a', fontSize: '1.2rem' }}>
-                {showTransliteration ? '✓' : '○'}
-              </span>
-            </div>
-            <div
-              onClick={() => setShowTranslation(!showTranslation)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '10px 12px',
-                backgroundColor: showTranslation ? 'rgba(40, 167, 69, 0.3)' : 'rgba(255,255,255,0.1)',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                border: showTranslation ? '1px solid rgba(40, 167, 69, 0.5)' : '1px solid rgba(255,255,255,0.2)',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <span style={{ color: 'white', fontSize: '0.9rem' }}>{t('viewer.translation')}</span>
-              <span style={{ color: showTranslation ? '#10b981' : '#71717a', fontSize: '1.2rem' }}>
-                {showTranslation ? '✓' : '○'}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ControlsPanel
+        showControls={showControls}
+        fontSize={fontSize}
+        setFontSize={setFontSize}
+        textColor={textColor}
+        setTextColor={setTextColor}
+        showOriginal={showOriginal}
+        setShowOriginal={setShowOriginal}
+        showTransliteration={showTransliteration}
+        setShowTransliteration={setShowTransliteration}
+        showTranslation={showTranslation}
+        setShowTranslation={setShowTranslation}
+        controlsRef={controlsRef}
+      />
 
       {renderSlide()}
 
-      {/* Announcement Overlay Banner - Bottom */}
-      {(announcementBanner.visible || announcementBanner.animating === 'out') && announcementBanner.text && (
-        <div style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.85)',
-          color: 'white',
-          padding: '20px 40px',
-          textAlign: 'center',
-          fontSize: 'clamp(1.5rem, 4vw, 3rem)',
-          fontWeight: '400',
-          zIndex: 1000,
-          animation: announcementBanner.animating === 'out'
-            ? 'slideDown 0.5s ease-in forwards'
-            : announcementBanner.animating === 'in'
-              ? 'slideUp 0.5s ease-out'
-              : 'none',
-          backdropFilter: 'blur(10px)',
-          borderTop: '1px solid rgba(255, 255, 255, 0.2)'
-        }}>
-          {announcementBanner.text}
-        </div>
-      )}
+      <AnnouncementBanner banner={announcementBanner} />
 
-      {/* Local Media Overlay - shown to remote viewers when operator displays local media on HDMI */}
-      {/* Don't show on local presentation window since it's actually displaying the media */}
-      {localMediaOverlay && !isLocalViewer && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.9)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 2000,
-          color: 'white',
-          textAlign: 'center',
-          padding: '20px'
-        }}>
-          <svg width="80" height="80" viewBox="0 0 16 16" fill="currentColor" style={{ marginBottom: '20px', opacity: 0.7 }}>
-            <path d="M0 5a2 2 0 0 1 2-2h7.5a2 2 0 0 1 1.983 1.738l3.11-1.382A1 1 0 0 1 16 4.269v7.462a1 1 0 0 1-1.406.913l-3.111-1.382A2 2 0 0 1 9.5 13H2a2 2 0 0 1-2-2V5z"/>
-          </svg>
-          <div style={{ fontSize: 'clamp(1.5rem, 4vw, 2.5rem)', fontWeight: '300', marginBottom: '10px' }}>
-            {t('viewer.localMediaShowing', 'Local media is being displayed')}
-          </div>
-          <div style={{ fontSize: 'clamp(1rem, 2.5vw, 1.5rem)', opacity: 0.7 }}>
-            {t('viewer.resumingSoon', 'Resuming shortly...')}
-          </div>
-        </div>
-      )}
+      <LocalMediaOverlay visible={localMediaOverlay} isLocalViewer={isLocalViewer} />
       </div>
     </>
   );

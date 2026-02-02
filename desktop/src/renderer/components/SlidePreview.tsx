@@ -136,6 +136,7 @@ interface SlidePreviewProps {
   showBadge?: boolean;
   presentationSlide?: PresentationSlide | null;
   combinedSlides?: SlideData[] | null;
+  onHtmlCapture?: (html: string, refWidth: number, refHeight: number) => void;
 }
 
 const SlidePreview: React.FC<SlidePreviewProps> = ({
@@ -148,7 +149,8 @@ const SlidePreview: React.FC<SlidePreviewProps> = ({
   activeMedia,
   showBadge = true,
   presentationSlide,
-  combinedSlides
+  combinedSlides,
+  onHtmlCapture
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -510,6 +512,7 @@ const SlidePreview: React.FC<SlidePreviewProps> = ({
             containerHeight={fitSize.height}
             presentationSlide={presentationSlide}
             combinedSlides={combinedSlides}
+            onHtmlCapture={onHtmlCapture}
           />
         )}
 

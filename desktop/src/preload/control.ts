@@ -34,6 +34,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Use send (fire-and-forget) for instant slide updates instead of invoke (request-response)
   sendSlide: (slideData: any) => ipcRenderer.send('slides:send', slideData),
   sendBlank: () => ipcRenderer.send('slides:blank'),
+  reportRenderedHtml: (html: string, refWidth: number, refHeight: number) =>
+    ipcRenderer.send('display:renderedHtml', html, refWidth, refHeight),
   sendTool: (toolData: any) => ipcRenderer.send('tools:send', toolData),
   applyTheme: (theme: any) => ipcRenderer.send('theme:apply', theme),
   setBackground: (background: string) => ipcRenderer.send('background:set', background),
@@ -345,6 +347,7 @@ declare global {
       // Slide Control (fire-and-forget, no return value)
       sendSlide: (slideData: any) => void;
       sendBlank: () => void;
+      reportRenderedHtml: (html: string, refWidth: number, refHeight: number) => void;
       sendTool: (toolData: any) => void;
       applyTheme: (theme: any) => void;
       setBackground: (background: string) => void;

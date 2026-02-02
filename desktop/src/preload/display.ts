@@ -88,9 +88,6 @@ contextBridge.exposeInMainWorld('displayAPI', {
     if (typeof playing !== 'boolean') return;
     ipcRenderer.send('video:playing', playing);
   },
-  reportRenderedHtml: (html: string, refWidth: number, refHeight: number) => {
-    ipcRenderer.send('display:renderedHtml', html, refWidth, refHeight);
-  },
   reportError: (error: string) => {
     // Validate and sanitize error message
     if (typeof error !== 'string') return;
@@ -134,7 +131,6 @@ declare global {
       reportVideoTime: (time: number, duration: number) => void;
       reportVideoEnded: () => void;
       reportVideoPlaying: (playing: boolean) => void;
-      reportRenderedHtml: (html: string, refWidth: number, refHeight: number) => void;
       reportError: (error: string) => void;
 
       // Request Data

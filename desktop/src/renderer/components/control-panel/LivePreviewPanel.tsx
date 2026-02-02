@@ -98,6 +98,11 @@ const LivePreviewPanel = memo<LivePreviewPanelProps>(({
   const lastVideoTimeUpdateRef = useRef<number>(0);
   const glowStyleRef = useRef<HTMLStyleElement | null>(null);
 
+  // Capture rendered HTML from SlideRenderer and send to main process for virtual displays
+  const handleHtmlCapture = useCallback((html: string, refWidth: number, refHeight: number) => {
+    window.electronAPI.reportRenderedHtml(html, refWidth, refHeight);
+  }, []);
+
   // Inject glow animation keyframes once
   useEffect(() => {
     if (!glowStyleRef.current) {
@@ -370,6 +375,7 @@ const LivePreviewPanel = memo<LivePreviewPanelProps>(({
               showBadge={false}
               presentationSlide={memoizedPresentationSlide}
               combinedSlides={getCombinedSlides()}
+              onHtmlCapture={handleHtmlCapture}
             />
           )}
           </div>

@@ -61,17 +61,16 @@ function ViewerPage({ remotePin, remoteConfig }) {
   const [presentationData, setPresentationData] = useState(null); // For presentation slides
   const [renderedHtml, setRenderedHtml] = useState(null); // Mirrored HTML from desktop SlideRenderer
   const [renderedHtmlDimensions, setRenderedHtmlDimensions] = useState(null);
-  const [clockTime, setClockTime] = useState(new Date());
-  const [stopwatchElapsed, setStopwatchElapsed] = useState(0);
   const [countdownMessageKey, setCountdownMessageKey] = useState(0); // For triggering message update animation
   const prevCountdownMessageRef = useRef('');
-  const clockIntervalRef = useRef(null);
   // Announcement animation state
   const [announcementBanner, setAnnouncementBanner] = useState({ visible: false, text: '', animating: false });
   const [localMediaOverlay, setLocalMediaOverlay] = useState(false);
   // Rotating messages state (for desktop app format: type: 'rotatingMessages' with messages array)
   const [rotatingMessageIndex, setRotatingMessageIndex] = useState(0);
   const rotatingMessagesIntervalRef = useRef(null);
+  const announcementHideTimerRef = useRef(null);
+  const announcementAnimTimerRef = useRef(null);
 
   // YouTube state
   const [youtubeVideoId, setYoutubeVideoId] = useState(null);
@@ -281,22 +280,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- INACTIVITY_TIMEOUT is a constant that never changes
   }, [joined]);
 
-  // Clock timer effect - updates every second when clock is displayed
-  useEffect(() => {
-    if (toolsData?.type === 'clock') {
-      clockIntervalRef.current = setInterval(() => {
-        setClockTime(new Date());
-      }, 1000);
-    }
-    return () => {
-      if (clockIntervalRef.current) {
-        clearInterval(clockIntervalRef.current);
-        clockIntervalRef.current = null;
-      }
-    };
-  }, [toolsData?.type]);
-
-  // Countdown: desktop sends pre-formatted 'remaining' string every second, no local timer needed
+  // Tools: desktop sends pre-formatted strings (remaining, time, date) every second — no local timers needed
 
   // Detect countdown message changes and trigger animation
   useEffect(() => {
@@ -313,33 +297,50 @@ function ViewerPage({ remotePin, remoteConfig }) {
   // Announcement banner animation effect
   // Desktop sends flat: { type: 'announcement', active: true/false, text: '...' }
   useEffect(() => {
+    // Clear any pending animation timer on each run
+    if (announcementAnimTimerRef.current) {
+      clearTimeout(announcementAnimTimerRef.current);
+      announcementAnimTimerRef.current = null;
+    }
+
     if (toolsData?.type === 'announcement') {
       const isActive = toolsData.active;
       const text = toolsData.text || '';
       if (isActive && text) {
         // Show banner with slide-up animation
         setAnnouncementBanner({ visible: true, text, animating: 'in' });
-        // After animation completes, remove animating state
-        setTimeout(() => {
-          setAnnouncementBanner(prev => ({ ...prev, animating: false }));
+        announcementAnimTimerRef.current = setTimeout(() => {
+          setAnnouncementBanner(prev => prev.animating === 'in' ? { ...prev, animating: false } : prev);
+          announcementAnimTimerRef.current = null;
         }, 500);
-      } else if (!isActive && announcementBanner.visible) {
+      } else if (!isActive) {
         // Hide banner with slide-down animation
-        setAnnouncementBanner(prev => ({ ...prev, animating: 'out' }));
-        // After animation completes, hide the banner
-        setTimeout(() => {
+        setAnnouncementBanner(prev => {
+          if (!prev.visible) return prev;
+          return { ...prev, animating: 'out' };
+        });
+        announcementAnimTimerRef.current = setTimeout(() => {
           setAnnouncementBanner({ visible: false, text: '', animating: false });
+          announcementAnimTimerRef.current = null;
         }, 500);
-      } else if (isActive && text !== announcementBanner.text) {
-        // Text changed while visible - update without animation
-        setAnnouncementBanner(prev => ({ ...prev, text }));
       }
-    } else if (announcementBanner.visible) {
+    } else {
       // Tool type changed away from announcement - hide immediately
-      setAnnouncementBanner({ visible: false, text: '', animating: false });
+      setAnnouncementBanner(prev => {
+        if (!prev.visible) return prev;
+        return { visible: false, text: '', animating: false };
+      });
     }
+
+    return () => {
+      if (announcementAnimTimerRef.current) {
+        clearTimeout(announcementAnimTimerRef.current);
+        announcementAnimTimerRef.current = null;
+      }
+    };
+    // Only depend on toolsData changes, not announcementBanner (avoids circular deps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toolsData?.type, toolsData?.active, toolsData?.text, announcementBanner.visible, announcementBanner.text]);
+  }, [toolsData?.type, toolsData?.active, toolsData?.text]);
 
   // Handle rotating messages (desktop app format: type: 'rotatingMessages' with messages array)
   useEffect(() => {
@@ -580,14 +581,27 @@ function ViewerPage({ remotePin, remoteConfig }) {
     // Handle standalone tool updates from operator (countdown, clock, stopwatch, announcement, rotatingMessages)
     // Desktop sends flat data: { type, active, remaining/time/text/message/... }
     socketService.onToolsUpdate((toolData) => {
+      // Cancel any pending announcement hide timer
+      if (announcementHideTimerRef.current) {
+        clearTimeout(announcementHideTimerRef.current);
+        announcementHideTimerRef.current = null;
+      }
+
       if (toolData && toolData.type && toolData.active) {
         setToolsData(toolData);
       } else if (toolData && !toolData.active) {
         if (toolData.type === 'announcement') {
           // Keep data so the announcement effect can trigger the hide animation
           setToolsData(toolData);
-          // Clear after animation completes
-          setTimeout(() => setToolsData(null), 600);
+          // Clear after animation completes, but only if no new tool replaced it
+          announcementHideTimerRef.current = setTimeout(() => {
+            setToolsData(prev => {
+              // Only clear if still showing the deactivated announcement
+              if (prev && prev.type === 'announcement' && !prev.active) return null;
+              return prev;
+            });
+            announcementHideTimerRef.current = null;
+          }, 600);
         } else {
           setToolsData(null);
         }
@@ -800,6 +814,11 @@ function ViewerPage({ remotePin, remoteConfig }) {
       unsubscribe(); // Unsubscribe from connection status changes
       socketService.removeAllListeners();
       socketService.disconnect();
+      // Clear any pending announcement timers
+      if (announcementHideTimerRef.current) {
+        clearTimeout(announcementHideTimerRef.current);
+        announcementHideTimerRef.current = null;
+      }
     };
   }, [location.search, remotePin, hasFixedTheme, cleanupYoutubePlayer]);
 
@@ -967,29 +986,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
     } catch (error) {
       console.error('Error toggling fullscreen:', error);
     }
-  };
-
-  // Format time helper for tools display
-  const formatTime = (totalSeconds) => {
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    if (hours > 0) {
-      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    }
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  // Format clock time
-  const formatClockTime = (date, format) => {
-    if (format === '12h') {
-      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-    }
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-  };
-
-  const formatClockDate = (date) => {
-    return date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   };
 
   // Helper to render countdown (used standalone or under announcement overlay)
@@ -1414,7 +1410,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
               letterSpacing: '0.05em',
               textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
             }}>
-              {toolsData.time || formatClockTime(clockTime, toolsData.format)}
+              {toolsData.time || '--:--:--'}
             </div>
             {toolsData.date && (
               <div style={{
@@ -1441,7 +1437,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
               letterSpacing: '0.05em',
               textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
             }}>
-              {toolsData.time || formatTime(stopwatchElapsed)}
+              {toolsData.time || '00:00.0'}
             </div>
             {toolsData.running !== undefined && (
               <div style={{

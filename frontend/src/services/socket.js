@@ -404,6 +404,12 @@ class SocketService {
     }
   }
 
+  onRenderedHtmlUpdate(callback) {
+    if (this.socket) {
+      this.socket.on('renderedHtml:update', callback);
+    }
+  }
+
   onYoutubeLoad(callback) {
     if (this.socket) {
       this.socket.on('youtube:load', callback);

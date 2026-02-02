@@ -522,10 +522,6 @@ function ViewerPage({ remotePin, remoteConfig }) {
       // Clear YouTube video when presenting any other content (destroy player first to avoid React DOM errors)
       cleanupYoutubePlayer();
 
-      // Capture mirrored HTML from desktop
-      setRenderedHtml(data.renderedHtml || null);
-      setRenderedHtmlDimensions(data.renderedHtmlDimensions || null);
-
       // Handle tools data
       if (data.toolsData) {
         setToolsData(data.toolsData);
@@ -676,6 +672,12 @@ function ViewerPage({ remotePin, remoteConfig }) {
         // Tool was stopped
         setToolsData(null);
       }
+    });
+
+    // Rendered HTML from desktop (arrives separately after display window renders)
+    socketService.onRenderedHtmlUpdate((data) => {
+      setRenderedHtml(data.renderedHtml || null);
+      setRenderedHtmlDimensions(data.renderedHtmlDimensions || null);
     });
 
     // YouTube socket listeners

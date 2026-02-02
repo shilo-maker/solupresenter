@@ -431,9 +431,7 @@ export class SocketService {
         imageUrl: slideData.imageUrl || null,
         toolsData: slideData.toolsData || null,
         presentationData: slideData.presentationData || null,
-        backgroundImage: slideData.backgroundImage || null,
-        renderedHtml: slideData.renderedHtml || null,
-        renderedHtmlDimensions: slideData.renderedHtmlDimensions || null
+        backgroundImage: slideData.backgroundImage || null
       };
 
       // Transform slideData to backend format if present
@@ -457,6 +455,19 @@ export class SocketService {
       }
 
       this.socket.emit('operator:updateSlide', transformedData);
+    }
+  }
+
+  /**
+   * Broadcast rendered HTML to online viewers (sent separately from slide data)
+   */
+  broadcastRenderedHtml(html: string, refWidth: number, refHeight: number): void {
+    if (this.socket && this.status.connected && this.status.roomPin) {
+      this.socket.emit('operator:renderedHtml', {
+        roomPin: this.status.roomPin,
+        renderedHtml: html,
+        renderedHtmlDimensions: { width: refWidth, height: refHeight }
+      });
     }
   }
 

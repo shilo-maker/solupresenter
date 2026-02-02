@@ -1621,15 +1621,18 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
     );
   }
 
-  // Capture rendered HTML and send to parent for mirroring to virtual displays
+  // Capture rendered HTML and send to parent for mirroring to virtual displays.
+  // Debounced (50ms) so flow positioning can settle before capturing final layout.
   useEffect(() => {
     if (!onHtmlCapture || !contentDivRef.current) return;
-    const rafId = requestAnimationFrame(() => {
-      if (contentDivRef.current) {
-        onHtmlCapture(contentDivRef.current.innerHTML, refWidth, refHeight);
-      }
-    });
-    return () => cancelAnimationFrame(rafId);
+    const timerId = setTimeout(() => {
+      requestAnimationFrame(() => {
+        if (contentDivRef.current) {
+          onHtmlCapture(contentDivRef.current.innerHTML, refWidth, refHeight);
+        }
+      });
+    }, 50);
+    return () => clearTimeout(timerId);
   }, [slideData, displayMode, theme, presentationSlide, combinedSlides, isBlank, onHtmlCapture, refWidth, refHeight, flowPositions, measuredHeights]);
 
   // Check if we're rendering a presentation slide

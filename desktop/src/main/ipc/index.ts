@@ -279,10 +279,6 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   // ============ Slide Control ============
   // Use 'on' (fire-and-forget) instead of 'handle' for instant slide updates
 
-  // Buffer slide data briefly to allow display window to attach rendered HTML
-  let pendingSlideData: any = null;
-  let pendingSlideTimer: ReturnType<typeof setTimeout> | null = null;
-
   ipcMain.on('slides:send', (event, slideData) => {
     // Validate slideData
     if (!slideData || typeof slideData !== 'object') {
@@ -291,6 +287,7 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     }
     try {
       const resolved = displayManager.broadcastSlide(slideData);
+      socketService.broadcastSlide(slideData);
       obsServer.updateSlide(slideData);
 
       // Forward auto-resolved theme to online viewers (e.g. default Bible/Prayer theme loaded on first slide)
@@ -301,28 +298,14 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
           socketService.broadcastPrayerTheme(resolved.theme);
         }
       }
-
-      // Buffer to wait for rendered HTML from display window (needs time for
-      // React render + useEffect + rAF + IPC round-trip, plus flow positioning settling)
-      pendingSlideData = slideData;
-      if (pendingSlideTimer) clearTimeout(pendingSlideTimer);
-      pendingSlideTimer = setTimeout(() => {
-        if (pendingSlideData) {
-          socketService.broadcastSlide(pendingSlideData);
-          pendingSlideData = null;
-        }
-      }, 150);
     } catch (error) {
       console.error('[IPC slides:send] Broadcast error:', error);
     }
   });
 
+  // Rendered HTML arrives separately from display window (after React render settles)
   ipcMain.on('display:renderedHtml', (_event, html: string, refWidth: number, refHeight: number) => {
-    if (pendingSlideData) {
-      // Accumulate HTML updates — don't send eagerly so flow positioning can settle
-      pendingSlideData.renderedHtml = html;
-      pendingSlideData.renderedHtmlDimensions = { width: refWidth, height: refHeight };
-    }
+    socketService.broadcastRenderedHtml(html, refWidth, refHeight);
   });
 
   ipcMain.on('slides:blank', () => {

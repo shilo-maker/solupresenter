@@ -402,7 +402,7 @@ io.on('connection', (socket) => {
   // Operator updates slide
   socket.on('operator:updateSlide', async (data) => {
     try {
-      const { roomId, roomPin, backgroundImage: clientBackgroundImage, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData, slideData, nextSlideData, toolsData, presentationData, renderedHtml, renderedHtmlDimensions } = data;
+      const { roomId, roomPin, backgroundImage: clientBackgroundImage, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData, slideData, nextSlideData, toolsData, presentationData } = data;
 
       // Use PIN from client if available (fast path), otherwise query DB (fallback)
       let pin = roomPin;
@@ -481,13 +481,6 @@ io.on('connection', (socket) => {
         roomToolsData.delete(pin);
       }
 
-      // Store rendered HTML in memory for late-joining viewers
-      if (renderedHtml) {
-        roomRenderedHtml.set(pin, { html: renderedHtml, dimensions: renderedHtmlDimensions });
-      } else {
-        roomRenderedHtml.delete(pin);
-      }
-
       // 🚀 BROADCAST IMMEDIATELY - no DB query needed when PIN is provided!
       io.to(`room:${pin}`).emit('slide:update', {
         currentSlide: currentSlideData,
@@ -497,9 +490,7 @@ io.on('connection', (socket) => {
         imageUrl: imageUrl || null,
         backgroundImage: backgroundImage || '',
         toolsData: toolsData || null,
-        presentationData: presentationData || null,
-        renderedHtml: renderedHtml || null,
-        renderedHtmlDimensions: renderedHtmlDimensions || null
+        presentationData: presentationData || null
       });
 
       // 💾 Save to database asynchronously (don't block broadcast)
@@ -522,6 +513,21 @@ io.on('connection', (socket) => {
       console.error('Error in operator:updateSlide:', error);
       socket.emit('error', { message: 'Failed to update slide' });
     }
+  });
+
+  // Operator sends rendered HTML (arrives separately after display window renders)
+  socket.on('operator:renderedHtml', (data) => {
+    const { roomPin, renderedHtml, renderedHtmlDimensions } = data;
+    if (!roomPin || !renderedHtml) return;
+
+    // Store for late-joining viewers
+    roomRenderedHtml.set(roomPin, { html: renderedHtml, dimensions: renderedHtmlDimensions });
+
+    // Broadcast to all viewers in the room
+    io.to(`room:${roomPin}`).emit('renderedHtml:update', {
+      renderedHtml,
+      renderedHtmlDimensions
+    });
   });
 
   // Operator updates background

@@ -1230,11 +1230,11 @@ function ViewerPage({ remotePin, remoteConfig }) {
       return `calc(${baseFontSize} * ${fontSize / 100} * ${themeFontScale})`;
     };
 
-    // Get text content for each line type (including reference lines from Bible/Prayer themes)
+    // Get text content for each line type (including reference lines and Bible/Prayer aliases)
     const getTextForLine = (lineType) => {
-      if (lineType === 'original') return slide.originalText;
+      if (lineType === 'original' || lineType === 'hebrew') return slide.originalText;
       if (lineType === 'transliteration') return slide.transliteration;
-      if (lineType === 'translation') return slide.translation;
+      if (lineType === 'translation' || lineType === 'english') return slide.translation;
       if (lineType === 'reference') return slide.reference;
       if (lineType === 'referenceEnglish') return slide.referenceEnglish;
       if (lineType === 'referenceTranslation') return slide.referenceTranslation;
@@ -1246,9 +1246,9 @@ function ViewerPage({ remotePin, remoteConfig }) {
       const text = getTextForLine(lineType);
       if (!text) return false;
       if (!isLineVisible(lineType)) return false;
-      if (lineType === 'original' && !showOriginal) return false;
+      if ((lineType === 'original' || lineType === 'hebrew') && !showOriginal) return false;
       if (lineType === 'transliteration' && !showTransliteration) return false;
-      if (lineType === 'translation' && !showTranslation) return false;
+      if ((lineType === 'translation' || lineType === 'english') && !showTranslation) return false;
       return true;
     };
 

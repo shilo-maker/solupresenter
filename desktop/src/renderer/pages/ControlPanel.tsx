@@ -314,6 +314,14 @@ const ControlPanel: React.FC = () => {
   const [virtualDisplayLoading, setVirtualDisplayLoading] = useState(false);
   const [virtualDisplayError, setVirtualDisplayError] = useState<string | null>(null);
 
+  // Public room state
+  const [activePublicRoom, setActivePublicRoom] = useState<{ id: string; slug: string } | null>(() => {
+    try {
+      const saved = localStorage.getItem('activePublicRoom');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+
   // Slide code navigation state
   const [slideCodeMap, setSlideCodeMap] = useState<SlideCodeMap | null>(null);
 
@@ -2030,6 +2038,24 @@ const ControlPanel: React.FC = () => {
       if (result) {
         setRoomPin(result.roomPin);
         relinkVirtualDisplays();
+        // Re-link saved public room
+        try {
+          const savedPublicRoom = localStorage.getItem('activePublicRoom');
+          if (savedPublicRoom) {
+            const room = JSON.parse(savedPublicRoom);
+            const linked = await window.electronAPI.linkPublicRoom(room.id);
+            if (!linked) {
+              // Room no longer exists on server — clear stale state
+              console.warn('Public room no longer valid, clearing saved state');
+              setActivePublicRoom(null);
+              localStorage.removeItem('activePublicRoom');
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to re-link public room, clearing saved state:', error);
+          setActivePublicRoom(null);
+          localStorage.removeItem('activePublicRoom');
+        }
       }
     }
   }, [relinkVirtualDisplays]);
@@ -2098,6 +2124,33 @@ const ControlPanel: React.FC = () => {
   const handleCopyVirtualDisplayUrl = useCallback((url: string) => {
     window.electronAPI.copyToClipboard(url);
   }, []);
+
+  // ============ Public Room Functions ============
+
+  const handleCreatePublicRoom = useCallback(async (customName: string) => {
+    const userPrefix = authState.user?.email?.split('@')[0]?.toLowerCase().replace(/[^\w-]/g, '') || 'user';
+    const slug = `${userPrefix}-${customName}`;
+    const publicRoom = await window.electronAPI.createPublicRoom(slug);
+    if (!publicRoom) throw new Error('Failed to create public room');
+
+    const linked = await window.electronAPI.linkPublicRoom(publicRoom.id);
+    if (!linked) throw new Error('Failed to link public room');
+
+    const room = { id: publicRoom.id, slug: publicRoom.slug };
+    setActivePublicRoom(room);
+    localStorage.setItem('activePublicRoom', JSON.stringify(room));
+  }, [authState.user?.email]);
+
+  const handleUnlinkPublicRoom = useCallback(async () => {
+    if (!activePublicRoom) return;
+    try {
+      await window.electronAPI.unlinkPublicRoom(activePublicRoom.id);
+    } catch (error) {
+      console.warn('Failed to unlink public room:', error);
+    }
+    setActivePublicRoom(null);
+    localStorage.removeItem('activePublicRoom');
+  }, [activePublicRoom]);
 
   const importSongsFromServer = async () => {
     // Clear any existing timeout
@@ -2612,6 +2665,9 @@ const ControlPanel: React.FC = () => {
         onAddVirtualDisplay={() => setShowVirtualDisplayModal(true)}
         onRemoveVirtualDisplay={handleRemoveVirtualDisplay}
         onCopyVirtualDisplayUrl={handleCopyVirtualDisplayUrl}
+        activePublicRoom={activePublicRoom}
+        onCreatePublicRoom={handleCreatePublicRoom}
+        onUnlinkPublicRoom={handleUnlinkPublicRoom}
       />
 
       {/* Main Content - Two Row Layout with resizable panels */}

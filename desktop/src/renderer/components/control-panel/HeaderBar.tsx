@@ -111,6 +111,11 @@ export interface HeaderBarProps {
   onAddVirtualDisplay?: () => void;
   onRemoveVirtualDisplay?: (id: string) => void;
   onCopyVirtualDisplayUrl?: (url: string) => void;
+
+  // Public room
+  activePublicRoom?: { id: string; slug: string } | null;
+  onCreatePublicRoom?: (customName: string) => Promise<void>;
+  onUnlinkPublicRoom?: () => Promise<void>;
 }
 
 const HeaderBar = memo<HeaderBarProps>(({
@@ -163,7 +168,10 @@ const HeaderBar = memo<HeaderBarProps>(({
   virtualDisplays = [],
   onAddVirtualDisplay,
   onRemoveVirtualDisplay,
-  onCopyVirtualDisplayUrl
+  onCopyVirtualDisplayUrl,
+  activePublicRoom,
+  onCreatePublicRoom,
+  onUnlinkPublicRoom
 }) => {
   const { t, i18n } = useTranslation();
   const isRTL = i18n.language === 'he';
@@ -177,9 +185,15 @@ const HeaderBar = memo<HeaderBarProps>(({
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [vdUrlCopiedId, setVdUrlCopiedId] = useState<string | null>(null);
   const [vdQrCode, setVdQrCode] = useState<{ id: string; dataUrl: string } | null>(null);
+  const [publicRoomName, setPublicRoomName] = useState('');
+  const [publicRoomCreating, setPublicRoomCreating] = useState(false);
+  const [pinCopied, setPinCopied] = useState(false);
+  const [urlCopied, setUrlCopied] = useState(false);
   const vdQrCodeRef = useRef<string | null>(null);
   const obsUrlCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const vdCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const pinCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const urlCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Shared hover handlers — DOM-only, zero re-renders
   const btnHoverIn = useCallback((e: React.MouseEvent<HTMLButtonElement | HTMLDivElement>) => {
@@ -218,6 +232,12 @@ const HeaderBar = memo<HeaderBarProps>(({
       }
       if (vdCopyTimeoutRef.current) {
         clearTimeout(vdCopyTimeoutRef.current);
+      }
+      if (pinCopyTimeoutRef.current) {
+        clearTimeout(pinCopyTimeoutRef.current);
+      }
+      if (urlCopyTimeoutRef.current) {
+        clearTimeout(urlCopyTimeoutRef.current);
       }
     };
   }, []);
@@ -1444,7 +1464,7 @@ const HeaderBar = memo<HeaderBarProps>(({
                     borderRadius: '8px',
                     border: '1px solid rgba(255,255,255,0.2)',
                     padding: '4px',
-                    minWidth: '150px',
+                    minWidth: onlineConnected ? '280px' : '150px',
                     zIndex: 100,
                     boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
                   }}>
@@ -1452,6 +1472,152 @@ const HeaderBar = memo<HeaderBarProps>(({
                       <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>{t('settings.loggedInAs')}</div>
                       <div style={{ color: 'white', fontSize: '0.85rem', fontWeight: 500 }}>{authState.user?.email}</div>
                     </div>
+
+                    {/* Room PIN Section */}
+                    {onlineConnected && roomPin && (
+                      <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '4px' }}>
+                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '4px' }}>Room PIN</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ color: 'white', fontSize: '1rem', fontWeight: 600, fontFamily: 'monospace', letterSpacing: '2px' }}>{roomPin}</span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(roomPin);
+                              setPinCopied(true);
+                              if (pinCopyTimeoutRef.current) clearTimeout(pinCopyTimeoutRef.current);
+                              pinCopyTimeoutRef.current = setTimeout(() => setPinCopied(false), 2000);
+                            }}
+                            style={{
+                              background: 'rgba(255,255,255,0.1)',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '2px 8px',
+                              color: pinCopied ? '#4caf50' : 'rgba(255,255,255,0.6)',
+                              cursor: 'pointer',
+                              fontSize: '0.7rem'
+                            }}
+                          >
+                            {pinCopied ? 'Copied!' : 'Copy'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Public Room Section */}
+                    {onlineConnected && (
+                      <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '4px' }}>
+                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '4px' }}>Public Room</div>
+                        {activePublicRoom ? (
+                          <div>
+                            <div style={{
+                              color: 'rgba(255,255,255,0.7)',
+                              fontSize: '0.75rem',
+                              marginBottom: '6px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              solucast.app/viewer?room={activePublicRoom.slug}
+                            </div>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(`https://solucast.app/viewer?room=${activePublicRoom.slug}`);
+                                  setUrlCopied(true);
+                                  if (urlCopyTimeoutRef.current) clearTimeout(urlCopyTimeoutRef.current);
+                                  urlCopyTimeoutRef.current = setTimeout(() => setUrlCopied(false), 2000);
+                                }}
+                                style={{
+                                  background: 'rgba(255,255,255,0.1)',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  padding: '4px 10px',
+                                  color: urlCopied ? '#4caf50' : 'rgba(255,255,255,0.7)',
+                                  cursor: 'pointer',
+                                  fontSize: '0.7rem'
+                                }}
+                              >
+                                {urlCopied ? 'Copied!' : 'Copy URL'}
+                              </button>
+                              {onUnlinkPublicRoom && (
+                                <button
+                                  onClick={onUnlinkPublicRoom}
+                                  style={{
+                                    background: 'rgba(220, 53, 69, 0.15)',
+                                    border: '1px solid rgba(220, 53, 69, 0.3)',
+                                    borderRadius: '4px',
+                                    padding: '4px 10px',
+                                    color: '#dc3545',
+                                    cursor: 'pointer',
+                                    fontSize: '0.7rem'
+                                  }}
+                                >
+                                  Unlink
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ) : onCreatePublicRoom ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', flexShrink: 0 }}>
+                              {authState.user?.email?.split('@')[0]?.toLowerCase().replace(/[^\w-]/g, '') || 'user'}-
+                            </span>
+                            <input
+                              type="text"
+                              value={publicRoomName}
+                              onChange={(e) => setPublicRoomName(e.target.value.toLowerCase().replace(/[^\w-]/g, ''))}
+                              placeholder="worship"
+                              onKeyDown={async (e) => {
+                                if (e.key === 'Enter' && publicRoomName.trim() && !publicRoomCreating) {
+                                  setPublicRoomCreating(true);
+                                  try {
+                                    await onCreatePublicRoom(publicRoomName.trim());
+                                    setPublicRoomName('');
+                                  } catch { /* error handled in parent */ }
+                                  setPublicRoomCreating(false);
+                                }
+                              }}
+                              style={{
+                                flex: 1,
+                                minWidth: 0,
+                                background: 'rgba(255,255,255,0.1)',
+                                border: '1px solid rgba(255,255,255,0.2)',
+                                borderRadius: '4px',
+                                padding: '4px 8px',
+                                color: 'white',
+                                fontSize: '0.75rem',
+                                outline: 'none'
+                              }}
+                            />
+                            <button
+                              onClick={async () => {
+                                if (publicRoomName.trim() && !publicRoomCreating) {
+                                  setPublicRoomCreating(true);
+                                  try {
+                                    await onCreatePublicRoom(publicRoomName.trim());
+                                    setPublicRoomName('');
+                                  } catch { /* error handled in parent */ }
+                                  setPublicRoomCreating(false);
+                                }
+                              }}
+                              disabled={!publicRoomName.trim() || publicRoomCreating}
+                              style={{
+                                background: publicRoomName.trim() && !publicRoomCreating ? 'rgba(76, 175, 80, 0.2)' : 'rgba(255,255,255,0.05)',
+                                border: publicRoomName.trim() && !publicRoomCreating ? '1px solid rgba(76, 175, 80, 0.4)' : '1px solid rgba(255,255,255,0.1)',
+                                borderRadius: '4px',
+                                padding: '4px 10px',
+                                color: publicRoomName.trim() && !publicRoomCreating ? '#4caf50' : 'rgba(255,255,255,0.3)',
+                                cursor: publicRoomName.trim() && !publicRoomCreating ? 'pointer' : 'default',
+                                fontSize: '0.7rem',
+                                flexShrink: 0
+                              }}
+                            >
+                              {publicRoomCreating ? 'Creating...' : 'Create'}
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+
                     <button
                       onClick={() => { onNavigateToSettings(); onShowUserMenuChange(false); }}
                       style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: 'white', cursor: 'pointer', fontSize: '0.85rem', textAlign: isRTL ? 'right' : 'left' }}

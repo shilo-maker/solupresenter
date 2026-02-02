@@ -431,7 +431,9 @@ export class SocketService {
         imageUrl: slideData.imageUrl || null,
         toolsData: slideData.toolsData || null,
         presentationData: slideData.presentationData || null,
-        backgroundImage: slideData.backgroundImage || null
+        backgroundImage: slideData.backgroundImage || null,
+        renderedHtml: slideData.renderedHtml || null,
+        renderedHtmlDimensions: slideData.renderedHtmlDimensions || null
       };
 
       // Transform slideData to backend format if present

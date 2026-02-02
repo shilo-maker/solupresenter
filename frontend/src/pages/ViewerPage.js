@@ -59,6 +59,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [toolsData, setToolsData] = useState(null); // For tools display (countdown, clock, stopwatch, announcement)
   const [presentationData, setPresentationData] = useState(null); // For presentation slides
+  const [renderedHtml, setRenderedHtml] = useState(null); // Mirrored HTML from desktop SlideRenderer
+  const [renderedHtmlDimensions, setRenderedHtmlDimensions] = useState(null);
   const [clockTime, setClockTime] = useState(new Date());
   const [countdownRemaining, setCountdownRemaining] = useState(0);
   const [stopwatchElapsed, setStopwatchElapsed] = useState(0);
@@ -113,6 +115,25 @@ function ViewerPage({ remotePin, remoteConfig }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialThemeId]);
+
+  // Viewport size tracking for scaled rendering (throttled to ~60fps like desktop)
+  const [viewportSize, setViewportSize] = useState({ width: window.innerWidth, height: window.innerHeight });
+
+  useEffect(() => {
+    let resizeTimeout = null;
+    const handleResize = () => {
+      if (resizeTimeout) return;
+      resizeTimeout = setTimeout(() => {
+        setViewportSize({ width: window.innerWidth, height: window.innerHeight });
+        resizeTimeout = null;
+      }, 16);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (resizeTimeout) clearTimeout(resizeTimeout);
+    };
+  }, []);
 
   // Viewer display toggles
   const [showOriginal, setShowOriginal] = useState(true);
@@ -409,6 +430,10 @@ function ViewerPage({ remotePin, remoteConfig }) {
       // Set the room background
       setBackgroundImage(data.backgroundImage || '');
 
+      // Capture mirrored HTML from desktop
+      setRenderedHtml(data.renderedHtml || null);
+      setRenderedHtmlDimensions(data.renderedHtmlDimensions || null);
+
       // Handle all possible current slide states
       if (data.presentationData) {
         // Presentation slide (bypasses theme)
@@ -496,6 +521,10 @@ function ViewerPage({ remotePin, remoteConfig }) {
 
       // Clear YouTube video when presenting any other content (destroy player first to avoid React DOM errors)
       cleanupYoutubePlayer();
+
+      // Capture mirrored HTML from desktop
+      setRenderedHtml(data.renderedHtml || null);
+      setRenderedHtmlDimensions(data.renderedHtmlDimensions || null);
 
       // Handle tools data
       if (data.toolsData) {
@@ -657,6 +686,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
       setImageUrl(null);
       setPresentationData(null);
       setToolsData(null);
+      setRenderedHtml(null);
+      setRenderedHtmlDimensions(null);
     });
 
     socketService.onYoutubePlay((data) => {
@@ -1219,15 +1250,18 @@ function ViewerPage({ remotePin, remoteConfig }) {
 
   // Render slide content with WYSIWYG absolute positioning (when linePositions is set)
   const renderWithAbsolutePositioning = (slide, isTransliterationLanguage, getTextDirection) => {
-    const containerStyle = getThemeContainerStyle();
+    // Reference dimensions from theme (matching desktop SlideRenderer)
+    const refWidth = activeTheme?.canvasDimensions?.width || 1920;
+    const refHeight = activeTheme?.canvasDimensions?.height || 1080;
+    const scale = Math.min(viewportSize.width / refWidth, viewportSize.height / refHeight);
+    const scaledWidth = refWidth * scale;
+    const scaledHeight = refHeight * scale;
 
-    // Helper to get responsive font size
-    const getResponsiveFontSize = (lineType, themeLineStyle) => {
-      const baseFontSize = lineType === 'original' && isTransliterationLanguage
-        ? 'clamp(2rem, 6vw, 6rem)'
-        : 'clamp(1.5rem, 4.5vw, 4.5rem)';
+    // Desktop-matching pixel font size: 5% of refHeight at fontSize=100
+    const getPixelFontSize = (lineType, themeLineStyle) => {
+      const baseFontSize = refHeight * 0.05; // 54px at 1080p
       const themeFontScale = themeLineStyle.fontSize ? parseFloat(themeLineStyle.fontSize) / 100 : 1;
-      return `calc(${baseFontSize} * ${fontSize / 100} * ${themeFontScale})`;
+      return baseFontSize * themeFontScale;
     };
 
     // Get text content for each line type (including reference lines and Bible/Prayer aliases)
@@ -1256,130 +1290,157 @@ function ViewerPage({ remotePin, remoteConfig }) {
       <div style={{
         width: '100%',
         height: '100%',
-        position: 'relative',
-        ...containerStyle
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        position: 'relative'
       }}>
-        {/* Render background boxes (behind text) */}
-        {(activeTheme?.backgroundBoxes || []).map((box, index) => (
-          <div
-            key={box.id || `box-${index}`}
-            style={{
-              position: 'absolute',
-              left: `${box.x}%`,
-              top: `${box.y}%`,
-              width: `${box.width}%`,
-              height: `${box.height}%`,
-              backgroundColor: box.color || '#000000',
-              opacity: box.opacity !== undefined ? box.opacity : 0.5,
-              borderRadius: box.borderRadius ? `${box.borderRadius}px` : '0px',
-              zIndex: 1
-            }}
-          />
-        ))}
+        {/* Scaled wrapper matching desktop SlideRenderer pattern */}
+        <div style={{
+          width: scaledWidth,
+          height: scaledHeight,
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          {/* Full-size content at reference resolution, scaled down with transform */}
+          <div style={{
+            width: refWidth,
+            height: refHeight,
+            transform: `scale(${scale})`,
+            transformOrigin: 'top left',
+            position: 'absolute',
+            top: 0,
+            left: 0
+          }}>
+            {/* Render background boxes (behind text) */}
+            {(activeTheme?.backgroundBoxes || []).map((box, index) => (
+              <div
+                key={box.id || `box-${index}`}
+                style={{
+                  position: 'absolute',
+                  left: `${box.x}%`,
+                  top: `${box.y}%`,
+                  width: `${box.width}%`,
+                  height: `${box.height}%`,
+                  backgroundColor: box.color || '#000000',
+                  opacity: box.opacity !== undefined ? box.opacity : 0.5,
+                  borderRadius: box.borderRadius ? `${box.borderRadius}px` : '0px',
+                  zIndex: 1
+                }}
+              />
+            ))}
 
-        {/* Render each line with absolute positioning (including reference lines from Bible/Prayer themes) */}
-        {(activeTheme?.lineOrder || ['original', 'transliteration', 'translation']).map((lineType) => {
-          if (!shouldShowLine(lineType)) return null;
+            {/* Render each line with absolute positioning (including reference lines from Bible/Prayer themes) */}
+            {(activeTheme?.lineOrder || ['original', 'transliteration', 'translation']).map((lineType) => {
+              if (!shouldShowLine(lineType)) return null;
 
-          // Look up position: check linePositions first, then theme's top-level reference positions
-          let position = activeTheme.linePositions?.[lineType];
-          if (!position && lineType === 'reference') position = activeTheme?.referencePosition;
-          if (!position && lineType === 'referenceEnglish') position = activeTheme?.referenceEnglishPosition;
-          if (!position && lineType === 'referenceTranslation') position = activeTheme?.referenceTranslationPosition;
-          if (!position) return null;
+              // Look up position: check linePositions first, then theme's top-level reference positions
+              let position = activeTheme.linePositions?.[lineType];
+              if (!position && lineType === 'reference') position = activeTheme?.referencePosition;
+              if (!position && lineType === 'referenceEnglish') position = activeTheme?.referenceEnglishPosition;
+              if (!position && lineType === 'referenceTranslation') position = activeTheme?.referenceTranslationPosition;
+              if (!position) return null;
 
-          // Look up style: check lineStyles first, then theme's top-level reference styles
-          let themeLineStyle = getThemeLineStyle(lineType);
-          if (Object.keys(themeLineStyle).length === 0) {
-            let refStyle = null;
-            if (lineType === 'reference') refStyle = activeTheme?.referenceStyle;
-            if (lineType === 'referenceEnglish') refStyle = activeTheme?.referenceEnglishStyle;
-            if (lineType === 'referenceTranslation') refStyle = activeTheme?.referenceTranslationStyle;
-            if (refStyle) {
-              const result = {
-                fontSize: refStyle.fontSize ? `${refStyle.fontSize}%` : undefined,
-                fontWeight: refStyle.fontWeight || undefined,
-                color: refStyle.color || undefined,
-                opacity: refStyle.opacity !== undefined ? refStyle.opacity : undefined
-              };
-              const shadow = buildThemeTextShadow(refStyle);
-              if (shadow) result.textShadow = shadow;
-              const stroke = buildThemeTextStroke(refStyle);
-              if (stroke) {
-                result.WebkitTextStroke = stroke;
-                result.paintOrder = 'stroke fill';
+              // Look up style: check lineStyles first, then theme's top-level reference styles
+              let themeLineStyle = getThemeLineStyle(lineType);
+              if (Object.keys(themeLineStyle).length === 0) {
+                let refStyle = null;
+                if (lineType === 'reference') refStyle = activeTheme?.referenceStyle;
+                if (lineType === 'referenceEnglish') refStyle = activeTheme?.referenceEnglishStyle;
+                if (lineType === 'referenceTranslation') refStyle = activeTheme?.referenceTranslationStyle;
+                if (refStyle) {
+                  const result = {
+                    fontSize: refStyle.fontSize ? `${refStyle.fontSize}%` : undefined,
+                    fontWeight: refStyle.fontWeight || undefined,
+                    color: refStyle.color || undefined,
+                    opacity: refStyle.opacity !== undefined ? refStyle.opacity : undefined
+                  };
+                  const shadow = buildThemeTextShadow(refStyle);
+                  if (shadow) result.textShadow = shadow;
+                  const stroke = buildThemeTextStroke(refStyle);
+                  if (stroke) {
+                    result.WebkitTextStroke = stroke;
+                    result.paintOrder = 'stroke fill';
+                  }
+                  themeLineStyle = result;
+                  // Check visibility
+                  if (refStyle.visible === false) return null;
+                }
               }
-              themeLineStyle = result;
-              // Check visibility
-              if (refStyle.visible === false) return null;
-            }
-          }
 
-          const text = getTextForLine(lineType);
-          const overflowText = lineType === 'translation' ? slide.translationOverflow : null;
+              const text = getTextForLine(lineType);
+              const overflowText = lineType === 'translation' ? slide.translationOverflow : null;
 
-          // Get alignment values (default to center)
-          const alignH = position.alignH || 'center';
-          const alignV = position.alignV || 'center';
-          const alignItemsValue = alignH === 'left' ? 'flex-start' : alignH === 'right' ? 'flex-end' : 'center';
-          const justifyContentValue = alignV === 'top' ? 'flex-start' : alignV === 'bottom' ? 'flex-end' : 'center';
+              // Get alignment values (default to center)
+              const alignH = position.alignH || 'center';
+              const alignV = position.alignV || 'center';
+              const alignItemsValue = alignH === 'left' ? 'flex-start' : alignH === 'right' ? 'flex-end' : 'center';
+              const justifyContentValue = alignV === 'top' ? 'flex-start' : alignV === 'bottom' ? 'flex-end' : 'center';
 
-          // Build border styles for reference lines
-          const isReferenceLine = lineType === 'reference' || lineType === 'referenceEnglish' || lineType === 'referenceTranslation';
-          const borderStyles = {};
-          if (isReferenceLine) {
-            const refStyle = lineType === 'reference' ? activeTheme?.referenceStyle
-              : lineType === 'referenceEnglish' ? activeTheme?.referenceEnglishStyle
-              : activeTheme?.referenceTranslationStyle;
-            if (refStyle) {
-              const borderColor = refStyle.borderColor || '#ffffff';
-              if (refStyle.borderTop) borderStyles.borderTop = `${refStyle.borderTop}px solid ${borderColor}`;
-              if (refStyle.borderBottom) borderStyles.borderBottom = `${refStyle.borderBottom}px solid ${borderColor}`;
-              if (refStyle.borderLeft) borderStyles.borderLeft = `${refStyle.borderLeft}px solid ${borderColor}`;
-              if (refStyle.borderRight) borderStyles.borderRight = `${refStyle.borderRight}px solid ${borderColor}`;
-              if (refStyle.backgroundColor) borderStyles.backgroundColor = refStyle.backgroundColor;
-              if (refStyle.borderRadius) borderStyles.borderRadius = `${refStyle.borderRadius}px`;
-            }
-          }
+              // Support autoHeight and flow mode (matching desktop SlideRenderer)
+              const useAutoHeight = position.autoHeight === true || position.positionMode === 'flow';
 
-          return (
-            <div
-              key={lineType}
-              style={{
-                position: 'absolute',
-                left: `${position.x}%`,
-                top: `${position.y}%`,
-                width: `${position.width}%`,
-                height: `${position.height}%`,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: alignItemsValue,
-                justifyContent: justifyContentValue,
-                paddingTop: position.paddingTop ? `${position.paddingTop}%` : undefined,
-                paddingBottom: position.paddingBottom ? `${position.paddingBottom}%` : undefined,
-                boxSizing: 'border-box',
-                fontSize: getResponsiveFontSize(lineType, themeLineStyle),
-                lineHeight: 1.4,
-                fontWeight: themeLineStyle.fontWeight || '400',
-                color: themeLineStyle.color || textColor,
-                opacity: themeLineStyle.opacity !== undefined ? themeLineStyle.opacity : 1,
-                textShadow: themeLineStyle.textShadow || '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
-                WebkitTextStroke: themeLineStyle.WebkitTextStroke,
-                direction: getTextDirection(text),
-                unicodeBidi: 'plaintext',
-                textAlign: alignH,
-                overflow: 'hidden',
-                wordWrap: 'break-word',
-                overflowWrap: 'break-word',
-                zIndex: 2,
-                ...borderStyles
-              }}
-            >
-              <span style={{ display: 'block', width: '100%' }}>{text}</span>
-              {overflowText && <span style={{ display: 'block', width: '100%', marginTop: '0.2em' }}>{overflowText}</span>}
-            </div>
-          );
-        })}
+              // Build border styles for reference lines
+              const isReferenceLine = lineType === 'reference' || lineType === 'referenceEnglish' || lineType === 'referenceTranslation';
+              const borderStyles = {};
+              if (isReferenceLine) {
+                const refStyle = lineType === 'reference' ? activeTheme?.referenceStyle
+                  : lineType === 'referenceEnglish' ? activeTheme?.referenceEnglishStyle
+                  : activeTheme?.referenceTranslationStyle;
+                if (refStyle) {
+                  const borderColor = refStyle.borderColor || '#ffffff';
+                  if (refStyle.borderTop) borderStyles.borderTop = `${refStyle.borderTop}px solid ${borderColor}`;
+                  if (refStyle.borderBottom) borderStyles.borderBottom = `${refStyle.borderBottom}px solid ${borderColor}`;
+                  if (refStyle.borderLeft) borderStyles.borderLeft = `${refStyle.borderLeft}px solid ${borderColor}`;
+                  if (refStyle.borderRight) borderStyles.borderRight = `${refStyle.borderRight}px solid ${borderColor}`;
+                  if (refStyle.backgroundColor) borderStyles.backgroundColor = refStyle.backgroundColor;
+                  if (refStyle.borderRadius) borderStyles.borderRadius = `${refStyle.borderRadius}px`;
+                }
+              }
+
+              return (
+                <div
+                  key={lineType}
+                  style={{
+                    position: 'absolute',
+                    left: `${position.x}%`,
+                    top: `${position.y}%`,
+                    width: `${position.width}%`,
+                    height: useAutoHeight ? 'auto' : `${position.height}%`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: alignItemsValue,
+                    justifyContent: justifyContentValue,
+                    paddingTop: position.paddingTop ? `${position.paddingTop}%` : undefined,
+                    paddingBottom: position.paddingBottom ? `${position.paddingBottom}%` : undefined,
+                    paddingLeft: position.paddingLeft ? `${position.paddingLeft}px` : undefined,
+                    paddingRight: position.paddingRight ? `${position.paddingRight}px` : undefined,
+                    boxSizing: 'border-box',
+                    fontSize: `${getPixelFontSize(lineType, themeLineStyle)}px`,
+                    lineHeight: 1.35,
+                    fontWeight: themeLineStyle.fontWeight || '400',
+                    color: themeLineStyle.color || textColor,
+                    opacity: themeLineStyle.opacity !== undefined ? themeLineStyle.opacity : 1,
+                    textShadow: themeLineStyle.textShadow || '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                    WebkitTextStroke: themeLineStyle.WebkitTextStroke,
+                    direction: getTextDirection(text),
+                    unicodeBidi: 'plaintext',
+                    textAlign: alignH,
+                    overflow: useAutoHeight ? 'visible' : 'hidden',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    zIndex: isReferenceLine ? 10 : 2,
+                    ...borderStyles
+                  }}
+                >
+                  <span style={{ display: 'block', width: '100%' }}>{text}</span>
+                  {overflowText && <span style={{ display: 'block', width: '100%', marginTop: '0.2em' }}>{overflowText}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     );
   };
@@ -1607,6 +1668,23 @@ function ViewerPage({ remotePin, remoteConfig }) {
           background: '#000'
         }}>
           <div id="youtube-player" style={{ width: '100%', height: '100%' }} />
+        </div>
+      );
+    }
+
+    // Render mirrored HTML from desktop SlideRenderer (pixel-perfect match)
+    if (renderedHtml) {
+      const refW = renderedHtmlDimensions?.width || 1920;
+      const refH = renderedHtmlDimensions?.height || 1080;
+      const scale = Math.min(viewportSize.width / refW, viewportSize.height / refH);
+      return (
+        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+          <div style={{ width: refW * scale, height: refH * scale, position: 'relative', overflow: 'hidden' }}>
+            <div
+              style={{ width: refW, height: refH, transform: `scale(${scale})`, transformOrigin: 'top left', position: 'absolute', top: 0, left: 0, fontFamily: "'Heebo', 'Segoe UI', sans-serif" }}
+              dangerouslySetInnerHTML={{ __html: renderedHtml }}
+            />
+          </div>
         </div>
       );
     }

@@ -251,6 +251,9 @@ interface SlideRendererProps {
 
   // Combined slides for original-only mode
   combinedSlides?: SlideData[] | null;
+
+  // Callback to capture rendered HTML for mirroring to virtual displays
+  onHtmlCapture?: (html: string, refWidth: number, refHeight: number) => void;
 }
 
 const DEFAULT_SAMPLE_TEXT: Record<string, string> = {
@@ -473,9 +476,11 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
   editorMode = false,
   sampleText = DEFAULT_SAMPLE_TEXT,
   presentationSlide,
-  combinedSlides
+  combinedSlides,
+  onHtmlCapture
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const contentDivRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
 
   // For flow positioning: refs to measure actual heights and calculated positions
@@ -1616,6 +1621,17 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
     );
   }
 
+  // Capture rendered HTML and send to parent for mirroring to virtual displays
+  useEffect(() => {
+    if (!onHtmlCapture || !contentDivRef.current) return;
+    const rafId = requestAnimationFrame(() => {
+      if (contentDivRef.current) {
+        onHtmlCapture(contentDivRef.current.innerHTML, refWidth, refHeight);
+      }
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [slideData, displayMode, theme, presentationSlide, combinedSlides, isBlank, onHtmlCapture, refWidth, refHeight, flowPositions, measuredHeights]);
+
   // Check if we're rendering a presentation slide
   const isPresentation = !!presentationSlide;
 
@@ -1640,6 +1656,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
       }}>
         {/* Full-size content (1920x1080), scaled down with transform */}
         <div
+          ref={contentDivRef}
           style={{
             width: refWidth,
             height: refHeight,

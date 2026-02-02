@@ -208,6 +208,7 @@ app.use((err, req, res, next) => {
 const operatorSockets = new Map(); // Map of userId -> socketId
 const viewerRooms = new Map(); // Map of socketId -> roomPin
 const roomToolsData = new Map(); // Map of roomPin -> toolsData (for new viewers)
+const roomRenderedHtml = new Map(); // Map of roomPin -> { html, dimensions } (for late-joining viewers)
 const roomActiveTheme = new Map(); // Map of roomPin -> theme (for new viewers)
 const roomActiveBibleTheme = new Map(); // Map of roomPin -> bible theme (for new viewers)
 const roomActivePrayerTheme = new Map(); // Map of roomPin -> prayer theme (for new viewers)
@@ -380,6 +381,8 @@ io.on('connection', (socket) => {
         backgroundImage: room.backgroundImage || '',
         toolsData: roomToolsData.get(room.pin) || null,
         presentationData: room.currentPresentationData || null,
+        renderedHtml: roomRenderedHtml.get(room.pin)?.html || null,
+        renderedHtmlDimensions: roomRenderedHtml.get(room.pin)?.dimensions || null,
         theme: theme,
         bibleTheme: roomActiveBibleTheme.get(room.pin) || null,
         prayerTheme: roomActivePrayerTheme.get(room.pin) || null,
@@ -399,7 +402,7 @@ io.on('connection', (socket) => {
   // Operator updates slide
   socket.on('operator:updateSlide', async (data) => {
     try {
-      const { roomId, roomPin, backgroundImage: clientBackgroundImage, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData, slideData, nextSlideData, toolsData, presentationData } = data;
+      const { roomId, roomPin, backgroundImage: clientBackgroundImage, songId, slideIndex, displayMode, isBlank, imageUrl, bibleData, slideData, nextSlideData, toolsData, presentationData, renderedHtml, renderedHtmlDimensions } = data;
 
       // Use PIN from client if available (fast path), otherwise query DB (fallback)
       let pin = roomPin;
@@ -478,6 +481,13 @@ io.on('connection', (socket) => {
         roomToolsData.delete(pin);
       }
 
+      // Store rendered HTML in memory for late-joining viewers
+      if (renderedHtml) {
+        roomRenderedHtml.set(pin, { html: renderedHtml, dimensions: renderedHtmlDimensions });
+      } else {
+        roomRenderedHtml.delete(pin);
+      }
+
       // 🚀 BROADCAST IMMEDIATELY - no DB query needed when PIN is provided!
       io.to(`room:${pin}`).emit('slide:update', {
         currentSlide: currentSlideData,
@@ -487,7 +497,9 @@ io.on('connection', (socket) => {
         imageUrl: imageUrl || null,
         backgroundImage: backgroundImage || '',
         toolsData: toolsData || null,
-        presentationData: presentationData || null
+        presentationData: presentationData || null,
+        renderedHtml: renderedHtml || null,
+        renderedHtmlDimensions: renderedHtmlDimensions || null
       });
 
       // 💾 Save to database asynchronously (don't block broadcast)

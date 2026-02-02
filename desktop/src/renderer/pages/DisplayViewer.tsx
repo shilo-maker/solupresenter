@@ -1401,6 +1401,9 @@ const DisplayViewer: React.FC = () => {
           backgroundImage={backgroundImage}
           isBlank={true}
           fillContainer={true}
+          onHtmlCapture={(html, refWidth, refHeight) => {
+            window.displayAPI.reportRenderedHtml(html, refWidth, refHeight);
+          }}
         />
         {renderCloseButton()}
       </div>
@@ -1765,6 +1768,9 @@ const DisplayViewer: React.FC = () => {
         fillContainer={true}
         presentationSlide={presentationSlide}
         combinedSlides={combinedSlides}
+        onHtmlCapture={(html, refWidth, refHeight) => {
+          window.displayAPI.reportRenderedHtml(html, refWidth, refHeight);
+        }}
       />
       {/* Overlay tools on top of the slide content */}
       {renderRotatingMessages()}

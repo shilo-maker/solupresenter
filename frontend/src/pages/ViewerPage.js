@@ -668,6 +668,30 @@ function ViewerPage({ remotePin, remoteConfig }) {
     socketService.onToolsUpdate((toolData) => {
       if (toolData && toolData.type) {
         setToolsData(toolData);
+
+        // Sync countdown timing
+        if (toolData.countdown) {
+          const { remaining, endTime, running } = toolData.countdown;
+          if (running && endTime) {
+            const now = Date.now();
+            const remainingSecs = Math.max(0, Math.round((endTime - now) / 1000));
+            setCountdownRemaining(remainingSecs);
+          } else {
+            setCountdownRemaining(remaining || 0);
+          }
+        }
+
+        // Sync stopwatch timing
+        if (toolData.type === 'stopwatch' && toolData.stopwatch) {
+          const { elapsed, startTime, running } = toolData.stopwatch;
+          if (running && startTime) {
+            const now = Date.now();
+            const elapsedSecs = Math.round((now - startTime) / 1000);
+            setStopwatchElapsed(elapsedSecs);
+          } else {
+            setStopwatchElapsed(elapsed || 0);
+          }
+        }
       } else if (toolData && !toolData.active) {
         // Tool was stopped
         setToolsData(null);

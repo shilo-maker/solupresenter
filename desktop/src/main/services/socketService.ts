@@ -29,6 +29,8 @@ export class SocketService {
   // Track last broadcast state for reconnection recovery
   private lastSlideData: any = null;
   private lastTheme: any = null;
+  private lastBibleTheme: any = null;
+  private lastPrayerTheme: any = null;
   private lastBackground: string | null = null;
   private lastYoutubeState: { videoId: string; title: string; currentTime: number; isPlaying: boolean } | null = null;
   private lastToolData: any = null;
@@ -437,7 +439,8 @@ export class SocketService {
         transformedData.slideData = {
           slide: slideData.slideData,
           title: slideData.songTitle || slideData.slideData.title || '',
-          isBible: slideData.isBible || false,
+          isBible: slideData.isBible || slideData.contentType === 'bible' || false,
+          isPrayer: slideData.contentType === 'prayer' || slideData.contentType === 'sermon' || false,
           originalLanguage: slideData.originalLanguage || 'he',
           combinedSlides: slideData.combinedSlides || null
         };
@@ -463,6 +466,32 @@ export class SocketService {
     this.lastTheme = theme;
     if (this.socket && this.status.connected && this.status.roomPin) {
       this.socket.emit('operator:applyTheme', {
+        roomPin: this.status.roomPin,
+        theme
+      });
+    }
+  }
+
+  /**
+   * Broadcast Bible theme to online viewers
+   */
+  broadcastBibleTheme(theme: any): void {
+    this.lastBibleTheme = theme;
+    if (this.socket && this.status.connected && this.status.roomPin) {
+      this.socket.emit('operator:applyBibleTheme', {
+        roomPin: this.status.roomPin,
+        theme
+      });
+    }
+  }
+
+  /**
+   * Broadcast Prayer theme to online viewers
+   */
+  broadcastPrayerTheme(theme: any): void {
+    this.lastPrayerTheme = theme;
+    if (this.socket && this.status.connected && this.status.roomPin) {
+      this.socket.emit('operator:applyPrayerTheme', {
         roomPin: this.status.roomPin,
         theme
       });
@@ -683,6 +712,12 @@ export class SocketService {
       if (this.lastTheme) {
         this.broadcastTheme(this.lastTheme);
       }
+      if (this.lastBibleTheme) {
+        this.broadcastBibleTheme(this.lastBibleTheme);
+      }
+      if (this.lastPrayerTheme) {
+        this.broadcastPrayerTheme(this.lastPrayerTheme);
+      }
       if (this.lastBackground) {
         this.broadcastBackground(this.lastBackground);
       }
@@ -757,6 +792,8 @@ export class SocketService {
   clearCachedState(): void {
     this.lastSlideData = null;
     this.lastTheme = null;
+    this.lastBibleTheme = null;
+    this.lastPrayerTheme = null;
     this.lastBackground = null;
     this.lastYoutubeState = null;
     this.lastToolData = null;

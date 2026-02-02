@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Form, Button, Alert, Spinner } from 'react-bootstrap';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -101,6 +101,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
 
   // Theme state - use initialTheme from remoteConfig if provided (for custom remote screens)
   const [viewerTheme, setViewerTheme] = useState(remoteConfig?.initialTheme || null);
+  const [bibleTheme, setBibleTheme] = useState(null);
+  const [prayerTheme, setPrayerTheme] = useState(null);
   const hasFixedTheme = !!remoteConfig?.initialTheme;
 
   // Update theme when remoteConfig.initialTheme changes (for custom remote screens)
@@ -444,6 +446,12 @@ function ViewerPage({ remotePin, remoteConfig }) {
       if (data.theme && !hasFixedTheme) {
         setViewerTheme(data.theme);
       }
+      if (data.bibleTheme && !hasFixedTheme) {
+        setBibleTheme(data.bibleTheme);
+      }
+      if (data.prayerTheme && !hasFixedTheme) {
+        setPrayerTheme(data.prayerTheme);
+      }
 
       // Handle tools data for new viewers
       if (data.toolsData) {
@@ -600,6 +608,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
       setSearchResults([]);
       setSelectedRoom(null);
       setViewerTheme(null);
+      setBibleTheme(null);
+      setPrayerTheme(null);
       setError(tRef.current('viewer.sessionEnded'));
     });
 
@@ -607,6 +617,20 @@ function ViewerPage({ remotePin, remoteConfig }) {
     socketService.onThemeUpdate((data) => {
       if (!hasFixedTheme) {
         setViewerTheme(data.theme);
+      }
+    });
+
+    // Handle Bible theme updates from operator
+    socketService.onBibleThemeUpdate((data) => {
+      if (!hasFixedTheme) {
+        setBibleTheme(data.theme);
+      }
+    });
+
+    // Handle Prayer theme updates from operator
+    socketService.onPrayerThemeUpdate((data) => {
+      if (!hasFixedTheme) {
+        setPrayerTheme(data.theme);
       }
     });
 
@@ -1078,11 +1102,18 @@ function ViewerPage({ remotePin, remoteConfig }) {
     return `${style.textStrokeWidth}px ${style.textStrokeColor || '#000000'}`;
   };
 
+  // Compute the active theme based on content type (Bible/Prayer themes override viewer theme)
+  const activeTheme = useMemo(() => {
+    if (currentSlide?.isBible && bibleTheme) return bibleTheme;
+    if (currentSlide?.isPrayer && prayerTheme) return prayerTheme;
+    return viewerTheme;
+  }, [currentSlide?.isBible, currentSlide?.isPrayer, bibleTheme, prayerTheme, viewerTheme]);
+
   const getThemeLineStyle = (lineType) => {
-    if (!viewerTheme?.lineStyles?.[lineType]) {
+    if (!activeTheme?.lineStyles?.[lineType]) {
       return {};
     }
-    const style = viewerTheme.lineStyles[lineType];
+    const style = activeTheme.lineStyles[lineType];
     const result = {
       fontSize: style.fontSize ? `${style.fontSize}%` : undefined,
       fontWeight: style.fontWeight || undefined,
@@ -1100,20 +1131,20 @@ function ViewerPage({ remotePin, remoteConfig }) {
   };
 
   const isLineVisible = (lineType) => {
-    if (!viewerTheme?.lineStyles?.[lineType]) {
+    if (!activeTheme?.lineStyles?.[lineType]) {
       return true; // Default visible
     }
-    return viewerTheme.lineStyles[lineType].visible !== false;
+    return activeTheme.lineStyles[lineType].visible !== false;
   };
 
   const getThemePositioningStyle = () => {
-    if (!viewerTheme?.positioning) {
+    if (!activeTheme?.positioning) {
       return {
         alignItems: 'center',
         justifyContent: 'center'
       };
     }
-    const { vertical, horizontal } = viewerTheme.positioning;
+    const { vertical, horizontal } = activeTheme.positioning;
     return {
       alignItems: horizontal === 'left' ? 'flex-start' : horizontal === 'right' ? 'flex-end' : 'center',
       justifyContent: vertical === 'top' ? 'flex-start' : vertical === 'bottom' ? 'flex-end' : 'center'
@@ -1121,12 +1152,12 @@ function ViewerPage({ remotePin, remoteConfig }) {
   };
 
   const getThemeContainerStyle = () => {
-    if (!viewerTheme?.container) {
+    if (!activeTheme?.container) {
       return {
         padding: '2vh 6vw'
       };
     }
-    const { maxWidth, padding, backgroundColor, borderRadius } = viewerTheme.container;
+    const { maxWidth, padding, backgroundColor, borderRadius } = activeTheme.container;
     return {
       maxWidth: maxWidth || '100%',
       padding: padding || '2vh 6vw',
@@ -1137,8 +1168,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
 
   // Get background style based on theme viewerBackground settings
   const getViewerBackgroundStyle = () => {
-    const themeType = viewerTheme?.viewerBackground?.type;
-    const themeColor = viewerTheme?.viewerBackground?.color;
+    const themeType = activeTheme?.viewerBackground?.type;
+    const themeColor = activeTheme?.viewerBackground?.color;
     const isGradient = backgroundImage && backgroundImage.startsWith('linear-gradient');
 
     // Default (inherit) - use room's background
@@ -1199,11 +1230,14 @@ function ViewerPage({ remotePin, remoteConfig }) {
       return `calc(${baseFontSize} * ${fontSize / 100} * ${themeFontScale})`;
     };
 
-    // Get text content for each line type
+    // Get text content for each line type (including reference lines from Bible/Prayer themes)
     const getTextForLine = (lineType) => {
       if (lineType === 'original') return slide.originalText;
       if (lineType === 'transliteration') return slide.transliteration;
       if (lineType === 'translation') return slide.translation;
+      if (lineType === 'reference') return slide.reference;
+      if (lineType === 'referenceEnglish') return slide.referenceEnglish;
+      if (lineType === 'referenceTranslation') return slide.referenceTranslation;
       return null;
     };
 
@@ -1225,36 +1259,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
         position: 'relative',
         ...containerStyle
       }}>
-        {/* Bible Reference Label - Top Left (only for Bible verses) */}
-        {slide.reference && (
-          <div style={{
-            position: 'absolute',
-            top: '15px',
-            left: '15px',
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
-            color: 'white',
-            padding: '6px 12px',
-            borderRadius: '8px',
-            fontSize: 'clamp(0.85rem, 1.2vw, 1rem)',
-            fontWeight: '500',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-start',
-            gap: '2px',
-            textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
-            zIndex: 10
-          }}>
-            {slide.hebrewReference && (
-              <div style={{ direction: 'rtl', width: '100%' }}>
-                {slide.hebrewReference}
-              </div>
-            )}
-            <div>{slide.reference}</div>
-          </div>
-        )}
-
         {/* Render background boxes (behind text) */}
-        {(viewerTheme?.backgroundBoxes || []).map((box, index) => (
+        {(activeTheme?.backgroundBoxes || []).map((box, index) => (
           <div
             key={box.id || `box-${index}`}
             style={{
@@ -1271,14 +1277,44 @@ function ViewerPage({ remotePin, remoteConfig }) {
           />
         ))}
 
-        {/* Render each line with absolute positioning */}
-        {(viewerTheme?.lineOrder || ['original', 'transliteration', 'translation']).map((lineType) => {
+        {/* Render each line with absolute positioning (including reference lines from Bible/Prayer themes) */}
+        {(activeTheme?.lineOrder || ['original', 'transliteration', 'translation']).map((lineType) => {
           if (!shouldShowLine(lineType)) return null;
 
-          const position = viewerTheme.linePositions?.[lineType];
+          // Look up position: check linePositions first, then theme's top-level reference positions
+          let position = activeTheme.linePositions?.[lineType];
+          if (!position && lineType === 'reference') position = activeTheme?.referencePosition;
+          if (!position && lineType === 'referenceEnglish') position = activeTheme?.referenceEnglishPosition;
+          if (!position && lineType === 'referenceTranslation') position = activeTheme?.referenceTranslationPosition;
           if (!position) return null;
 
-          const themeLineStyle = getThemeLineStyle(lineType);
+          // Look up style: check lineStyles first, then theme's top-level reference styles
+          let themeLineStyle = getThemeLineStyle(lineType);
+          if (Object.keys(themeLineStyle).length === 0) {
+            let refStyle = null;
+            if (lineType === 'reference') refStyle = activeTheme?.referenceStyle;
+            if (lineType === 'referenceEnglish') refStyle = activeTheme?.referenceEnglishStyle;
+            if (lineType === 'referenceTranslation') refStyle = activeTheme?.referenceTranslationStyle;
+            if (refStyle) {
+              const result = {
+                fontSize: refStyle.fontSize ? `${refStyle.fontSize}%` : undefined,
+                fontWeight: refStyle.fontWeight || undefined,
+                color: refStyle.color || undefined,
+                opacity: refStyle.opacity !== undefined ? refStyle.opacity : undefined
+              };
+              const shadow = buildThemeTextShadow(refStyle);
+              if (shadow) result.textShadow = shadow;
+              const stroke = buildThemeTextStroke(refStyle);
+              if (stroke) {
+                result.WebkitTextStroke = stroke;
+                result.paintOrder = 'stroke fill';
+              }
+              themeLineStyle = result;
+              // Check visibility
+              if (refStyle.visible === false) return null;
+            }
+          }
+
           const text = getTextForLine(lineType);
           const overflowText = lineType === 'translation' ? slide.translationOverflow : null;
 
@@ -1287,6 +1323,24 @@ function ViewerPage({ remotePin, remoteConfig }) {
           const alignV = position.alignV || 'center';
           const alignItemsValue = alignH === 'left' ? 'flex-start' : alignH === 'right' ? 'flex-end' : 'center';
           const justifyContentValue = alignV === 'top' ? 'flex-start' : alignV === 'bottom' ? 'flex-end' : 'center';
+
+          // Build border styles for reference lines
+          const isReferenceLine = lineType === 'reference' || lineType === 'referenceEnglish' || lineType === 'referenceTranslation';
+          const borderStyles = {};
+          if (isReferenceLine) {
+            const refStyle = lineType === 'reference' ? activeTheme?.referenceStyle
+              : lineType === 'referenceEnglish' ? activeTheme?.referenceEnglishStyle
+              : activeTheme?.referenceTranslationStyle;
+            if (refStyle) {
+              const borderColor = refStyle.borderColor || '#ffffff';
+              if (refStyle.borderTop) borderStyles.borderTop = `${refStyle.borderTop}px solid ${borderColor}`;
+              if (refStyle.borderBottom) borderStyles.borderBottom = `${refStyle.borderBottom}px solid ${borderColor}`;
+              if (refStyle.borderLeft) borderStyles.borderLeft = `${refStyle.borderLeft}px solid ${borderColor}`;
+              if (refStyle.borderRight) borderStyles.borderRight = `${refStyle.borderRight}px solid ${borderColor}`;
+              if (refStyle.backgroundColor) borderStyles.backgroundColor = refStyle.backgroundColor;
+              if (refStyle.borderRadius) borderStyles.borderRadius = `${refStyle.borderRadius}px`;
+            }
+          }
 
           return (
             <div
@@ -1317,7 +1371,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
                 overflow: 'hidden',
                 wordWrap: 'break-word',
                 overflowWrap: 'break-word',
-                zIndex: 2
+                zIndex: 2,
+                ...borderStyles
               }}
             >
               <span style={{ display: 'block', width: '100%' }}>{text}</span>
@@ -1747,7 +1802,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
     };
 
     // Use WYSIWYG absolute positioning if linePositions is set
-    if (viewerTheme?.linePositions) {
+    if (activeTheme?.linePositions) {
       return renderWithAbsolutePositioning(slide, isTransliterationLanguage, getTextDirection);
     }
 
@@ -1764,13 +1819,13 @@ function ViewerPage({ remotePin, remoteConfig }) {
         ...positioningStyle,
         ...containerStyle,
         color: textColor,
-        textAlign: viewerTheme?.positioning?.horizontal === 'left' ? 'left' :
-                   viewerTheme?.positioning?.horizontal === 'right' ? 'right' : 'center',
+        textAlign: activeTheme?.positioning?.horizontal === 'left' ? 'left' :
+                   activeTheme?.positioning?.horizontal === 'right' ? 'right' : 'center',
         boxSizing: 'border-box',
         position: 'relative'
       }}>
-        {/* Bible Reference Label - Top Left (only for Bible verses) */}
-        {slide.reference && (
+        {/* Bible Reference Label - Top Left (only for Bible verses, when no theme positioning) */}
+        {isBible && slide.reference && !activeTheme?.referencePosition && (
           <div style={{
             position: 'absolute',
             top: '15px',
@@ -1785,16 +1840,15 @@ function ViewerPage({ remotePin, remoteConfig }) {
             flexDirection: 'column',
             alignItems: 'flex-start',
             gap: '2px',
-            textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
+            textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
+            zIndex: 10
           }}>
-            {slide.hebrewReference && (
-              <div style={{ direction: 'rtl', width: '100%' }}>
-                {slide.hebrewReference}
-              </div>
-            )}
-            {displayMode === 'bilingual' && (
+            <div style={{ direction: 'rtl', width: '100%' }}>
+              {slide.reference}
+            </div>
+            {displayMode === 'bilingual' && slide.referenceEnglish && (
               <div>
-                {slide.reference}
+                {slide.referenceEnglish}
               </div>
             )}
           </div>
@@ -1824,8 +1878,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
                       wordWrap: 'break-word',
                       overflowWrap: 'break-word',
                       color: textColor,
-                      textShadow: buildThemeTextShadow(viewerTheme?.lineStyles?.original) || '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
-                      WebkitTextStroke: buildThemeTextStroke(viewerTheme?.lineStyles?.original),
+                      textShadow: buildThemeTextShadow(activeTheme?.lineStyles?.original) || '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                      WebkitTextStroke: buildThemeTextStroke(activeTheme?.lineStyles?.original),
                       paintOrder: 'stroke fill',
                       direction: getTextDirection(combinedSlide.originalText),
                       unicodeBidi: 'plaintext',
@@ -1847,8 +1901,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
                 wordWrap: 'break-word',
                 overflowWrap: 'break-word',
                 color: textColor,
-                textShadow: buildThemeTextShadow(viewerTheme?.lineStyles?.original) || '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
-                WebkitTextStroke: buildThemeTextStroke(viewerTheme?.lineStyles?.original),
+                textShadow: buildThemeTextShadow(activeTheme?.lineStyles?.original) || '3px 3px 8px rgba(0, 0, 0, 0.9), -2px -2px 4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                WebkitTextStroke: buildThemeTextStroke(activeTheme?.lineStyles?.original),
                 direction: getTextDirection(slide.originalText),
                 unicodeBidi: 'plaintext',
                 textAlign: isBible ? 'right' : 'center'
@@ -1867,7 +1921,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
             maxWidth: '100%'
           }}>
             {/* Render lines in theme-specified order */}
-            {(viewerTheme?.lineOrder || ['original', 'transliteration', 'translation']).map((lineType) => {
+            {(activeTheme?.lineOrder || ['original', 'transliteration', 'translation']).map((lineType) => {
               // Get theme styles for this line
               const themeLineStyle = getThemeLineStyle(lineType);
               const themeVisible = isLineVisible(lineType);

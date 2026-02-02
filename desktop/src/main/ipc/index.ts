@@ -1376,6 +1376,7 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
       throw new Error('Invalid bible theme data');
     }
     displayManager.broadcastBibleTheme(theme);
+    socketService.broadcastBibleTheme(theme);
     return true;
   });
 
@@ -1539,6 +1540,7 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
       throw new Error('Invalid prayer theme data');
     }
     displayManager.broadcastPrayerTheme(theme);
+    socketService.broadcastPrayerTheme(theme);
     return true;
   });
 

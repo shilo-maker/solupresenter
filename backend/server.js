@@ -209,6 +209,8 @@ const operatorSockets = new Map(); // Map of userId -> socketId
 const viewerRooms = new Map(); // Map of socketId -> roomPin
 const roomToolsData = new Map(); // Map of roomPin -> toolsData (for new viewers)
 const roomActiveTheme = new Map(); // Map of roomPin -> theme (for new viewers)
+const roomActiveBibleTheme = new Map(); // Map of roomPin -> bible theme (for new viewers)
+const roomActivePrayerTheme = new Map(); // Map of roomPin -> prayer theme (for new viewers)
 
 io.on('connection', (socket) => {
   // Operator joins their room
@@ -379,6 +381,8 @@ io.on('connection', (socket) => {
         toolsData: roomToolsData.get(room.pin) || null,
         presentationData: room.currentPresentationData || null,
         theme: theme,
+        bibleTheme: roomActiveBibleTheme.get(room.pin) || null,
+        prayerTheme: roomActivePrayerTheme.get(room.pin) || null,
         stageMonitorTheme: stageMonitorTheme
       };
 
@@ -436,6 +440,7 @@ io.on('connection', (socket) => {
             songTitle: slideData.title,
             backgroundImage: backgroundImage || '',
             isBible: slideData.isBible || false,
+            isPrayer: slideData.isPrayer || false,
             originalLanguage: slideData.originalLanguage || 'en'
           };
         } else if (bibleData) {
@@ -771,6 +776,42 @@ io.on('connection', (socket) => {
     } catch (error) {
       console.error('Error in operator:applyTheme:', error);
       socket.emit('error', { message: 'Failed to apply theme' });
+    }
+  });
+
+  // Operator applies a Bible viewer theme
+  socket.on('operator:applyBibleTheme', async (data) => {
+    try {
+      const { roomPin, theme } = data;
+      if (!roomPin) return;
+
+      if (theme) {
+        roomActiveBibleTheme.set(roomPin, theme);
+      } else {
+        roomActiveBibleTheme.delete(roomPin);
+      }
+
+      io.to(`room:${roomPin}`).emit('bibleTheme:update', { theme });
+    } catch (error) {
+      console.error('Error in operator:applyBibleTheme:', error);
+    }
+  });
+
+  // Operator applies a Prayer viewer theme
+  socket.on('operator:applyPrayerTheme', async (data) => {
+    try {
+      const { roomPin, theme } = data;
+      if (!roomPin) return;
+
+      if (theme) {
+        roomActivePrayerTheme.set(roomPin, theme);
+      } else {
+        roomActivePrayerTheme.delete(roomPin);
+      }
+
+      io.to(`room:${roomPin}`).emit('prayerTheme:update', { theme });
+    } catch (error) {
+      console.error('Error in operator:applyPrayerTheme:', error);
     }
   });
 

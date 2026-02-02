@@ -380,6 +380,18 @@ class SocketService {
     }
   }
 
+  onBibleThemeUpdate(callback) {
+    if (this.socket) {
+      this.socket.on('bibleTheme:update', callback);
+    }
+  }
+
+  onPrayerThemeUpdate(callback) {
+    if (this.socket) {
+      this.socket.on('prayerTheme:update', callback);
+    }
+  }
+
   onLocalMediaStatus(callback) {
     if (this.socket) {
       this.socket.on('localMedia:status', callback);

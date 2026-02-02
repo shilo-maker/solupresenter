@@ -181,7 +181,7 @@ const LoadSetlistModal: React.FC<LoadSetlistModalProps> = ({
         items.push({
           id: crypto.randomUUID(),
           type: 'section',
-          title: item.title || item.name || item.label || ''
+          title: item.sectionTitle || item.title || item.name || item.label || ''
         });
       } else {
         skipped++;

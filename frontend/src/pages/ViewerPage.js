@@ -62,13 +62,10 @@ function ViewerPage({ remotePin, remoteConfig }) {
   const [renderedHtml, setRenderedHtml] = useState(null); // Mirrored HTML from desktop SlideRenderer
   const [renderedHtmlDimensions, setRenderedHtmlDimensions] = useState(null);
   const [clockTime, setClockTime] = useState(new Date());
-  const [countdownRemaining, setCountdownRemaining] = useState(0);
   const [stopwatchElapsed, setStopwatchElapsed] = useState(0);
   const [countdownMessageKey, setCountdownMessageKey] = useState(0); // For triggering message update animation
   const prevCountdownMessageRef = useRef('');
   const clockIntervalRef = useRef(null);
-  const countdownIntervalRef = useRef(null);
-  const stopwatchIntervalRef = useRef(null);
   // Announcement animation state
   const [announcementBanner, setAnnouncementBanner] = useState({ visible: false, text: '', animating: false });
   const [localMediaOverlay, setLocalMediaOverlay] = useState(false);
@@ -299,78 +296,41 @@ function ViewerPage({ remotePin, remoteConfig }) {
     };
   }, [toolsData?.type]);
 
-  // Countdown timer effect - decrements every second when running
-  // Countdown can be standalone OR underneath an announcement overlay
-  useEffect(() => {
-    // Start interval if countdown is running (regardless of whether it's standalone or under announcement)
-    if (toolsData?.countdown?.running && countdownRemaining > 0) {
-      countdownIntervalRef.current = setInterval(() => {
-        setCountdownRemaining(prev => {
-          const next = Math.max(0, prev - 1);
-          // Auto-clear interval when countdown reaches 0
-          if (next === 0 && countdownIntervalRef.current) {
-            clearInterval(countdownIntervalRef.current);
-            countdownIntervalRef.current = null;
-          }
-          return next;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-        countdownIntervalRef.current = null;
-      }
-    };
-    // Note: countdownRemaining is intentionally excluded to prevent interval restart every second
-    // The interval self-clears when countdown reaches 0
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toolsData?.countdown?.running]);
+  // Countdown: desktop sends pre-formatted 'remaining' string every second, no local timer needed
 
   // Detect countdown message changes and trigger animation
   useEffect(() => {
-    const currentMessage = toolsData?.countdown?.message || '';
+    const currentMessage = (toolsData?.type === 'countdown' ? toolsData?.message : '') || '';
     if (currentMessage && currentMessage !== prevCountdownMessageRef.current) {
       // Message changed - trigger animation by updating key
       setCountdownMessageKey(prev => prev + 1);
     }
     prevCountdownMessageRef.current = currentMessage;
-  }, [toolsData?.countdown?.message]);
+  }, [toolsData?.type, toolsData?.message]);
 
-  // Stopwatch timer effect - increments every second when running
-  useEffect(() => {
-    if (toolsData?.type === 'stopwatch' && toolsData?.stopwatch?.running) {
-      stopwatchIntervalRef.current = setInterval(() => {
-        setStopwatchElapsed(prev => prev + 1);
-      }, 1000);
-    }
-    return () => {
-      if (stopwatchIntervalRef.current) {
-        clearInterval(stopwatchIntervalRef.current);
-        stopwatchIntervalRef.current = null;
-      }
-    };
-  }, [toolsData?.type, toolsData?.stopwatch?.running]);
+  // Stopwatch: desktop sends pre-formatted 'time' string every 100ms, no local timer needed
 
   // Announcement banner animation effect
+  // Desktop sends flat: { type: 'announcement', active: true/false, text: '...' }
   useEffect(() => {
     if (toolsData?.type === 'announcement') {
-      const { visible, text } = toolsData.announcement || {};
-      if (visible && text) {
+      const isActive = toolsData.active;
+      const text = toolsData.text || '';
+      if (isActive && text) {
         // Show banner with slide-up animation
         setAnnouncementBanner({ visible: true, text, animating: 'in' });
         // After animation completes, remove animating state
         setTimeout(() => {
           setAnnouncementBanner(prev => ({ ...prev, animating: false }));
         }, 500);
-      } else if (!visible && announcementBanner.visible) {
+      } else if (!isActive && announcementBanner.visible) {
         // Hide banner with slide-down animation
         setAnnouncementBanner(prev => ({ ...prev, animating: 'out' }));
         // After animation completes, hide the banner
         setTimeout(() => {
           setAnnouncementBanner({ visible: false, text: '', animating: false });
         }, 500);
-      } else if (visible && text !== announcementBanner.text) {
+      } else if (isActive && text !== announcementBanner.text) {
         // Text changed while visible - update without animation
         setAnnouncementBanner(prev => ({ ...prev, text }));
       }
@@ -378,8 +338,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
       // Tool type changed away from announcement - hide immediately
       setAnnouncementBanner({ visible: false, text: '', animating: false });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- We only want to react to specific announcement properties (visible, text), not the whole object
-  }, [toolsData?.type, toolsData?.announcement?.visible, toolsData?.announcement?.text, announcementBanner.visible, announcementBanner.text]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toolsData?.type, toolsData?.active, toolsData?.text, announcementBanner.visible, announcementBanner.text]);
 
   // Handle rotating messages (desktop app format: type: 'rotatingMessages' with messages array)
   useEffect(() => {
@@ -479,33 +439,9 @@ function ViewerPage({ remotePin, remoteConfig }) {
       }
 
       // Handle tools data for new viewers
+      // Desktop sends flat tool data: { type, active, remaining/time/text/... }
       if (data.toolsData) {
         setToolsData(data.toolsData);
-
-        // Handle countdown timing sync
-        if (data.toolsData.countdown) {
-          const { remaining, endTime, running } = data.toolsData.countdown;
-          if (running && endTime) {
-            // Calculate remaining based on endTime for sync
-            const now = Date.now();
-            const remainingSecs = Math.max(0, Math.round((endTime - now) / 1000));
-            setCountdownRemaining(remainingSecs);
-          } else {
-            setCountdownRemaining(remaining || 0);
-          }
-        }
-
-        // Handle stopwatch timing sync
-        if (data.toolsData.type === 'stopwatch' && data.toolsData.stopwatch) {
-          const { elapsed, startTime, running } = data.toolsData.stopwatch;
-          if (running && startTime) {
-            const now = Date.now();
-            const elapsedSecs = Math.round((now - startTime) / 1000);
-            setStopwatchElapsed(elapsedSecs);
-          } else {
-            setStopwatchElapsed(elapsed || 0);
-          }
-        }
       }
 
       // Handle local media active status for new viewers
@@ -541,31 +477,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
           }
         }
 
-        // Handle specific tool types
-        // Countdown can be standalone OR included with an announcement overlay
-        if (data.toolsData.countdown) {
-          const { remaining, endTime, running } = data.toolsData.countdown;
-          if (running && endTime) {
-            // Calculate remaining based on endTime for sync
-            const now = Date.now();
-            const remainingSecs = Math.max(0, Math.round((endTime - now) / 1000));
-            setCountdownRemaining(remainingSecs);
-          } else {
-            setCountdownRemaining(remaining || 0);
-          }
-        }
-
-        if (data.toolsData.type === 'stopwatch' && data.toolsData.stopwatch) {
-          const { elapsed, startTime, running } = data.toolsData.stopwatch;
-          if (running && startTime) {
-            // Calculate elapsed based on startTime for sync
-            const now = Date.now();
-            const elapsedSecs = Math.round((now - startTime) / 1000);
-            setStopwatchElapsed(elapsedSecs);
-          } else {
-            setStopwatchElapsed(elapsed || 0);
-          }
-        }
+        // Tool data is flat from desktop: { type, active, remaining/time/text/... }
+        // No additional sync needed — desktop sends updates every second
       } else if (data.presentationData) {
         // Handle presentation slides (bypass theme)
         setPresentationData(data.presentationData);
@@ -665,33 +578,10 @@ function ViewerPage({ remotePin, remoteConfig }) {
     });
 
     // Handle standalone tool updates from operator (countdown, clock, stopwatch, announcement, rotatingMessages)
+    // Desktop sends flat data: { type, active, remaining/time/text/message/... }
     socketService.onToolsUpdate((toolData) => {
-      if (toolData && toolData.type) {
+      if (toolData && toolData.type && toolData.active) {
         setToolsData(toolData);
-
-        // Sync countdown timing
-        if (toolData.countdown) {
-          const { remaining, endTime, running } = toolData.countdown;
-          if (running && endTime) {
-            const now = Date.now();
-            const remainingSecs = Math.max(0, Math.round((endTime - now) / 1000));
-            setCountdownRemaining(remainingSecs);
-          } else {
-            setCountdownRemaining(remaining || 0);
-          }
-        }
-
-        // Sync stopwatch timing
-        if (toolData.type === 'stopwatch' && toolData.stopwatch) {
-          const { elapsed, startTime, running } = toolData.stopwatch;
-          if (running && startTime) {
-            const now = Date.now();
-            const elapsedSecs = Math.round((now - startTime) / 1000);
-            setStopwatchElapsed(elapsedSecs);
-          } else {
-            setStopwatchElapsed(elapsed || 0);
-          }
-        }
       } else if (toolData && !toolData.active) {
         // Tool was stopped
         setToolsData(null);
@@ -1097,8 +987,11 @@ function ViewerPage({ remotePin, remoteConfig }) {
   };
 
   // Helper to render countdown (used standalone or under announcement overlay)
+  // Desktop sends flat: { type: 'countdown', active: true, remaining: '04:30', message: '...', messageTranslation: '...' }
   const renderCountdown = () => {
-    const { message } = toolsData?.countdown || {};
+    const message = toolsData?.message || '';
+    const messageTranslation = toolsData?.messageTranslation || '';
+    const remaining = toolsData?.remaining || '00:00';
     const toolsStyle = {
       width: '100%',
       height: '100%',
@@ -1121,9 +1014,23 @@ function ViewerPage({ remotePin, remoteConfig }) {
               marginBottom: '0.3em',
               lineHeight: '1',
               textShadow: '2px 2px 8px rgba(0, 0, 0, 0.8)',
-              animation: 'messageUpdate 0.5s ease-out, breathing 3s ease-in-out 0.5s infinite'
+              animation: 'messageUpdate 0.5s ease-out, breathing 3s ease-in-out 0.5s infinite',
+              direction: 'rtl'
             }}>
             {message}
+          </div>
+        )}
+        {messageTranslation && (
+          <div style={{
+            fontSize: 'clamp(1.5rem, 3.5vw, 3rem)',
+            fontWeight: '300',
+            fontFamily: "'Montserrat', sans-serif",
+            marginBottom: '0.5em',
+            lineHeight: '1',
+            opacity: 0.8,
+            textShadow: '2px 2px 8px rgba(0, 0, 0, 0.8)'
+          }}>
+            {messageTranslation}
           </div>
         )}
         <div style={{
@@ -1135,7 +1042,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
           fontVariantNumeric: 'tabular-nums',
           textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
         }}>
-          {formatTime(countdownRemaining)}
+          {remaining}
         </div>
       </div>
     );
@@ -1473,7 +1380,7 @@ function ViewerPage({ remotePin, remoteConfig }) {
 
   const renderSlide = () => {
     // If announcement is active with countdown underneath, show countdown
-    if (toolsData?.type === 'announcement' && toolsData?.countdown?.running) {
+    if (toolsData?.type === 'announcement' && toolsData?.remaining) {
       return renderCountdown();
     }
 
@@ -1495,9 +1402,8 @@ function ViewerPage({ remotePin, remoteConfig }) {
         return renderCountdown();
       }
 
-      // Clock display
+      // Clock display — desktop sends { type: 'clock', active: true, time: '10:30:00', date: '...', format: '24h' }
       if (toolsData.type === 'clock') {
-        const { format, showDate } = toolsData.clock || {};
         return (
           <div style={toolsStyle}>
             <div style={{
@@ -1507,37 +1413,26 @@ function ViewerPage({ remotePin, remoteConfig }) {
               letterSpacing: '0.05em',
               textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
             }}>
-              {formatClockTime(clockTime, format)}
+              {toolsData.time || formatClockTime(clockTime, toolsData.format)}
             </div>
-            {showDate && (
+            {toolsData.date && (
               <div style={{
                 fontSize: 'clamp(1.5rem, 3vw, 2.5rem)',
                 fontWeight: '300',
                 marginTop: '20px',
                 textShadow: '2px 2px 6px rgba(0, 0, 0, 0.8)'
               }}>
-                {formatClockDate(clockTime)}
+                {toolsData.date}
               </div>
             )}
           </div>
         );
       }
 
-      // Stopwatch display
+      // Stopwatch display — desktop sends { type: 'stopwatch', active: true, time: '00:05.3', running: true }
       if (toolsData.type === 'stopwatch') {
-        const { label } = toolsData.stopwatch || {};
         return (
           <div style={toolsStyle}>
-            {label && (
-              <div style={{
-                fontSize: 'clamp(1.5rem, 3vw, 2.5rem)',
-                fontWeight: '300',
-                marginBottom: '20px',
-                textShadow: '2px 2px 6px rgba(0, 0, 0, 0.8)'
-              }}>
-                {label}
-              </div>
-            )}
             <div style={{
               fontSize: 'clamp(4rem, 15vw, 12rem)',
               fontWeight: '200',
@@ -1545,8 +1440,19 @@ function ViewerPage({ remotePin, remoteConfig }) {
               letterSpacing: '0.05em',
               textShadow: '3px 3px 10px rgba(0, 0, 0, 0.9)'
             }}>
-              {formatTime(stopwatchElapsed)}
+              {toolsData.time || formatTime(stopwatchElapsed)}
             </div>
+            {toolsData.running !== undefined && (
+              <div style={{
+                fontSize: 'clamp(0.8rem, 2vw, 1.2rem)',
+                fontWeight: '300',
+                marginTop: '10px',
+                opacity: 0.6,
+                textShadow: '1px 1px 4px rgba(0, 0, 0, 0.8)'
+              }}>
+                {toolsData.running ? 'RUNNING' : 'PAUSED'}
+              </div>
+            )}
           </div>
         );
       }

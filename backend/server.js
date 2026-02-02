@@ -212,6 +212,7 @@ const roomRenderedHtml = new Map(); // Map of roomPin -> { html, dimensions } (f
 const roomActiveTheme = new Map(); // Map of roomPin -> theme (for new viewers)
 const roomActiveBibleTheme = new Map(); // Map of roomPin -> bible theme (for new viewers)
 const roomActivePrayerTheme = new Map(); // Map of roomPin -> prayer theme (for new viewers)
+const midiBridgeSockets = new Map(); // Map of socketId -> roomPin (for MIDI bridge connections)
 
 io.on('connection', (socket) => {
   // Operator joins their room
@@ -895,6 +896,77 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ==================== MIDI Bridge Handlers ====================
+
+  // MIDI bridge joins a room
+  socket.on('midi:join', async (data) => {
+    try {
+      const { pin } = data || {};
+      if (!pin) {
+        socket.emit('midi:error', { message: 'Room PIN is required' });
+        return;
+      }
+
+      const room = await Room.findOne({
+        where: { pin: pin.toUpperCase(), isActive: true },
+        attributes: ['id', 'pin']
+      });
+
+      if (!room) {
+        socket.emit('midi:error', { message: 'Room not found or inactive' });
+        return;
+      }
+
+      socket.join(`room:${room.pin}`);
+      midiBridgeSockets.set(socket.id, room.pin);
+
+      socket.emit('midi:joined', { roomPin: room.pin });
+    } catch (error) {
+      console.error('Error in midi:join:', error);
+      socket.emit('midi:error', { message: 'Failed to join room' });
+    }
+  });
+
+  // MIDI bridge sends a command (relayed to operator's room)
+  socket.on('midi:command', (data) => {
+    try {
+      const roomPin = midiBridgeSockets.get(socket.id);
+      if (!roomPin) {
+        socket.emit('midi:error', { message: 'Not connected to a room' });
+        return;
+      }
+
+      if (data && data.command && typeof data.command === 'object' && data.command.type) {
+        io.to(`room:${roomPin}`).emit('midi:command', { command: data.command });
+      }
+    } catch (error) {
+      console.error('Error in midi:command:', error);
+    }
+  });
+
+  // MIDI bridge explicitly leaves a room
+  socket.on('midi:leave', () => {
+    const roomPin = midiBridgeSockets.get(socket.id);
+    if (roomPin) {
+      socket.leave(`room:${roomPin}`);
+      midiBridgeSockets.delete(socket.id);
+    }
+  });
+
+  // Operator broadcasts setlist summary for MIDI bridges
+  socket.on('operator:updateSetlistSummary', (data) => {
+    try {
+      const { roomPin, setlist } = data || {};
+      if (roomPin && Array.isArray(setlist)) {
+        io.to(`room:${roomPin}`).emit('setlist:summary', { setlist });
+      }
+    } catch (error) {
+      console.error('Error in operator:updateSetlistSummary:', error);
+    }
+  });
+
+  // ==================== End MIDI Bridge Handlers ====================
+
   // Heartbeat - ping/pong
   socket.on('ping', (timestamp) => {
     socket.emit('pong', timestamp);
@@ -920,6 +992,9 @@ io.on('connection', (socket) => {
         }
         viewerRooms.delete(socket.id);
       }
+
+      // Check if this was a MIDI bridge
+      midiBridgeSockets.delete(socket.id);
 
       // Check if this was an operator
       for (const [userId, socketId] of operatorSockets.entries()) {

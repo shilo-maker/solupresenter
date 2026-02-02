@@ -58,6 +58,7 @@ const Settings = lazy(() => import('./pages/Settings'));
 const Themes = lazy(() => import('./pages/Themes'));
 const RemoteScreen = lazy(() => import('./pages/RemoteScreen'));
 const RemoteScreens = lazy(() => import('./pages/RemoteScreens'));
+const MidiBridgePage = lazy(() => import('./pages/MidiBridgePage'));
 
 function App() {
   return (
@@ -75,6 +76,7 @@ function App() {
             <Route path="/obs-overlay" element={<OBSOverlay />} />
             <Route path="/stage-monitor" element={<StageMonitor />} />
             <Route path="/u/:userId/screen/:screenId" element={<RemoteScreen />} />
+            <Route path="/midi-bridge" element={<MidiBridgePage />} />
 
           {/* Private routes */}
           <Route

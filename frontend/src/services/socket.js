@@ -459,6 +459,19 @@ class SocketService {
     }
   }
 
+  // Listen for a generic event, returns unsubscribe function
+  on(event, callback) {
+    if (this.socket) {
+      this.socket.on(event, callback);
+      return () => {
+        if (this.socket) {
+          this.socket.off(event, callback);
+        }
+      };
+    }
+    return () => {};
+  }
+
   // Emit generic event (for direct socket.emit access)
   emit(event, data) {
     if (this.socket?.connected) {

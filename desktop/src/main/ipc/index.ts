@@ -2187,8 +2187,17 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     }
   });
 
+  let lastSetlistJson = '';
   ipcMain.on('remoteControl:updateState', (event, state: Partial<RemoteControlState>) => {
     remoteControlServer.updateState(state);
+    // Broadcast setlist summary to MIDI bridges only when setlist actually changes
+    if (state.setlist && socketService) {
+      const json = JSON.stringify(state.setlist);
+      if (json !== lastSetlistJson) {
+        lastSetlistJson = json;
+        socketService.broadcastSetlistSummary(state.setlist);
+      }
+    }
   });
 
   ipcMain.on('remoteControl:setCommandHandlerActive', (event, active: boolean) => {

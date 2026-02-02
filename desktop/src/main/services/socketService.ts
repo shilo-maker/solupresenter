@@ -119,6 +119,13 @@ export class SocketService {
           this.notifyViewerCount(data.count);
         });
 
+        // MIDI bridge commands — relay to control window via existing remote:command IPC
+        this.socket.on('midi:command', (data: { command: any }) => {
+          if (data?.command && this.controlWindow && !this.controlWindow.isDestroyed()) {
+            this.controlWindow.webContents.send('remote:command', data.command);
+          }
+        });
+
         // Timeout after 10 seconds
         this.connectionTimeoutId = setTimeout(() => {
           if (!this.status.connected) {
@@ -558,6 +565,18 @@ export class SocketService {
       } catch (error) {
         console.error('[SocketService] broadcastTool error:', error);
       }
+    }
+  }
+
+  /**
+   * Broadcast setlist summary to MIDI bridges in the room
+   */
+  broadcastSetlistSummary(setlist: Array<{ id: string; type: string; title: string }>): void {
+    if (this.socket && this.status.connected && this.status.roomPin) {
+      this.socket.emit('operator:updateSetlistSummary', {
+        roomPin: this.status.roomPin,
+        setlist
+      });
     }
   }
 

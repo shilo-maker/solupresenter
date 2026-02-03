@@ -48,6 +48,9 @@ let saveTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let isDirty = false;
 const SAVE_DEBOUNCE_MS = 500; // Save at most every 500ms
 
+// Initialization mode - skips individual saves, does one save at the end
+let isInitializing = false;
+
 // Rate limiting for backup creation
 let lastBackupTime = 0;
 const BACKUP_MIN_INTERVAL_MS = 60 * 1000; // Minimum 1 minute between backups
@@ -195,22 +198,17 @@ function copySeedMedia(): void {
  * Initialize database
  */
 export async function initDatabase(): Promise<void> {
-  console.log('initDatabase: starting...');
+  const startTime = Date.now();
+  isInitializing = true; // Skip individual saves during init for faster startup
   try {
-    console.log('initDatabase: loading sql.js...');
     const wasmPath = getSqlJsWasmPath();
-    console.log('initDatabase: WASM path:', wasmPath);
-
     const sqlConfig: any = {};
     if (wasmPath && fs.existsSync(wasmPath)) {
       // Load WASM file directly as a buffer for more reliable loading
-      const wasmBinary = fs.readFileSync(wasmPath);
-      sqlConfig.wasmBinary = wasmBinary;
-      console.log('initDatabase: Loaded WASM binary, size:', wasmBinary.length);
+      sqlConfig.wasmBinary = fs.readFileSync(wasmPath);
     }
 
     const SQL = await initSqlJs(sqlConfig);
-    console.log('initDatabase: sql.js loaded');
 
     // Ensure directory exists
     const dbDir = path.dirname(dbPath);
@@ -408,7 +406,7 @@ export async function initDatabase(): Promise<void> {
         JSON.stringify(defaultLinePositions),
         JSON.stringify([])
       ]);
-      console.log('Created Default theme');
+      
       saveDatabase();
     }
 
@@ -559,7 +557,7 @@ export async function initDatabase(): Promise<void> {
         JSON.stringify(defaultCurrentSlideText),
         JSON.stringify(defaultNextSlideText)
       ]);
-      console.log('Created Default Stage theme');
+      
       saveDatabase();
     }
 
@@ -626,6 +624,8 @@ export async function initDatabase(): Promise<void> {
         linePositions TEXT,
         referenceStyle TEXT,
         referencePosition TEXT,
+        referenceEnglishStyle TEXT,
+        referenceEnglishPosition TEXT,
         viewerBackground TEXT,
         canvasDimensions TEXT DEFAULT '{"width":1920,"height":1080}',
         backgroundBoxes TEXT,
@@ -802,7 +802,7 @@ export async function initDatabase(): Promise<void> {
         JSON.stringify({ width: 1920, height: 1080 }),
         JSON.stringify([])
       ]);
-      console.log('Created Default Bible theme');
+      
       saveDatabase();
     } else {
       // Migration: Update existing classic Bible theme to add referenceEnglishStyle and referenceEnglishPosition if missing
@@ -865,7 +865,7 @@ export async function initDatabase(): Promise<void> {
         JSON.stringify({ width: 1920, height: 1080 }),
         JSON.stringify([])
       ]);
-      console.log('Created Default OBS Songs theme');
+      
       saveDatabase();
     }
 
@@ -907,7 +907,7 @@ export async function initDatabase(): Promise<void> {
         JSON.stringify({ width: 1920, height: 1080 }),
         JSON.stringify([{ id: 'box-default', x: 0, y: 0, width: 38.09, height: 100, color: '#e8dcc8', opacity: 0.87, borderRadius: 8, texture: 'paper', textureOpacity: 0.3 }])
       ]);
-      console.log('Created Default OBS Bible theme');
+      
       saveDatabase();
     }
 
@@ -954,7 +954,7 @@ export async function initDatabase(): Promise<void> {
         JSON.stringify({ width: 1920, height: 1080 }),
         JSON.stringify([{ id: 'default-box', x: 0, y: 0.07, width: 45, height: 99.87, color: '#d4c4a8', opacity: 0.84, borderRadius: 0, texture: 'paper', textureOpacity: 0.3 }])
       ]);
-      console.log('Created Default OBS Prayer theme');
+      
       saveDatabase();
     }
 
@@ -1008,14 +1008,19 @@ export async function initDatabase(): Promise<void> {
         JSON.stringify({ width: 1920, height: 1080 }),
         JSON.stringify([])
       ]);
-      console.log('Created Default Prayer theme');
+      
       saveDatabase();
     }
 
-    saveDatabase();
+    // End initialization mode and do a single save
+    isInitializing = false;
+    if (isDirty) {
+      performSave();
+    }
 
-    console.log('Database initialized successfully');
+    console.log(`[Database] Initialized in ${Date.now() - startTime}ms`);
   } catch (error) {
+    isInitializing = false;
     console.error('Failed to initialize database:', error);
     throw error;
   }
@@ -1043,11 +1048,15 @@ function performSave(): void {
 /**
  * Save database to file (debounced)
  * Multiple calls within SAVE_DEBOUNCE_MS will be batched into one save
+ * During initialization, saves are skipped and done once at the end
  */
 export function saveDatabase(): void {
   if (!db) return;
 
   isDirty = true;
+
+  // During initialization, skip individual saves - we'll save once at the end
+  if (isInitializing) return;
 
   // Clear existing timeout to reset the debounce
   if (saveTimeoutId) {
@@ -1473,6 +1482,7 @@ export function getDisplayThemeOverride(displayId: number, themeType: DisplayThe
 
 /**
  * Set a theme override for a display (upsert)
+ * Uses transaction to prevent race conditions between DELETE and INSERT
  */
 export function setDisplayThemeOverride(displayId: number, themeType: DisplayThemeType, themeId: string): DisplayThemeOverride | null {
   if (!db) return null;
@@ -1483,18 +1493,28 @@ export function setDisplayThemeOverride(displayId: number, themeType: DisplayThe
   const existing = getDisplayThemeOverride(displayId, themeType);
   const createdAt = existing?.createdAt || now;
 
-  // Delete existing record if any (needed for INSERT OR REPLACE to work correctly)
-  if (existing) {
-    db.run('DELETE FROM display_theme_overrides WHERE displayId = ? AND themeType = ?', [displayId, themeType]);
+  try {
+    // Use transaction to ensure atomic DELETE-INSERT
+    beginTransaction();
+
+    // Delete existing record if any
+    if (existing) {
+      db.run('DELETE FROM display_theme_overrides WHERE displayId = ? AND themeType = ?', [displayId, themeType]);
+    }
+
+    // Insert the new/updated record
+    db.run(`
+      INSERT INTO display_theme_overrides (displayId, themeType, themeId, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?)
+    `, [displayId, themeType, themeId, createdAt, now]);
+
+    commitTransaction();
+  } catch (error) {
+    rollbackTransaction();
+    console.error('setDisplayThemeOverride error:', error);
+    return null;
   }
 
-  // Insert the new/updated record
-  db.run(`
-    INSERT INTO display_theme_overrides (displayId, themeType, themeId, createdAt, updatedAt)
-    VALUES (?, ?, ?, ?, ?)
-  `, [displayId, themeType, themeId, createdAt, now]);
-
-  saveDatabase();
   return getDisplayThemeOverride(displayId, themeType);
 }
 

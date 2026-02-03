@@ -269,7 +269,12 @@ export function deleteStageTheme(id: string): boolean {
   createBackup('delete_stage_theme');
 
   try {
+    // Delete the stage theme
     db.run(`DELETE FROM stage_monitor_themes WHERE id = ?`, [id]);
+
+    // Cascade cleanup: remove any display_theme_overrides that reference this theme
+    db.run(`DELETE FROM display_theme_overrides WHERE themeId = ?`, [id]);
+
     saveDatabase();
     return true;
   } catch (error) {

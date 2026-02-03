@@ -37,9 +37,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   reportRenderedHtml: (html: string, refWidth: number, refHeight: number) =>
     ipcRenderer.send('display:renderedHtml', html, refWidth, refHeight),
   sendTool: (toolData: any) => ipcRenderer.send('tools:send', toolData),
-  applyTheme: (theme: any) => ipcRenderer.send('theme:apply', theme),
+  applyTheme: (theme: any) => ipcRenderer.invoke('theme:apply', theme),
   setBackground: (background: string) => ipcRenderer.send('background:set', background),
-  applyOBSTheme: (theme: any) => ipcRenderer.send('obsTheme:apply', theme),
+  applyOBSTheme: (theme: any) => ipcRenderer.invoke('obsTheme:apply', theme),
 
   // ============ Fullscreen Media Display ============
   displayMedia: (mediaData: { type: 'image' | 'video'; url: string }) => ipcRenderer.invoke('media:display', mediaData),
@@ -293,6 +293,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('remote:addToSetlist', handler);
       return () => ipcRenderer.removeListener('remote:addToSetlist', handler);
     },
+    onThemeSelected: (callback: (data: { themeType: string; themeId: string }) => void) => {
+      const handler = (_: any, data: { themeType: string; themeId: string }) => {
+        console.log('[preload] Received remote:themeSelected', data);
+        callback(data);
+      };
+      ipcRenderer.on('remote:themeSelected', handler);
+      return () => ipcRenderer.removeListener('remote:themeSelected', handler);
+    },
     // Get current setlist from server (for sync on mount)
     getServerSetlist: () => ipcRenderer.invoke('remoteControl:getSetlist')
   },
@@ -303,7 +311,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const clampedFactor = Math.max(0.8, Math.min(1.5, factor));
     webFrame.setZoomFactor(clampedFactor);
   },
-  getZoomFactor: () => webFrame.getZoomFactor()
+  getZoomFactor: () => webFrame.getZoomFactor(),
+
+  // ============ Auto Update ============
+  autoUpdate: {
+    check: () => ipcRenderer.invoke('autoUpdate:check'),
+    download: () => ipcRenderer.invoke('autoUpdate:download'),
+    install: () => ipcRenderer.invoke('autoUpdate:install'),
+    getStatus: () => ipcRenderer.invoke('autoUpdate:getStatus'),
+    reset: () => ipcRenderer.invoke('autoUpdate:reset'),
+    onStatus: (callback: (status: { status: string; version?: string; releaseNotes?: string; progress?: number; error?: string }) => void) => {
+      const handler = (_: any, status: any) => callback(status);
+      ipcRenderer.on('autoUpdate:status', handler);
+      return () => ipcRenderer.removeListener('autoUpdate:status', handler);
+    }
+  }
 });
 
 // Type declarations for TypeScript
@@ -344,14 +366,14 @@ declare global {
       closeOBSOverlay: () => Promise<boolean>;
       isOBSOverlayOpen: () => Promise<boolean>;
 
-      // Slide Control (fire-and-forget, no return value)
+      // Slide Control (fire-and-forget for slides/tools, invoke for themes)
       sendSlide: (slideData: any) => void;
       sendBlank: () => void;
       reportRenderedHtml: (html: string, refWidth: number, refHeight: number) => void;
       sendTool: (toolData: any) => void;
-      applyTheme: (theme: any) => void;
+      applyTheme: (theme: any) => Promise<boolean>;
       setBackground: (background: string) => void;
-      applyOBSTheme: (theme: any) => void;
+      applyOBSTheme: (theme: any) => Promise<boolean>;
 
       // Fullscreen Media Display
       displayMedia: (mediaData: { type: 'image' | 'video'; url: string }) => Promise<boolean>;
@@ -669,12 +691,23 @@ declare global {
         setCommandHandlerActive: (active: boolean) => void;
         onCommand: (callback: (command: { type: string; payload?: any }) => void) => () => void;
         onAddToSetlist: (callback: (item: any) => void) => () => void;
+        onThemeSelected: (callback: (data: { themeType: string; themeId: string }) => void) => () => void;
         getServerSetlist: () => Promise<any[]>;
       };
 
       // UI Scaling
       setZoomFactor: (factor: number) => void;
       getZoomFactor: () => number;
+
+      // Auto Update
+      autoUpdate: {
+        check: () => Promise<{ status: string; version?: string; releaseNotes?: string; progress?: number; error?: string }>;
+        download: () => Promise<boolean>;
+        install: () => Promise<boolean>;
+        getStatus: () => Promise<{ status: string; version?: string; releaseNotes?: string; progress?: number; error?: string }>;
+        reset: () => Promise<boolean>;
+        onStatus: (callback: (status: { status: string; version?: string; releaseNotes?: string; progress?: number; error?: string }) => void) => () => void;
+      };
     };
   }
 }

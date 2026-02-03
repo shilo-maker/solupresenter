@@ -18,6 +18,14 @@ interface RemoteControlStatus {
   clients: number;
 }
 
+interface UpdateStatus {
+  status: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error';
+  version?: string;
+  releaseNotes?: string;
+  progress?: number;
+  error?: string;
+}
+
 export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -29,6 +37,7 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
   const [remoteControlLoading, setRemoteControlLoading] = useState(false);
   const [remoteControlQRCode, setRemoteControlQRCode] = useState<string | null>(null);
   const [syncLoading, setSyncLoading] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ status: 'idle' });
 
   // Theme state
   const {
@@ -86,9 +95,22 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
     // Load themes
     loadThemes();
 
+    // Load update status
+    window.electronAPI.autoUpdate.getStatus()
+      .then(setUpdateStatus)
+      .catch((error) => console.error('Failed to load update status:', error));
+
+    // Subscribe to update status changes
+    const unsubscribeUpdate = window.electronAPI.autoUpdate.onStatus((status) => {
+      setUpdateStatus(status as UpdateStatus);
+    });
+
     // Poll for status updates while component is mounted
     const interval = setInterval(loadRemoteControlStatus, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      unsubscribeUpdate();
+    };
   }, [loadRemoteControlStatus, loadThemes]);
 
   const handleLanguageChange = async (lang: 'en' | 'he') => {
@@ -130,6 +152,38 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
 
   const copyToClipboard = (text: string) => {
     window.electronAPI.copyToClipboard(text);
+  };
+
+  const handleCheckForUpdates = async () => {
+    try {
+      await window.electronAPI.autoUpdate.check();
+    } catch (error) {
+      console.error('Failed to check for updates:', error);
+    }
+  };
+
+  const handleDownloadUpdate = async () => {
+    try {
+      await window.electronAPI.autoUpdate.download();
+    } catch (error) {
+      console.error('Failed to download update:', error);
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    try {
+      await window.electronAPI.autoUpdate.install();
+    } catch (error) {
+      console.error('Failed to install update:', error);
+    }
+  };
+
+  const handleResetUpdateStatus = async () => {
+    try {
+      await window.electronAPI.autoUpdate.reset();
+    } catch (error) {
+      console.error('Failed to reset update status:', error);
+    }
   };
 
   const isRTL = i18n.language === 'he';
@@ -1314,6 +1368,300 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
           <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '12px' }}>
             {t('settings.syncNote', 'Note: This is a one-way sync. Changes you make locally will not be uploaded to the official database.')}
           </p>
+        </section>
+
+        {/* Software Updates Section */}
+        <section
+          style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '20px'
+          }}
+        >
+          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#8b5cf6' }}>
+            {t('settings.softwareUpdates', 'Software Updates')}
+          </h2>
+
+          {/* Idle state - Check for Updates button */}
+          {updateStatus.status === 'idle' && (
+            <button
+              onClick={handleCheckForUpdates}
+              style={{
+                width: '100%',
+                padding: '14px 20px',
+                background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                border: 'none',
+                borderRadius: '8px',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px'
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+              </svg>
+              {t('settings.checkForUpdates', 'Check for Updates')}
+            </button>
+          )}
+
+          {/* Checking state - Spinner */}
+          {updateStatus.status === 'checking' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 0' }}>
+              <div
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  border: '3px solid rgba(139, 92, 246, 0.3)',
+                  borderTopColor: '#8b5cf6',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }}
+              />
+              <span style={{ color: 'rgba(255,255,255,0.8)' }}>
+                {t('settings.checkingForUpdates', 'Checking for updates...')}
+              </span>
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            </div>
+          )}
+
+          {/* Available state - Shows version and Download button */}
+          {updateStatus.status === 'available' && (
+            <div>
+              <div
+                style={{
+                  background: 'rgba(139, 92, 246, 0.1)',
+                  border: '1px solid rgba(139, 92, 246, 0.3)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  marginBottom: '16px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 16v-4" />
+                    <path d="M12 8h.01" />
+                  </svg>
+                  <span style={{ color: '#8b5cf6', fontWeight: 600 }}>
+                    {t('settings.updateAvailable', 'Update Available')}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.9rem', color: 'rgba(255,255,255,0.8)' }}>
+                  {t('settings.newVersionAvailable', 'Version {{version}} is available for download.', { version: updateStatus.version })}
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={handleDownloadUpdate}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: 'white',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                    fontWeight: 600
+                  }}
+                >
+                  {t('settings.downloadUpdate', 'Download Update')}
+                </button>
+                <button
+                  onClick={handleResetUpdateStatus}
+                  style={{
+                    padding: '12px 20px',
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '8px',
+                    color: 'rgba(255,255,255,0.7)',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  {t('settings.later', 'Later')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Downloading state - Progress bar */}
+          {updateStatus.status === 'downloading' && (
+            <div>
+              <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: 'rgba(255,255,255,0.8)' }}>
+                  {t('settings.downloadingUpdate', 'Downloading update...')}
+                </span>
+                <span style={{ color: '#8b5cf6', fontWeight: 600 }}>
+                  {updateStatus.progress || 0}%
+                </span>
+              </div>
+              <div
+                style={{
+                  width: '100%',
+                  height: '8px',
+                  background: 'rgba(139, 92, 246, 0.2)',
+                  borderRadius: '4px',
+                  overflow: 'hidden'
+                }}
+              >
+                <div
+                  style={{
+                    width: `${updateStatus.progress || 0}%`,
+                    height: '100%',
+                    background: 'linear-gradient(90deg, #8b5cf6, #a78bfa)',
+                    borderRadius: '4px',
+                    transition: 'width 0.3s ease'
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Downloaded state - Restart & Update button */}
+          {updateStatus.status === 'downloaded' && (
+            <div>
+              <div
+                style={{
+                  background: 'rgba(16, 185, 129, 0.1)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  marginBottom: '16px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <polyline points="22 4 12 14.01 9 11.01" />
+                  </svg>
+                  <span style={{ color: '#10b981', fontWeight: 600 }}>
+                    {t('settings.updateReady', 'Update Ready')}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.9rem', color: 'rgba(255,255,255,0.8)' }}>
+                  {t('settings.updateReadyDescription', 'Version {{version}} has been downloaded. Restart the app to install the update.', { version: updateStatus.version })}
+                </p>
+              </div>
+              <button
+                onClick={handleInstallUpdate}
+                style={{
+                  width: '100%',
+                  padding: '14px 20px',
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '0.95rem',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+                  <path d="M21 3v5h-5" />
+                </svg>
+                {t('settings.restartAndUpdate', 'Restart & Update')}
+              </button>
+            </div>
+          )}
+
+          {/* Not Available state - Up to date message */}
+          {updateStatus.status === 'not-available' && (
+            <div>
+              <div
+                style={{
+                  background: 'rgba(16, 185, 129, 0.1)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px'
+                }}
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+                <span style={{ color: '#10b981', fontWeight: 500 }}>
+                  {t('settings.upToDate', "You're up to date!")}
+                </span>
+              </div>
+              <button
+                onClick={handleResetUpdateStatus}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  color: 'rgba(255,255,255,0.7)',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem'
+                }}
+              >
+                {t('settings.checkAgain', 'Check Again')}
+              </button>
+            </div>
+          )}
+
+          {/* Error state - Error message with Try Again button */}
+          {updateStatus.status === 'error' && (
+            <div>
+              <div
+                style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  marginBottom: '16px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="15" y1="9" x2="9" y2="15" />
+                    <line x1="9" y1="9" x2="15" y2="15" />
+                  </svg>
+                  <span style={{ color: '#ef4444', fontWeight: 600 }}>
+                    {t('settings.updateError', 'Update Error')}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: 'rgba(255,255,255,0.7)' }}>
+                  {updateStatus.error || t('settings.updateErrorGeneric', 'An error occurred while checking for updates.')}
+                </p>
+              </div>
+              <button
+                onClick={handleCheckForUpdates}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  background: 'rgba(239, 68, 68, 0.2)',
+                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  borderRadius: '8px',
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem',
+                  fontWeight: 500
+                }}
+              >
+                {t('settings.tryAgain', 'Try Again')}
+              </button>
+            </div>
+          )}
         </section>
 
         {/* About Section */}

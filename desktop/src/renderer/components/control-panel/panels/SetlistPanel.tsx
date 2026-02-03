@@ -1245,6 +1245,34 @@ const SetlistPanel = memo<SetlistPanelProps>(({
           next.delete(item.id);
         } else {
           next.add(item.id);
+          // Clear selection for items inside the collapsed section
+          // Only process if there's an active selection that could be affected
+          if (selectedSetlistMediaId || selectedYoutubeItemId) {
+            let inSection = false;
+            for (const setlistItem of setlist) {
+              if (setlistItem.id === item.id) {
+                inSection = true;
+                continue;
+              }
+              if (setlistItem.type === 'section') {
+                // Reached next section, stop processing
+                if (inSection) break;
+                continue;
+              }
+              if (inSection) {
+                if (selectedSetlistMediaId && setlistItem.type === 'media' && selectedSetlistMediaId === setlistItem.id) {
+                  onSelectedSetlistMediaIdChange(null);
+                  // If no more selections to clear, exit early
+                  if (!selectedYoutubeItemId) break;
+                }
+                if (selectedYoutubeItemId && setlistItem.type === 'youtube' && selectedYoutubeItemId === setlistItem.id) {
+                  onSelectedYoutubeItemIdChange(null);
+                  // If no more selections to clear, exit early
+                  if (!selectedSetlistMediaId) break;
+                }
+              }
+            }
+          }
         }
         return next;
       });

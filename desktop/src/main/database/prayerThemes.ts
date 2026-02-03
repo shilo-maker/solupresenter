@@ -249,7 +249,12 @@ export async function deletePrayerTheme(id: string): Promise<boolean> {
   createBackup('delete_prayer_theme');
 
   try {
+    // Delete the prayer theme
     db.run(`DELETE FROM prayer_themes WHERE id = ?`, [id]);
+
+    // Cascade cleanup: remove any display_theme_overrides that reference this theme
+    db.run(`DELETE FROM display_theme_overrides WHERE themeId = ?`, [id]);
+
     saveDatabase();
     return true;
   } catch (error) {

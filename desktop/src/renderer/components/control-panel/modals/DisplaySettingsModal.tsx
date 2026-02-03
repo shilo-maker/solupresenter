@@ -20,6 +20,12 @@ interface DisplaySettings {
   customThemeId?: string;
 }
 
+interface OBSTheme {
+  id: string;
+  name: string;
+  type?: 'songs' | 'bible' | 'prayer';
+}
+
 interface DisplaySettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -28,6 +34,7 @@ interface DisplaySettingsModalProps {
   stageThemes: Theme[];
   bibleThemes: Theme[];
   prayerThemes: Theme[];
+  obsThemes?: OBSTheme[];
   onStart: (displayId: number, type: 'viewer' | 'stage') => void;
   onThemeOverrideChanged: () => void;
 }
@@ -40,6 +47,7 @@ const DisplaySettingsModal = memo<DisplaySettingsModalProps>(({
   stageThemes,
   bibleThemes,
   prayerThemes,
+  obsThemes = [],
   onStart,
   onThemeOverrideChanged
 }) => {
@@ -116,14 +124,21 @@ const DisplaySettingsModal = memo<DisplaySettingsModalProps>(({
   const handleSetViewer = useCallback(() => setDisplayType('viewer'), []);
   const handleSetStage = useCallback(() => setDisplayType('stage'), []);
 
-  // Memoized theme types array
+  // Memoized OBS themes filtered by type
+  const obsThemesFiltered = useMemo(() => ({
+    viewer: obsThemes.filter(t => t.type === 'songs'),
+    bible: obsThemes.filter(t => t.type === 'bible'),
+    prayer: obsThemes.filter(t => t.type === 'prayer')
+  }), [obsThemes]);
+
+  // Memoized theme types array with OBS themes support
   const themeTypes = useMemo(() => displayType === 'stage'
-    ? [{ key: 'stage', label: t('displayThemeOverrides.stageTheme', 'Stage Theme'), themes: stageThemes }]
+    ? [{ key: 'stage', label: t('displayThemeOverrides.stageTheme', 'Stage Theme'), themes: stageThemes, obsThemes: [] as OBSTheme[] }]
     : [
-        { key: 'viewer', label: t('displayThemeOverrides.songsTheme', 'Songs Theme'), themes },
-        { key: 'bible', label: t('displayThemeOverrides.bibleTheme', 'Bible Theme'), themes: bibleThemes },
-        { key: 'prayer', label: t('displayThemeOverrides.prayerTheme', 'Prayer Theme'), themes: prayerThemes }
-      ], [displayType, t, stageThemes, themes, bibleThemes, prayerThemes]);
+        { key: 'viewer', label: t('displayThemeOverrides.songsTheme', 'Songs Theme'), themes, obsThemes: obsThemesFiltered.viewer },
+        { key: 'bible', label: t('displayThemeOverrides.bibleTheme', 'Bible Theme'), themes: bibleThemes, obsThemes: obsThemesFiltered.bible },
+        { key: 'prayer', label: t('displayThemeOverrides.prayerTheme', 'Prayer Theme'), themes: prayerThemes, obsThemes: obsThemesFiltered.prayer }
+      ], [displayType, t, stageThemes, themes, bibleThemes, prayerThemes, obsThemesFiltered]);
 
   // Memoized handler for stopPropagation
   const handleContentClick = useCallback((e: React.MouseEvent) => e.stopPropagation(), []);
@@ -246,7 +261,7 @@ const DisplaySettingsModal = memo<DisplaySettingsModalProps>(({
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', minHeight: '120px' }}>
-            {themeTypes.map(({ key, label, themes: themeList }) => (
+            {themeTypes.map(({ key, label, themes: themeList, obsThemes: obsThemeList }) => (
               <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', minWidth: '100px' }}>
                   {label}:
@@ -269,11 +284,24 @@ const DisplaySettingsModal = memo<DisplaySettingsModalProps>(({
                   <option value="" style={{ background: '#1e1e32' }}>
                     {t('displayThemeOverrides.useGlobal', '-- Use Global --')}
                   </option>
-                  {themeList.map(theme => (
-                    <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
-                      {theme.name}
-                    </option>
-                  ))}
+                  {themeList.length > 0 && (
+                    <optgroup label={t('displayThemeOverrides.regularThemes', 'Regular Themes')} style={{ background: '#1e1e32' }}>
+                      {themeList.map(theme => (
+                        <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
+                          {theme.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {obsThemeList.length > 0 && (
+                    <optgroup label={t('displayThemeOverrides.obsThemes', 'OBS Themes')} style={{ background: '#1e1e32' }}>
+                      {obsThemeList.map(theme => (
+                        <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
+                          {theme.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
             ))}

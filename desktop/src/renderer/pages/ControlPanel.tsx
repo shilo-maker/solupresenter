@@ -907,11 +907,31 @@ const ControlPanel: React.FC = () => {
     try {
       const songList = await window.electronAPI.getSongs();
       setSongs(songList || []);
+
+      // Create a Map for O(1) lookups instead of O(n) find() calls
+      const songsById = new Map((songList || []).map((s: Song) => [s.id, s]));
+
+      // Update selectedSong with fresh data if it exists in the new list
+      setSelectedSong(prev => {
+        if (!prev) return null;
+        return songsById.get(prev.id) || prev;
+      });
+
+      // Update setlist items with fresh song data
+      setSetlist(prev => prev.map(item => {
+        if (item.type === 'song' && item.song?.id) {
+          const freshSong = songsById.get(item.song.id);
+          if (freshSong) {
+            return { ...item, song: freshSong };
+          }
+        }
+        return item;
+      }));
     } catch (error) {
       console.error('Failed to load songs:', error);
       setSongs([]);
     }
-  }, []);
+  }, [setSetlist]);
 
   const loadPresentations = useCallback(async () => {
     try {
@@ -1188,6 +1208,8 @@ const ControlPanel: React.FC = () => {
       await window.electronAPI.deleteSong(songId);
       await loadSongs();
       setSelectedSong(prev => prev?.id === songId ? null : prev);
+      // Remove deleted song from current setlist
+      setSetlist(prev => prev.filter(item => !(item.type === 'song' && item.song?.id === songId)));
     } catch (error) {
       console.error('Failed to delete song:', error);
     }
@@ -2238,14 +2260,39 @@ const ControlPanel: React.FC = () => {
   }, [clearSetlistFromContext]);
 
   const loadSetlistDirect = useCallback((saved: SavedSetlist) => {
-    setSetlist(saved.items);
+    // Validate items - filter out songs that no longer exist in the library
+    // Create a Map for O(1) lookups instead of O(n) some()/find() calls
+    const songsById = new Map(songs.map(s => [s.id, s]));
+
+    const validatedItems = saved.items
+      .filter(item => {
+        if (item.type === 'song' && item.song?.id) {
+          if (!songsById.has(item.song.id)) {
+            console.warn(`[Setlist] Song "${item.song?.title}" (${item.song?.id}) no longer exists, removing from setlist`);
+            return false;
+          }
+        }
+        return true;
+      })
+      .map(item => {
+        // Update song data with latest from library (immutable update)
+        if (item.type === 'song' && item.song?.id) {
+          const latestSong = songsById.get(item.song.id);
+          if (latestSong) {
+            return { ...item, song: latestSong };
+          }
+        }
+        return item;
+      });
+
+    setSetlist(validatedItems);
     setCurrentSetlistName(saved.name);
     setCurrentSetlistId(saved.id);
-    updateSavedSnapshot(saved.items);
+    updateSavedSnapshot(validatedItems);
     setShowLoadModal(false);
     setShowUnsavedWarning(false);
     setPendingAction(null);
-  }, [updateSavedSnapshot]);
+  }, [updateSavedSnapshot, songs]);
 
   const deleteSetlistById = useCallback(async (id: string) => {
     try {

@@ -317,7 +317,13 @@ export async function deleteOBSTheme(id: string): Promise<boolean> {
   createBackup('delete_obs_theme');
 
   try {
+    // Delete the OBS theme
     db.run(`DELETE FROM obs_themes WHERE id = ?`, [id]);
+
+    // Cascade cleanup: remove any display_theme_overrides that reference this theme
+    // OBS themes can be used as viewer/bible/prayer themes through the theme resolver fallback
+    db.run(`DELETE FROM display_theme_overrides WHERE themeId = ?`, [id]);
+
     saveDatabase();
     return true;
   } catch (error) {

@@ -1,6 +1,7 @@
 import { ipcMain, dialog, app, shell, BrowserWindow } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as autoUpdateService from '../services/autoUpdateService';
 import { DisplayManager } from '../windows/displayManager';
 import { getLocalServerPort } from '../index';
 
@@ -102,6 +103,8 @@ export function setSocketControlWindow(window: import('electron').BrowserWindow)
   }
   // Also set control window for remote control server
   remoteControlServer.setControlWindow(window);
+  // Also set control window for auto-update service
+  autoUpdateService.setControlWindow(window);
 }
 
 export function registerIpcHandlers(displayManager: DisplayManager): void {
@@ -318,17 +321,19 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     }
   });
 
-  ipcMain.on('theme:apply', (event, theme) => {
+  ipcMain.handle('theme:apply', (event, theme) => {
     // Validate theme
     if (!theme || typeof theme !== 'object') {
       console.error('[IPC] theme:apply: invalid theme data');
-      return;
+      return false;
     }
     try {
       displayManager.broadcastTheme(theme);
       socketService.broadcastTheme(theme);
+      return true;
     } catch (error) {
       console.error('[IPC theme:apply] Broadcast error:', error);
+      return false;
     }
   });
 
@@ -367,11 +372,13 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     }
   });
 
-  ipcMain.on('obsTheme:apply', (event, theme) => {
+  ipcMain.handle('obsTheme:apply', (event, theme) => {
     try {
       obsServer.updateTheme(theme);
+      return true;
     } catch (error) {
       console.error('[IPC obsTheme:apply] Error:', error);
+      return false;
     }
   });
 
@@ -1574,6 +1581,38 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     if (themeId !== null && (typeof themeId !== 'string' || themeId.length > MAX_NAME_LENGTH)) {
       throw new Error('Invalid theme ID');
     }
+    // Validate theme exists before saving (if not clearing)
+    if (themeId !== null) {
+      let themeExists = false;
+      switch (themeType) {
+        case 'viewer':
+          themeExists = !!queryOne('SELECT id FROM viewer_themes WHERE id = ?', [themeId]);
+          break;
+        case 'stage':
+          themeExists = !!queryOne('SELECT id FROM stage_themes WHERE id = ?', [themeId]);
+          break;
+        case 'bible':
+          themeExists = !!queryOne('SELECT id FROM bible_themes WHERE id = ?', [themeId]);
+          break;
+        case 'prayer':
+          themeExists = !!queryOne('SELECT id FROM prayer_themes WHERE id = ?', [themeId]);
+          break;
+        case 'obs':
+          themeExists = !!queryOne('SELECT id FROM obs_themes WHERE id = ? AND type = ?', [themeId, 'songs']);
+          break;
+        case 'obsBible':
+          themeExists = !!queryOne('SELECT id FROM obs_themes WHERE id = ? AND type = ?', [themeId, 'bible']);
+          break;
+        case 'obsPrayer':
+          themeExists = !!queryOne('SELECT id FROM obs_themes WHERE id = ? AND type = ?', [themeId, 'prayer']);
+          break;
+      }
+      if (!themeExists) {
+        console.warn(`[IPC] settings:saveSelectedThemeId: theme ${themeId} of type ${themeType} not found`);
+        // Don't throw - just warn and don't save invalid reference
+        return false;
+      }
+    }
     saveSelectedThemeId(themeType, themeId);
     return true;
   });
@@ -2215,11 +2254,27 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   // Set up theme resolvers for per-display theme overrides
   // Use synchronous queryOne directly since the async functions return Promises
+  // Each resolver also checks OBS themes as a fallback, allowing OBS themes to be used on regular displays
   displayManager.setThemeResolvers({
-    viewer: (id: string) => queryOne('SELECT * FROM viewer_themes WHERE id = ?', [id]),
+    viewer: (id: string) => {
+      const theme = queryOne('SELECT * FROM viewer_themes WHERE id = ?', [id]);
+      if (theme) return theme;
+      // Fallback to OBS songs theme
+      return queryOne('SELECT * FROM obs_themes WHERE id = ? AND type = ?', [id, 'songs']);
+    },
     stage: (id: string) => queryOne('SELECT * FROM stage_themes WHERE id = ?', [id]),
-    bible: (id: string) => queryOne('SELECT * FROM bible_themes WHERE id = ?', [id]),
-    prayer: (id: string) => queryOne('SELECT * FROM prayer_themes WHERE id = ?', [id])
+    bible: (id: string) => {
+      const theme = queryOne('SELECT * FROM bible_themes WHERE id = ?', [id]);
+      if (theme) return theme;
+      // Fallback to OBS bible theme
+      return queryOne('SELECT * FROM obs_themes WHERE id = ? AND type = ?', [id, 'bible']);
+    },
+    prayer: (id: string) => {
+      const theme = queryOne('SELECT * FROM prayer_themes WHERE id = ?', [id]);
+      if (theme) return theme;
+      // Fallback to OBS prayer theme
+      return queryOne('SELECT * FROM obs_themes WHERE id = ? AND type = ?', [id, 'prayer']);
+    }
   });
 
   // Set up default theme resolvers to load default themes when none are set
@@ -2330,6 +2385,58 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
       return true;
     } catch (error) {
       console.error('[IPC displayThemeOverrides:rebroadcast] Error:', error);
+      return false;
+    }
+  });
+
+  // ============ Auto Update ============
+
+  // Set control window for auto-update status notifications
+  if (controlWindowRef) {
+    autoUpdateService.setControlWindow(controlWindowRef);
+  }
+
+  ipcMain.handle('autoUpdate:check', async () => {
+    try {
+      return await autoUpdateService.checkForUpdates();
+    } catch (error) {
+      console.error('[IPC autoUpdate:check] Error:', error);
+      return { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('autoUpdate:download', async () => {
+    try {
+      return await autoUpdateService.downloadUpdate();
+    } catch (error) {
+      console.error('[IPC autoUpdate:download] Error:', error);
+      return false;
+    }
+  });
+
+  ipcMain.handle('autoUpdate:install', () => {
+    try {
+      return autoUpdateService.installUpdate();
+    } catch (error) {
+      console.error('[IPC autoUpdate:install] Error:', error);
+      return false;
+    }
+  });
+
+  ipcMain.handle('autoUpdate:getStatus', () => {
+    try {
+      return autoUpdateService.getUpdateStatus();
+    } catch (error) {
+      console.error('[IPC autoUpdate:getStatus] Error:', error);
+      return { status: 'idle' };
+    }
+  });
+
+  ipcMain.handle('autoUpdate:reset', () => {
+    try {
+      return autoUpdateService.resetUpdateStatus();
+    } catch (error) {
+      console.error('[IPC autoUpdate:reset] Error:', error);
       return false;
     }
   });

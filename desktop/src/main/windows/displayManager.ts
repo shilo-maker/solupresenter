@@ -142,23 +142,33 @@ export class DisplayManager {
   constructor() {
     // Listen for display:ready IPC from renderer processes
     ipcMain.on('display:ready', (event) => {
-      const senderWindow = BrowserWindow.fromWebContents(event.sender);
-      if (!senderWindow) {
-        return;
-      }
-
-      // Check if this is the OBS overlay window
-      if (this.obsOverlayWindow?.window === senderWindow) {
-        this.sendInitialStateToOBS();
-        return;
-      }
-
-      // Find which managed display this is
-      for (const [displayId, managed] of this.displays) {
-        if (managed.window === senderWindow) {
-          this.sendInitialState(managed);
+      try {
+        const senderWindow = BrowserWindow.fromWebContents(event.sender);
+        if (!senderWindow) {
+          log.warn('display:ready received but sender window not found');
           return;
         }
+
+        // Check if this is the OBS overlay window
+        if (this.obsOverlayWindow?.window === senderWindow) {
+          log.debug('display:ready from OBS overlay window');
+          this.sendInitialStateToOBS();
+          return;
+        }
+
+        // Find which managed display this is
+        for (const [displayId, managed] of this.displays) {
+          if (managed.window === senderWindow) {
+            log.debug(`display:ready from display ${displayId} (${managed.type})`);
+            this.sendInitialState(managed);
+            return;
+          }
+        }
+
+        // Window not found in managed displays - log for debugging
+        log.warn('display:ready received from unknown window (may be closing or not yet registered)');
+      } catch (error) {
+        log.error('Error handling display:ready:', error);
       }
     });
 
@@ -1051,11 +1061,19 @@ export class DisplayManager {
   private getThemeForDisplay(displayId: number, themeType: DisplayThemeType, globalTheme: any): any {
     // Check for display-specific override
     const override = getDisplayThemeOverride(displayId, themeType);
-    if (override && this.themeResolvers[themeType]) {
+    if (override) {
+      // Warn if theme resolvers are not set
+      if (!this.themeResolvers[themeType]) {
+        log.warn(`Theme resolver not set for type ${themeType}, falling back to global theme for display ${displayId}`);
+        return globalTheme;
+      }
       const overrideTheme = this.themeResolvers[themeType]!(override.themeId);
       if (overrideTheme) {
         log.debug(`Using override theme for display ${displayId}, type ${themeType}:`, overrideTheme.name);
         return overrideTheme;
+      } else {
+        // Theme was deleted or doesn't exist - log warning and fall back
+        log.warn(`Override theme ${override.themeId} not found for display ${displayId}, type ${themeType}. Using global theme.`);
       }
     }
     // Fall back to global theme
@@ -1163,6 +1181,19 @@ export class DisplayManager {
         } catch (error) {
           log.debug('Window destroyed during rebroadcastAllThemes slide update:', error);
         }
+      }
+
+      // Also update OBS overlay with current slide data and theme
+      try {
+        if (this.obsOverlayWindow?.window && !this.obsOverlayWindow.window.isDestroyed()) {
+          const slideWithTheme = {
+            ...this.currentSlideData,
+            activeTheme: globalTheme
+          };
+          this.obsOverlayWindow.window.webContents.send('slide:update', slideWithTheme);
+        }
+      } catch (error) {
+        log.debug('OBS window destroyed during rebroadcastAllThemes:', error);
       }
     }
   }

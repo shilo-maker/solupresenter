@@ -1,8 +1,8 @@
-import { getDb, saveDatabase, generateId, queryAll, queryOne, createBackup } from './index';
+import { getDb, saveDatabase, generateId, queryAll, queryOne, createBackup, beginTransaction, commitTransaction, rollbackTransaction } from './index';
 
 export interface SetlistItem {
   id: string;
-  type: 'song' | 'blank' | 'section' | 'countdown' | 'announcement' | 'messages' | 'media' | 'bible' | 'presentation' | 'youtube';
+  type: 'song' | 'blank' | 'section' | 'countdown' | 'announcement' | 'messages' | 'media' | 'bible' | 'presentation' | 'youtube' | 'clock' | 'stopwatch' | 'audioPlaylist';
   // Song data (full song object for offline use)
   song?: {
     id: string;
@@ -130,29 +130,38 @@ export async function createSetlist(data: SetlistData): Promise<Setlist | null> 
   const now = new Date().toISOString();
   const items = data.items || [];
 
-  db.run(`
-    INSERT INTO setlists (id, name, venue, items, createdAt, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `, [
-    id,
-    data.name,
-    data.venue || null,
-    JSON.stringify(items),
-    now,  // Use ISO string for createdAt
-    now
-  ]);
+  try {
+    beginTransaction();
 
-  saveDatabase();
+    db.run(`
+      INSERT INTO setlists (id, name, venue, items, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `, [
+      id,
+      data.name,
+      data.venue || null,
+      JSON.stringify(items),
+      now,  // Use ISO string for createdAt
+      now
+    ]);
 
-  // Return the created object directly instead of re-querying
-  return {
-    id,
-    name: data.name,
-    venue: data.venue,
-    items,
-    createdAt: now,
-    updatedAt: now
-  };
+    commitTransaction();
+    saveDatabase();
+
+    // Return the created object directly instead of re-querying
+    return {
+      id,
+      name: data.name,
+      venue: data.venue,
+      items,
+      createdAt: now,
+      updatedAt: now
+    };
+  } catch (error) {
+    rollbackTransaction();
+    console.error('[setlists] createSetlist error:', error);
+    throw error;
+  }
 }
 
 /**
@@ -193,11 +202,19 @@ export async function updateSetlist(id: string, data: Partial<SetlistData>): Pro
   values.push(id);
   updatedSetlist.updatedAt = now;
 
-  db.run(`UPDATE setlists SET ${updates.join(', ')} WHERE id = ?`, values);
-  saveDatabase();
+  try {
+    beginTransaction();
+    db.run(`UPDATE setlists SET ${updates.join(', ')} WHERE id = ?`, values);
+    commitTransaction();
+    saveDatabase();
 
-  // Return the updated object directly instead of re-querying
-  return updatedSetlist;
+    // Return the updated object directly instead of re-querying
+    return updatedSetlist;
+  } catch (error) {
+    rollbackTransaction();
+    console.error('[setlists] updateSetlist error:', error);
+    return null;
+  }
 }
 
 /**
@@ -210,10 +227,22 @@ export async function deleteSetlist(id: string): Promise<boolean> {
   // Validate input
   if (!id || typeof id !== 'string') return false;
 
+  // Verify setlist exists before deleting
+  const existing = await getSetlist(id);
+  if (!existing) return false;
+
   // Create backup before destructive operation
   createBackup('delete_setlist');
 
-  db.run(`DELETE FROM setlists WHERE id = ?`, [id]);
-  saveDatabase();
-  return true;
+  try {
+    beginTransaction();
+    db.run(`DELETE FROM setlists WHERE id = ?`, [id]);
+    commitTransaction();
+    saveDatabase();
+    return true;
+  } catch (error) {
+    rollbackTransaction();
+    console.error('[setlists] deleteSetlist error:', error);
+    return false;
+  }
 }

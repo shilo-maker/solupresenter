@@ -943,8 +943,8 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
             alignItems,
             paddingTop: `${position.paddingTop}%`,
             paddingBottom: `${position.paddingBottom}%`,
-            paddingLeft: `${position.paddingLeft ?? 0}px`,
-            paddingRight: `${position.paddingRight ?? 0}px`,
+            paddingLeft: `${position.paddingLeft ?? 0}%`,
+            paddingRight: `${position.paddingRight ?? 0}%`,
             boxSizing: 'border-box',
             zIndex: isReferenceLine ? 10 : 2,
             overflow: useAutoHeight ? 'visible' : 'hidden',
@@ -1130,10 +1130,12 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
     // Skip if reference is in lineOrder - it will be rendered by renderAbsoluteLines
     if (lineOrder.includes('reference')) return null;
     if (!slideData?.reference) return null;
-    if (!theme?.referencePosition) return null;
 
-    const position = theme.referencePosition;
-    const style = theme?.referenceStyle || {
+    // Use effectiveLinePositions and effectiveLineStyles for consistency with other lines
+    const position = effectiveLinePositions.reference;
+    if (!position) return null;
+
+    const style = effectiveLineStyles.reference || {
       fontSize: 70,
       fontWeight: '500',
       color: '#06b6d4',
@@ -1219,9 +1221,9 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
       return null; // Only show in bilingual mode
     }
 
-    // Use theme position if available, otherwise use defaults
-    const position = theme?.referenceTranslationPosition || DEFAULT_LINE_POSITIONS.referenceTranslation;
-    const style = theme?.referenceTranslationStyle || DEFAULT_LINE_STYLES.referenceTranslation;
+    // Use effectiveLinePositions and effectiveLineStyles for consistency with other lines
+    const position = effectiveLinePositions.referenceTranslation || DEFAULT_LINE_POSITIONS.referenceTranslation;
+    const style = effectiveLineStyles.referenceTranslation || DEFAULT_LINE_STYLES.referenceTranslation;
 
     if (style.visible === false) return null;
 
@@ -1285,9 +1287,9 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
       return null; // Only show in bilingual mode
     }
 
-    // Use theme position if available
-    const position = theme?.referenceEnglishPosition;
-    const style = theme?.referenceEnglishStyle;
+    // Use effectiveLinePositions and effectiveLineStyles for consistency with other lines
+    const position = effectiveLinePositions.referenceEnglish;
+    const style = effectiveLineStyles.referenceEnglish;
 
     // If no specific referenceEnglish position, don't render (Bible theme not configured)
     if (!position) {
@@ -1582,6 +1584,22 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
   const scaledWidth = refWidth * scale;
   const scaledHeight = refHeight * scale;
 
+  // Capture rendered HTML and send to parent for mirroring to virtual displays.
+  // Debounced (50ms) so flow positioning can settle before capturing final layout.
+  // NOTE: This must be called BEFORE any early returns to satisfy React's rules of hooks
+  useEffect(() => {
+    // Skip capture if blank or no callback
+    if (isBlank || !onHtmlCapture || !contentDivRef.current) return;
+    const timerId = setTimeout(() => {
+      requestAnimationFrame(() => {
+        if (contentDivRef.current) {
+          onHtmlCapture(contentDivRef.current.innerHTML, refWidth, refHeight);
+        }
+      });
+    }, 50);
+    return () => clearTimeout(timerId);
+  }, [slideData, displayMode, theme, presentationSlide, combinedSlides, isBlank, onHtmlCapture, refWidth, refHeight, flowPositions, measuredHeights]);
+
   // Render blank screen
   if (isBlank) {
     return (
@@ -1620,20 +1638,6 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
       </div>
     );
   }
-
-  // Capture rendered HTML and send to parent for mirroring to virtual displays.
-  // Debounced (50ms) so flow positioning can settle before capturing final layout.
-  useEffect(() => {
-    if (!onHtmlCapture || !contentDivRef.current) return;
-    const timerId = setTimeout(() => {
-      requestAnimationFrame(() => {
-        if (contentDivRef.current) {
-          onHtmlCapture(contentDivRef.current.innerHTML, refWidth, refHeight);
-        }
-      });
-    }, 50);
-    return () => clearTimeout(timerId);
-  }, [slideData, displayMode, theme, presentationSlide, combinedSlides, isBlank, onHtmlCapture, refWidth, refHeight, flowPositions, measuredHeights]);
 
   // Check if we're rendering a presentation slide
   const isPresentation = !!presentationSlide;

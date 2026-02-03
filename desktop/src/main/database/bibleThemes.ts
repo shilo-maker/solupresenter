@@ -242,7 +242,12 @@ export async function deleteBibleTheme(id: string): Promise<boolean> {
   createBackup('delete_bible_theme');
 
   try {
+    // Delete the bible theme
     db.run(`DELETE FROM bible_themes WHERE id = ?`, [id]);
+
+    // Cascade cleanup: remove any display_theme_overrides that reference this theme
+    db.run(`DELETE FROM display_theme_overrides WHERE themeId = ?`, [id]);
+
     saveDatabase();
     return true;
   } catch (error) {

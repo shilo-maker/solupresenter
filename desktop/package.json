@@ -1,16 +1,18 @@
 {
   "name": "solupresenter-desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "SoluPresenter Desktop - Multi-display presentation software",
   "main": "dist/main/main/index.js",
   "author": "SoluPresenter",
   "license": "MIT",
   "scripts": {
-    "dev": "concurrently -k \"npm run dev:renderer\" \"npm run dev:main\"",
-    "dev:main": "wait-on http://localhost:5173 && electron .",
+    "dev": "npm run build:main:fast && concurrently -k \"npm run dev:renderer\" \"npm run watch:main\" \"npm run dev:electron\"",
+    "dev:electron": "electron .",
+    "watch:main": "node scripts/build-main.mjs --watch",
     "dev:renderer": "vite",
     "build": "npm run build:renderer && npm run build:main",
     "build:main": "tsc -p tsconfig.main.json",
+    "build:main:fast": "node scripts/build-main.mjs",
     "build:renderer": "vite build",
     "start": "electron .",
     "package": "npm run build && electron-builder",
@@ -48,12 +50,14 @@
     "concurrently": "^9.1.2",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
+    "esbuild": "^0.27.2",
     "png-to-ico": "^3.0.1",
     "react": "^19.0.0",
     "react-bootstrap": "^2.10.7",
     "react-dom": "^19.0.0",
     "sharp": "^0.34.5",
     "to-ico": "^1.1.5",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.5",
     "vitest": "^4.0.17",
@@ -112,7 +116,7 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "your-username",
+      "owner": "shilo",
       "repo": "solupresenter"
     }
   }

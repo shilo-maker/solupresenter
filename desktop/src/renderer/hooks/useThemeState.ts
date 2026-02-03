@@ -1,8 +1,11 @@
 import { useState, useCallback } from 'react';
 
-// Module-level flag to track if themes have been loaded and applied
+// Module-level flag to track if themes have been loaded
 // This persists across component remounts (e.g., navigating away and back)
-let hasAppliedInitialThemes = false;
+// NOTE: Themes are NO LONGER automatically applied on mount to prevent
+// unexpected theme broadcasts when navigating or reconnecting displays.
+// Themes are only applied when explicitly requested by user action.
+let hasLoadedThemes = false;
 
 export interface Theme {
   id: string;
@@ -121,10 +124,12 @@ export function useThemeState(): UseThemeStateReturn {
   }, []);
 
   // Load all themes from database
+  // NOTE: This function ONLY loads themes into state - it does NOT broadcast them to displays.
+  // Themes are only broadcast when explicitly applied by user action (via applyViewerTheme, etc.)
+  // or when a display connects and requests initial state from displayManager.
   const loadThemes = useCallback(async () => {
     try {
       const savedThemeIds = await window.electronAPI.getSelectedThemeIds();
-      const isFirstLoad = !hasAppliedInitialThemes;
 
       // Load songs (viewer) themes
       const themeList = await window.electronAPI.getThemes();
@@ -137,10 +142,7 @@ export function useThemeState(): UseThemeStateReturn {
           themeToSelect = themeList.find((t: Theme) => t.isDefault) || themeList[0];
         }
         setSelectedTheme(themeToSelect);
-        // Only apply theme on first load
-        if (isFirstLoad) {
-          applyThemeToViewerInternal(themeToSelect);
-        }
+        // NO automatic apply - themes are only applied on explicit user action
       }
 
       // Load stage monitor themes
@@ -154,10 +156,7 @@ export function useThemeState(): UseThemeStateReturn {
           themeToSelect = stageThemeList.find((t: Theme) => t.isDefault) || stageThemeList[0];
         }
         setSelectedStageTheme(themeToSelect);
-        // Only apply theme on first load
-        if (isFirstLoad) {
-          applyStageThemeToMonitorInternal(themeToSelect);
-        }
+        // NO automatic apply - themes are only applied on explicit user action
       }
 
       // Load Bible themes
@@ -171,10 +170,7 @@ export function useThemeState(): UseThemeStateReturn {
           themeToSelect = bibleThemeList.find((t: Theme) => t.isDefault) || bibleThemeList[0];
         }
         setSelectedBibleTheme(themeToSelect);
-        // Only apply theme on first load
-        if (isFirstLoad) {
-          window.electronAPI.applyBibleTheme(themeToSelect);
-        }
+        // NO automatic apply - themes are only applied on explicit user action
       }
 
       // Load OBS themes
@@ -195,10 +191,7 @@ export function useThemeState(): UseThemeStateReturn {
           }
           setSelectedOBSSongsTheme(songsTheme);
           setSelectedOBSTheme(songsTheme);
-          // Only apply theme on first load
-          if (isFirstLoad) {
-            window.electronAPI.applyOBSTheme(songsTheme);
-          }
+          // NO automatic apply - themes are only applied on explicit user action
         }
 
         // Load OBS Bible theme
@@ -210,10 +203,7 @@ export function useThemeState(): UseThemeStateReturn {
             bibleTheme = obsBibleThemes.find((t: Theme) => t.isDefault) || obsBibleThemes[0];
           }
           setSelectedOBSBibleTheme(bibleTheme);
-          // Only apply theme on first load
-          if (isFirstLoad) {
-            window.electronAPI.applyOBSTheme(bibleTheme);
-          }
+          // NO automatic apply - themes are only applied on explicit user action
         }
 
         // Load OBS Prayer theme
@@ -225,10 +215,7 @@ export function useThemeState(): UseThemeStateReturn {
             prayerTheme = obsPrayerThemes.find((t: Theme) => t.isDefault) || obsPrayerThemes[0];
           }
           setSelectedOBSPrayerTheme(prayerTheme);
-          // Only apply theme on first load
-          if (isFirstLoad) {
-            window.electronAPI.applyOBSTheme(prayerTheme);
-          }
+          // NO automatic apply - themes are only applied on explicit user action
         }
       }
 
@@ -243,18 +230,15 @@ export function useThemeState(): UseThemeStateReturn {
           themeToSelect = prayerThemeList.find((t: Theme) => t.isDefault) || prayerThemeList[0];
         }
         setSelectedPrayerTheme(themeToSelect);
-        // Only apply theme on first load
-        if (isFirstLoad) {
-          window.electronAPI.applyPrayerTheme(themeToSelect);
-        }
+        // NO automatic apply - themes are only applied on explicit user action
       }
 
       // Mark as loaded (module-level to persist across navigation)
-      hasAppliedInitialThemes = true;
+      hasLoadedThemes = true;
     } catch (error) {
       console.error('Failed to load themes:', error);
     }
-  }, [applyThemeToViewerInternal, applyStageThemeToMonitorInternal]);
+  }, []);
 
   // Apply viewer theme (accepts theme object)
   const applyViewerTheme = useCallback((theme: any) => {

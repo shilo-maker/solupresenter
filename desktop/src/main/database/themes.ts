@@ -204,7 +204,12 @@ export async function deleteTheme(id: string): Promise<boolean> {
   createBackup('delete_theme');
 
   try {
+    // Delete the viewer theme
     db.run(`DELETE FROM viewer_themes WHERE id = ?`, [id]);
+
+    // Cascade cleanup: remove any display_theme_overrides that reference this theme
+    db.run(`DELETE FROM display_theme_overrides WHERE themeId = ?`, [id]);
+
     saveDatabase();
     return true;
   } catch (error) {

@@ -1756,6 +1756,7 @@ const HeaderBar = memo<HeaderBarProps>(({
         stageThemes={stageMonitorThemes}
         bibleThemes={bibleThemes}
         prayerThemes={prayerThemes}
+        obsThemes={obsThemes}
         onStart={handleDisplaySettingsStart}
         onThemeOverrideChanged={handleThemeOverrideChanged}
       />

@@ -136,10 +136,23 @@ const DisplayThemeOverrideModal = memo<DisplayThemeOverrideModalProps>(({
     prayer: prayerThemes
   }), [themes, stageThemes, bibleThemes, prayerThemes]);
 
+  // Memoized OBS themes filtered by type
+  const obsThemesMap = useMemo(() => ({
+    viewer: obsThemes.filter(t => t.type === 'songs'),
+    bible: obsThemes.filter(t => t.type === 'bible'),
+    prayer: obsThemes.filter(t => t.type === 'prayer')
+  }), [obsThemes]);
+
   // Get themes for a specific type
   const getThemesForType = useCallback((themeType: 'viewer' | 'stage' | 'bible' | 'prayer'): Theme[] => {
     return themesMap[themeType] || [];
   }, [themesMap]);
+
+  // Get OBS themes for a specific type (viewer uses 'songs', others match directly)
+  const getOBSThemesForType = useCallback((themeType: 'viewer' | 'stage' | 'bible' | 'prayer'): OBSTheme[] => {
+    if (themeType === 'stage') return []; // No OBS themes for stage
+    return obsThemesMap[themeType] || [];
+  }, [obsThemesMap]);
 
   // Get display name for theme type
   const getThemeTypeName = useCallback((themeType: 'viewer' | 'stage' | 'bible' | 'prayer'): string => {
@@ -535,11 +548,24 @@ const DisplayThemeOverrideModal = memo<DisplayThemeOverrideModalProps>(({
                         <option value="" style={{ background: '#1e1e32' }}>
                           {t('displayThemeOverrides.useGlobal', '-- Use Global --')}
                         </option>
-                        {getThemesForType(themeType).map(theme => (
-                          <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
-                            {theme.name}
-                          </option>
-                        ))}
+                        {getThemesForType(themeType).length > 0 && (
+                          <optgroup label={t('displayThemeOverrides.regularThemes', 'Regular Themes')} style={{ background: '#1e1e32' }}>
+                            {getThemesForType(themeType).map(theme => (
+                              <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
+                                {theme.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {getOBSThemesForType(themeType).length > 0 && (
+                          <optgroup label={t('displayThemeOverrides.obsThemes', 'OBS Themes')} style={{ background: '#1e1e32' }}>
+                            {getOBSThemesForType(themeType).map(theme => (
+                              <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
+                                {theme.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                     </div>
                   ))}

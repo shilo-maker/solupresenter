@@ -53,31 +53,60 @@ let displayManager: DisplayManager;
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
-function createControlWindow(): void {
-  const primaryDisplay = screen.getPrimaryDisplay();
+// Cache icon path at module level (computed once on first call)
+let cachedIconPath: string | null = null;
 
-  // Get icon path - use ICO for Windows, PNG for other platforms
+function getIconPath(): string {
+  if (cachedIconPath !== null) return cachedIconPath;
+
   const iconExt = process.platform === 'win32' ? 'favicon.ico' : 'logo512.png';
-  let iconPath = '';
-
-  // Try multiple locations
   const possiblePaths = [
-    // Production: extraResources icons folder
     path.join(process.resourcesPath || '', 'icons', iconExt),
-    // Development: relative to dist folder
     path.join(__dirname, '..', '..', '..', 'resources', 'icons', iconExt),
-    // Alternative dev path
     path.join(__dirname, '..', '..', 'resources', 'icons', iconExt),
-    // Next to app
     path.join(app.getAppPath(), 'resources', 'icons', iconExt),
   ];
 
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) {
-      iconPath = p;
-      break;
+      cachedIconPath = p;
+      return cachedIconPath;
     }
   }
+  cachedIconPath = '';
+  return cachedIconPath;
+}
+
+/**
+ * Check if Vite dev server is ready
+ */
+async function isViteReady(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const req = http.get('http://localhost:5173', (res) => {
+      resolve(res.statusCode === 200);
+    });
+    req.on('error', () => resolve(false));
+    req.setTimeout(500, () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
+
+/**
+ * Wait for Vite dev server with polling
+ */
+async function waitForVite(maxAttempts = 100): Promise<boolean> {
+  for (let i = 0; i < maxAttempts; i++) {
+    if (await isViteReady()) return true;
+    await new Promise(r => setTimeout(r, 100));
+  }
+  return false;
+}
+
+function createControlWindow(): void {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const iconPath = getIconPath();
 
   controlWindow = new BrowserWindow({
     x: primaryDisplay.bounds.x + 50,
@@ -88,8 +117,8 @@ function createControlWindow(): void {
     minHeight: 700,
     title: 'SoluCast',
     icon: iconPath,
-    show: false, // Don't show until ready
-    backgroundColor: '#09090b', // Match app background to prevent white flash
+    show: false,
+    backgroundColor: '#09090b',
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'control.js'),
@@ -101,17 +130,29 @@ function createControlWindow(): void {
 
   controlWindow.setMenu(null);
 
-  // Show window with smooth fade when ready to display
-  controlWindow.once('ready-to-show', () => {
-    controlWindow?.show();
-  });
-
   // Load the renderer
   if (isDev) {
-    controlWindow.loadURL('http://localhost:5173');
-    controlWindow.webContents.openDevTools({ mode: 'detach' });
+    // Show window as soon as loading screen's DOM is ready (no white flash)
+    controlWindow.webContents.once('dom-ready', () => {
+      controlWindow?.show();
+    });
+
+    // Inline loading HTML for fastest load (no file I/O)
+    controlWindow.loadURL(`data:text/html;charset=utf-8,<!DOCTYPE html><html><head><style>*{margin:0;padding:0}body{background:#09090b;height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:24px}.s{width:48px;height:48px;border:3px solid rgba(255,255,255,0.1);border-top-color:#3b82f6;border-radius:50%;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.t{color:rgba(255,255,255,0.6);font-family:system-ui;font-size:14px}</style></head><body><div class="s"></div><div class="t">Starting...</div></body></html>`);
+
+    // Poll for Vite and load when ready
+    waitForVite().then((ready) => {
+      if (ready && controlWindow && !controlWindow.isDestroyed()) {
+        controlWindow.loadURL('http://localhost:5173');
+        controlWindow.webContents.openDevTools({ mode: 'detach' });
+      }
+    });
   } else {
-    // In production, use local HTTP server for proper origin (needed for YouTube)
+    // In production: show window when ready
+    controlWindow.once('ready-to-show', () => {
+      controlWindow?.show();
+    });
+    // Use local HTTP server for proper origin (needed for YouTube)
     controlWindow.loadURL(`http://127.0.0.1:${localServerPort}/`);
   }
 
@@ -444,14 +485,20 @@ async function startLocalServer(): Promise<number> {
 }
 
 async function initializeApp(): Promise<void> {
-  // Initialize database
-  try {
-    await initDatabase();
-  } catch (err) {
-    console.error('Database initialization failed:', err);
-  }
+  const startTime = Date.now();
 
-  // Cleanup orphaned media files from previous crashes
+  // Initialize display manager early (synchronous, fast)
+  displayManager = new DisplayManager();
+
+  // Register IPC handlers early so they're ready when window loads
+  registerIpcHandlers(displayManager);
+
+  // Start database initialization (don't await yet)
+  const dbPromise = initDatabase().catch((err) => {
+    console.error('Database initialization failed:', err);
+  });
+
+  // Cleanup orphaned media files from previous crashes (background)
   cleanupOrphanedFiles().catch((err) => {
     console.warn('Media cleanup warning:', err);
   });
@@ -466,12 +513,6 @@ async function initializeApp(): Promise<void> {
   }).catch((err) => {
     console.warn('ML Translation initialization error:', err);
   });
-
-  // Initialize display manager
-  displayManager = new DisplayManager();
-
-  // Register IPC handlers
-  registerIpcHandlers(displayManager);
 
   // Register media protocol handler with streaming support
 
@@ -782,20 +823,28 @@ async function initializeApp(): Promise<void> {
     } catch (err) {
       console.error('Failed to start local server:', err);
     }
+
+    // Wait for database before creating window in production
+    await dbPromise;
+
+    // Create main control window
+    createControlWindow();
   } else {
-    // In dev mode, also start local HTTP server just for media file serving
-    // (renderer is served by Vite, but media files need our server)
-    try {
-      const port = await startLocalServer();
+    // DEV MODE: Create window immediately (loads from Vite at localhost:5173)
+    // Don't wait for database or local server - window can load while they initialize
+    createControlWindow();
+
+    // Start local HTTP server for media file serving in background
+    startLocalServer().then((port) => {
       setLocalServerPort(port);
       console.log(`[Dev] Media server started on port ${port}`);
-    } catch (err) {
+    }).catch((err) => {
       console.error('Failed to start media server:', err);
-    }
-  }
+    });
 
-  // Create main control window
-  createControlWindow();
+    // Wait for database to finish (window is already loading)
+    await dbPromise;
+  }
 
   // Set control window reference for socket service (for status notifications)
   if (controlWindow) {
@@ -808,6 +857,8 @@ async function initializeApp(): Promise<void> {
       controlWindow.webContents.send('displays:changed', displays);
     }
   });
+
+  console.log(`[App] Initialization complete in ${Date.now() - startTime}ms`);
 }
 
 // App lifecycle

@@ -41,7 +41,8 @@
       "Bash(powershell -Command \"Stop-Process -Id 28352 -Force; Stop-Process -Id 24756 -Force\")",
       "Bash(npm run build:*)",
       "Bash(npm audit:*)",
-      "Bash(npx:*)"
+      "Bash(npx:*)",
+      "Bash(npm run typecheck:*)"
     ],
     "deny": [],
     "ask": []

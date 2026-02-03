@@ -120,9 +120,20 @@ export class SocketService {
         });
 
         // MIDI bridge commands — relay to control window via existing remote:command IPC
+        // Only allow whitelisted commands to prevent unsafe operations
         this.socket.on('midi:command', (data: { command: any }) => {
           if (data?.command && this.controlWindow && !this.controlWindow.isDestroyed()) {
-            this.controlWindow.webContents.send('remote:command', data.command);
+            const allowedMidiCommands = [
+              'next', 'prev', 'nextSlide', 'prevSlide',
+              'nextSong', 'prevSong', 'goToSong', 'goToSlide',
+              'blank', 'unblank', 'toggleBlank'
+            ];
+            const commandType = data.command.type || data.command.action;
+            if (typeof commandType === 'string' && allowedMidiCommands.includes(commandType)) {
+              this.controlWindow.webContents.send('remote:command', data.command);
+            } else {
+              console.warn('[SocketService] Blocked unauthorized MIDI command:', commandType);
+            }
           }
         });
 
@@ -737,19 +748,14 @@ export class SocketService {
 
   /**
    * Restore broadcast state after reconnection
+   * NOTE: Themes are intentionally NOT re-broadcast on reconnect to prevent
+   * unexpected theme changes. Themes should only be applied via explicit user action.
+   * Only content state (slides, background, YouTube, tools) is restored.
    */
   private restoreStateOnReconnect(): void {
-    // Re-broadcast last known state to sync viewers
+    // Re-broadcast last known CONTENT state to sync viewers
+    // Themes are NOT re-broadcast - they should only be applied on explicit user action
     setTimeout(() => {
-      if (this.lastTheme) {
-        this.broadcastTheme(this.lastTheme);
-      }
-      if (this.lastBibleTheme) {
-        this.broadcastBibleTheme(this.lastBibleTheme);
-      }
-      if (this.lastPrayerTheme) {
-        this.broadcastPrayerTheme(this.lastPrayerTheme);
-      }
       if (this.lastBackground) {
         this.broadcastBackground(this.lastBackground);
       }

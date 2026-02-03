@@ -189,15 +189,39 @@ const SongsPanel = memo<SongsPanelProps>(({
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [visibleSongsCount, setVisibleSongsCount] = useState(50);
 
-  // Filter songs based on search query
+  // Filter songs based on search query (title/author matches first, then content matches)
   const filteredSongs = useMemo(() => {
     if (!searchQuery) return songs;
     const query = searchQuery.toLowerCase();
-    return songs.filter(song =>
-      song.title.toLowerCase().includes(query) ||
-      song.author?.toLowerCase().includes(query) ||
-      song.tags?.some(tag => tag.toLowerCase().includes(query))
-    );
+
+    // Helper to search in slide content
+    const searchInSlides = (slides: any[] | undefined): boolean => {
+      if (!Array.isArray(slides)) return false;
+      return slides.some(slide =>
+        (slide.originalText || '').toLowerCase().includes(query) ||
+        (slide.transliteration || '').toLowerCase().includes(query) ||
+        (slide.translation || '').toLowerCase().includes(query)
+      );
+    };
+
+    // Separate into title/author matches and content-only matches
+    const titleAuthorMatches: Song[] = [];
+    const contentMatches: Song[] = [];
+
+    for (const song of songs) {
+      const matchesTitle = song.title.toLowerCase().includes(query);
+      const matchesAuthor = song.author?.toLowerCase().includes(query);
+      const matchesTags = song.tags?.some(tag => tag.toLowerCase().includes(query));
+
+      if (matchesTitle || matchesAuthor || matchesTags) {
+        titleAuthorMatches.push(song);
+      } else if (searchInSlides(song.slides)) {
+        contentMatches.push(song);
+      }
+    }
+
+    // Return title/author matches first, then content matches
+    return [...titleAuthorMatches, ...contentMatches];
   }, [songs, searchQuery]);
 
   // Reset visible count when search changes

@@ -31,22 +31,89 @@ export interface SongData {
 }
 
 /**
+ * Extract searchable text content from slides array
+ */
+function extractSearchableContent(slides: any[]): string {
+  if (!Array.isArray(slides)) return '';
+  return slides
+    .map(slide => [
+      slide.originalText || '',
+      slide.transliteration || '',
+      slide.translation || ''
+    ].join(' '))
+    .join(' ')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Get all songs, optionally filtered by search query
  * Hebrew songs are always shown first, then other languages
  * Within each language group, sorted alphabetically by title
+ *
+ * Search priority:
+ * 1. Title matches (highest priority)
+ * 2. Author matches
+ * 3. Content matches (lyrics text)
  */
 export async function getSongs(query?: string): Promise<any[]> {
-  // Order by: Hebrew first, then alphabetically by title
-  const orderClause = "ORDER BY CASE WHEN originalLanguage = 'he' THEN 0 ELSE 1 END, title COLLATE NOCASE ASC";
-
   if (query) {
+    const searchLower = query.toLowerCase();
     const searchPattern = `%${query}%`;
-    return queryAll(
-      `SELECT * FROM songs WHERE title LIKE ? OR author LIKE ? ${orderClause}`,
-      [searchPattern, searchPattern]
+
+    // First get all potential matches from title/author (fast, indexed)
+    const titleAuthorMatches = queryAll(
+      `SELECT *, 0 as matchPriority FROM songs
+       WHERE title LIKE ? OR author LIKE ?
+       ORDER BY
+         CASE WHEN title LIKE ? THEN 0 ELSE 1 END,
+         CASE WHEN originalLanguage = 'he' THEN 0 ELSE 1 END,
+         title COLLATE NOCASE ASC`,
+      [searchPattern, searchPattern, searchPattern]
     );
+
+    // Get IDs of songs already matched
+    const matchedIds = new Set(titleAuthorMatches.map(s => s.id));
+
+    // Search content in remaining songs (parse JSON only for non-matched songs)
+    const allSongs = queryAll(`SELECT * FROM songs`);
+    const contentMatches: any[] = [];
+
+    for (const song of allSongs) {
+      if (matchedIds.has(song.id)) continue;
+
+      // Parse slides and search in content
+      let slides: any[] = [];
+      try {
+        slides = typeof song.slides === 'string' ? JSON.parse(song.slides) : (song.slides || []);
+      } catch {
+        continue;
+      }
+
+      const content = extractSearchableContent(slides);
+      if (content.includes(searchLower)) {
+        contentMatches.push({ ...song, matchPriority: 2 });
+      }
+    }
+
+    // Sort content matches: Hebrew first, then alphabetically
+    contentMatches.sort((a, b) => {
+      const langA = a.originalLanguage === 'he' ? 0 : 1;
+      const langB = b.originalLanguage === 'he' ? 0 : 1;
+      if (langA !== langB) return langA - langB;
+      return (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' });
+    });
+
+    // Return title/author matches first, then content matches
+    return [...titleAuthorMatches, ...contentMatches];
   }
-  return queryAll(`SELECT * FROM songs ${orderClause}`);
+
+  // No query - return all songs ordered by Hebrew first, then alphabetically
+  return queryAll(
+    `SELECT * FROM songs
+     ORDER BY CASE WHEN originalLanguage = 'he' THEN 0 ELSE 1 END, title COLLATE NOCASE ASC`
+  );
 }
 
 /**

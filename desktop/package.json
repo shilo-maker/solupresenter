@@ -1,6 +1,6 @@
 {
   "name": "solupresenter-desktop",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "SoluPresenter Desktop - Multi-display presentation software",
   "main": "dist/main/main/index.js",
   "author": "SoluPresenter",

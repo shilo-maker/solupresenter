@@ -116,7 +116,7 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "shilo",
+      "owner": "shilo-maker",
       "repo": "solupresenter"
     }
   }

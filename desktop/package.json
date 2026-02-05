@@ -1,9 +1,9 @@
 {
   "name": "solupresenter-desktop",
-  "version": "1.2.0",
-  "description": "SoluPresenter Desktop - Multi-display presentation software",
+  "version": "1.3.0",
+  "description": "SoluCast Desktop - Multi-display presentation software",
   "main": "dist/main/main/index.js",
-  "author": "SoluPresenter",
+  "author": "SoluCast",
   "license": "MIT",
   "scripts": {
     "dev": "npm run build:main:fast && concurrently -k \"npm run dev:renderer\" \"npm run watch:main\" \"npm run dev:electron\"",
@@ -11,7 +11,7 @@
     "watch:main": "node scripts/build-main.mjs --watch",
     "dev:renderer": "vite",
     "build": "npm run build:renderer && npm run build:main",
-    "build:main": "tsc -p tsconfig.main.json",
+    "build:main": "node scripts/build-main.mjs",
     "build:main:fast": "node scripts/build-main.mjs",
     "build:renderer": "vite build",
     "start": "electron .",
@@ -64,8 +64,8 @@
     "wait-on": "^9.0.3"
   },
   "build": {
-    "appId": "com.solupresenter.desktop",
-    "productName": "SoluPresenter",
+    "appId": "com.solucast.desktop",
+    "productName": "SoluCast",
     "directories": {
       "output": "release",
       "buildResources": "resources"

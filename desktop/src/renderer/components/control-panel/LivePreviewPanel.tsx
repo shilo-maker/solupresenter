@@ -1,6 +1,7 @@
-import React, { memo, useRef, useCallback, useEffect } from 'react';
+import React, { memo, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import SlidePreview from '../SlidePreview';
+import SlideControlButtons from './SlideControlButtons';
 
 interface Display {
   id: number;
@@ -60,6 +61,14 @@ interface LivePreviewPanelProps {
   onVideoPlay: () => void;
   onVideoPause: () => void;
   onVideoSeeked: (currentTime: number) => void;
+  // SlideControlButtons props
+  showBackgroundDropdown: boolean;
+  isRTL: boolean;
+  onToggleBlank: () => void;
+  onToggleDisplayMode: () => void;
+  onToggleBackgroundDropdown: () => void;
+  onSelectBackground: (value: string) => void;
+  onClearBackground: () => void;
 }
 
 const TIME_UPDATE_THROTTLE_MS = 250;
@@ -92,7 +101,15 @@ const LivePreviewPanel = memo<LivePreviewPanelProps>(({
   onVideoTimeUpdate,
   onVideoPlay,
   onVideoPause,
-  onVideoSeeked
+  onVideoSeeked,
+  // SlideControlButtons props
+  showBackgroundDropdown,
+  isRTL,
+  onToggleBlank,
+  onToggleDisplayMode,
+  onToggleBackgroundDropdown,
+  onSelectBackground,
+  onClearBackground
 }) => {
   const { t } = useTranslation();
   const lastVideoTimeUpdateRef = useRef<number>(0);
@@ -130,22 +147,21 @@ const LivePreviewPanel = memo<LivePreviewPanelProps>(({
   const arHeight = viewerDisplay ? viewerDisplay.bounds.height : 9;
   const aspectRatio = `${arWidth} / ${arHeight}`;
 
-  // Get status text and color
-  const getStatusInfo = () => {
+  // Get status text and color - memoized to avoid recalculation on every render
+  const statusInfo = useMemo(() => {
+    if (isBlank) return { text: 'BLANK', color: '#dc3545' };
     if (activeMedia) return { text: 'MEDIA', color: '#06b6d4' };
     if (youtubeOnDisplay || selectedYoutubeItemId) return { text: 'YOUTUBE', color: '#FF0000' };
     if (selectedPresentation) return { text: 'PRESENTATION', color: '#28a745' };
-    if (currentSlide || isBlank) {
+    if (currentSlide) {
       const text = currentContentType === 'song' ? 'SONG' : currentContentType === 'bible' ? 'BIBLE' : 'CONTENT';
       return { text, color: '#28a745' };
     }
     return { text: onlineConnected ? 'ONLINE' : 'NO CONTENT', color: onlineConnected ? '#28a745' : '#6c757d' };
-  };
+  }, [isBlank, activeMedia, youtubeOnDisplay, selectedYoutubeItemId, selectedPresentation, currentSlide, currentContentType, onlineConnected]);
 
-  const statusInfo = getStatusInfo();
-
-  // Combined slides calculation - returns ALL slides in the combined group
-  const getCombinedSlides = () => {
+  // Combined slides calculation - memoized to avoid recalculation on every render
+  const combinedSlides = useMemo(() => {
     if (displayMode !== 'original' || !combinedSlidesData) return undefined;
     const currentCombined = combinedSlidesData.combinedSlides[selectedCombinedIndex];
     if (!currentCombined || !('originalIndices' in currentCombined) || !Array.isArray(currentCombined.originalIndices) || currentCombined.originalIndices.length <= 1) {
@@ -156,25 +172,10 @@ const LivePreviewPanel = memo<LivePreviewPanelProps>(({
       const slide = selectedSong?.slides?.[idx];
       return slide ? { originalText: slide.originalText || '' } : null;
     }).filter((s: any): s is { originalText: string } => s !== null);
-  };
+  }, [displayMode, combinedSlidesData, selectedCombinedIndex, selectedSong?.slides]);
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', overflow: 'hidden', minWidth: 0 }}>
-      {/* Live Preview Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ color: 'white', fontWeight: 600 }}>{t('controlPanel.livePreview')}</span>
-          {selectedSong && (
-            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-              — {selectedSong.title}
-            </span>
-          )}
-          {currentSlide?.verseType && (
-            <span style={{ fontSize: '0.65rem', padding: '2px 8px', background: getVerseTypeColor(currentSlide.verseType), borderRadius: '10px', color: 'white', fontWeight: 600 }}>{currentSlide.verseType}</span>
-          )}
-        </div>
-      </div>
-
       {/* Main Preview Screen */}
       <div style={{ flex: 1, padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0, overflow: 'hidden', containerType: 'size' } as React.CSSProperties}>
         {(() => {
@@ -219,7 +220,7 @@ const LivePreviewPanel = memo<LivePreviewPanelProps>(({
             top: '8px',
             right: '10px',
             background: statusInfo.color,
-            color: 'white',
+            color: 'black',
             fontSize: '10px',
             fontWeight: 700,
             padding: '2px 8px',
@@ -230,29 +231,30 @@ const LivePreviewPanel = memo<LivePreviewPanelProps>(({
             {statusInfo.text}
           </div>
 
-          {/* YouTube display */}
-          {youtubeOnDisplay && activeYoutubeVideo ? (
-            <div style={{
+          {/* YouTube container - ALWAYS rendered to avoid DOM conflicts, shown/hidden via zIndex */}
+          <div
+            ref={youtubeContainerRef}
+            style={{
               position: 'absolute',
               top: 0,
               left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: '#000'
-            }}>
-              <div
-                ref={youtubeContainerRef}
-                style={{
-                  width: '100%',
-                  height: '100%'
-                }}
-              />
+              width: '100%',
+              height: '100%',
+              backgroundColor: '#000',
+              zIndex: youtubeOnDisplay && activeYoutubeVideo ? 5 : -1,
+              opacity: youtubeOnDisplay && activeYoutubeVideo ? 1 : 0,
+              pointerEvents: youtubeOnDisplay && activeYoutubeVideo ? 'auto' : 'none'
+            }}
+          />
+          {/* YouTube overlay controls - only shown when YouTube is active */}
+          {youtubeOnDisplay && activeYoutubeVideo && (
+            <>
               <div style={{
                 position: 'absolute',
                 top: '8px',
                 left: '10px',
                 background: '#FF0000',
-                color: 'white',
+                color: 'black',
                 fontSize: '10px',
                 fontWeight: 700,
                 padding: '2px 8px',
@@ -275,7 +277,7 @@ const LivePreviewPanel = memo<LivePreviewPanelProps>(({
                   background: 'rgba(220, 53, 69, 0.9)',
                   border: 'none',
                   borderRadius: '4px',
-                  color: 'white',
+                  color: 'black',
                   fontSize: '10px',
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -287,8 +289,10 @@ const LivePreviewPanel = memo<LivePreviewPanelProps>(({
                 </svg>
                 Stop
               </button>
-            </div>
-          ) : activeMedia ? (
+            </>
+          )}
+          {/* Media display - shown when not YouTube */}
+          {!youtubeOnDisplay && activeMedia ? (
             <div style={{
               position: 'absolute',
               top: 0,
@@ -349,7 +353,7 @@ const LivePreviewPanel = memo<LivePreviewPanelProps>(({
                   background: 'rgba(220, 53, 69, 0.9)',
                   border: 'none',
                   borderRadius: '6px',
-                  color: 'white',
+                  color: 'black',
                   fontSize: '12px',
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -363,7 +367,7 @@ const LivePreviewPanel = memo<LivePreviewPanelProps>(({
                 Clear Media
               </button>
             </div>
-          ) : (
+          ) : !youtubeOnDisplay ? (
             <SlidePreview
               slideData={liveSlideData}
               displayMode={displayMode}
@@ -374,14 +378,41 @@ const LivePreviewPanel = memo<LivePreviewPanelProps>(({
               activeMedia={null}
               showBadge={false}
               presentationSlide={memoizedPresentationSlide}
-              combinedSlides={getCombinedSlides()}
+              combinedSlides={combinedSlides}
               onHtmlCapture={handleHtmlCapture}
             />
-          )}
+          ) : null}
           </div>
         </div>
           );
         })()}
+      </div>
+
+      {/* Live Preview Footer (was Header) */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', borderTop: '1px solid rgba(255,255,255,0.1)', flexWrap: 'wrap', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ color: 'white', fontWeight: 600 }}>{t('controlPanel.livePreview')}</span>
+          {selectedSong && (
+            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
+              — {selectedSong.title}
+            </span>
+          )}
+          {currentSlide?.verseType && (
+            <span style={{ fontSize: '0.65rem', padding: '2px 8px', background: getVerseTypeColor(currentSlide.verseType), borderRadius: '10px', color: 'black', fontWeight: 600 }}>{currentSlide.verseType}</span>
+          )}
+        </div>
+        <SlideControlButtons
+          isBlank={isBlank}
+          displayMode={displayMode}
+          showBackgroundDropdown={showBackgroundDropdown}
+          selectedBackground={selectedBackground}
+          isRTL={isRTL}
+          onToggleBlank={onToggleBlank}
+          onToggleDisplayMode={onToggleDisplayMode}
+          onToggleBackgroundDropdown={onToggleBackgroundDropdown}
+          onSelectBackground={onSelectBackground}
+          onClearBackground={onClearBackground}
+        />
       </div>
     </div>
   );

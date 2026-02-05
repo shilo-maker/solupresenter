@@ -110,7 +110,7 @@ const OBSSettingsModal = memo<OBSSettingsModalProps>(({
     >
       <div
         style={{
-          background: 'rgba(30, 30, 50, 0.98)',
+          background: 'rgba(24, 24, 27, 0.98)',
           borderRadius: '16px',
           border: '1px solid rgba(255,255,255,0.2)',
           padding: '24px',
@@ -239,11 +239,11 @@ const OBSSettingsModal = memo<OBSSettingsModalProps>(({
                     cursor: 'pointer'
                   }}
                 >
-                  <option value="" style={{ background: '#1e1e32' }}>
+                  <option value="" style={{ background: '#18181b' }}>
                     {t('displayThemeOverrides.useGlobal', '-- Use Global --')}
                   </option>
                   {themeList.map(theme => (
-                    <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
+                    <option key={theme.id} value={theme.id} style={{ background: '#18181b' }}>
                       {theme.name}
                     </option>
                   ))}

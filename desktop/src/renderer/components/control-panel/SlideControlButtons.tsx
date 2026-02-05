@@ -9,9 +9,7 @@ interface SlideControlButtonsProps {
   showBackgroundDropdown: boolean;
   selectedBackground: string;
   isRTL: boolean;
-  isQuickModeActive: boolean;
   onToggleBlank: () => void;
-  onQuickModeClick: () => void;
   onToggleDisplayMode: () => void;
   onToggleBackgroundDropdown: () => void;
   onSelectBackground: (value: string) => void;
@@ -24,9 +22,7 @@ const SlideControlButtons = memo<SlideControlButtonsProps>(({
   showBackgroundDropdown,
   selectedBackground,
   isRTL,
-  isQuickModeActive,
   onToggleBlank,
-  onQuickModeClick,
   onToggleDisplayMode,
   onToggleBackgroundDropdown,
   onSelectBackground,
@@ -39,49 +35,35 @@ const SlideControlButtons = memo<SlideControlButtonsProps>(({
       <button
         onClick={onToggleBlank}
         style={{
-          background: isBlank ? '#ffc107' : 'rgba(255,255,255,0.1)',
-          border: 'none',
+          background: isBlank ? '#94a3b8' : 'rgba(255,255,255,0.1)',
+          border: '1px solid #94a3b8',
           borderRadius: '6px',
           padding: '5px 10px',
-          color: isBlank ? '#000' : 'white',
-          cursor: 'pointer',
-          fontWeight: 600,
-          fontSize: '0.75rem'
-        }}
-      >
-        {isBlank ? t('controlPanel.blankOn') : t('display.blank')}
-      </button>
-      <button
-        onClick={onQuickModeClick}
-        style={{
-          background: isQuickModeActive ? '#6f42c1' : '#28a745',
-          border: 'none',
-          borderRadius: '6px',
-          padding: '5px 10px',
-          color: 'white',
+          color: isBlank ? '#000' : '#94a3b8',
           cursor: 'pointer',
           fontWeight: 600,
           fontSize: '0.75rem',
-          boxShadow: isQuickModeActive ? '0 0 10px #6f42c1, 0 0 20px rgba(111, 66, 193, 0.5)' : 'none',
-          animation: isQuickModeActive ? 'quickModePulse 2s ease-in-out infinite' : 'none'
+          transition: 'all 0.15s ease',
+          boxShadow: isBlank ? '0 0 10px #94a3b8, 0 0 20px rgba(148, 163, 184, 0.5)' : 'none'
         }}
       >
-        {isQuickModeActive ? '✏️ Quick Edit' : `⚡ ${t('controlPanel.quickMode')}`}
+        {t('display.blank')}
       </button>
       <button
         onClick={onToggleDisplayMode}
         style={{
-          background: colors.button.info,
-          border: 'none',
+          background: displayMode === 'bilingual' ? '#06b6d4' : 'rgba(255,255,255,0.1)',
+          border: '1px solid #06b6d4',
           borderRadius: '6px',
           padding: '5px 10px',
-          color: 'white',
+          color: displayMode === 'bilingual' ? '#000' : '#06b6d4',
           cursor: 'pointer',
           fontWeight: 600,
-          fontSize: '0.75rem'
+          fontSize: '0.75rem',
+          transition: 'all 0.15s ease'
         }}
       >
-        {displayMode === 'original' ? t('controlPanel.original') : t('controlPanel.bilingual')}
+        {t('controlPanel.bilingual')}
       </button>
 
       {/* Background Button with Dropdown */}

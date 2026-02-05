@@ -782,7 +782,7 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
             {t('settings.remoteControl', 'Remote Control')}
           </h2>
           <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginBottom: '16px' }}>
-            {t('settings.remoteControlDescription', 'Control SoluPresenter from your mobile device on the local network.')}
+            {t('settings.remoteControlDescription', 'Control SoluCast from your mobile device on the local network.')}
           </p>
 
           {remoteControlStatus?.running ? (
@@ -937,14 +937,26 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
               style={{
                 width: '100%',
                 padding: '14px',
-                background: 'linear-gradient(135deg, #06b6d4, #0891b2)',
+                background: 'linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)',
                 border: 'none',
                 borderRadius: '8px',
-                color: 'white',
+                color: '#000',
                 cursor: remoteControlLoading ? 'not-allowed' : 'pointer',
                 fontSize: '0.95rem',
                 fontWeight: 600,
-                opacity: remoteControlLoading ? 0.5 : 1
+                opacity: remoteControlLoading ? 0.5 : 1,
+                boxShadow: '0 2px 8px rgba(6, 182, 212, 0.4)',
+                transition: 'transform 0.15s, box-shadow 0.15s'
+              }}
+              onMouseEnter={(e) => {
+                if (!remoteControlLoading) {
+                  e.currentTarget.style.transform = 'scale(1.02)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(6, 182, 212, 0.6)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(6, 182, 212, 0.4)';
               }}
             >
               {remoteControlLoading ? t('common.loading', 'Loading...') : t('settings.startRemoteControl', 'Start Remote Control')}
@@ -1098,7 +1110,7 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
               onClick={async () => {
                 try {
                   const result = await window.electronAPI.showSaveDialog({
-                    defaultPath: `solupresenter-songs-${new Date().toISOString().split('T')[0]}.json`,
+                    defaultPath: `solucast-songs-${new Date().toISOString().split('T')[0]}.json`,
                     filters: [{ name: 'JSON Files', extensions: ['json'] }]
                   });
 
@@ -1209,7 +1221,7 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
               onClick={async () => {
                 try {
                   const result = await window.electronAPI.showSaveDialog({
-                    defaultPath: `solupresenter-themes-${new Date().toISOString().split('T')[0]}.json`,
+                    defaultPath: `solucast-themes-${new Date().toISOString().split('T')[0]}.json`,
                     filters: [{ name: 'JSON Files', extensions: ['json'] }]
                   });
 

@@ -115,7 +115,11 @@ const LoadSetlistModal: React.FC<LoadSetlistModalProps> = ({
       const itemType = item.type || item.itemType;
 
       if (itemType === 'song') {
-        const lookup = songLookups.find(s => s.index === i)!;
+        const lookup = songLookups.find(s => s.index === i);
+        if (!lookup) {
+          skipped++;
+          continue;
+        }
         const localSong = localSongByItemIndex[i];
 
         if (localSong) {
@@ -320,7 +324,7 @@ const LoadSetlistModal: React.FC<LoadSetlistModalProps> = ({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: 'rgba(30,30,50,0.98)',
+          background: 'rgba(24, 24, 27, 0.98)',
           borderRadius: '16px',
           padding: '24px',
           minWidth: '400px',

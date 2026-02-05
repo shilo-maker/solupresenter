@@ -100,6 +100,7 @@ export interface SetlistPanelProps {
   onAddSectionHeader: () => void;
   onShowLoadModal: () => void;
   onShowSaveModal: () => void;
+  onQuickSave: () => void;
 
   // Selection/playback actions
   onSelectSong: (song: Song, type: 'song' | 'bible', sendToDisplay: boolean) => void;
@@ -281,7 +282,7 @@ const SetlistItemRow = memo<SetlistItemRowProps>(({
         style={{
           display: 'flex',
           alignItems: 'center',
-          padding: item.type === 'section' ? '6px 12px' : '10px 12px',
+          padding: item.type === 'section' ? '8px 14px' : '12px 14px',
           cursor: item.type === 'section' ? 'pointer' : 'grab',
           background: dropTargetIndex === index
             ? 'rgba(0, 212, 255, 0.2)'
@@ -533,8 +534,8 @@ const SetlistItemRow = memo<SetlistItemRowProps>(({
         <span style={{
           flex: 1,
           color: 'white',
-          fontWeight: item.type === 'section' ? 700 : 400,
-          fontSize: '0.85rem',
+          fontWeight: item.type === 'section' ? 700 : 500,
+          fontSize: '0.9rem',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap'
@@ -1207,6 +1208,7 @@ const SetlistPanel = memo<SetlistPanelProps>(({
   onAddSectionHeader,
   onShowLoadModal,
   onShowSaveModal,
+  onQuickSave,
   onSelectSong,
   onSelectPresentation,
   onSetSelectedSong,
@@ -1356,6 +1358,26 @@ const SetlistPanel = memo<SetlistPanelProps>(({
             } else {
               onSetlistChange(prev => [...prev, presItem]);
             }
+          } else if (data.type === 'audioPlaylist' && data.playlist) {
+            const playlistItem: SetlistItem = {
+              id: crypto.randomUUID(),
+              type: 'audioPlaylist',
+              title: data.playlist.name,
+              audioPlaylist: {
+                name: data.playlist.name,
+                tracks: data.playlist.tracks,
+                shuffle: data.playlist.shuffle
+              }
+            };
+            if (dropTargetIndex !== null) {
+              onSetlistChange(prev => {
+                const newSetlist = [...prev];
+                newSetlist.splice(dropTargetIndex, 0, playlistItem);
+                return newSetlist;
+              });
+            } else {
+              onSetlistChange(prev => [...prev, playlistItem]);
+            }
           } else if (data.type && data.path && data.name) {
             const mediaItem: SetlistItem = {
               id: crypto.randomUUID(),
@@ -1391,16 +1413,48 @@ const SetlistPanel = memo<SetlistPanelProps>(({
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header */}
       <div
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)', cursor: 'context-menu' }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)', cursor: 'context-menu', minHeight: '44px', boxSizing: 'border-box' }}
         onContextMenu={(e) => { e.preventDefault(); onShowSetlistMenuChange(true); }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ color: 'white', fontWeight: 600 }}>{currentSetlistId ? currentSetlistName : t('controlPanel.setlist')}</span>
-          {hasUnsavedChanges && setlist.length > 0 && (
-            <span style={{ color: '#ffc107', fontSize: '0.7rem', fontWeight: 600 }}>*</span>
-          )}
           <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginLeft: '2px' }}>{setlist.length} {t('controlPanel.items')}</span>
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Golden Save button when there are unsaved changes */}
+          {hasUnsavedChanges && setlist.length > 0 && (
+            <button
+              onClick={() => currentSetlistId ? onQuickSave() : onShowSaveModal()}
+              style={{
+                background: 'linear-gradient(135deg, #ffc107 0%, #ff9800 100%)',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '5px 12px',
+                color: '#000',
+                cursor: 'pointer',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                boxShadow: '0 2px 8px rgba(255, 193, 7, 0.4)',
+                transition: 'transform 0.15s, box-shadow 0.15s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(255, 193, 7, 0.5)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(255, 193, 7, 0.4)';
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H9.5a1 1 0 0 0-1 1v4.057A.5.5 0 0 1 8 5.5a.5.5 0 0 1-.5.5H6a.5.5 0 0 1-.5-.5A.5.5 0 0 1 6 5h1.5V2a2 2 0 0 1 2-2H14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h2.5a.5.5 0 0 1 0 1H2z"/>
+              </svg>
+              {t('common.save')}
+            </button>
+          )}
         <div style={{ position: 'relative' }}>
           <button
             onClick={() => onShowSetlistMenuChange(!showSetlistMenu)}
@@ -1448,7 +1502,7 @@ const SetlistPanel = memo<SetlistPanelProps>(({
                 top: '100%',
                 ...(isRTL ? { left: 0 } : { right: 0 }),
                 marginTop: '4px',
-                background: 'rgba(30,30,50,0.98)',
+                background: 'rgba(24, 24, 27, 0.98)',
                 borderRadius: '8px',
                 border: '1px solid rgba(255,255,255,0.2)',
                 padding: '4px',
@@ -1496,6 +1550,7 @@ const SetlistPanel = memo<SetlistPanelProps>(({
               </div>
             </>
           )}
+        </div>
         </div>
       </div>
 

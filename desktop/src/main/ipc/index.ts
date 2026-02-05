@@ -1589,7 +1589,7 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
           themeExists = !!queryOne('SELECT id FROM viewer_themes WHERE id = ?', [themeId]);
           break;
         case 'stage':
-          themeExists = !!queryOne('SELECT id FROM stage_themes WHERE id = ?', [themeId]);
+          themeExists = !!queryOne('SELECT id FROM stage_monitor_themes WHERE id = ?', [themeId]);
           break;
         case 'bible':
           themeExists = !!queryOne('SELECT id FROM bible_themes WHERE id = ?', [themeId]);
@@ -2262,7 +2262,7 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
       // Fallback to OBS songs theme
       return queryOne('SELECT * FROM obs_themes WHERE id = ? AND type = ?', [id, 'songs']);
     },
-    stage: (id: string) => queryOne('SELECT * FROM stage_themes WHERE id = ?', [id]),
+    stage: (id: string) => queryOne('SELECT * FROM stage_monitor_themes WHERE id = ?', [id]),
     bible: (id: string) => {
       const theme = queryOne('SELECT * FROM bible_themes WHERE id = ?', [id]);
       if (theme) return theme;
@@ -2280,6 +2280,7 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   // Set up default theme resolvers to load default themes when none are set
   displayManager.setDefaultThemeResolvers({
     viewer: () => queryOne('SELECT * FROM viewer_themes WHERE isDefault = 1'),
+    stage: () => queryOne('SELECT * FROM stage_monitor_themes WHERE isDefault = 1'),
     bible: () => queryOne('SELECT * FROM bible_themes WHERE isDefault = 1'),
     prayer: () => queryOne('SELECT * FROM prayer_themes WHERE isDefault = 1')
   });
@@ -2335,6 +2336,28 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
       if (!themeId || typeof themeId !== 'string' || themeId.length > MAX_NAME_LENGTH) {
         throw new Error('Invalid theme ID');
       }
+
+      // Validate that the theme actually exists in the database
+      let themeExists = false;
+      switch (themeType) {
+        case 'viewer':
+          themeExists = !!queryOne('SELECT id FROM viewer_themes WHERE id = ?', [themeId]);
+          break;
+        case 'stage':
+          themeExists = !!queryOne('SELECT id FROM stage_monitor_themes WHERE id = ?', [themeId]);
+          break;
+        case 'bible':
+          themeExists = !!queryOne('SELECT id FROM bible_themes WHERE id = ?', [themeId]);
+          break;
+        case 'prayer':
+          themeExists = !!queryOne('SELECT id FROM prayer_themes WHERE id = ?', [themeId]);
+          break;
+      }
+      if (!themeExists) {
+        console.warn(`[IPC displayThemeOverrides:set] Theme ${themeId} not found for type ${themeType}`);
+        throw new Error(`Theme not found: ${themeId}`);
+      }
+
       const result = setDisplayThemeOverride(displayId, themeType, themeId);
       // Re-broadcast themes to apply the new override immediately
       displayManager.rebroadcastAllThemes();

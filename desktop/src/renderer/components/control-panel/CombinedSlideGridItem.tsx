@@ -1,4 +1,4 @@
-import React, { memo, useCallback, CSSProperties } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 
 interface SlideData {
   originalText?: string;
@@ -40,8 +40,8 @@ const CombinedSlideGridItem: React.FC<CombinedSlideGridItemProps> = memo(({
 
   const verseType = item.verseType || '';
 
-  const containerStyle: CSSProperties = {
-    position: 'relative',
+  const containerStyle = useMemo(() => ({
+    position: 'relative' as const,
     border: isSelected ? '2px solid #00d4ff' : '2px solid rgba(255,255,255,0.1)',
     borderRadius: '6px',
     padding: '8px 10px',
@@ -51,17 +51,17 @@ const CombinedSlideGridItem: React.FC<CombinedSlideGridItemProps> = memo(({
       ? (isSelected ? bgColor : `${bgColor}99`)
       : (isSelected ? 'rgba(0, 212, 255, 0.2)' : 'rgba(0,0,0,0.3)'),
     boxShadow: isSelected ? '0 0 12px rgba(0, 212, 255, 0.6)' : 'none'
-  };
+  }), [isSelected, bgColor]);
 
-  const headerStyle: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
+  const headerStyle = useMemo(() => ({
+    display: 'flex' as const,
+    alignItems: 'center' as const,
     gap: '6px',
     color: isSelected ? '#00d4ff' : 'rgba(255,255,255,0.7)',
-    fontWeight: 'bold',
+    fontWeight: 'bold' as const,
     marginBottom: '4px',
     fontSize: '0.75rem'
-  };
+  }), [isSelected]);
 
   return (
     <div onMouseDown={handleMouseDown} style={containerStyle}>

@@ -750,10 +750,8 @@ class RemoteControlServer extends EventEmitter {
       } else {
         console.log(`[RemoteControlServer] Received ${state.fullSlides.length} fullSlides for "${incomingTitle}"`);
       }
-    } else if (state.fullSlides) {
-      // Empty slides array - don't reset directlyLoadedContent
-      console.log(`[RemoteControlServer] Received empty fullSlides array - ignoring (directlyLoadedContent=${this.directlyLoadedContent})`);
     }
+    // Note: Empty fullSlides arrays are silently ignored to avoid log spam
     this.broadcastState();
   }
 

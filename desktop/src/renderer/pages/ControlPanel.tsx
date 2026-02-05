@@ -17,6 +17,8 @@ import SlideGridItem from '../components/control-panel/SlideGridItem';
 import CombinedSlideGridItem from '../components/control-panel/CombinedSlideGridItem';
 import AudioPlayerBar from '../components/control-panel/AudioPlayerBar';
 import HeaderBar, { VirtualDisplay } from '../components/control-panel/HeaderBar';
+import VerticalSidebar from '../components/control-panel/VerticalSidebar';
+import AboutModal from '../components/control-panel/modals/AboutModal';
 const VirtualDisplayModal = React.lazy(() => import('../components/control-panel/modals/VirtualDisplayModal'));
 import VerseSectionNav from '../components/control-panel/VerseSectionNav';
 import SlideControlButtons from '../components/control-panel/SlideControlButtons';
@@ -375,6 +377,9 @@ const ControlPanel: React.FC = () => {
   const [showSlideEditor, setShowSlideEditor] = useState(false);
   const [editingSlideIndex, setEditingSlideIndex] = useState<number | null>(null);
   const [isAddingNewSlide, setIsAddingNewSlide] = useState(false);
+
+  // Inline song slide editor state - tracks which slide index is being edited (null = not editing)
+  const [editingSongSlideIndex, setEditingSongSlideIndex] = useState<number | null>(null);
 
   // Tools state (extracted to hook)
   const {
@@ -1086,20 +1091,69 @@ const ControlPanel: React.FC = () => {
     }
   }, [bibleBooks.length, fetchBibleBooks]);
 
-  // Single slide editor functions
+  // Single slide editor functions - now uses inline card editor
   const handleEditSlide = useCallback((slideIndex: number) => {
     if (!selectedSong) return;
-    setEditingSlideIndex(slideIndex);
-    setIsAddingNewSlide(false);
-    setShowSlideEditor(true);
+    // Set the specific slide index to edit
+    setEditingSongSlideIndex(slideIndex);
   }, [selectedSong]);
 
   const handleAddSlide = useCallback(() => {
     if (!selectedSong) return;
-    setEditingSlideIndex(selectedSong.slides.length); // Index for new slide
-    setIsAddingNewSlide(true);
-    setShowSlideEditor(true);
+    // -1 indicates adding a new slide
+    setEditingSongSlideIndex(-1);
   }, [selectedSong]);
+
+  // Save all slides from inline editor
+  const handleSaveSongSlides = useCallback(async (updatedSlides: Array<{ originalText: string; transliteration: string; translation: string; translationOverflow: string; verseType: string }>) => {
+    if (!selectedSong) return;
+
+    try {
+      // Save to database
+      await window.electronAPI.updateSong(selectedSong.id, { slides: updatedSlides });
+
+      // Refresh songs list from database
+      await loadSongs();
+
+      // Update local state
+      const updatedSong = { ...selectedSong, slides: updatedSlides };
+      setSelectedSong(updatedSong);
+
+      // Update any setlist items containing this song
+      setSetlist(prev => prev.map(item => {
+        if (item.type === 'song' && item.song?.id === selectedSong.id) {
+          return { ...item, song: { ...item.song, slides: updatedSlides } };
+        }
+        return item;
+      }));
+
+      // Re-broadcast if the current slide is live
+      if (liveSongId === selectedSong.id && liveSlideIndex < updatedSlides.length) {
+        const slide = updatedSlides[liveSlideIndex];
+        window.electronAPI.sendSlide({
+          songId: selectedSong.id,
+          slideIndex: liveSlideIndex,
+          displayMode: displayMode,
+          isBlank: false,
+          songTitle: selectedSong.title,
+          contentType: 'song',
+          backgroundImage: selectedBackground || undefined,
+          slide: slide
+        });
+      }
+
+      // Exit edit mode
+      setEditingSongSlideIndex(null);
+    } catch (error) {
+      console.error('Failed to save song slides:', error);
+      alert('Failed to save slides. Please try again.');
+    }
+  }, [selectedSong, loadSongs, setSetlist, liveSongId, liveSlideIndex, displayMode, selectedBackground]);
+
+  // Cancel inline song slide editing
+  const handleCancelEditSongSlides = useCallback(() => {
+    setEditingSongSlideIndex(null);
+  }, []);
 
   const handleSaveSlide = useCallback(async (slideIndex: number, updatedSlide: { originalText?: string; transliteration?: string; translation?: string; translationOverflow?: string; verseType?: string }) => {
     if (!selectedSong) return;
@@ -1232,6 +1286,13 @@ const ControlPanel: React.FC = () => {
 
   // Display fullscreen media (takes over from slides)
   const handleDisplayMedia = useCallback(async (type: 'image' | 'video', path: string) => {
+    // Stop other media types first
+    setYoutubeOnDisplay(false);
+    setActiveYoutubeVideo(null);
+    window.electronAPI.youtubeStop();
+    setActiveAudio(null);
+    setActiveAudioSetlistId(null);
+
     // Encode the path for media:// protocol (for display windows)
     // Use triple-slash format (media://file/path) to avoid hostname issues in child windows
     const encodedPath = path
@@ -1304,6 +1365,19 @@ const ControlPanel: React.FC = () => {
       audioNeedsInitialPlay
     }
   );
+
+  // Wrapper for handlePlayAudio that stops other media first
+  const handlePlayAudioWithMediaStop = useCallback((path: string, name: string) => {
+    // Stop other media types first
+    setYoutubeOnDisplay(false);
+    setActiveYoutubeVideo(null);
+    window.electronAPI.youtubeStop();
+    setActiveMedia(null);
+    window.electronAPI.clearMedia();
+
+    // Now play audio
+    handlePlayAudio(path, name);
+  }, [handlePlayAudio]);
 
   const sendCurrentSlide = useCallback((song: Song | null, slideIndex: number, mode: DisplayMode, combinedIndices?: number[], contentType: 'song' | 'bible' | 'prayer' | 'presentation' = 'song') => {
     if (!song || !song.slides[slideIndex]) {
@@ -1919,7 +1993,7 @@ const ControlPanel: React.FC = () => {
       toggleBlank,
       selectCombinedSlide,
       sendCurrentSlide,
-      handlePlayAudio,
+      handlePlayAudio: handlePlayAudioWithMediaStop,
       setSelectedSong,
       setSelectedPresentation,
       setCurrentSlideIndex,
@@ -2243,6 +2317,26 @@ const ControlPanel: React.FC = () => {
     }
   };
 
+  // Quick save for existing setlists (no modal needed)
+  const quickSaveSetlist = async () => {
+    if (!currentSetlistId || !currentSetlistName) return;
+
+    try {
+      const savedSetlist = await window.electronAPI.updateSetlist(currentSetlistId, {
+        name: currentSetlistName,
+        items: setlist
+      });
+
+      if (savedSetlist) {
+        await loadSavedSetlists();
+      }
+
+      updateSavedSnapshot(setlist);
+    } catch (error) {
+      console.error('Failed to quick save setlist:', error);
+    }
+  };
+
   const tryLoadSetlist = (saved: SavedSetlist) => {
     if (hasUnsavedChanges && setlist.length > 0) {
       setPendingAction({ type: 'load', setlist: saved });
@@ -2347,6 +2441,7 @@ const ControlPanel: React.FC = () => {
       setIsBlank,
       setQuickSlideBroadcastIndex,
       setCurrentContentType,
+      setLiveState,
       sendCurrentSlide
     },
     { quickSlideTextareaRef }
@@ -2492,6 +2587,12 @@ const ControlPanel: React.FC = () => {
   const handleClearMediaSetlist = useCallback(() => window.electronAPI.clearMedia(), []);
   const handleStartEditingSongFromSetlist = useCallback((song: any) => startEditingSong(song ?? undefined), [startEditingSong]);
   const handlePlayYoutubeVideo = useCallback((videoId: string, title: string, thumbnail?: string) => {
+    // Stop other media types first
+    setActiveMedia(null);
+    setActiveAudio(null);
+    setActiveAudioSetlistId(null);
+    window.electronAPI.clearMedia();
+
     setActiveYoutubeVideo({ videoId, title, thumbnail: thumbnail || '' });
     setYoutubeOnDisplay(true);
     window.electronAPI.youtubeLoad(videoId, title);
@@ -2518,20 +2619,78 @@ const ControlPanel: React.FC = () => {
     window.electronAPI.seekVideo(currentTime);
   }, []);
 
+  // SlideControlButtons callbacks (for LivePreviewPanel)
+  const handleToggleDisplayMode = useCallback(() => {
+    const newMode = displayMode === 'bilingual' ? 'original' : 'bilingual';
+    setDisplayMode(newMode);
+
+    // Re-send current slide with new display mode after a brief delay to ensure state is updated
+    const song = selectedSongRef.current;
+    if (song && !isBlank && currentSlideIndex !== null) {
+      // Use setTimeout to ensure displayMode state has been updated before re-sending
+      setTimeout(() => {
+        let combinedIndices: number[] | undefined;
+        if (newMode === 'original' && combinedSlidesData) {
+          const combinedIdx = combinedSlidesData.originalToCombined.get(currentSlideIndex);
+          if (combinedIdx !== undefined) {
+            combinedIndices = combinedSlidesData.combinedToOriginal.get(combinedIdx);
+          }
+        }
+
+        // Update live state with refreshed slide data
+        const slide = song.slides[currentSlideIndex];
+        const slideData = currentContentType === 'bible' ? {
+          ...slide,
+          reference: (slide as any).hebrewReference || song.title,
+          referenceEnglish: (slide as any).reference,
+          originalLanguage: song.originalLanguage
+        } : { ...slide, originalLanguage: song.originalLanguage };
+        setLiveState({ slideData, contentType: currentContentType, songId: song.id, slideIndex: currentSlideIndex });
+
+        sendCurrentSlide(song, currentSlideIndex, newMode, combinedIndices, currentContentType);
+      }, 0);
+    }
+  }, [displayMode, isBlank, currentSlideIndex, combinedSlidesData, currentContentType, sendCurrentSlide]);
+
+  const handleToggleBackgroundDropdown = useCallback(() => {
+    setShowBackgroundDropdown(prev => !prev);
+  }, []);
+
+  const handleSelectBackground = useCallback((value: string) => {
+    setSelectedBackground(value);
+    handleSetBackground(value);
+    setShowBackgroundDropdown(false);
+  }, [handleSetBackground]);
+
+  const handleClearBackground = useCallback(() => {
+    setSelectedBackground('');
+    handleSetBackground('');
+  }, [handleSetBackground]);
+
   // BottomRowPanel callbacks
   const handleQuickModeClick = useCallback(() => {
     const isQuickModeActive = selectedSong?.id === 'quick-slide';
     if (isQuickModeActive) {
-      setShowQuickSlideModal(true);
+      // Turn off Quick Mode - clear the selected song
+      setSelectedSong(null);
       setQuickSlideBroadcastIndex(-1);
-      updateQuickSlideCount(quickSlideText);
-    } else if (quickSlideText.trim()) {
-      parseAndBroadcastQuickSlide(0);
     } else {
-      setShowQuickSlideModal(true);
-      setQuickSlideBroadcastIndex(-1);
+      // Turn on Quick Mode - create a quick-slide song placeholder
+      const quickSong = {
+        id: 'quick-slide',
+        title: 'Quick Slide',
+        slides: []
+      };
+      setSelectedSong(quickSong);
+      setSelectedPresentation(null);
+      updateQuickSlideCount(quickSlideText);
     }
-  }, [selectedSong?.id, quickSlideText, updateQuickSlideCount, parseAndBroadcastQuickSlide]);
+  }, [selectedSong?.id, quickSlideText, updateQuickSlideCount, setSelectedSong, setSelectedPresentation]);
+
+  // Handler for Quick Slide text changes from inline editor
+  const handleQuickSlideTextChange = useCallback((text: string) => {
+    setQuickSlideText(text);
+  }, []);
 
   const handleSetAutoPlayActive = useCallback((active: boolean, presentation: any) => {
     setAutoPlayActive(active);
@@ -2659,10 +2818,14 @@ const ControlPanel: React.FC = () => {
 
   const assignedDisplays = useMemo(() => displays.filter(d => d.isAssigned), [displays]);
 
+  // State for showing about modal from sidebar
+  const [showAboutModal, setShowAboutModal] = useState(false);
+
   return (
     <div className="control-panel" style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: colors.background.base }}>
-      {/* Header */}
+      {/* Header in headless mode - only renders dropdown panels */}
       <HeaderBar
+        headless={true}
         showDisplayPanel={showDisplayPanel}
         displays={displays}
         assignedDisplays={assignedDisplays}
@@ -2717,12 +2880,167 @@ const ControlPanel: React.FC = () => {
         onUnlinkPublicRoom={handleUnlinkPublicRoom}
       />
 
-      {/* Main Content - Two Row Layout with resizable panels */}
+      {/* Main Content - Two Row Layout */}
       <main ref={mainContentRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '12px', gap: '0' }}>
-        {/* Top Row - Three Column Layout with resizable widths */}
-        <div style={{ display: 'flex', height: `${topRowHeight}%`, overflow: 'hidden', minHeight: 0 }}>
-          {/* Left Column - Resource Panel (Songs/Media/Tools) */}
-          <div style={{ width: `${leftPanelWidth}%`, flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', overflow: 'hidden' }}>
+        {/* Top Row - Sidebar | Live Preview | Setlist | Tabs (for RTL: Tabs rightmost) */}
+        <div style={{ height: `${topRowHeight}%`, display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', overflow: 'hidden', minHeight: 0 }}>
+          {/* Vertical Sidebar - leftmost (or rightmost in RTL) */}
+          <VerticalSidebar
+            displays={displays}
+            assignedDisplays={assignedDisplays}
+            onlineConnected={onlineConnected}
+            viewerCount={viewerCount}
+            authState={authState}
+            themes={themes}
+            selectedTheme={selectedTheme}
+            onShowDisplayPanel={() => setShowDisplayPanel(!showDisplayPanel)}
+            onShowThemePanel={() => setShowThemePanel(!showThemePanel)}
+            onShowAuthModal={handleShowAuthModal}
+            onNavigateToSettings={handleNavigateToSettings}
+            onShowAboutModal={() => setShowAboutModal(true)}
+          />
+
+          {/* Live Preview */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+            <LivePreviewPanel
+              displays={displays}
+              selectedSong={selectedSong}
+              currentSlide={currentSlide}
+              isBlank={isBlank}
+              activeMedia={activeMedia}
+              youtubeOnDisplay={youtubeOnDisplay}
+              activeYoutubeVideo={activeYoutubeVideo}
+              selectedPresentation={selectedPresentation}
+              selectedYoutubeItemId={selectedYoutubeItemId}
+              currentContentType={currentContentType}
+              onlineConnected={onlineConnected}
+              displayMode={displayMode}
+              selectedBackground={selectedBackground}
+              liveSlideData={liveSlideData}
+              memoizedLivePreviewTheme={memoizedLivePreviewTheme}
+              memoizedTools={memoizedTools}
+              memoizedPresentationSlide={memoizedPresentationSlide}
+              combinedSlidesData={combinedSlidesData}
+              selectedCombinedIndex={selectedCombinedIndex}
+              youtubeContainerRef={youtubeContainerRef}
+              previewVideoRef={previewVideoRef}
+              getVerseTypeColor={getVerseTypeColor}
+              onYoutubeStop={handleYoutubeStop}
+              onClearMedia={handleClearMedia}
+              onVideoTimeUpdate={handleVideoTimeUpdate}
+              onVideoPlay={handleVideoPlay}
+              onVideoPause={handleVideoPause}
+              onVideoSeeked={handleVideoSeeked}
+              showBackgroundDropdown={showBackgroundDropdown}
+              isRTL={isRTL}
+              onToggleBlank={toggleBlank}
+              onToggleDisplayMode={handleToggleDisplayMode}
+              onToggleBackgroundDropdown={handleToggleBackgroundDropdown}
+              onSelectBackground={handleSelectBackground}
+              onClearBackground={handleClearBackground}
+            />
+          </div>
+
+          {/* Resize Handle - Live Preview/Setlist */}
+          <ResizeHandle
+            direction="vertical"
+            isResizing={isResizing === 'row'}
+            onMouseDown={(e) => startResize('row', e)}
+          />
+
+          {/* Middle - Setlist */}
+          <div style={{ width: `${setlistPanelWidth}%`, flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', overflow: 'hidden', minWidth: 0 }}>
+            <React.Suspense fallback={null}>
+            <SetlistPanel
+              setlist={setlist}
+              currentSetlistId={currentSetlistId}
+              currentSetlistName={currentSetlistName}
+              hasUnsavedChanges={hasUnsavedChanges}
+              showSetlistMenu={showSetlistMenu}
+              setlistMenuHover={setlistMenuHover}
+              draggedSong={draggedSong}
+              isDraggingMedia={isDraggingMedia}
+              dropTargetIndex={dropTargetIndex}
+              draggedSetlistIndex={draggedSetlistIndex}
+              collapsedSections={collapsedSections}
+              expandedPlaylistIds={expandedPlaylistIds}
+              setlistMenuOpen={setlistMenuOpen}
+              hoveredMediaStopId={hoveredMediaStopId}
+              selectedSetlistMediaId={selectedSetlistMediaId}
+              selectedYoutubeItemId={selectedYoutubeItemId}
+              selectedSong={selectedSong}
+              selectedPresentation={selectedPresentation}
+              activeMedia={activeMedia}
+              activeAudio={activeAudio}
+              audioStatus={audioStatus}
+              activeToolId={activeToolId}
+              youtubeOnDisplay={youtubeOnDisplay}
+              activeYoutubeVideo={activeYoutubeVideo}
+              activePlaylistId={activePlaylistId}
+              activePlaylistIndex={activePlaylistIndex}
+              activePlaylistOrder={activePlaylistOrder}
+              autoPlayActive={autoPlayActive}
+              autoPlayInterval={autoPlayInterval}
+              currentPresentationSlideIndex={currentPresentationSlideIndex}
+              onShowSetlistMenuChange={setShowSetlistMenu}
+              onSetlistMenuHoverChange={setSetlistMenuHover}
+              onDraggedSongChange={setDraggedSong}
+              onIsDraggingMediaChange={setIsDraggingMedia}
+              onDropTargetIndexChange={setDropTargetIndex}
+              onDraggedSetlistIndexChange={setDraggedSetlistIndex}
+              onCollapsedSectionsChange={setCollapsedSections}
+              onExpandedPlaylistIdsChange={setExpandedPlaylistIds}
+              onSetlistMenuOpenChange={setSetlistMenuOpen}
+              onHoveredMediaStopIdChange={setHoveredMediaStopId}
+              onSelectedSetlistMediaIdChange={setSelectedSetlistMediaId}
+              onSelectedYoutubeItemIdChange={setSelectedYoutubeItemId}
+              onSetlistContextMenuChange={setSetlistContextMenu}
+              onSetlistChange={setSetlist}
+              onAddToSetlist={addToSetlist}
+              onRemoveFromSetlist={removeFromSetlist}
+              onTryClearSetlist={tryClearSetlist}
+              onAddSectionHeader={addSectionHeader}
+              onShowLoadModal={handleShowLoadModal}
+              onShowSaveModal={handleShowSaveModal}
+              onQuickSave={quickSaveSetlist}
+              onSelectSong={selectSong}
+              onSelectPresentation={handleSelectPresentationFromSetlist}
+              onSetSelectedSong={setSelectedSong}
+              onSetSelectedPresentation={setSelectedPresentation}
+              onSetCurrentPresentationSlideIndex={setCurrentPresentationSlideIndex}
+              onSetCurrentContentType={handleSetCurrentContentType}
+              onSetIsBlank={setIsBlank}
+              onSetLiveState={setLiveState}
+              onSendBlank={handleSendBlank}
+              onStopAllTools={stopAllTools}
+              onBroadcastToolFromSetlist={broadcastToolFromSetlist}
+              onSetActiveMedia={setActiveMedia}
+              onSetActiveAudio={setActiveAudio}
+              onSetActiveAudioSetlistId={setActiveAudioSetlistId}
+              onHandlePlayAudio={handlePlayAudioWithMediaStop}
+              onHandleDisplayMedia={handleDisplayMedia}
+              onClearMedia={handleClearMediaSetlist}
+              onStartPlaylist={startPlaylist}
+              onSetActivePlaylistId={setActivePlaylistId}
+              onSetActivePlaylistIndex={setActivePlaylistIndex}
+              onSetActivePlaylistOrder={setActivePlaylistOrder}
+              onOpenEditPlaylistModal={openEditPlaylistModal}
+              onStartEditingSong={handleStartEditingSongFromSetlist}
+              onPlayYoutubeVideo={handlePlayYoutubeVideo}
+              onStopYoutubeVideo={handleStopYoutubeVideo}
+            />
+            </React.Suspense>
+          </div>
+
+          {/* Resize Handle - Setlist/Tabs */}
+          <ResizeHandle
+            direction="vertical"
+            isResizing={isResizing === 'left'}
+            onMouseDown={(e) => startResize('left', e)}
+          />
+
+          {/* Right - Resource Panel (Tabs) - rightmost for RTL */}
+          <div style={{ width: `${leftPanelWidth}%`, flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', overflow: 'hidden', minWidth: 0 }}>
             {/* Resource Tabs */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderBottom: activeResourcePanel === 'songs' ? 'none' : '1px solid rgba(255,255,255,0.1)' }}>
               <div style={{ display: 'flex', gap: '4px' }}>
@@ -2730,31 +3048,10 @@ const ControlPanel: React.FC = () => {
                   <button
                     key={tab.id}
                     onClick={() => handleResourcePanelChange(tab.id as ResourcePanel)}
-                    style={{
-                      background: activeResourcePanel === tab.id ? '#06b6d4' : 'rgba(255,255,255,0.1)',
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '8px 12px',
-                      color: 'white',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      transition: 'background 0.15s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (activeResourcePanel !== tab.id) {
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.18)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (activeResourcePanel !== tab.id) {
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-                      }
-                    }}
+                    className={`resource-tab-button ${activeResourcePanel === tab.id ? 'active' : ''}`}
                     title={tab.label}
                   >
-                    {tab.icon}
+                    <span className="tab-icon">{tab.icon}</span>
                   </button>
                 ))}
               </div>
@@ -2767,7 +3064,7 @@ const ControlPanel: React.FC = () => {
               </div>
             )}
 
-            {/* Resource Content — panels stay mounted, hidden via display:none for instant switching */}
+            {/* Resource Content */}
             <div style={{ flex: 1, overflow: 'auto' }}>
               {/* Songs Panel */}
               <div style={{ display: activeResourcePanel === 'songs' ? 'contents' : 'none' }}>
@@ -2801,7 +3098,7 @@ const ControlPanel: React.FC = () => {
                   onYoutubeInputSubmit={handleYoutubeInputSubmit}
                   onCloseYoutubeSearchResults={closeYoutubeSearchResults}
                   onDisplayMedia={handleDisplayMedia}
-                  onPlayAudio={handlePlayAudio}
+                  onPlayAudio={handlePlayAudioWithMediaStop}
                   onAddMediaToSetlist={handleAddMediaToSetlist}
                   onAddPlaylistToSetlist={handleAddPlaylistToSetlist}
                   onAddYoutubeToSetlist={handleAddYoutubeToSetlist}
@@ -2888,186 +3185,61 @@ const ControlPanel: React.FC = () => {
               </div>
             </div>
           </div>
-
-          {/* Resize Handle - Left/Setlist */}
-          <ResizeHandle
-            direction="vertical"
-            isResizing={isResizing === 'left'}
-            onMouseDown={(e) => startResize('left', e)}
-          />
-
-          {/* Middle Column - Setlist */}
-          <div style={{ width: `${setlistPanelWidth}%`, flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', overflow: 'hidden' }}>
-            <React.Suspense fallback={null}>
-            <SetlistPanel
-              setlist={setlist}
-              currentSetlistId={currentSetlistId}
-              currentSetlistName={currentSetlistName}
-              hasUnsavedChanges={hasUnsavedChanges}
-              showSetlistMenu={showSetlistMenu}
-              setlistMenuHover={setlistMenuHover}
-              draggedSong={draggedSong}
-              isDraggingMedia={isDraggingMedia}
-              dropTargetIndex={dropTargetIndex}
-              draggedSetlistIndex={draggedSetlistIndex}
-              collapsedSections={collapsedSections}
-              expandedPlaylistIds={expandedPlaylistIds}
-              setlistMenuOpen={setlistMenuOpen}
-              hoveredMediaStopId={hoveredMediaStopId}
-              selectedSetlistMediaId={selectedSetlistMediaId}
-              selectedYoutubeItemId={selectedYoutubeItemId}
-              selectedSong={selectedSong}
-              selectedPresentation={selectedPresentation}
-              activeMedia={activeMedia}
-              activeAudio={activeAudio}
-              audioStatus={audioStatus}
-              activeToolId={activeToolId}
-              youtubeOnDisplay={youtubeOnDisplay}
-              activeYoutubeVideo={activeYoutubeVideo}
-              activePlaylistId={activePlaylistId}
-              activePlaylistIndex={activePlaylistIndex}
-              activePlaylistOrder={activePlaylistOrder}
-              autoPlayActive={autoPlayActive}
-              autoPlayInterval={autoPlayInterval}
-              currentPresentationSlideIndex={currentPresentationSlideIndex}
-              onShowSetlistMenuChange={setShowSetlistMenu}
-              onSetlistMenuHoverChange={setSetlistMenuHover}
-              onDraggedSongChange={setDraggedSong}
-              onIsDraggingMediaChange={setIsDraggingMedia}
-              onDropTargetIndexChange={setDropTargetIndex}
-              onDraggedSetlistIndexChange={setDraggedSetlistIndex}
-              onCollapsedSectionsChange={setCollapsedSections}
-              onExpandedPlaylistIdsChange={setExpandedPlaylistIds}
-              onSetlistMenuOpenChange={setSetlistMenuOpen}
-              onHoveredMediaStopIdChange={setHoveredMediaStopId}
-              onSelectedSetlistMediaIdChange={setSelectedSetlistMediaId}
-              onSelectedYoutubeItemIdChange={setSelectedYoutubeItemId}
-              onSetlistContextMenuChange={setSetlistContextMenu}
-              onSetlistChange={setSetlist}
-              onAddToSetlist={addToSetlist}
-              onRemoveFromSetlist={removeFromSetlist}
-              onTryClearSetlist={tryClearSetlist}
-              onAddSectionHeader={addSectionHeader}
-              onShowLoadModal={handleShowLoadModal}
-              onShowSaveModal={handleShowSaveModal}
-              onSelectSong={selectSong}
-              onSelectPresentation={handleSelectPresentationFromSetlist}
-              onSetSelectedSong={setSelectedSong}
-              onSetSelectedPresentation={setSelectedPresentation}
-              onSetCurrentPresentationSlideIndex={setCurrentPresentationSlideIndex}
-              onSetCurrentContentType={handleSetCurrentContentType}
-              onSetIsBlank={setIsBlank}
-              onSetLiveState={setLiveState}
-              onSendBlank={handleSendBlank}
-              onStopAllTools={stopAllTools}
-              onBroadcastToolFromSetlist={broadcastToolFromSetlist}
-              onSetActiveMedia={setActiveMedia}
-              onSetActiveAudio={setActiveAudio}
-              onSetActiveAudioSetlistId={setActiveAudioSetlistId}
-              onHandlePlayAudio={handlePlayAudio}
-              onHandleDisplayMedia={handleDisplayMedia}
-              onClearMedia={handleClearMediaSetlist}
-              onStartPlaylist={startPlaylist}
-              onSetActivePlaylistId={setActivePlaylistId}
-              onSetActivePlaylistIndex={setActivePlaylistIndex}
-              onSetActivePlaylistOrder={setActivePlaylistOrder}
-              onOpenEditPlaylistModal={openEditPlaylistModal}
-              onStartEditingSong={handleStartEditingSongFromSetlist}
-              onPlayYoutubeVideo={handlePlayYoutubeVideo}
-              onStopYoutubeVideo={handleStopYoutubeVideo}
-            />
-            </React.Suspense>
-          </div>
-
-
-          {/* Resize Handle - Setlist/Preview */}
-          <ResizeHandle
-            direction="vertical"
-            isResizing={isResizing === 'setlist'}
-            onMouseDown={(e) => startResize('setlist', e)}
-          />
-
-          {/* Right Column - Live Preview (remaining space) */}
-          <LivePreviewPanel
-            displays={displays}
-            selectedSong={selectedSong}
-            currentSlide={currentSlide}
-            isBlank={isBlank}
-            activeMedia={activeMedia}
-            youtubeOnDisplay={youtubeOnDisplay}
-            activeYoutubeVideo={activeYoutubeVideo}
-            selectedPresentation={selectedPresentation}
-            selectedYoutubeItemId={selectedYoutubeItemId}
-            currentContentType={currentContentType}
-            onlineConnected={onlineConnected}
-            displayMode={displayMode}
-            selectedBackground={selectedBackground}
-            liveSlideData={liveSlideData}
-            memoizedLivePreviewTheme={memoizedLivePreviewTheme}
-            memoizedTools={memoizedTools}
-            memoizedPresentationSlide={memoizedPresentationSlide}
-            combinedSlidesData={combinedSlidesData}
-            selectedCombinedIndex={selectedCombinedIndex}
-            youtubeContainerRef={youtubeContainerRef}
-            previewVideoRef={previewVideoRef}
-            getVerseTypeColor={getVerseTypeColor}
-            onYoutubeStop={handleYoutubeStop}
-            onClearMedia={handleClearMedia}
-            onVideoTimeUpdate={handleVideoTimeUpdate}
-            onVideoPlay={handleVideoPlay}
-            onVideoPause={handleVideoPause}
-            onVideoSeeked={handleVideoSeeked}
-          />
         </div>{/* End of Top Row */}
 
         {/* Horizontal Resize Handle - Top/Bottom Rows */}
         <ResizeHandle
           direction="horizontal"
-          isResizing={isResizing === 'row'}
-          onMouseDown={(e) => startResize('row', e)}
+          isResizing={isResizing === 'setlist'}
+          onMouseDown={(e) => startResize('setlist', e)}
         />
 
-        {/* Bottom Row - Slides Grid */}
-        <BottomRowPanel
-          selectedSong={selectedSong}
-          selectedPresentation={selectedPresentation}
-          displayMode={displayMode}
-          currentSlideIndex={currentSlideIndex}
-          liveSongId={liveSongId}
-          liveSlideIndex={liveSlideIndex}
-          isBlank={isBlank}
-          isRTL={isRTL}
-          autoPlayActive={autoPlayActive}
-          autoPlayInterval={autoPlayInterval}
-          currentPresentationSlideIndex={currentPresentationSlideIndex}
-          showBackgroundDropdown={showBackgroundDropdown}
-          selectedBackground={selectedBackground}
-          combinedSlidesData={combinedSlidesData}
-          selectedCombinedIndex={selectedCombinedIndex}
-          quickSlideText={quickSlideText}
-          getVerseTypeColor={getVerseTypeColor}
-          selectSlide={selectSlide}
-          toggleBlank={toggleBlank}
-          goToSlide={goToSlide}
-          selectCombinedSlide={selectCombinedSlide}
-          sendPrayerPresentationSlide={sendPrayerPresentationSlide}
-          updateQuickSlideCount={updateQuickSlideCount}
-          handleSetBackground={handleSetBackground}
-          isQuickModeActive={selectedSong?.id === 'quick-slide'}
-          onQuickModeClick={handleQuickModeClick}
-          onSetDisplayMode={setDisplayMode}
-          onSetIsBlank={setIsBlank}
-          onSetLiveState={setLiveState}
-          onSetShowBackgroundDropdown={setShowBackgroundDropdown}
-          onSetSelectedBackground={setSelectedBackground}
-          onSetAutoPlayActive={handleSetAutoPlayActive}
-          onSetAutoPlayInterval={setAutoPlayInterval}
-          onSetCurrentPresentationSlideIndex={setCurrentPresentationSlideIndex}
-          onSlideCodeMapChange={setSlideCodeMap}
-          onEditSlide={handleEditSlide}
-          onAddSlide={handleAddSlide}
-          arrangementState={arrangementState}
-        />
+        {/* Bottom Row - Slides Preview */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+          <BottomRowPanel
+            selectedSong={selectedSong}
+            selectedPresentation={selectedPresentation}
+            displayMode={displayMode}
+            currentSlideIndex={currentSlideIndex}
+            liveSongId={liveSongId}
+            liveSlideIndex={liveSlideIndex}
+            isBlank={isBlank}
+            isRTL={isRTL}
+            contentType={currentContentType}
+            isQuickModeActive={selectedSong?.id === 'quick-slide'}
+            onQuickModeClick={handleQuickModeClick}
+            quickSlideCount={quickSlideCount}
+            quickSlideBroadcastIndex={quickSlideBroadcastIndex}
+            isAutoGenerating={isAutoGenerating}
+            onQuickSlideTextChange={handleQuickSlideTextChange}
+            onAutoGenerateQuickSlide={autoGenerateQuickSlide}
+            onBroadcastQuickSlide={parseAndBroadcastQuickSlide}
+            autoPlayActive={autoPlayActive}
+            autoPlayInterval={autoPlayInterval}
+            currentPresentationSlideIndex={currentPresentationSlideIndex}
+            combinedSlidesData={combinedSlidesData}
+            selectedCombinedIndex={selectedCombinedIndex}
+            quickSlideText={quickSlideText}
+            getVerseTypeColor={getVerseTypeColor}
+            selectSlide={selectSlide}
+            goToSlide={goToSlide}
+            selectCombinedSlide={selectCombinedSlide}
+            sendPrayerPresentationSlide={sendPrayerPresentationSlide}
+            updateQuickSlideCount={updateQuickSlideCount}
+            onSetIsBlank={setIsBlank}
+            onSetLiveState={setLiveState}
+            onSetAutoPlayActive={handleSetAutoPlayActive}
+            onSetAutoPlayInterval={setAutoPlayInterval}
+            onSetCurrentPresentationSlideIndex={setCurrentPresentationSlideIndex}
+            onSlideCodeMapChange={setSlideCodeMap}
+            onEditSlide={handleEditSlide}
+            onAddSlide={handleAddSlide}
+            arrangementState={arrangementState}
+            editingSongSlideIndex={editingSongSlideIndex}
+            onSaveSongSlides={handleSaveSongSlides}
+            onCancelEditSongSlides={handleCancelEditSongSlides}
+          />
+        </div>
       </main>
 
       {/* Slide Code Keyboard Navigation Indicator */}
@@ -3354,6 +3526,11 @@ const ControlPanel: React.FC = () => {
             }
           }}
         />
+      )}
+
+      {/* About Modal */}
+      {showAboutModal && (
+        <AboutModal onClose={() => setShowAboutModal(false)} />
       )}
 
       {/* Hidden audio element for background music */}

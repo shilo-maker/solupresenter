@@ -99,6 +99,9 @@ export class DisplayManager {
   private identifyWindows: BrowserWindow[] = [];
   private identifyTimeout: NodeJS.Timeout | null = null;
 
+  // Track windows being closed to avoid misidentifying them as control window
+  private closingWindows: Set<BrowserWindow> = new Set();
+
   // Theme resolver callbacks - set from IPC to resolve theme IDs to theme objects
   private themeResolvers: {
     viewer?: (id: string) => any;
@@ -110,6 +113,7 @@ export class DisplayManager {
   // Default theme resolver callbacks - set from IPC to get default themes from database
   private defaultThemeResolvers: {
     viewer?: () => any;
+    stage?: () => any;
     bible?: () => any;
     prayer?: () => any;
   } = {};
@@ -199,10 +203,18 @@ export class DisplayManager {
 
     try {
     if (managed.type === 'viewer') {
-      // Theme - respect per-display overrides
-      if (this.currentViewerTheme) {
-        const themeToSend = this.getThemeForDisplay(managed.id, 'viewer', this.currentViewerTheme);
-        managed.window.webContents.send('theme:update', themeToSend);
+      // Theme - respect per-display overrides, load default if none set
+      let viewerTheme = this.currentViewerTheme;
+      if (!viewerTheme && this.defaultThemeResolvers.viewer) {
+        viewerTheme = this.defaultThemeResolvers.viewer();
+        if (viewerTheme) {
+          this.currentViewerTheme = viewerTheme;
+          log.debug(' Loaded default viewer theme for initial state:', viewerTheme.name);
+        }
+      }
+      const viewerThemeToSend = this.getThemeForDisplay(managed.id, 'viewer', viewerTheme);
+      if (viewerThemeToSend) {
+        managed.window.webContents.send('theme:update', viewerThemeToSend);
       }
 
       // Background
@@ -217,9 +229,19 @@ export class DisplayManager {
         let themeType: DisplayThemeType = 'viewer';
         if (contentType === 'bible') {
           activeTheme = this.currentBibleTheme;
+          // Load default bible theme if not set
+          if (!activeTheme && this.defaultThemeResolvers.bible) {
+            activeTheme = this.defaultThemeResolvers.bible();
+            if (activeTheme) this.currentBibleTheme = activeTheme;
+          }
           themeType = 'bible';
         } else if (contentType === 'prayer' || contentType === 'sermon') {
           activeTheme = this.currentPrayerTheme;
+          // Load default prayer theme if not set
+          if (!activeTheme && this.defaultThemeResolvers.prayer) {
+            activeTheme = this.defaultThemeResolvers.prayer();
+            if (activeTheme) this.currentPrayerTheme = activeTheme;
+          }
           themeType = 'prayer';
         }
         // Apply per-display override if available
@@ -252,10 +274,18 @@ export class DisplayManager {
         });
       }
     } else if (managed.type === 'stage') {
-      // Stage theme - respect per-display overrides
-      if (this.currentStageTheme) {
-        const themeToSend = this.getThemeForDisplay(managed.id, 'stage', this.currentStageTheme);
-        managed.window.webContents.send('stageTheme:update', themeToSend);
+      // Stage theme - respect per-display overrides, load default if none set
+      let stageTheme = this.currentStageTheme;
+      if (!stageTheme && this.defaultThemeResolvers.stage) {
+        stageTheme = this.defaultThemeResolvers.stage();
+        if (stageTheme) {
+          this.currentStageTheme = stageTheme;
+          log.debug(' Loaded default stage theme for initial state:', stageTheme.name);
+        }
+      }
+      const stageThemeToSend = this.getThemeForDisplay(managed.id, 'stage', stageTheme);
+      if (stageThemeToSend) {
+        managed.window.webContents.send('stageTheme:update', stageThemeToSend);
       }
 
       // Slide data (stage monitors also show slides, with activeTheme respecting overrides)
@@ -387,6 +417,26 @@ export class DisplayManager {
     // Build URL with sameScreen parameter if applicable
     const sameScreenParam = isSameScreenAsControl ? '?sameScreen=true' : '';
 
+    // IMPORTANT: Store reference BEFORE loading URL
+    // This ensures the window is registered when display:ready event arrives
+    // (loadURL is async and the renderer may send display:ready before we continue)
+    this.displays.set(displayId, {
+      id: displayId,
+      electronDisplay,
+      window,
+      type
+    });
+
+    // Handle window close - only delete if this window is still the current one for this displayId
+    // (prevents old closing window from deleting new window's entry)
+    window.on('closed', () => {
+      const current = this.displays.get(displayId);
+      if (current?.window === window) {
+        this.displays.delete(displayId);
+        this.notifyDisplayChange();
+      }
+    });
+
     // Load appropriate content based on type
     if (isDev) {
       window.loadURL(`http://localhost:5173/#/display/${type}${sameScreenParam}`);
@@ -400,20 +450,6 @@ export class DisplayManager {
     // Note: Initial state is now sent when we receive 'display:ready' IPC from the renderer
     // This ensures the React component has mounted and registered its IPC listeners
 
-    // Store reference
-    this.displays.set(displayId, {
-      id: displayId,
-      electronDisplay,
-      window,
-      type
-    });
-
-    // Handle window close
-    window.on('closed', () => {
-      this.displays.delete(displayId);
-      this.notifyDisplayChange();
-    });
-
     this.notifyDisplayChange();
     return true;
   }
@@ -424,6 +460,11 @@ export class DisplayManager {
   closeDisplayWindow(displayId: number): void {
     const managed = this.displays.get(displayId);
     if (managed?.window) {
+      // Track window as closing to prevent misidentification in getControlWindowDisplay
+      this.closingWindows.add(managed.window);
+      managed.window.once('closed', () => {
+        this.closingWindows.delete(managed.window!);
+      });
       managed.window.close();
     }
     this.displays.delete(displayId);
@@ -706,9 +747,12 @@ export class DisplayManager {
       log.error(' broadcastStageTheme: invalid theme, expected object or null');
       return;
     }
+    // Always update currentStageTheme for consistency with other theme types
+    // This ensures late-joining displays get the correct state
     this.currentStageTheme = theme;
 
     // Send to each stage display with potential per-display override
+    // Even if global theme is null, per-display overrides may apply
     for (const managed of this.displays.values()) {
       if (managed.type === 'stage') {
         this.sendThemeToDisplay(managed, 'stage', theme, 'stageTheme:update');
@@ -1049,6 +1093,7 @@ export class DisplayManager {
    */
   setDefaultThemeResolvers(resolvers: {
     viewer?: () => any;
+    stage?: () => any;
     bible?: () => any;
     prayer?: () => any;
   }): void {
@@ -1106,10 +1151,9 @@ export class DisplayManager {
       this.broadcastTheme(this.currentViewerTheme);
     }
 
-    // Re-broadcast stage themes
-    if (this.currentStageTheme) {
-      this.broadcastStageTheme(this.currentStageTheme);
-    }
+    // Re-broadcast stage themes - always try for stage displays even if global theme is null
+    // This ensures per-display overrides are applied
+    this.broadcastStageTheme(this.currentStageTheme);
 
     // Re-broadcast bible themes
     if (this.currentBibleTheme) {
@@ -1356,6 +1400,9 @@ export class DisplayManager {
         }
       });
 
+      // Set to screen-saver level with relative level 1 to appear above display windows
+      identifyWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+
       // Create HTML content for the overlay
       const htmlContent = `
         <!DOCTYPE html>
@@ -1466,6 +1513,27 @@ export class DisplayManager {
     const controlWindow = allWindows.find(win => {
       if (win.isDestroyed()) return false;
 
+      // Exclude windows that are in the process of being closed
+      if (this.closingWindows.has(win)) return false;
+
+      // Exclude display windows by URL (catches windows not yet in this.displays)
+      try {
+        const url = win.webContents.getURL();
+        // Exclude windows with empty/loading URLs (likely new display windows)
+        if (!url || url === '' || url === 'about:blank') return false;
+        // Exclude display viewer/stage windows
+        if (url.includes('/display/')) return false;
+        // Exclude DevTools windows
+        if (url.startsWith('devtools://')) return false;
+        // Control panel URL should contain localhost or 127.0.0.1 with no /display/ path
+        const isControlPanelUrl = (url.includes('localhost:') || url.includes('127.0.0.1:')) &&
+                                   !url.includes('/display/');
+        if (!isControlPanelUrl) return false;
+      } catch {
+        // Window might be in a bad state, skip it
+        return false;
+      }
+
       // Check if it's a managed display window
       for (const managed of this.displays.values()) {
         if (managed.window === win) return false;
@@ -1473,6 +1541,9 @@ export class DisplayManager {
 
       // Check if it's the OBS overlay
       if (this.obsOverlayWindow?.window === win) return false;
+
+      // Exclude identify overlay windows
+      if (this.identifyWindows.includes(win)) return false;
 
       return true;
     });
@@ -1504,36 +1575,103 @@ export class DisplayManager {
   getControlWindowDisplay(): number | null {
     const allWindows = BrowserWindow.getAllWindows();
 
+    log.debug(`[getControlWindowDisplay] Total windows: ${allWindows.length}`);
+
     // Find the control window
     const controlWindow = allWindows.find(win => {
-      if (win.isDestroyed()) return false;
+      const winId = win.id;
 
-      for (const managed of this.displays.values()) {
-        if (managed.window === win) return false;
+      if (win.isDestroyed()) {
+        log.debug(`[getControlWindowDisplay] Window ${winId}: excluded (destroyed)`);
+        return false;
       }
 
-      if (this.obsOverlayWindow?.window === win) return false;
+      // Exclude windows that are in the process of being closed
+      if (this.closingWindows.has(win)) {
+        log.debug(`[getControlWindowDisplay] Window ${winId}: excluded (closing)`);
+        return false;
+      }
 
+      // Exclude display windows by URL (catches windows not yet in this.displays)
+      try {
+        const url = win.webContents.getURL();
+        // Exclude windows with empty/loading URLs (likely new display windows)
+        if (!url || url === '' || url === 'about:blank') {
+          log.debug(`[getControlWindowDisplay] Window ${winId}: excluded (empty/loading URL)`);
+          return false;
+        }
+        // Exclude display viewer/stage windows
+        if (url.includes('/display/')) {
+          log.debug(`[getControlWindowDisplay] Window ${winId}: excluded (display URL: ${url.substring(0, 50)}...)`);
+          return false;
+        }
+        // Exclude DevTools windows
+        if (url.startsWith('devtools://')) {
+          log.debug(`[getControlWindowDisplay] Window ${winId}: excluded (devtools)`);
+          return false;
+        }
+        // Control panel URL should contain localhost or 127.0.0.1 with no /display/ path
+        // If it's neither the control panel pattern, skip it
+        const isControlPanelUrl = (url.includes('localhost:') || url.includes('127.0.0.1:')) &&
+                                   !url.includes('/display/');
+        if (!isControlPanelUrl) {
+          log.debug(`[getControlWindowDisplay] Window ${winId}: excluded (not control panel URL: ${url.substring(0, 50)}...)`);
+          return false;
+        }
+        log.debug(`[getControlWindowDisplay] Window ${winId}: URL = ${url.substring(0, 80)}...`);
+      } catch (e) {
+        // Window might be in a bad state, skip it
+        log.debug(`[getControlWindowDisplay] Window ${winId}: excluded (error getting URL)`);
+        return false;
+      }
+
+      for (const managed of this.displays.values()) {
+        if (managed.window === win) {
+          log.debug(`[getControlWindowDisplay] Window ${winId}: excluded (managed display)`);
+          return false;
+        }
+      }
+
+      if (this.obsOverlayWindow?.window === win) {
+        log.debug(`[getControlWindowDisplay] Window ${winId}: excluded (OBS overlay)`);
+        return false;
+      }
+
+      // Exclude identify overlay windows
+      if (this.identifyWindows.includes(win)) {
+        log.debug(`[getControlWindowDisplay] Window ${winId}: excluded (identify overlay)`);
+        return false;
+      }
+
+      log.debug(`[getControlWindowDisplay] Window ${winId}: SELECTED as control window`);
       return true;
     });
 
-    if (!controlWindow) return null;
+    if (!controlWindow) {
+      log.debug(`[getControlWindowDisplay] No control window found!`);
+      return null;
+    }
 
     const bounds = controlWindow.getBounds();
     const centerX = bounds.x + bounds.width / 2;
     const centerY = bounds.y + bounds.height / 2;
 
+    log.debug(`[getControlWindowDisplay] Control window bounds: x=${bounds.x}, y=${bounds.y}, w=${bounds.width}, h=${bounds.height}, center=(${centerX}, ${centerY})`);
+
     // Find which display contains the center of the control window
     const allDisplays = screen.getAllDisplays();
     for (const display of allDisplays) {
+      log.debug(`[getControlWindowDisplay] Checking display ${display.id}: x=${display.bounds.x}, y=${display.bounds.y}, w=${display.bounds.width}, h=${display.bounds.height}`);
       if (centerX >= display.bounds.x &&
           centerX < display.bounds.x + display.bounds.width &&
           centerY >= display.bounds.y &&
           centerY < display.bounds.y + display.bounds.height) {
+        log.debug(`[getControlWindowDisplay] Returning display ${display.id}`);
         return display.id;
       }
     }
 
+    log.debug(`[getControlWindowDisplay] No matching display found for control window position`);
     return null;
   }
 }

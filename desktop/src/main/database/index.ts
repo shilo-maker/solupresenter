@@ -1550,3 +1550,15 @@ export function clearAllDisplayThemeOverrides(): boolean {
   saveDatabase();
   return true;
 }
+
+/**
+ * Remove all overrides that reference a specific theme ID
+ * Called when a theme is deleted to prevent orphaned references
+ */
+export function removeOverridesForTheme(themeId: string): number {
+  if (!db) return 0;
+
+  const result = db.run('DELETE FROM display_theme_overrides WHERE themeId = ?', [themeId]);
+  saveDatabase();
+  return result.changes || 0;
+}

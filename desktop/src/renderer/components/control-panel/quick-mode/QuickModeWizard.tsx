@@ -986,7 +986,7 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
             <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '16px' }}>
               {subtitles.map((item, index) => (
                 <div
-                  key={index}
+                  key={`subtitle-${index}-${(item.subtitle || '').substring(0, 15)}`}
                   style={{
                     background: 'rgba(0,0,0,0.2)',
                     borderRadius: '8px',
@@ -1556,7 +1556,7 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
               {/* Subtitle Translations */}
               {subtitles.filter(s => s.subtitle.trim()).map((item, index) => (
                 <div
-                  key={index}
+                  key={`subtitle-translation-${index}-${(item.subtitle || '').substring(0, 15)}`}
                   style={{
                     background: 'rgba(0,0,0,0.2)',
                     borderRadius: '8px',

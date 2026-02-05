@@ -32,7 +32,7 @@ const NewThemeTypeModal = memo<NewThemeTypeModalProps>(({ onClose }) => {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: 'rgba(30,30,50,0.98)',
+          background: 'rgba(24, 24, 27, 0.98)',
           borderRadius: '16px',
           padding: '24px',
           minWidth: '500px',

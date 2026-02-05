@@ -96,6 +96,7 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const text = expressText;
+    const scrollTop = textarea.scrollTop;
 
     // Add newlines if needed for proper formatting
     let insertText = marker;
@@ -107,11 +108,12 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
     const newText = text.substring(0, start) + insertText + text.substring(end);
     setExpressText(newText);
 
-    // Restore focus and set cursor after inserted text
+    // Restore focus, cursor position, and scroll position after React re-render
     setTimeout(() => {
       textarea.focus();
       const newCursorPos = start + insertText.length;
       textarea.setSelectionRange(newCursorPos, newCursorPos);
+      textarea.scrollTop = scrollTop;
     }, 0);
   };
 
@@ -142,13 +144,14 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
 
   const updateSlide = (field: string, value: string) => {
     const newSlides = [...editingSong.slides];
+    if (editingSlideIndex < 0 || editingSlideIndex >= newSlides.length) return;
     newSlides[editingSlideIndex] = { ...newSlides[editingSlideIndex], [field]: value };
     setEditingSong({ ...editingSong, slides: newSlides });
   };
 
   const autoGenerateContent = async () => {
     const slide = editingSong.slides[editingSlideIndex];
-    if (!slide.originalText.trim()) return;
+    if (!slide || !slide.originalText.trim()) return;
 
     try {
       const result = await window.electronAPI.processQuickSlide(slide.originalText);
@@ -297,7 +300,7 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: 'linear-gradient(135deg, rgba(30,30,50,0.98), rgba(20,20,40,0.98))',
+          background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.98), rgba(18, 18, 21, 0.98))',
           borderRadius: '16px',
           padding: '24px',
           width: '1000px',
@@ -529,7 +532,7 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
               <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {editingSong.slides.map((slide, idx) => (
                   <div
-                    key={idx}
+                    key={`slide-${idx}-${slide.verseType || 'v'}-${(slide.originalText || '').substring(0, 20)}`}
                     onClick={() => setEditingSlideIndex(idx)}
                     style={{
                       padding: '8px',

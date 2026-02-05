@@ -698,7 +698,7 @@ const OBSOverlay: React.FC = () => {
                       {displayMode === 'original' && combinedSlides && combinedSlides.map((combined, idx) => (
                         combined.originalText && (
                           <div
-                            key={idx}
+                            key={`combined-${idx}-${(combined.originalText || '').substring(0, 15)}`}
                             style={{
                               display: 'inline-block',
                               fontSize: lineFontSize,

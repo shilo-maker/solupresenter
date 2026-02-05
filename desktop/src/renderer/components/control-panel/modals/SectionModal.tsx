@@ -51,7 +51,7 @@ const SectionModal: React.FC<SectionModalProps> = ({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: 'rgba(30,30,50,0.98)',
+          background: 'rgba(24, 24, 27, 0.98)',
           borderRadius: '16px',
           padding: '24px',
           minWidth: '350px',
@@ -126,12 +126,23 @@ const SectionModal: React.FC<SectionModalProps> = ({
           <button
             onClick={handleConfirm}
             style={{
-              background: '#06b6d4',
+              background: 'linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)',
               border: 'none',
               borderRadius: '8px',
               padding: '10px 20px',
-              color: 'white',
-              cursor: 'pointer'
+              color: '#000',
+              cursor: 'pointer',
+              fontWeight: 600,
+              boxShadow: '0 2px 8px rgba(6, 182, 212, 0.4)',
+              transition: 'transform 0.15s, box-shadow 0.15s'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.05)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(6, 182, 212, 0.6)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(6, 182, 212, 0.4)';
             }}
           >
             {t('common.add')}

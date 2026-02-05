@@ -513,6 +513,7 @@ export async function importSongsFromBackend(backendUrl: string): Promise<{ impo
         }
       }
       commitTransaction();
+      saveDatabase();
     } catch (transactionError) {
       rollbackTransaction();
       throw transactionError;

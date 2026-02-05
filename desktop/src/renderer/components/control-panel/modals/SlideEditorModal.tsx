@@ -108,7 +108,7 @@ const SlideEditorModal: React.FC<SlideEditorModalProps> = ({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: 'linear-gradient(135deg, rgba(30,30,50,0.98), rgba(20,20,40,0.98))',
+          background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.98), rgba(18, 18, 21, 0.98))',
           borderRadius: '16px',
           padding: '24px',
           width: '600px',

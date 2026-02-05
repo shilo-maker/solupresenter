@@ -1,32 +1,10 @@
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import logoImage from '../../../assets/logo.png';
 
 interface AboutModalProps {
   onClose: () => void;
 }
-
-const PILLARS = [
-  {
-    icon: '\u{1F525}',
-    title: 'House of Prayer',
-    desc: 'Raising up day and night worship and prayer in the land of Israel'
-  },
-  {
-    icon: '\u{1F3B5}',
-    title: 'Create Culture',
-    desc: 'Producing original Hebrew worship music, media, and creative arts'
-  },
-  {
-    icon: '\u{1F4D6}',
-    title: 'Teach & Equip',
-    desc: 'Training and discipling believers in Israel and the nations'
-  },
-  {
-    icon: '\u{1F30D}',
-    title: 'Out of Zion',
-    desc: 'Taking the word of the Lord from Jerusalem to the nations'
-  }
-];
 
 const GlobeIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -45,12 +23,6 @@ const InstagramIcon = () => (
     <path d="M8 0C5.829 0 5.556.01 4.703.048 3.85.088 3.269.222 2.76.42a3.917 3.917 0 0 0-1.417.923A3.927 3.927 0 0 0 .42 2.76C.222 3.268.087 3.85.048 4.7.01 5.555 0 5.827 0 8.001c0 2.172.01 2.444.048 3.297.04.852.174 1.433.372 1.942.205.526.478.972.923 1.417.444.445.89.719 1.416.923.51.198 1.09.333 1.942.372C5.555 15.99 5.827 16 8 16s2.444-.01 3.298-.048c.851-.04 1.434-.174 1.943-.372a3.916 3.916 0 0 0 1.416-.923c.445-.445.718-.891.923-1.417.197-.509.332-1.09.372-1.942C15.99 10.445 16 10.173 16 8s-.01-2.445-.048-3.299c-.04-.851-.175-1.433-.372-1.941a3.926 3.926 0 0 0-.923-1.417A3.911 3.911 0 0 0 13.24.42c-.51-.198-1.092-.333-1.943-.372C10.443.01 10.172 0 7.998 0h.003zm-.717 1.442h.718c2.136 0 2.389.007 3.232.046.78.035 1.204.166 1.486.275.373.145.64.319.92.599.28.28.453.546.598.92.11.281.24.705.275 1.485.039.843.047 1.096.047 3.231s-.008 2.389-.047 3.232c-.035.78-.166 1.203-.275 1.485a2.47 2.47 0 0 1-.599.919c-.28.28-.546.453-.92.598-.28.11-.704.24-1.485.276-.843.038-1.096.047-3.232.047s-2.39-.009-3.233-.047c-.78-.036-1.203-.166-1.485-.276a2.478 2.478 0 0 1-.92-.598 2.48 2.48 0 0 1-.6-.92c-.109-.281-.24-.705-.275-1.485-.038-.843-.046-1.096-.046-3.233 0-2.136.008-2.388.046-3.231.036-.78.166-1.204.276-1.486.145-.373.319-.64.599-.92.28-.28.546-.453.92-.598.282-.11.705-.24 1.485-.276.738-.034 1.024-.044 2.515-.045v.002zm4.988 1.328a.96.96 0 1 0 0 1.92.96.96 0 0 0 0-1.92zm-4.27 1.122a4.109 4.109 0 1 0 0 8.217 4.109 4.109 0 0 0 0-8.217zm0 1.441a2.667 2.667 0 1 1 0 5.334 2.667 2.667 0 0 1 0-5.334z"/>
   </svg>
 );
-
-const SOCIAL_LINKS = [
-  { label: 'Website', url: 'https://soluisrael.org', Icon: GlobeIcon },
-  { label: 'YouTube', url: 'https://youtube.com/@SOLUIsrael', Icon: YouTubeIcon },
-  { label: 'Instagram', url: 'https://instagram.com/soluisrael', Icon: InstagramIcon }
-] as const;
 
 const GIVE_URL = 'https://soluisrael.org/give';
 
@@ -134,6 +106,8 @@ const closeBtnStyle: React.CSSProperties = {
 };
 
 const AboutModal = memo<AboutModalProps>(({ onClose }) => {
+  const { t } = useTranslation();
+
   const openLink = useCallback((url: string) => {
     window.electronAPI.openExternal(url);
   }, []);
@@ -162,6 +136,35 @@ const AboutModal = memo<AboutModalProps>(({ onClose }) => {
 
   const handleGive = useCallback(() => openLink(GIVE_URL), [openLink]);
 
+  const pillars = useMemo(() => [
+    {
+      icon: '\u{1F525}',
+      title: t('about.pillarPrayer'),
+      desc: t('about.pillarPrayerDesc')
+    },
+    {
+      icon: '\u{1F3B5}',
+      title: t('about.pillarCulture'),
+      desc: t('about.pillarCultureDesc')
+    },
+    {
+      icon: '\u{1F4D6}',
+      title: t('about.pillarTeach'),
+      desc: t('about.pillarTeachDesc')
+    },
+    {
+      icon: '\u{1F30D}',
+      title: t('about.pillarZion'),
+      desc: t('about.pillarZionDesc')
+    }
+  ], [t]);
+
+  const socialLinks = useMemo(() => [
+    { label: t('about.website'), url: 'https://soluisrael.org', Icon: GlobeIcon },
+    { label: t('about.youtube'), url: 'https://youtube.com/@SOLUIsrael', Icon: YouTubeIcon },
+    { label: t('about.instagram'), url: 'https://instagram.com/soluisrael', Icon: InstagramIcon }
+  ], [t]);
+
   return (
     <div onClick={onClose} style={overlayStyle}>
       <div onClick={(e) => e.stopPropagation()} style={contentStyle}>
@@ -173,30 +176,30 @@ const AboutModal = memo<AboutModalProps>(({ onClose }) => {
             style={{ height: '64px', objectFit: 'contain', marginBottom: '12px', filter: 'brightness(1.1)' }}
           />
           <h2 style={{ color: '#fafafa', margin: '0 0 4px 0', fontSize: '1.4rem', fontWeight: 600 }}>
-            SoluPresenter
+            SoluCast
           </h2>
           <p style={{ color: '#71717a', margin: 0, fontSize: '0.85rem' }}>
-            by Solu Israel Ministry
+            {t('about.byMinistry')}
           </p>
         </div>
 
         {/* Vision */}
         <div style={visionBoxStyle}>
           <p style={{ color: '#a1a1aa', margin: 0, fontSize: '0.85rem', lineHeight: 1.6, textAlign: 'center', fontStyle: 'italic' }}>
-            "A voice calling in the wilderness, prepare the way of the Lord"
+            {t('about.visionQuote')}
           </p>
           <p style={{ color: '#71717a', margin: '6px 0 0 0', fontSize: '0.75rem', textAlign: 'center' }}>
-            Isaiah 40:3 — SOLU: from the Hebrew command to "build up a highway"
+            {t('about.visionRef')}
           </p>
         </div>
 
         {/* 4 Pillars */}
         <div style={{ marginBottom: '20px' }}>
           <h4 style={{ color: '#a1a1aa', margin: '0 0 12px 0', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
-            Four Pillars
+            {t('about.fourPillars')}
           </h4>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            {PILLARS.map((pillar, idx) => (
+            {pillars.map((pillar, idx) => (
               <div key={idx} style={pillarCardStyle}>
                 <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>{pillar.icon}</div>
                 <div style={{ color: '#fafafa', fontSize: '0.8rem', fontWeight: 500, marginBottom: '2px' }}>
@@ -212,7 +215,7 @@ const AboutModal = memo<AboutModalProps>(({ onClose }) => {
 
         {/* Social Links */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '20px' }}>
-          {SOCIAL_LINKS.map((link) => (
+          {socialLinks.map((link) => (
             <button
               key={link.label}
               onClick={() => openLink(link.url)}
@@ -233,7 +236,7 @@ const AboutModal = memo<AboutModalProps>(({ onClose }) => {
           onMouseEnter={handleCtaEnter}
           onMouseLeave={handleCtaLeave}
         >
-          Support Our Ministry
+          {t('about.supportMinistry')}
         </button>
         <p style={{ color: '#71717a', fontSize: '0.7rem', textAlign: 'center', margin: '8px 0 0 0' }}>
           soluisrael.org/give

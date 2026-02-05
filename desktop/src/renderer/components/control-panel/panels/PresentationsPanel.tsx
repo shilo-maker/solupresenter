@@ -236,19 +236,29 @@ const PresentationsPanel = memo<PresentationsPanelProps>(({
           onClick={onNewPresentation}
           title="New Presentation"
           style={{
-            background: '#06b6d4',
+            background: 'linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)',
             border: 'none',
             borderRadius: '8px',
             width: '34px',
             height: '34px',
-            color: 'white',
+            color: '#000',
             cursor: 'pointer',
             fontWeight: 600,
             fontSize: '1.2rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            flexShrink: 0
+            flexShrink: 0,
+            boxShadow: '0 2px 8px rgba(6, 182, 212, 0.4)',
+            transition: 'transform 0.15s, box-shadow 0.15s'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.05)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(6, 182, 212, 0.6)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 2px 8px rgba(6, 182, 212, 0.4)';
           }}
         >
           +

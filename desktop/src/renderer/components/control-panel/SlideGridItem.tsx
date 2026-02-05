@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useState, CSSProperties } from 'react';
+import React, { memo, useCallback, useState, useMemo } from 'react';
 
 interface SlideData {
   originalText?: string;
@@ -42,8 +42,11 @@ const SlideGridItem: React.FC<SlideGridItemProps> = memo(({
     onEdit?.(index);
   }, [index, onEdit]);
 
-  const containerStyle: CSSProperties = {
-    position: 'relative',
+  const handleMouseEnter = useCallback(() => setIsHovered(true), []);
+  const handleMouseLeave = useCallback(() => setIsHovered(false), []);
+
+  const containerStyle = useMemo(() => ({
+    position: 'relative' as const,
     border: isSelected ? '2px solid #00d4ff' : '2px solid rgba(255,255,255,0.1)',
     borderRadius: '6px',
     padding: '8px 10px',
@@ -52,23 +55,23 @@ const SlideGridItem: React.FC<SlideGridItemProps> = memo(({
       ? (isSelected ? bgColor : `${bgColor}99`)
       : (isSelected ? 'rgba(0, 212, 255, 0.2)' : 'rgba(0,0,0,0.3)'),
     boxShadow: isSelected ? '0 0 10px rgba(0, 212, 255, 0.5)' : 'none'
-  };
+  }), [isSelected, bgColor]);
 
-  const headerStyle: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
+  const headerStyle = useMemo(() => ({
+    display: 'flex' as const,
+    alignItems: 'center' as const,
     gap: '6px',
     color: isSelected ? '#00d4ff' : 'rgba(255,255,255,0.6)',
-    fontWeight: 'bold',
+    fontWeight: 'bold' as const,
     marginBottom: '6px',
     fontSize: '0.7rem'
-  };
+  }), [isSelected]);
 
   return (
     <div
       onMouseDown={handleMouseDown}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       style={containerStyle}
     >
       {/* Edit button - appears on hover */}

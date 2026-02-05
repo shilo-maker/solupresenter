@@ -96,7 +96,7 @@ const VirtualDisplayModal = memo<VirtualDisplayModalProps>(({
       <div
         onClick={handleContentClick}
         style={{
-          background: 'rgba(30, 30, 50, 0.98)',
+          background: 'rgba(24, 24, 27, 0.98)',
           borderRadius: '12px',
           border: '1px solid rgba(255,255,255,0.2)',
           padding: '24px',
@@ -259,14 +259,28 @@ const VirtualDisplayModal = memo<VirtualDisplayModalProps>(({
             disabled={!isValid || isLoading}
             style={{
               padding: '8px 20px',
-              background: isValid && !isLoading ? '#06b6d4' : 'rgba(255,255,255,0.1)',
+              background: isValid && !isLoading ? 'linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)' : 'rgba(255,255,255,0.1)',
               border: 'none',
               borderRadius: '8px',
-              color: 'white',
+              color: isValid && !isLoading ? '#000' : 'white',
               cursor: isValid && !isLoading ? 'pointer' : 'not-allowed',
               fontSize: '0.85rem',
               fontWeight: 600,
-              opacity: isValid && !isLoading ? 1 : 0.5
+              opacity: isValid && !isLoading ? 1 : 0.5,
+              boxShadow: isValid && !isLoading ? '0 2px 8px rgba(6, 182, 212, 0.4)' : 'none',
+              transition: 'transform 0.15s, box-shadow 0.15s'
+            }}
+            onMouseEnter={(e) => {
+              if (isValid && !isLoading) {
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(6, 182, 212, 0.6)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (isValid && !isLoading) {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(6, 182, 212, 0.4)';
+              }
             }}
           >
             {isLoading ? t('common.adding', 'Adding...') : t('common.add', 'Add')}

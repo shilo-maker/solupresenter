@@ -22,6 +22,7 @@ interface UseQuickSlideCallbacks {
   setIsBlank: React.Dispatch<React.SetStateAction<boolean>>;
   setQuickSlideBroadcastIndex: React.Dispatch<React.SetStateAction<number>>;
   setCurrentContentType: React.Dispatch<React.SetStateAction<'song' | 'bible' | 'prayer' | 'presentation'>>;
+  setLiveState: React.Dispatch<React.SetStateAction<{ slideData: any; contentType: 'song' | 'bible' | 'prayer' | 'presentation' | null; songId: string | null; slideIndex: number }>>;
   sendCurrentSlide: (song: Song | null, slideIndex: number, mode: DisplayMode, combinedIndices?: number[], contentType?: 'song' | 'bible' | 'prayer') => void;
 }
 
@@ -31,7 +32,7 @@ interface UseQuickSlideState {
 }
 
 interface UseQuickSlideRefs {
-  quickSlideTextareaRef: React.RefObject<HTMLTextAreaElement>;
+  quickSlideTextareaRef?: React.RefObject<HTMLTextAreaElement>;
 }
 
 // Check if text contains Hebrew characters
@@ -40,7 +41,7 @@ const isHebrewText = (text: string) => /[\u0590-\u05FF]/.test(text);
 export function useQuickSlide(
   state: UseQuickSlideState,
   callbacks: UseQuickSlideCallbacks,
-  refs: UseQuickSlideRefs
+  refs?: UseQuickSlideRefs
 ) {
   const { displayMode, quickSlideText } = state;
 
@@ -53,14 +54,15 @@ export function useQuickSlide(
     setIsBlank,
     setQuickSlideBroadcastIndex,
     setCurrentContentType,
+    setLiveState,
     sendCurrentSlide
   } = callbacks;
 
-  const { quickSlideTextareaRef } = refs;
+  const quickSlideTextareaRef = refs?.quickSlideTextareaRef;
 
-  // Get current text from the textarea ref, or fall back to stored state
+  // Get current text - prefer textarea ref if available (for modal), otherwise use state (for inline editor)
   const getCurrentQuickSlideText = useCallback(() => {
-    return quickSlideTextareaRef.current?.value || quickSlideText || '';
+    return quickSlideTextareaRef?.current?.value || quickSlideText || '';
   }, [quickSlideTextareaRef, quickSlideText]);
 
   // Update the count of slides based on text blocks
@@ -96,9 +98,11 @@ export function useQuickSlide(
       );
 
       const newText = processedBlocks.join('\n\n');
-      if (quickSlideTextareaRef.current) {
+      // Update textarea ref if available (modal mode)
+      if (quickSlideTextareaRef?.current) {
         quickSlideTextareaRef.current.value = newText;
       }
+      // Always update state (works for both modal and inline editor)
       setQuickSlideText(newText);
       updateQuickSlideCount(newText);
     } catch (error) {
@@ -108,8 +112,9 @@ export function useQuickSlide(
   }, [getCurrentQuickSlideText, quickSlideTextareaRef, setQuickSlideText, updateQuickSlideCount, setIsAutoGenerating]);
 
   // Parse text and broadcast a specific slide
-  const parseAndBroadcastQuickSlide = useCallback((slideIndex: number) => {
-    const currentText = getCurrentQuickSlideText();
+  // Accepts optional text parameter to avoid stale closure issues with inline editor
+  const parseAndBroadcastQuickSlide = useCallback((slideIndex: number, textOverride?: string) => {
+    const currentText = textOverride ?? getCurrentQuickSlideText();
     if (!currentText.trim()) return;
 
     const blocks = currentText.split(/\n\s*\n/).filter(block => block.trim());
@@ -136,8 +141,13 @@ export function useQuickSlide(
     setIsBlank(false);
     setQuickSlideBroadcastIndex(slideIndex);
     setCurrentContentType('song'); // Quick slide is always song type
+
+    // Update live state for the preview panel
+    const slide = quickSong.slides[slideIndex];
+    setLiveState({ slideData: slide, contentType: 'song', songId: 'quick-slide', slideIndex });
+
     sendCurrentSlide(quickSong, slideIndex, displayMode, undefined, 'song');
-  }, [getCurrentQuickSlideText, displayMode, setSelectedSong, setCurrentSlideIndex, setIsBlank, setQuickSlideBroadcastIndex, setCurrentContentType, sendCurrentSlide]);
+  }, [getCurrentQuickSlideText, displayMode, setSelectedSong, setCurrentSlideIndex, setIsBlank, setQuickSlideBroadcastIndex, setCurrentContentType, setLiveState, sendCurrentSlide]);
 
   return {
     isHebrewText,

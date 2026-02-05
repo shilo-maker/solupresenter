@@ -59,15 +59,15 @@ export const colors = {
     hover: 'rgba(255, 255, 255, 0.04)',
   },
 
-  // Button gradients
+  // Button gradients - enhanced with glow effect like golden save button
   button: {
-    primary: 'linear-gradient(135deg, #06b6d4, #0891b2)',
-    primaryHover: 'linear-gradient(135deg, #22d3ee, #06b6d4)',
-    success: 'linear-gradient(135deg, #10b981, #34d399)',
-    danger: 'linear-gradient(135deg, #ef4444, #f87171)',
+    primary: 'linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)',
+    primaryHover: 'linear-gradient(135deg, #67e8f9 0%, #22d3ee 100%)',
+    success: 'linear-gradient(135deg, #34d399 0%, #10b981 100%)',
+    danger: 'linear-gradient(135deg, #f87171 0%, #ef4444 100%)',
     secondary: '#27272a',
     ghost: 'transparent',
-    info: 'linear-gradient(135deg, #3b82f6, #60a5fa)',
+    info: 'linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%)',
     accent: '#06b6d4',
   },
 
@@ -162,13 +162,13 @@ export const buttonStyles = {
   primary: {
     background: colors.button.primary,
     color: colors.background.base,
-    boxShadow: `${shadows.sm}, inset 0 1px 0 rgba(255, 255, 255, 0.1)`,
+    boxShadow: '0 2px 8px rgba(6, 182, 212, 0.4)',
   } as CSSProperties,
 
   primaryHover: {
     background: colors.button.primaryHover,
-    boxShadow: `${shadows.md}, ${shadows.glowSm}`,
-    transform: 'translateY(-1px)',
+    boxShadow: '0 4px 12px rgba(6, 182, 212, 0.6)',
+    transform: 'scale(1.05)',
   } as CSSProperties,
 
   secondary: {
@@ -195,13 +195,25 @@ export const buttonStyles = {
   success: {
     background: colors.button.success,
     color: 'white',
-    boxShadow: shadows.sm,
+    boxShadow: '0 2px 8px rgba(16, 185, 129, 0.4)',
+  } as CSSProperties,
+
+  successHover: {
+    background: 'linear-gradient(135deg, #6ee7b7 0%, #34d399 100%)',
+    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.6)',
+    transform: 'scale(1.05)',
   } as CSSProperties,
 
   danger: {
     background: colors.button.danger,
     color: 'white',
-    boxShadow: shadows.sm,
+    boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)',
+  } as CSSProperties,
+
+  dangerHover: {
+    background: 'linear-gradient(135deg, #fca5a5 0%, #f87171 100%)',
+    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.6)',
+    transform: 'scale(1.05)',
   } as CSSProperties,
 
   icon: {
@@ -376,14 +388,17 @@ export const tabStyles = {
     padding: spacing[2],
     background: 'rgba(0, 0, 0, 0.4)',
     borderBottom: `1px solid ${colors.glass.border}`,
+    minHeight: '44px',
+    boxSizing: 'border-box' as const,
+    alignItems: 'center',
   } as CSSProperties,
 
   tab: (isActive: boolean) => ({
     padding: `${spacing[2]} ${spacing[4]}`,
-    background: isActive ? 'rgba(6, 182, 212, 0.1)' : 'transparent',
+    background: isActive ? 'linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)' : 'transparent',
     border: 'none',
     borderRadius: radius.md,
-    color: isActive ? colors.primary.light : colors.text.muted,
+    color: isActive ? '#000' : colors.text.muted,
     cursor: 'pointer',
     fontSize: '0.8125rem',
     fontWeight: isActive ? 600 : 500,
@@ -391,6 +406,7 @@ export const tabStyles = {
     transition: `all ${transitions.base}`,
     position: 'relative' as const,
     whiteSpace: 'nowrap' as const,
+    boxShadow: isActive ? '0 2px 8px rgba(6, 182, 212, 0.4)' : 'none',
   }) as CSSProperties,
 
   tabHover: {

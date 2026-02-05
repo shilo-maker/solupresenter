@@ -30,7 +30,7 @@ const BackgroundSelector = memo<BackgroundSelectorProps>(({
           border: 'none',
           borderRadius: '6px',
           padding: '5px 10px',
-          color: 'white',
+          color: '#000',
           cursor: 'pointer',
           fontWeight: 600,
           fontSize: '0.75rem'
@@ -46,7 +46,7 @@ const BackgroundSelector = memo<BackgroundSelectorProps>(({
           right: isRTL ? 'auto' : 0,
           left: isRTL ? 0 : 'auto',
           marginTop: '8px',
-          background: 'rgba(30, 30, 50, 0.98)',
+          background: 'rgba(24, 24, 27, 0.98)',
           borderRadius: '12px',
           border: '1px solid rgba(255,255,255,0.2)',
           padding: '12px',

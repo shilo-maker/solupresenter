@@ -233,8 +233,9 @@ const ThemeEditorPage: React.FC = () => {
       }
       setHasChanges(false);
 
-      // Broadcast the updated theme to all connected displays showing song content
-      window.electronAPI.applyTheme({ ...themeData, id: theme.id });
+      // Note: We don't automatically broadcast the theme to displays on save.
+      // The user should re-select the theme in the control panel if they want it applied.
+      // This prevents accidentally changing displays when editing non-active themes.
 
       // Show saved state briefly
       setSaveStatus('saved');

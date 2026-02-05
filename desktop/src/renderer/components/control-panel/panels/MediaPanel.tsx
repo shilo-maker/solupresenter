@@ -59,15 +59,30 @@ const MediaPanel = memo<MediaPanelProps>(({
       }}>
         <button
           onClick={() => setActiveMediaSubTab('library')}
-          onMouseEnter={(e) => { if (activeMediaSubTab !== 'library') e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
-          onMouseLeave={(e) => { if (activeMediaSubTab !== 'library') e.currentTarget.style.background = 'transparent'; }}
+          onMouseEnter={(e) => {
+            if (activeMediaSubTab !== 'library') {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+            } else {
+              e.currentTarget.style.transform = 'scale(1.02)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(6, 182, 212, 0.5)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            if (activeMediaSubTab !== 'library') {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.boxShadow = 'none';
+            } else {
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(6, 182, 212, 0.4)';
+            }
+          }}
           style={{
             flex: 1,
             padding: '8px 12px',
-            background: activeMediaSubTab === 'library' ? 'rgba(6, 182, 212, 0.2)' : 'transparent',
-            border: activeMediaSubTab === 'library' ? '1px solid rgba(6, 182, 212, 0.4)' : '1px solid rgba(255,255,255,0.1)',
+            background: activeMediaSubTab === 'library' ? 'linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)' : 'transparent',
+            border: activeMediaSubTab === 'library' ? 'none' : '1px solid rgba(255,255,255,0.1)',
             borderRadius: '6px',
-            color: activeMediaSubTab === 'library' ? '#06b6d4' : 'rgba(255,255,255,0.6)',
+            color: activeMediaSubTab === 'library' ? '#000' : 'rgba(255,255,255,0.6)',
             fontSize: '0.8rem',
             fontWeight: activeMediaSubTab === 'library' ? 600 : 400,
             cursor: 'pointer',
@@ -75,6 +90,7 @@ const MediaPanel = memo<MediaPanelProps>(({
             alignItems: 'center',
             justifyContent: 'center',
             gap: '6px',
+            boxShadow: activeMediaSubTab === 'library' ? '0 2px 8px rgba(6, 182, 212, 0.4)' : 'none',
             transition: 'all 0.2s ease'
           }}
         >
@@ -87,15 +103,30 @@ const MediaPanel = memo<MediaPanelProps>(({
         </button>
         <button
           onClick={() => setActiveMediaSubTab('links')}
-          onMouseEnter={(e) => { if (activeMediaSubTab !== 'links') e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
-          onMouseLeave={(e) => { if (activeMediaSubTab !== 'links') e.currentTarget.style.background = 'transparent'; }}
+          onMouseEnter={(e) => {
+            if (activeMediaSubTab !== 'links') {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+            } else {
+              e.currentTarget.style.transform = 'scale(1.02)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(255, 0, 0, 0.5)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            if (activeMediaSubTab !== 'links') {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.boxShadow = 'none';
+            } else {
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(255, 0, 0, 0.4)';
+            }
+          }}
           style={{
             flex: 1,
             padding: '8px 12px',
-            background: activeMediaSubTab === 'links' ? 'rgba(255, 0, 0, 0.15)' : 'transparent',
-            border: activeMediaSubTab === 'links' ? '1px solid rgba(255, 0, 0, 0.4)' : '1px solid rgba(255,255,255,0.1)',
+            background: activeMediaSubTab === 'links' ? 'linear-gradient(135deg, #ff6b6b 0%, #ff0000 100%)' : 'transparent',
+            border: activeMediaSubTab === 'links' ? 'none' : '1px solid rgba(255,255,255,0.1)',
             borderRadius: '6px',
-            color: activeMediaSubTab === 'links' ? '#ff4444' : 'rgba(255,255,255,0.6)',
+            color: activeMediaSubTab === 'links' ? '#fff' : 'rgba(255,255,255,0.6)',
             fontSize: '0.8rem',
             fontWeight: activeMediaSubTab === 'links' ? 600 : 400,
             cursor: 'pointer',
@@ -103,6 +134,7 @@ const MediaPanel = memo<MediaPanelProps>(({
             alignItems: 'center',
             justifyContent: 'center',
             gap: '6px',
+            boxShadow: activeMediaSubTab === 'links' ? '0 2px 8px rgba(255, 0, 0, 0.4)' : 'none',
             transition: 'all 0.2s ease'
           }}
         >

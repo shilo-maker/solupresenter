@@ -36,7 +36,7 @@ const SongItem = memo<SongItemProps>(({
   const defaultBg = isSelected ? 'rgba(6,182,212,0.2)' : 'transparent';
 
   const containerStyle = useMemo(() => ({
-    padding: '10px 12px',
+    padding: '12px 14px',
     cursor: 'grab' as const,
     background: isSelected ? 'rgba(6,182,212,0.2)' : 'transparent',
     borderLeft: isSelected ? `3px solid ${colors.button.accent}` : '3px solid transparent',
@@ -91,7 +91,7 @@ const SongItem = memo<SongItemProps>(({
       style={containerStyle}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ color: 'white', fontWeight: 500, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{song.title}</div>
+        <div style={{ color: 'white', fontWeight: 500, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{song.title}</div>
       </div>
       {(isHovered || showMenu) && (
         <div style={{ position: 'relative' }}>
@@ -269,21 +269,29 @@ const SongsPanel = memo<SongsPanelProps>(({
           onClick={handleNewSong}
           title="New Song"
           style={{
-            background: 'rgba(255,255,255,0.1)',
+            background: 'linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)',
             border: 'none',
             borderRadius: '6px',
             padding: '8px 12px',
-            color: 'white',
+            color: '#000',
             cursor: 'pointer',
             fontSize: '1rem',
+            fontWeight: 600,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
-            transition: 'background 0.15s ease'
+            boxShadow: '0 2px 8px rgba(6, 182, 212, 0.4)',
+            transition: 'transform 0.15s, box-shadow 0.15s'
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#06b6d4'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.05)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(6, 182, 212, 0.6)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 2px 8px rgba(6, 182, 212, 0.4)';
+          }}
         >
           +
         </button>

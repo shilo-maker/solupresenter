@@ -116,6 +116,15 @@ const DisplaySettingsModal = memo<DisplaySettingsModalProps>(({
 
   const handleStart = useCallback(() => {
     if (!display) return;
+
+    // If display is already assigned with the same type, just close the modal
+    // Theme changes are already saved via handleThemeChange
+    if (display.isAssigned && display.assignedType === displayType) {
+      onClose();
+      return;
+    }
+
+    // Only restart if starting a new display or changing type
     onStart(display.id, displayType);
     onClose();
   }, [display, displayType, onStart, onClose]);
@@ -160,7 +169,7 @@ const DisplaySettingsModal = memo<DisplaySettingsModalProps>(({
     >
       <div
         style={{
-          background: 'rgba(30, 30, 50, 0.98)',
+          background: 'rgba(24, 24, 27, 0.98)',
           borderRadius: '16px',
           border: '1px solid rgba(255,255,255,0.2)',
           padding: '24px',
@@ -281,22 +290,22 @@ const DisplaySettingsModal = memo<DisplaySettingsModalProps>(({
                     cursor: loading ? 'wait' : 'pointer'
                   }}
                 >
-                  <option value="" style={{ background: '#1e1e32' }}>
+                  <option value="" style={{ background: '#18181b' }}>
                     {t('displayThemeOverrides.useGlobal', '-- Use Global --')}
                   </option>
                   {themeList.length > 0 && (
-                    <optgroup label={t('displayThemeOverrides.regularThemes', 'Regular Themes')} style={{ background: '#1e1e32' }}>
+                    <optgroup label={t('displayThemeOverrides.regularThemes', 'Regular Themes')} style={{ background: '#18181b' }}>
                       {themeList.map(theme => (
-                        <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
+                        <option key={theme.id} value={theme.id} style={{ background: '#18181b' }}>
                           {theme.name}
                         </option>
                       ))}
                     </optgroup>
                   )}
                   {obsThemeList.length > 0 && (
-                    <optgroup label={t('displayThemeOverrides.obsThemes', 'OBS Themes')} style={{ background: '#1e1e32' }}>
+                    <optgroup label={t('displayThemeOverrides.obsThemes', 'OBS Themes')} style={{ background: '#18181b' }}>
                       {obsThemeList.map(theme => (
-                        <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
+                        <option key={theme.id} value={theme.id} style={{ background: '#18181b' }}>
                           {theme.name}
                         </option>
                       ))}

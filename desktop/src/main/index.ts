@@ -104,6 +104,162 @@ async function waitForVite(maxAttempts = 100): Promise<boolean> {
   return false;
 }
 
+// Professional splash screen HTML - inline for instant load (no file I/O latency)
+const splashScreenHTML = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: linear-gradient(135deg, #0a0a0f 0%, #12121a 50%, #0d0d14 100%);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      overflow: hidden;
+      position: relative;
+    }
+    /* Animated background gradient */
+    body::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at 30% 30%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
+                  radial-gradient(circle at 70% 70%, rgba(6, 182, 212, 0.06) 0%, transparent 50%);
+      animation: bgPulse 4s ease-in-out infinite;
+    }
+    @keyframes bgPulse {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
+    .content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 32px;
+    }
+    /* Logo container with glow effect */
+    .logo-container {
+      position: relative;
+      width: 100px;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .logo-glow {
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      background: radial-gradient(circle, rgba(6, 182, 212, 0.4) 0%, transparent 70%);
+      border-radius: 50%;
+      animation: glowPulse 2s ease-in-out infinite;
+    }
+    @keyframes glowPulse {
+      0%, 100% { transform: scale(0.9); opacity: 0.5; }
+      50% { transform: scale(1.2); opacity: 0.8; }
+    }
+    .logo {
+      width: 80px;
+      height: 80px;
+      position: relative;
+      z-index: 1;
+    }
+    /* App name with gradient */
+    .app-name {
+      font-size: 28px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #ffffff 0%, #06b6d4 50%, #3b82f6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.5px;
+    }
+    /* Loading bar */
+    .loader-container {
+      width: 200px;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+    .loader-bar {
+      position: absolute;
+      height: 100%;
+      width: 40%;
+      background: linear-gradient(90deg, #06b6d4, #3b82f6, #06b6d4);
+      background-size: 200% 100%;
+      border-radius: 3px;
+      animation: loading 1.5s ease-in-out infinite;
+    }
+    @keyframes loading {
+      0% { left: -40%; background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { left: 100%; background-position: 0% 50%; }
+    }
+    /* Loading text */
+    .loading-text {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+    }
+    .dots::after {
+      content: '';
+      animation: dots 1.5s steps(4, end) infinite;
+    }
+    @keyframes dots {
+      0% { content: ''; }
+      25% { content: '.'; }
+      50% { content: '..'; }
+      75% { content: '...'; }
+      100% { content: ''; }
+    }
+    /* Version badge */
+    .version {
+      position: absolute;
+      bottom: 24px;
+      color: rgba(255, 255, 255, 0.25);
+      font-size: 11px;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div class="content">
+    <div class="logo-container">
+      <div class="logo-glow"></div>
+      <svg class="logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#06b6d4"/>
+            <stop offset="100%" style="stop-color:#3b82f6"/>
+          </linearGradient>
+        </defs>
+        <circle cx="50" cy="50" r="45" stroke="url(#logoGrad)" stroke-width="3" fill="none" opacity="0.3"/>
+        <circle cx="50" cy="50" r="35" stroke="url(#logoGrad)" stroke-width="2" fill="none" opacity="0.5"/>
+        <path d="M40 30 L70 50 L40 70 Z" fill="url(#logoGrad)"/>
+      </svg>
+    </div>
+    <div class="app-name">SoluCast</div>
+    <div class="loader-container">
+      <div class="loader-bar"></div>
+    </div>
+    <div class="loading-text">Loading<span class="dots"></span></div>
+  </div>
+  <div class="version">v${app.getVersion()}</div>
+</body>
+</html>`;
+
 function createControlWindow(): void {
   const primaryDisplay = screen.getPrimaryDisplay();
   const iconPath = getIconPath();
@@ -118,7 +274,7 @@ function createControlWindow(): void {
     title: 'SoluCast',
     icon: iconPath,
     show: false,
-    backgroundColor: '#09090b',
+    backgroundColor: '#0a0a0f',
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'control.js'),
@@ -130,17 +286,16 @@ function createControlWindow(): void {
 
   controlWindow.setMenu(null);
 
-  // Load the renderer
+  // Show window immediately when splash screen DOM is ready (no white flash)
+  controlWindow.webContents.once('dom-ready', () => {
+    controlWindow?.show();
+  });
+
+  // Load splash screen first (instant - no file I/O)
+  controlWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(splashScreenHTML)}`);
+
   if (isDev) {
-    // Show window as soon as loading screen's DOM is ready (no white flash)
-    controlWindow.webContents.once('dom-ready', () => {
-      controlWindow?.show();
-    });
-
-    // Inline loading HTML for fastest load (no file I/O)
-    controlWindow.loadURL(`data:text/html;charset=utf-8,<!DOCTYPE html><html><head><style>*{margin:0;padding:0}body{background:#09090b;height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:24px}.s{width:48px;height:48px;border:3px solid rgba(255,255,255,0.1);border-top-color:#3b82f6;border-radius:50%;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.t{color:rgba(255,255,255,0.6);font-family:system-ui;font-size:14px}</style></head><body><div class="s"></div><div class="t">Starting...</div></body></html>`);
-
-    // Poll for Vite and load when ready
+    // Dev mode: poll for Vite and load when ready
     waitForVite().then((ready) => {
       if (ready && controlWindow && !controlWindow.isDestroyed()) {
         controlWindow.loadURL('http://localhost:5173');
@@ -148,12 +303,12 @@ function createControlWindow(): void {
       }
     });
   } else {
-    // In production: show window when ready
-    controlWindow.once('ready-to-show', () => {
-      controlWindow?.show();
-    });
-    // Use local HTTP server for proper origin (needed for YouTube)
-    controlWindow.loadURL(`http://127.0.0.1:${localServerPort}/`);
+    // Production: load main app after a brief moment to show splash
+    setTimeout(() => {
+      if (controlWindow && !controlWindow.isDestroyed()) {
+        controlWindow.loadURL(`http://127.0.0.1:${localServerPort}/`);
+      }
+    }, 300);
   }
 
   controlWindow.on('closed', () => {

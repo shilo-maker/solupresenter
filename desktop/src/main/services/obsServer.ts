@@ -433,7 +433,7 @@ class OBSServer extends EventEmitter {
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>SoluPresenter OBS Overlay</title>
+  <title>SoluCast OBS Overlay</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {

@@ -129,10 +129,24 @@ export function useThemeState(): UseThemeStateReturn {
   // or when a display connects and requests initial state from displayManager.
   const loadThemes = useCallback(async () => {
     try {
-      const savedThemeIds = await window.electronAPI.getSelectedThemeIds();
+      // Load all theme data in parallel for faster startup
+      const [
+        savedThemeIds,
+        themeList,
+        stageThemeList,
+        bibleThemeList,
+        obsThemeList,
+        prayerThemeList
+      ] = await Promise.all([
+        window.electronAPI.getSelectedThemeIds(),
+        window.electronAPI.getThemes(),
+        window.electronAPI.getStageThemes(),
+        window.electronAPI.getBibleThemes(),
+        window.electronAPI.getOBSThemes(),
+        window.electronAPI.getPrayerThemes()
+      ]);
 
-      // Load songs (viewer) themes
-      const themeList = await window.electronAPI.getThemes();
+      // Process viewer themes
       setThemes(themeList);
       if (themeList.length > 0) {
         let themeToSelect = savedThemeIds.viewerThemeId
@@ -145,8 +159,7 @@ export function useThemeState(): UseThemeStateReturn {
         // NO automatic apply - themes are only applied on explicit user action
       }
 
-      // Load stage monitor themes
-      const stageThemeList = await window.electronAPI.getStageThemes();
+      // Process stage monitor themes
       setStageMonitorThemes(stageThemeList);
       if (stageThemeList.length > 0) {
         let themeToSelect = savedThemeIds.stageThemeId
@@ -159,8 +172,7 @@ export function useThemeState(): UseThemeStateReturn {
         // NO automatic apply - themes are only applied on explicit user action
       }
 
-      // Load Bible themes
-      const bibleThemeList = await window.electronAPI.getBibleThemes();
+      // Process Bible themes
       setBibleThemes(bibleThemeList || []);
       if (bibleThemeList && bibleThemeList.length > 0) {
         let themeToSelect = savedThemeIds.bibleThemeId
@@ -173,15 +185,14 @@ export function useThemeState(): UseThemeStateReturn {
         // NO automatic apply - themes are only applied on explicit user action
       }
 
-      // Load OBS themes
-      const obsThemeList = await window.electronAPI.getOBSThemes();
+      // Process OBS themes
       setObsThemes(obsThemeList || []);
       if (obsThemeList && obsThemeList.length > 0) {
         const obsSongsThemes = obsThemeList.filter((t: Theme) => t.type === 'songs');
         const obsBibleThemes = obsThemeList.filter((t: Theme) => t.type === 'bible');
         const obsPrayerThemes = obsThemeList.filter((t: Theme) => t.type === 'prayer');
 
-        // Load OBS Songs theme
+        // Process OBS Songs theme
         if (obsSongsThemes.length > 0) {
           let songsTheme = savedThemeIds.obsThemeId
             ? obsSongsThemes.find((t: Theme) => t.id === savedThemeIds.obsThemeId)
@@ -194,7 +205,7 @@ export function useThemeState(): UseThemeStateReturn {
           // NO automatic apply - themes are only applied on explicit user action
         }
 
-        // Load OBS Bible theme
+        // Process OBS Bible theme
         if (obsBibleThemes.length > 0) {
           let bibleTheme = savedThemeIds.obsBibleThemeId
             ? obsBibleThemes.find((t: Theme) => t.id === savedThemeIds.obsBibleThemeId)
@@ -206,7 +217,7 @@ export function useThemeState(): UseThemeStateReturn {
           // NO automatic apply - themes are only applied on explicit user action
         }
 
-        // Load OBS Prayer theme
+        // Process OBS Prayer theme
         if (obsPrayerThemes.length > 0) {
           let prayerTheme = savedThemeIds.obsPrayerThemeId
             ? obsPrayerThemes.find((t: Theme) => t.id === savedThemeIds.obsPrayerThemeId)
@@ -219,8 +230,7 @@ export function useThemeState(): UseThemeStateReturn {
         }
       }
 
-      // Load Prayer themes
-      const prayerThemeList = await window.electronAPI.getPrayerThemes();
+      // Process Prayer themes
       setPrayerThemes(prayerThemeList || []);
       if (prayerThemeList && prayerThemeList.length > 0) {
         let themeToSelect = savedThemeIds.prayerThemeId

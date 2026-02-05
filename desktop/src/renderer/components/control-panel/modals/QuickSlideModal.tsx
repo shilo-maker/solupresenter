@@ -50,7 +50,7 @@ const QuickSlideModal = memo<QuickSlideModalProps>(({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: 'rgba(30,30,50,0.98)',
+          background: 'rgba(24, 24, 27, 0.98)',
           borderRadius: '16px',
           padding: '24px',
           width: '600px',
@@ -148,7 +148,7 @@ const QuickSlideModal = memo<QuickSlideModalProps>(({
               <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Click to broadcast:</span>
               {Array.from({ length: quickSlideCount }, (_, idx) => (
                 <button
-                  key={idx}
+                  key={`quick-slide-btn-${idx}`}
                   onClick={() => onBroadcastSlide(idx)}
                   style={{
                     width: '40px',

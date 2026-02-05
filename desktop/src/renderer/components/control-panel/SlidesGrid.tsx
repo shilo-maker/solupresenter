@@ -64,6 +64,7 @@ interface SlidesGridProps {
   onAddSlide?: () => void;
   // Arrangement props
   arrangementState?: ArrangementStateReturn;
+  showSlideCodes?: boolean;
 }
 
 const gridStyle: React.CSSProperties = {
@@ -107,7 +108,8 @@ const SlidesGrid = memo<SlidesGridProps>(({
   onSlideCodeMapChange,
   onEditSlide,
   onAddSlide,
-  arrangementState
+  arrangementState,
+  showSlideCodes = true
 }) => {
   const { t, i18n } = useTranslation();
   const isRTL = i18n.dir() === 'rtl';
@@ -229,7 +231,7 @@ const SlidesGrid = memo<SlidesGridProps>(({
           // Wizard presentations (prayer/sermon)
           selectedPresentation.quickModeData?.subtitles?.map((subtitle: any, idx: number) => (
             <PrayerSlideItem
-              key={idx}
+              key={`${selectedPresentation.id}-subtitle-${idx}`}
               subtitle={subtitle}
               index={idx}
               isSelected={liveSongId === selectedPresentation.id && liveSlideIndex === idx}
@@ -330,7 +332,7 @@ const SlidesGrid = memo<SlidesGridProps>(({
                         bgColor={getVerseTypeColor(item.slide.verseType)}
                         onSelect={handleArrangedSlideSelect}
                         onEdit={onEditSlide ? handleArrangedSlideEdit : undefined}
-                        slideCode={slideCodeMap?.codes[item.originalIndex]?.code}
+                        slideCode={showSlideCodes ? slideCodeMap?.codes[item.originalIndex]?.code : undefined}
                       />
                     </div>
                   ))}
@@ -352,13 +354,13 @@ const SlidesGrid = memo<SlidesGridProps>(({
             const slideCode = slideCodeMap?.codes[originalIndex]?.code;
             return (
               <CombinedSlideGridItem
-                key={combinedIndex}
+                key={`${selectedSong.id}-combined-${combinedIndex}`}
                 item={item}
                 combinedIndex={combinedIndex}
                 isSelected={selectedCombinedIndex === combinedIndex && !isBlank && liveSongId === selectedSong.id}
                 bgColor={getVerseTypeColor(item.verseType || '')}
                 onSelect={onSelectCombinedSlide}
-                slideCode={slideCode}
+                slideCode={showSlideCodes ? slideCode : undefined}
               />
             );
           })
@@ -367,7 +369,7 @@ const SlidesGrid = memo<SlidesGridProps>(({
           <>
             {selectedSong.slides.map((slide, idx) => (
               <SlideGridItem
-                key={idx}
+                key={`${selectedSong.id}-slide-${idx}`}
                 slide={slide}
                 index={idx}
                 isSelected={idx === currentSlideIndex && !isBlank && liveSongId === selectedSong.id}
@@ -375,7 +377,7 @@ const SlidesGrid = memo<SlidesGridProps>(({
                 bgColor={getVerseTypeColor(slide.verseType)}
                 onSelect={onSelectSongSlide}
                 onEdit={onEditSlide}
-                slideCode={slideCodeMap?.codes[idx]?.code}
+                slideCode={showSlideCodes ? slideCodeMap?.codes[idx]?.code : undefined}
               />
             ))}
             {/* Add Slide card */}

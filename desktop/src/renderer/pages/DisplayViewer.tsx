@@ -272,6 +272,32 @@ const DisplayViewer: React.FC = () => {
   const youtubeReadyRef = useRef(false);
   const youtubeCreateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Helper function to properly clean up YouTube player and container
+  // This must be called BEFORE any state changes that would cause React to unmount the container
+  const cleanupYoutubePlayer = () => {
+    // Clear pending create timeout
+    if (youtubeCreateTimeoutRef.current) {
+      clearTimeout(youtubeCreateTimeoutRef.current);
+      youtubeCreateTimeoutRef.current = null;
+    }
+    // Destroy player first
+    if (youtubePlayerRef.current) {
+      try {
+        youtubePlayerRef.current.stopVideo?.();
+        youtubePlayerRef.current.destroy();
+      } catch (e) {
+        // Ignore - player may already be destroyed
+      }
+      youtubePlayerRef.current = null;
+    }
+    youtubeReadyRef.current = false;
+    // Manually clear the container to remove the iframe before React tries to reconcile
+    // This prevents the "removeChild" error when React unmounts the container
+    if (youtubeContainerRef.current) {
+      youtubeContainerRef.current.innerHTML = '';
+    }
+  };
+
   useEffect(() => {
     // Report ready
     window.displayAPI.reportReady();
@@ -279,6 +305,7 @@ const DisplayViewer: React.FC = () => {
     // Listen for slide updates
     const slideCleanup = window.displayAPI.onSlideUpdate((data) => {
       if (data.isBlank) {
+        cleanupYoutubePlayer(); // Clean up YouTube before state changes
         setIsBlank(true);
         setMediaType(null);
         setCombinedSlides(null);
@@ -288,11 +315,13 @@ const DisplayViewer: React.FC = () => {
         setIsBlank(false);
         // Handle presentation slides (with textbox styling)
         if (data.presentationSlide) {
+          cleanupYoutubePlayer(); // Clean up YouTube before state changes
           setPresentationSlide(data.presentationSlide);
           setSlideData(null); // Clear song slide data
           setMediaType(null);
           setYoutubeVideoId(null); // Clear YouTube when showing presentation
         } else if (data.slideData) {
+          cleanupYoutubePlayer(); // Clean up YouTube before state changes
           setSlideData(data.slideData);
           setPresentationSlide(null); // Clear presentation slide
           setMediaType(null);
@@ -340,8 +369,11 @@ const DisplayViewer: React.FC = () => {
         videoSyncedRef.current = false;
         return;
       }
-      // IMPORTANT: Set isBlank FIRST to prevent render branch switch
-      // If isBlank is checked before it's updated, the video component could unmount
+      // IMPORTANT: Clean up YouTube FIRST before any state changes
+      // This prevents React from trying to unmount a container with YouTube's iframe inside
+      cleanupYoutubePlayer();
+
+      // Set isBlank before media type to prevent render branch switch
       setIsBlank(false);
       setYoutubeVideoId(null); // Clear YouTube when showing media
       setMediaType(data.type);
@@ -443,17 +475,10 @@ const DisplayViewer: React.FC = () => {
           youtubeReadyRef.current = false;
           break;
         case 'stop':
+          // Clean up YouTube player FIRST before any state changes
+          cleanupYoutubePlayer();
           setYoutubeVideoId(null);
           setYoutubeTitle('');
-          youtubeReadyRef.current = false;
-          if (youtubePlayerRef.current) {
-            try {
-              youtubePlayerRef.current.destroy();
-            } catch (e) {
-              // Ignore
-            }
-            youtubePlayerRef.current = null;
-          }
           break;
         case 'play':
           if (youtubePlayerRef.current && youtubeReadyRef.current) {
@@ -689,27 +714,10 @@ const DisplayViewer: React.FC = () => {
     createPlayer();
 
     return () => {
-      // Clear pending create timeout
-      if (youtubeCreateTimeoutRef.current) {
-        clearTimeout(youtubeCreateTimeoutRef.current);
-        youtubeCreateTimeoutRef.current = null;
-      }
-      if (youtubePlayerRef.current) {
-        try {
-          // Stop video playback first to release resources
-          youtubePlayerRef.current.stopVideo?.();
-          youtubePlayerRef.current.destroy();
-        } catch (e) {
-          // Ignore - player may already be destroyed
-        }
-        youtubePlayerRef.current = null;
-      }
-      youtubeReadyRef.current = false;
-
-      // Clear container to remove any orphaned iframes
-      if (youtubeContainerRef.current) {
-        youtubeContainerRef.current.innerHTML = '';
-      }
+      // Use the helper function for cleanup
+      // Note: For normal state changes, cleanupYoutubePlayer is called BEFORE the state change
+      // This cleanup is mainly for when the component unmounts or videoId changes to a new value
+      cleanupYoutubePlayer();
     };
   }, [youtubeVideoId]);
 
@@ -841,8 +849,8 @@ const DisplayViewer: React.FC = () => {
     };
   }, [rotatingMessages.active, rotatingMessages.messages.length, rotatingMessages.interval]);
 
-  // Get positioning styles from theme
-  const getPositioningStyle = (): React.CSSProperties => {
+  // Get positioning styles from theme (memoized to prevent recalculation on every render)
+  const positioningStyle = useMemo((): React.CSSProperties => {
     const positioning = theme?.positioning || {};
     const style: React.CSSProperties = {
       display: 'flex',
@@ -878,26 +886,47 @@ const DisplayViewer: React.FC = () => {
     }
 
     return style;
-  };
+  }, [theme?.positioning, theme?.container?.padding]);
 
-  // Get line style from theme
-  const getLineStyle = (lineType: string): React.CSSProperties => {
+  // Memoized line styles map (prevents recalculating all line styles on every render)
+  const lineStylesMap = useMemo((): Record<string, React.CSSProperties> => {
     const lineStyles = theme?.lineStyles || {};
-    const style = lineStyles[lineType] || {};
+    const result: Record<string, React.CSSProperties> = {};
 
-    return {
-      fontSize: `${(style.fontSize || 100) / 20}vw`,
-      fontWeight: style.fontWeight || '500',
-      color: style.color || '#FFFFFF',
-      opacity: style.opacity ?? 1,
-      display: style.visible === false ? 'none' : 'block',
+    for (const lineType of ['original', 'transliteration', 'translation']) {
+      const style = lineStyles[lineType] || {};
+      result[lineType] = {
+        fontSize: `${(style.fontSize || 100) / 20}vw`,
+        fontWeight: style.fontWeight || '500',
+        color: style.color || '#FFFFFF',
+        opacity: style.opacity ?? 1,
+        display: style.visible === false ? 'none' : 'block',
+        marginBottom: '2vh',
+        lineHeight: 1.4
+      };
+    }
+
+    return result;
+  }, [theme?.lineStyles]);
+
+  // Get line style from memoized map
+  const getLineStyle = (lineType: string): React.CSSProperties => {
+    return lineStylesMap[lineType] || {
+      fontSize: '5vw',
+      fontWeight: '500',
+      color: '#FFFFFF',
+      opacity: 1,
+      display: 'block',
       marginBottom: '2vh',
       lineHeight: 1.4
     };
   };
 
-  // Get line order from theme
-  const lineOrder = theme?.lineOrder || ['original', 'transliteration', 'translation'];
+  // Get line order from theme (memoized)
+  const lineOrder = useMemo(
+    () => theme?.lineOrder || ['original', 'transliteration', 'translation'],
+    [theme?.lineOrder]
+  );
 
   // Render lines based on display mode
   const renderLines = () => {
@@ -909,7 +938,7 @@ const DisplayViewer: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2vh' }}>
           {combinedSlides.map((slide, idx) => (
             <div
-              key={idx}
+              key={`combined-${idx}-${(slide.originalText || '').substring(0, 15)}`}
               style={{
                 ...getLineStyle('original'),
                 direction: 'rtl'
@@ -1390,10 +1419,291 @@ const DisplayViewer: React.FC = () => {
     );
   };
 
-  // Render blank screen (still show background)
-  if (isBlank && !countdown.active && !clock.active && !stopwatch.active) {
-    return (
-      <div className="display-window" style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' }}>
+  // Determine what content to show (for single return with layers)
+  const showYoutube = youtubeVideoId && !countdown.active && !clock.active && !stopwatch.active;
+  const showVideo = mediaType === 'video' && !countdown.active && !clock.active && !stopwatch.active && !showYoutube;
+  const showImage = mediaType === 'image' && !countdown.active && !clock.active && !stopwatch.active && !showYoutube;
+  const showSlides = !showYoutube && !showVideo && !showImage && !countdown.active && !clock.active && !stopwatch.active;
+
+  // Single return with all layers - YouTube container is NEVER unmounted
+  return (
+    <div className="display-window" style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden', background: '#000' }}>
+      {/* YouTube container - ALWAYS mounted, shown/hidden via zIndex and opacity */}
+      <div
+        ref={youtubeContainerRef}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          zIndex: showYoutube ? 10 : -1,
+          opacity: showYoutube ? 1 : 0,
+          pointerEvents: showYoutube ? 'auto' : 'none'
+        }}
+      />
+
+      {/* Video layer */}
+      {showVideo && (
+        <div style={{ ...backgroundStyle, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 5 }}>
+          {/* Loading overlay */}
+          {mediaLoading && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(0, 0, 0, 0.7)',
+              zIndex: 10
+            }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                border: '3px solid rgba(255, 255, 255, 0.2)',
+                borderTopColor: '#06b6d4',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }} />
+              <style>{`
+                @keyframes spin {
+                  to { transform: rotate(360deg); }
+                }
+              `}</style>
+            </div>
+          )}
+          {/* Error overlay */}
+          {mediaLoadError && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(0, 0, 0, 0.9)',
+              zIndex: 10
+            }}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <div style={{ color: '#ff6b6b', fontSize: '1.5vw', marginTop: '1vh' }}>
+                {mediaLoadError}
+              </div>
+            </div>
+          )}
+          {mediaPath && (
+            <video
+              key={`video-${mediaPath}-${mediaRetryCount}`}
+              ref={videoRef}
+              src={mediaPath}
+              className="display-video"
+              muted
+              playsInline
+              onLoadStart={() => {
+                console.log('[DisplayViewer] Video load started, src:', mediaPath);
+              }}
+              onProgress={(e) => {
+                const video = e.target as HTMLVideoElement;
+                const buffered = video.buffered;
+                console.log('[DisplayViewer] Video progress event - buffered ranges:', buffered.length,
+                  'networkState:', video.networkState, 'readyState:', video.readyState);
+                if (buffered.length > 0) {
+                  console.log('[DisplayViewer] Video buffered:', buffered.end(0).toFixed(2), 'sec of', video.duration?.toFixed(2) || 'unknown', 'sec');
+                }
+              }}
+              onLoadedMetadata={(e) => {
+                const video = e.target as HTMLVideoElement;
+                console.log('[DisplayViewer] Video metadata loaded:', {
+                  duration: video.duration,
+                  videoWidth: video.videoWidth,
+                  videoHeight: video.videoHeight,
+                  src: video.src
+                });
+              }}
+              onLoadedData={() => {
+                console.log('[DisplayViewer] Video data loaded');
+                setMediaLoading(false);
+                setMediaLoadError(null);
+              }}
+              onAbort={() => {
+                console.log('[DisplayViewer] Video load aborted');
+              }}
+              onStalled={() => {
+                console.log('[DisplayViewer] Video stalled - waiting for data');
+              }}
+              onWaiting={() => {
+                console.log('[DisplayViewer] Video waiting for data');
+              }}
+              onCanPlay={async () => {
+                console.log('[DisplayViewer] Video can play');
+                if (videoSyncedRef.current) return;
+                videoSyncedRef.current = true;
+                try {
+                  const started = await window.displayAPI.signalVideoReady();
+                  console.log('[DisplayViewer] Video ready signal sent, playback started:', started);
+                  if (!started) {
+                    const pos = await window.displayAPI.getVideoPosition();
+                    if (pos && videoRef.current) {
+                      if (Math.abs(videoRef.current.currentTime - pos.time) > VIDEO_SYNC_THRESHOLD_SEC) {
+                        videoRef.current.currentTime = pos.time;
+                      }
+                      if (pos.isPlaying) {
+                        videoRef.current.play().catch(err => log.error('Video play failed:', err));
+                      }
+                    }
+                  }
+                } catch (err) {
+                  log.error('Failed to signal video ready:', err);
+                }
+              }}
+              onError={(e) => {
+                const videoElement = e.target as HTMLVideoElement;
+                const videoSrc = videoElement?.src || '';
+                if (!videoSrc || videoSrc.endsWith('/') || (!videoSrc.includes('/media/') && !videoSrc.startsWith('media://'))) {
+                  console.log('[DisplayViewer] Ignoring stale video error, src:', videoSrc);
+                  return;
+                }
+                const mediaError = videoElement?.error;
+                const errorCode = mediaError?.code;
+                const errorMessage = mediaError?.message || 'Unknown error';
+                const errorCodeNames: Record<number, string> = {
+                  1: 'MEDIA_ERR_ABORTED',
+                  2: 'MEDIA_ERR_NETWORK',
+                  3: 'MEDIA_ERR_DECODE',
+                  4: 'MEDIA_ERR_SRC_NOT_SUPPORTED'
+                };
+                const errorName = errorCode ? errorCodeNames[errorCode] || `Unknown (${errorCode})` : 'No error code';
+                log.error(`Video error: ${errorName} - ${errorMessage}`, 'src:', videoSrc, 'retry count:', mediaRetryCount);
+                setMediaLoading(false);
+                videoSyncedRef.current = false;
+                if (mediaRetryCount < MAX_MEDIA_RETRIES) {
+                  setMediaLoadError(`Retrying... (${mediaRetryCount + 1}/${MAX_MEDIA_RETRIES})`);
+                  mediaRetryTimeoutRef.current = setTimeout(() => {
+                    setMediaRetryCount(prev => prev + 1);
+                    setMediaLoading(true);
+                    setMediaLoadError(null);
+                  }, MEDIA_RETRY_DELAY_MS);
+                } else {
+                  setMediaLoadError('Video playback error - max retries exceeded');
+                  window.displayAPI.reportError('Video playback error after max retries');
+                }
+              }}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Image layer */}
+      {showImage && (
+        <div style={{ ...backgroundStyle, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 5 }}>
+          {mediaLoading && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(0, 0, 0, 0.7)',
+              zIndex: 10
+            }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                border: '3px solid rgba(255, 255, 255, 0.2)',
+                borderTopColor: '#06b6d4',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }} />
+              <style>{`
+                @keyframes spin {
+                  to { transform: rotate(360deg); }
+                }
+              `}</style>
+            </div>
+          )}
+          {mediaLoadError && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(0, 0, 0, 0.9)',
+              zIndex: 10
+            }}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+              <div style={{ color: '#ff6b6b', fontSize: '1.5vw', marginTop: '1vh' }}>
+                {mediaLoadError}
+              </div>
+            </div>
+          )}
+          {mediaPath && (
+            <img
+              key={`image-${mediaPath}-${mediaRetryCount}`}
+              src={mediaPath}
+              className="display-image"
+              alt=""
+              onLoad={() => {
+                setMediaLoading(false);
+                setMediaLoadError(null);
+                setMediaRetryCount(0);
+              }}
+              onError={(e) => {
+                log.error('Image load error:', e, 'retry count:', mediaRetryCount);
+                setMediaLoading(false);
+                if (mediaRetryCount < MAX_MEDIA_RETRIES) {
+                  setMediaLoadError(`Retrying... (${mediaRetryCount + 1}/${MAX_MEDIA_RETRIES})`);
+                  mediaRetryTimeoutRef.current = setTimeout(() => {
+                    setMediaRetryCount(prev => prev + 1);
+                    setMediaLoading(true);
+                    setMediaLoadError(null);
+                  }, MEDIA_RETRY_DELAY_MS);
+                } else {
+                  setMediaLoadError('Image load error - max retries exceeded');
+                  window.displayAPI.reportError('Image load error after max retries');
+                }
+              }}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Slide content layer */}
+      {showSlides && !isBlank && (
+        <SlideRenderer
+          slideData={slideData}
+          displayMode={displayMode}
+          theme={theme}
+          backgroundImage={backgroundImage}
+          isBlank={false}
+          fillContainer={true}
+          presentationSlide={presentationSlide}
+          combinedSlides={combinedSlides}
+        />
+      )}
+
+      {/* Blank screen - just show background */}
+      {isBlank && !countdown.active && !clock.active && !stopwatch.active && (
         <SlideRenderer
           slideData={null}
           displayMode={displayMode}
@@ -1402,372 +1712,14 @@ const DisplayViewer: React.FC = () => {
           isBlank={true}
           fillContainer={true}
         />
-        {renderCloseButton()}
-      </div>
-    );
-  }
+      )}
 
-  // Render YouTube video (unless a tool is active that takes over screen)
-  if (youtubeVideoId && !countdown.active && !clock.active && !stopwatch.active) {
-    return (
-      <div className="display-window" style={{ ...backgroundStyle, background: '#000' }}>
-        <div
-          ref={youtubeContainerRef}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%'
-          }}
-        />
-        {renderRotatingMessages()}
-        {renderAnnouncement()}
-        {renderCloseButton()}
-      </div>
-    );
-  }
+      {/* Tool overlays - highest z-index */}
+      {countdown.active && renderCountdown()}
+      {clock.active && renderClock()}
+      {stopwatch.active && renderStopwatch()}
 
-  // Render video (unless a tool is active that takes over screen)
-  if (mediaType === 'video' && !countdown.active && !clock.active && !stopwatch.active) {
-    return (
-      <div className="display-window" style={backgroundStyle}>
-        {/* Loading overlay */}
-        {mediaLoading && (
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(0, 0, 0, 0.7)',
-            zIndex: 10
-          }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              border: '3px solid rgba(255, 255, 255, 0.2)',
-              borderTopColor: '#06b6d4',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite'
-            }} />
-            <style>{`
-              @keyframes spin {
-                to { transform: rotate(360deg); }
-              }
-            `}</style>
-          </div>
-        )}
-        {/* Error overlay */}
-        {mediaLoadError && (
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(0, 0, 0, 0.9)',
-            zIndex: 10
-          }}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            <div style={{ color: '#ff6b6b', fontSize: '1.5vw', marginTop: '1vh' }}>
-              {mediaLoadError}
-            </div>
-          </div>
-        )}
-        {mediaPath && (
-          <video
-            key={`video-${mediaPath}-${mediaRetryCount}`}
-            ref={videoRef}
-            src={mediaPath}
-            className="display-video"
-            muted
-            playsInline
-            onLoadStart={() => {
-              console.log('[DisplayViewer] Video load started, src:', mediaPath);
-            }}
-            onProgress={(e) => {
-              const video = e.target as HTMLVideoElement;
-              const buffered = video.buffered;
-              console.log('[DisplayViewer] Video progress event - buffered ranges:', buffered.length,
-                'networkState:', video.networkState, 'readyState:', video.readyState);
-              if (buffered.length > 0) {
-                console.log('[DisplayViewer] Video buffered:', buffered.end(0).toFixed(2), 'sec of', video.duration?.toFixed(2) || 'unknown', 'sec');
-              }
-            }}
-          onLoadedMetadata={(e) => {
-            const video = e.target as HTMLVideoElement;
-            console.log('[DisplayViewer] Video metadata loaded:', {
-              duration: video.duration,
-              videoWidth: video.videoWidth,
-              videoHeight: video.videoHeight,
-              src: video.src
-            });
-          }}
-          onLoadedData={() => {
-            console.log('[DisplayViewer] Video data loaded');
-            // Mark loading as complete (video metadata loaded)
-            setMediaLoading(false);
-            setMediaLoadError(null);
-          }}
-          onAbort={() => {
-            console.log('[DisplayViewer] Video load aborted');
-          }}
-          onStalled={() => {
-            console.log('[DisplayViewer] Video stalled - waiting for data');
-          }}
-          onWaiting={() => {
-            console.log('[DisplayViewer] Video waiting for data');
-          }}
-          onCanPlay={async () => {
-            console.log('[DisplayViewer] Video can play');
-            // Signal ready only once per video load to avoid race conditions
-            if (videoSyncedRef.current) return;
-            videoSyncedRef.current = true;
-
-            try {
-              // Signal to main process that display is ready
-              // This triggers synchronized playback start on all windows
-              const started = await window.displayAPI.signalVideoReady();
-              console.log('[DisplayViewer] Video ready signal sent, playback started:', started);
-
-              // If playback was already started (by another display), sync to current position
-              if (!started) {
-                const pos = await window.displayAPI.getVideoPosition();
-                if (pos && videoRef.current) {
-                  if (Math.abs(videoRef.current.currentTime - pos.time) > VIDEO_SYNC_THRESHOLD_SEC) {
-                    videoRef.current.currentTime = pos.time;
-                  }
-                  if (pos.isPlaying) {
-                    videoRef.current.play().catch(err => log.error('Video play failed:', err));
-                  }
-                }
-              }
-            } catch (err) {
-              log.error('Failed to signal video ready:', err);
-            }
-          }}
-          onError={(e) => {
-            // Get detailed error information from the video element
-            const videoElement = e.target as HTMLVideoElement;
-            const videoSrc = videoElement?.src || '';
-
-            // Ignore errors from stale/empty video elements
-            // Empty src resolves to page URL (ends with '/')
-            if (!videoSrc || videoSrc.endsWith('/') || (!videoSrc.includes('/media/') && !videoSrc.startsWith('media://'))) {
-              console.log('[DisplayViewer] Ignoring stale video error, src:', videoSrc);
-              return;
-            }
-
-            const mediaError = videoElement?.error;
-            const errorCode = mediaError?.code;
-            const errorMessage = mediaError?.message || 'Unknown error';
-
-            // Map error codes to readable names
-            const errorCodeNames: Record<number, string> = {
-              1: 'MEDIA_ERR_ABORTED',
-              2: 'MEDIA_ERR_NETWORK',
-              3: 'MEDIA_ERR_DECODE',
-              4: 'MEDIA_ERR_SRC_NOT_SUPPORTED'
-            };
-            const errorName = errorCode ? errorCodeNames[errorCode] || `Unknown (${errorCode})` : 'No error code';
-
-            log.error(`Video error: ${errorName} - ${errorMessage}`, 'src:', videoSrc, 'retry count:', mediaRetryCount);
-            console.error('[DisplayViewer] Video error details:', {
-              errorCode,
-              errorName,
-              errorMessage,
-              src: videoSrc,
-              networkState: videoElement?.networkState,
-              readyState: videoElement?.readyState,
-              retryCount: mediaRetryCount
-            });
-
-            setMediaLoading(false);
-            videoSyncedRef.current = false; // Allow retry on error
-
-            // Auto-retry for transient errors
-            if (mediaRetryCount < MAX_MEDIA_RETRIES) {
-              setMediaLoadError(`Retrying... (${mediaRetryCount + 1}/${MAX_MEDIA_RETRIES})`);
-
-              mediaRetryTimeoutRef.current = setTimeout(() => {
-                // Incrementing retry count with the new key will recreate the video element
-                setMediaRetryCount(prev => prev + 1);
-                setMediaLoading(true);
-                setMediaLoadError(null);
-              }, MEDIA_RETRY_DELAY_MS);
-            } else {
-              setMediaLoadError('Video playback error - max retries exceeded');
-              window.displayAPI.reportError('Video playback error after max retries');
-            }
-          }}
-          />
-        )}
-        {renderRotatingMessages()}
-        {renderAnnouncement()}
-        {renderCloseButton()}
-      </div>
-    );
-  }
-
-  // Render image (unless a tool is active that takes over screen)
-  if (mediaType === 'image' && !countdown.active && !clock.active && !stopwatch.active) {
-    return (
-      <div className="display-window" style={backgroundStyle}>
-        {/* Loading overlay */}
-        {mediaLoading && (
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(0, 0, 0, 0.7)',
-            zIndex: 10
-          }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              border: '3px solid rgba(255, 255, 255, 0.2)',
-              borderTopColor: '#06b6d4',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite'
-            }} />
-            <style>{`
-              @keyframes spin {
-                to { transform: rotate(360deg); }
-              }
-            `}</style>
-          </div>
-        )}
-        {/* Error overlay */}
-        {mediaLoadError && (
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(0, 0, 0, 0.9)',
-            zIndex: 10
-          }}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" strokeWidth="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-              <circle cx="8.5" cy="8.5" r="1.5"/>
-              <polyline points="21 15 16 10 5 21"/>
-            </svg>
-            <div style={{ color: '#ff6b6b', fontSize: '1.5vw', marginTop: '1vh' }}>
-              {mediaLoadError}
-            </div>
-          </div>
-        )}
-        {mediaPath && (
-          <img
-            key={`image-${mediaPath}-${mediaRetryCount}`}
-            src={mediaPath}
-            className="display-image"
-            alt=""
-            onLoad={() => {
-              setMediaLoading(false);
-              setMediaLoadError(null);
-              setMediaRetryCount(0);
-            }}
-            onError={(e) => {
-              log.error('Image load error:', e, 'retry count:', mediaRetryCount);
-              setMediaLoading(false);
-
-              // Auto-retry for transient errors
-              if (mediaRetryCount < MAX_MEDIA_RETRIES) {
-                setMediaLoadError(`Retrying... (${mediaRetryCount + 1}/${MAX_MEDIA_RETRIES})`);
-
-                mediaRetryTimeoutRef.current = setTimeout(() => {
-                  setMediaRetryCount(prev => prev + 1);
-                  setMediaLoading(true);
-                  setMediaLoadError(null);
-                }, MEDIA_RETRY_DELAY_MS);
-              } else {
-                setMediaLoadError('Image load error - max retries exceeded');
-                window.displayAPI.reportError('Image load error after max retries');
-              }
-            }}
-          />
-        )}
-        {renderRotatingMessages()}
-        {renderAnnouncement()}
-        {renderCloseButton()}
-      </div>
-    );
-  }
-
-  // Render countdown (takes over screen)
-  if (countdown.active) {
-    return (
-      <div className="display-window" style={{ background: '#000' }}>
-        {renderCountdown()}
-        {renderRotatingMessages()}
-        {renderAnnouncement()}
-        {renderCloseButton()}
-      </div>
-    );
-  }
-
-  // Render clock (takes over screen)
-  if (clock.active) {
-    return (
-      <div className="display-window" style={{ background: '#000' }}>
-        {renderClock()}
-        {renderRotatingMessages()}
-        {renderAnnouncement()}
-        {renderCloseButton()}
-      </div>
-    );
-  }
-
-  // Render stopwatch (takes over screen)
-  if (stopwatch.active) {
-    return (
-      <div className="display-window" style={{ background: '#000' }}>
-        {renderStopwatch()}
-        {renderRotatingMessages()}
-        {renderAnnouncement()}
-        {renderCloseButton()}
-      </div>
-    );
-  }
-
-  // Render slide content using unified SlideRenderer
-  return (
-    <div className="display-window" style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' }}>
-      <SlideRenderer
-        slideData={slideData}
-        displayMode={displayMode}
-        theme={theme}
-        backgroundImage={backgroundImage}
-        isBlank={false}
-        fillContainer={true}
-        presentationSlide={presentationSlide}
-        combinedSlides={combinedSlides}
-
-      />
-      {/* Overlay tools on top of the slide content */}
+      {/* Always-visible overlays */}
       {renderRotatingMessages()}
       {renderAnnouncement()}
       {renderCloseButton()}

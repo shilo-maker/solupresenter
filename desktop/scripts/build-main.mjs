@@ -1,11 +1,12 @@
 import * as esbuild from 'esbuild';
-import { readdirSync, statSync } from 'fs';
+import { readdirSync, statSync, rmSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
 const isWatch = process.argv.includes('--watch');
+const shouldClean = !isWatch; // Clean on full builds, not watch mode
 
 // Get all TypeScript files from a directory recursively
 function getEntryPoints(dir, baseDir = dir) {
@@ -38,6 +39,19 @@ async function build() {
   const startTime = Date.now();
 
   try {
+    // Clean output directories on full builds to prevent stale/corrupted files
+    if (shouldClean) {
+      const mainOutDir = join(rootDir, 'dist/main/main');
+      const preloadOutDir = join(rootDir, 'dist/main/preload');
+
+      if (existsSync(mainOutDir)) {
+        rmSync(mainOutDir, { recursive: true, force: true });
+      }
+      if (existsSync(preloadOutDir)) {
+        rmSync(preloadOutDir, { recursive: true, force: true });
+      }
+    }
+
     // Get entry points
     const mainEntries = getEntryPoints(join(rootDir, 'src/main'));
     const preloadEntries = getEntryPoints(join(rootDir, 'src/preload'));

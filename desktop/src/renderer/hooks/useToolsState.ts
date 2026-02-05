@@ -112,15 +112,23 @@ export interface UseToolsStateReturn {
   stopwatchIntervalRef: React.MutableRefObject<NodeJS.Timeout | null>;
 }
 
+// Helper function to calculate next round hour (e.g., 14:35 -> "15:00")
+function getNextRoundHour(): string {
+  const now = new Date();
+  let nextHour = now.getHours() + 1;
+  if (nextHour >= 24) nextHour = 0;
+  return `${nextHour.toString().padStart(2, '0')}:00`;
+}
+
 export function useToolsState(
   setlist: SetlistItem[],
   setSetlist: React.Dispatch<React.SetStateAction<SetlistItem[]>>
 ): UseToolsStateReturn {
-  // Countdown state
-  const [countdownTargetTime, setCountdownTargetTime] = useState('');
+  // Countdown state - default to next round hour with preset messages
+  const [countdownTargetTime, setCountdownTargetTime] = useState(() => getNextRoundHour());
   const [countdownRemaining, setCountdownRemaining] = useState<string>('');
-  const [countdownMessage, setCountdownMessage] = useState('');
-  const [countdownMessageTranslation, setCountdownMessageTranslation] = useState('');
+  const [countdownMessage, setCountdownMessage] = useState('מתחילים בקרוב');
+  const [countdownMessageTranslation, setCountdownMessageTranslation] = useState('Starting Soon');
   const [isCountdownActive, setIsCountdownActive] = useState(false);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownMessageRef = useRef(countdownMessage);

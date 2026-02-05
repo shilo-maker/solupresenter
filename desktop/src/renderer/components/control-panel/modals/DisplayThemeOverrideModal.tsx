@@ -215,7 +215,7 @@ const DisplayThemeOverrideModal = memo<DisplayThemeOverrideModalProps>(({
     >
       <div
         style={{
-          background: 'rgba(30, 30, 50, 0.98)',
+          background: 'rgba(24, 24, 27, 0.98)',
           borderRadius: '16px',
           border: '1px solid rgba(255,255,255,0.2)',
           padding: '24px',
@@ -366,11 +366,11 @@ const DisplayThemeOverrideModal = memo<DisplayThemeOverrideModalProps>(({
                     cursor: 'pointer'
                   }}
                 >
-                  <option value="" style={{ background: '#1e1e32' }}>
+                  <option value="" style={{ background: '#18181b' }}>
                     {t('common.selectTheme', 'Select...')}
                   </option>
                   {obsThemes.filter(t => t.type === 'songs').map(theme => (
-                    <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
+                    <option key={theme.id} value={theme.id} style={{ background: '#18181b' }}>
                       {theme.name}
                     </option>
                   ))}
@@ -399,11 +399,11 @@ const DisplayThemeOverrideModal = memo<DisplayThemeOverrideModalProps>(({
                     cursor: 'pointer'
                   }}
                 >
-                  <option value="" style={{ background: '#1e1e32' }}>
+                  <option value="" style={{ background: '#18181b' }}>
                     {t('common.selectTheme', 'Select...')}
                   </option>
                   {obsThemes.filter(t => t.type === 'bible').map(theme => (
-                    <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
+                    <option key={theme.id} value={theme.id} style={{ background: '#18181b' }}>
                       {theme.name}
                     </option>
                   ))}
@@ -432,11 +432,11 @@ const DisplayThemeOverrideModal = memo<DisplayThemeOverrideModalProps>(({
                     cursor: 'pointer'
                   }}
                 >
-                  <option value="" style={{ background: '#1e1e32' }}>
+                  <option value="" style={{ background: '#18181b' }}>
                     {t('common.selectTheme', 'Select...')}
                   </option>
                   {obsThemes.filter(t => t.type === 'prayer').map(theme => (
-                    <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
+                    <option key={theme.id} value={theme.id} style={{ background: '#18181b' }}>
                       {theme.name}
                     </option>
                   ))}
@@ -545,22 +545,22 @@ const DisplayThemeOverrideModal = memo<DisplayThemeOverrideModalProps>(({
                           cursor: loading ? 'wait' : 'pointer'
                         }}
                       >
-                        <option value="" style={{ background: '#1e1e32' }}>
+                        <option value="" style={{ background: '#18181b' }}>
                           {t('displayThemeOverrides.useGlobal', '-- Use Global --')}
                         </option>
                         {getThemesForType(themeType).length > 0 && (
-                          <optgroup label={t('displayThemeOverrides.regularThemes', 'Regular Themes')} style={{ background: '#1e1e32' }}>
+                          <optgroup label={t('displayThemeOverrides.regularThemes', 'Regular Themes')} style={{ background: '#18181b' }}>
                             {getThemesForType(themeType).map(theme => (
-                              <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
+                              <option key={theme.id} value={theme.id} style={{ background: '#18181b' }}>
                                 {theme.name}
                               </option>
                             ))}
                           </optgroup>
                         )}
                         {getOBSThemesForType(themeType).length > 0 && (
-                          <optgroup label={t('displayThemeOverrides.obsThemes', 'OBS Themes')} style={{ background: '#1e1e32' }}>
+                          <optgroup label={t('displayThemeOverrides.obsThemes', 'OBS Themes')} style={{ background: '#18181b' }}>
                             {getOBSThemesForType(themeType).map(theme => (
-                              <option key={theme.id} value={theme.id} style={{ background: '#1e1e32' }}>
+                              <option key={theme.id} value={theme.id} style={{ background: '#18181b' }}>
                                 {theme.name}
                               </option>
                             ))}

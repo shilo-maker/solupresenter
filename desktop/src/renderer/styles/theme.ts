@@ -1,5 +1,5 @@
 /**
- * SoluPresenter Theme Configuration
+ * SoluCast Theme Configuration
  *
  * This is the single source of truth for all theme colors and design tokens.
  * To change the app's color scheme, update the values here.

@@ -637,7 +637,7 @@ const DisplayStage: React.FC = () => {
             color: elements.songTitle.color || colors.accent
           }}
         >
-          {songTitle || 'SoluPresenter'}
+          {songTitle || 'SoluCast'}
         </div>
       )}
 

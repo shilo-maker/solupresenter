@@ -1758,6 +1758,18 @@ const MediaGrid: React.FC<MediaGridProps> = ({ onSelectImage, onSelectVideo, onS
               {savedPlaylists.map(playlist => (
                 <div
                   key={playlist.id}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('application/json', JSON.stringify({
+                      type: 'audioPlaylist',
+                      playlist: {
+                        name: playlist.name,
+                        tracks: playlist.tracks,
+                        shuffle: playlist.shuffle
+                      }
+                    }));
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1766,11 +1778,11 @@ const MediaGrid: React.FC<MediaGridProps> = ({ onSelectImage, onSelectVideo, onS
                     background: 'rgba(255, 152, 0, 0.08)',
                     border: '1px solid rgba(255, 152, 0, 0.15)',
                     borderRadius: '6px',
-                    cursor: 'pointer',
+                    cursor: 'grab',
                     transition: 'all 0.15s ease'
                   }}
                   onDoubleClick={() => handleAddPlaylistToSetlist(playlist)}
-                  title="Double-click to add to setlist"
+                  title="Drag to setlist or double-click to add"
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF9800" strokeWidth="2">
                     <line x1="8" y1="6" x2="21" y2="6" />
@@ -2493,13 +2505,25 @@ const MediaGrid: React.FC<MediaGridProps> = ({ onSelectImage, onSelectVideo, onS
                 {savedPlaylists.slice(0, 3).map(playlist => (
                   <div
                     key={playlist.id}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('application/json', JSON.stringify({
+                        type: 'audioPlaylist',
+                        playlist: {
+                          name: playlist.name,
+                          tracks: playlist.tracks,
+                          shuffle: playlist.shuffle
+                        }
+                      }));
+                      e.dataTransfer.effectAllowed = 'copy';
+                    }}
                     onDoubleClick={() => handleAddPlaylistToSetlist(playlist)}
                     onMouseEnter={() => setHoveredMediaId(`playlist_${playlist.id}`)}
                     onMouseLeave={() => setHoveredMediaId(null)}
-                    title={`${playlist.name}\n${playlist.tracks.length} track${playlist.tracks.length !== 1 ? 's' : ''}\nDouble-click to add to setlist`}
+                    title={`${playlist.name}\n${playlist.tracks.length} track${playlist.tracks.length !== 1 ? 's' : ''}\nDrag to setlist or double-click to add`}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 8px', borderRadius: '6px',
-                      cursor: 'pointer',
+                      cursor: 'grab',
                       background: hoveredMediaId === `playlist_${playlist.id}` ? 'rgba(255,255,255,0.08)' : 'transparent',
                       borderLeft: '3px solid rgba(255, 152, 0, 0.6)', transition: 'all 0.15s ease'
                     }}

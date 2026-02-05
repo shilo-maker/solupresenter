@@ -1,4 +1,4 @@
-/* SoluPresenter Desktop - Modern Dark Theme */
+/* SoluCast Desktop - Modern Dark Theme */
 /* Redesigned with Cyan/Teal accent - Clean, Professional, Futuristic */
 
 /* Import modern font with more weights */
@@ -238,6 +238,17 @@ body::before {
 #root {
   position: relative;
   z-index: 1;
+  animation: fadeIn 0.4s ease-out;
+}
+
+/* Smooth fade-in when app loads (transition from splash screen) */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* ============ Scrollbar ============ */
@@ -1041,6 +1052,17 @@ select:focus {
   border-color: var(--color-primary);
   background: var(--bg-hover);
   box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+}
+
+/* Dark mode for select dropdowns */
+select {
+  color-scheme: dark;
+}
+
+select option {
+  background: #1a1a2e;
+  color: white;
+  padding: 8px;
 }
 
 input::placeholder,
@@ -2404,4 +2426,427 @@ textarea::placeholder {
     padding: var(--space-1) var(--space-2);
     font-size: 0.6875rem;
   }
+}
+
+/* ============================================
+   Optimized Resource Tab Buttons (CSS-based hover)
+   ============================================ */
+.resource-tab-button {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.resource-tab-button:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.resource-tab-button.active {
+  background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%);
+  color: #000;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.4);
+}
+
+.resource-tab-button.active:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.6);
+}
+
+.resource-tab-button .tab-icon {
+  display: flex;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.resource-tab-button.active .tab-icon {
+  color: #000;
+}
+
+/* ============================================
+   Optimized Header Dropdown Buttons
+   ============================================ */
+.header-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.header-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.header-btn-primary {
+  background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%);
+  color: #000;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.4);
+}
+
+.header-btn-primary:hover {
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.6);
+  transform: translateY(-1px);
+}
+
+/* ============================================
+   Optimized Dropdown Menu Items
+   ============================================ */
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.85rem;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
+
+.dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dropdown-item.selected {
+  background: rgba(6, 182, 212, 0.2);
+  color: #06b6d4;
+}
+
+.dropdown-item.selected:hover {
+  background: rgba(6, 182, 212, 0.3);
+}
+
+/* ============================================
+   Optimized Theme Item Buttons
+   ============================================ */
+.theme-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border: 1px solid transparent;
+  width: 100%;
+  font-family: inherit;
+  color: white;
+  font-size: 0.8rem;
+}
+
+.theme-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Songs theme (blue) */
+.theme-item.theme-songs.selected {
+  background: rgba(33, 150, 243, 0.3);
+  border-color: rgba(33, 150, 243, 0.5);
+}
+.theme-item.theme-songs.selected:hover {
+  background: rgba(33, 150, 243, 0.4);
+}
+
+/* Bible theme (purple) */
+.theme-item.theme-bible.selected {
+  background: rgba(156, 39, 176, 0.3);
+  border-color: rgba(156, 39, 176, 0.5);
+}
+.theme-item.theme-bible.selected:hover {
+  background: rgba(156, 39, 176, 0.4);
+}
+
+/* Prayer theme (orange) */
+.theme-item.theme-prayer.selected {
+  background: rgba(255, 152, 0, 0.3);
+  border-color: rgba(255, 152, 0, 0.5);
+}
+.theme-item.theme-prayer.selected:hover {
+  background: rgba(255, 152, 0, 0.4);
+}
+
+/* Stage theme (green) */
+.theme-item.theme-stage.selected {
+  background: rgba(76, 175, 80, 0.3);
+  border-color: rgba(76, 175, 80, 0.5);
+}
+.theme-item.theme-stage.selected:hover {
+  background: rgba(76, 175, 80, 0.4);
+}
+
+/* OBS themes (teal) */
+.theme-item.theme-obs {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 4px 8px;
+  font-size: 0.75rem;
+}
+.theme-item.theme-obs:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.theme-item.theme-obs.selected {
+  background: rgba(23, 162, 184, 0.3);
+  border-color: rgba(23, 162, 184, 0.5);
+}
+.theme-item.theme-obs.selected:hover {
+  background: rgba(23, 162, 184, 0.4);
+}
+
+/* Theme item edit button */
+.theme-item-edit-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  font-size: 0.65rem;
+  font-family: inherit;
+  transition: background 0.15s ease;
+}
+.theme-item-edit-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================
+   Primary Action Button (cyan gradient)
+   ============================================ */
+.action-btn-primary {
+  background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%);
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  color: #000;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
+  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.4);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.action-btn-primary:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.6);
+}
+
+/* ============================================
+   Header Display Button (success/default states)
+   ============================================ */
+.header-display-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s ease;
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+.header-display-btn.default {
+  background: rgba(255, 255, 255, 0.1);
+}
+.header-display-btn.default:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+.header-display-btn.success {
+  background: rgba(16, 185, 129, 0.3);
+}
+.header-display-btn.success:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Header Theme Button */
+.header-theme-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s ease;
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+.header-theme-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* User menu buttons */
+.user-menu-btn {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  font-size: 0.8rem;
+  text-align: left;
+  transition: background 0.15s ease;
+  font-family: inherit;
+}
+.user-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.user-menu-btn.danger {
+  color: #dc3545;
+}
+.user-menu-btn.danger:hover {
+  background: rgba(220, 53, 69, 0.1);
+}
+
+/* Small icon buttons in header */
+.header-icon-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  transition: background 0.15s ease;
+  font-family: inherit;
+}
+.header-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* User button with primary gradient */
+.header-user-btn {
+  background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  font-family: inherit;
+}
+.header-user-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Login button */
+.header-login-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  font-family: inherit;
+  transition: background 0.15s ease;
+}
+.header-login-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* ============ QuickSlideEditor Styles ============ */
+/* Delete button in quick slide cards */
+.quick-slide-delete-btn {
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 3px;
+  color: rgba(255,255,255,0.4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.quick-slide-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+/* Add slide button */
+.quick-slide-add-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  background: rgba(255,255,255,0.03);
+  border: 1px dashed rgba(255,255,255,0.2);
+  border-radius: 8px;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.15s;
+  min-height: 140px;
+}
+.quick-slide-add-btn:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.3);
+}
+
+/* Slide preview card in QuickSlideEditor */
+.quick-slide-preview {
+  border: 2px solid rgba(111, 66, 193, 0.4);
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  background-color: rgba(111, 66, 193, 0.25);
+  transition: all 0.15s;
+}
+.quick-slide-preview:hover {
+  border-color: rgba(167, 139, 250, 0.6);
+  background-color: rgba(111, 66, 193, 0.35);
+}
+.quick-slide-preview.selected {
+  border-color: #a78bfa;
+  background-color: rgba(167, 139, 250, 0.35);
+  box-shadow: 0 0 15px rgba(167, 139, 250, 0.6), 0 0 30px rgba(111, 66, 193, 0.4);
+}
+.quick-slide-preview.empty {
+  cursor: default;
+  opacity: 0.5;
 }

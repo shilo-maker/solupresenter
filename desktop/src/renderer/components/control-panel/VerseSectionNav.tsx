@@ -58,7 +58,7 @@ const VerseSectionNav = memo<VerseSectionNavProps>(({
     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', justifyContent: 'center' }}>
       {verseSections.map((section, idx) => (
         <button
-          key={idx}
+          key={`section-${section.type}-${section.index}`}
           onClick={() => onSelectSlide(section.index)}
           title={section.type}
           style={{

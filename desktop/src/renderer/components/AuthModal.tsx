@@ -106,7 +106,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess }) => {
         onClick={(e) => e.stopPropagation()}
         style={{
           position: 'relative',
-          background: 'linear-gradient(135deg, rgba(30,30,50,0.98), rgba(20,20,40,0.98))',
+          background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.98), rgba(18, 18, 21, 0.98))',
           borderRadius: '20px',
           padding: '32px',
           width: '380px',

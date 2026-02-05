@@ -907,6 +907,8 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
 
   ipcMain.on('video:timeUpdate', (event, time: number, duration: number) => {
     throttledVideoTimeUpdate(time, duration);
+    // Update displayManager's tracked position to prevent drift
+    displayManager.updateVideoPosition(time);
     // Also update remote control server's activeVideo state
     const currentState = remoteControlServer.getCurrentState?.();
     if (currentState?.activeMedia?.type === 'video') {
@@ -936,6 +938,8 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     if (controlWindowRef && !controlWindowRef.isDestroyed()) {
       controlWindowRef.webContents.send('video:playing', playing);
     }
+    // Update displayManager's play state
+    displayManager.updateVideoPosition(displayManager.getVideoPosition()?.time ?? 0, playing);
     // Also update remote control server's activeVideo state
     const currentState = remoteControlServer.getCurrentState?.();
     if (currentState?.activeMedia?.type === 'video') {

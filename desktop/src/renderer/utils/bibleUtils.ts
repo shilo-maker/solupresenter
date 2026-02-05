@@ -2,6 +2,7 @@
 export const hebrewBookNames: Record<string, string> = {
   'בראשית': 'Genesis', 'שמות': 'Exodus', 'ויקרא': 'Leviticus',
   'במדבר': 'Numbers', 'דברים': 'Deuteronomy', 'יהושע': 'Joshua',
+  'יהושוע': 'Joshua', // Alias for יהושע
   'שופטים': 'Judges', 'שמואל א': 'I Samuel', 'שמואל ב': 'II Samuel',
   'מלכים א': 'I Kings', 'מלכים ב': 'II Kings', 'ישעיהו': 'Isaiah',
   'ישעיה': 'Isaiah', 'ירמיהו': 'Jeremiah', 'ירמיה': 'Jeremiah',
@@ -18,13 +19,23 @@ export const hebrewBookNames: Record<string, string> = {
   'מתי': 'Matthew', 'מרקוס': 'Mark', 'לוקס': 'Luke', 'יוחנן': 'John',
   'מעשי השליחים': 'Acts', 'מעשים': 'Acts', 'רומים': 'Romans',
   'קורינתים א': '1 Corinthians', 'קורינתים ב': '2 Corinthians',
+  'אל הקורינתים א': '1 Corinthians', 'הראשונה אל הקורינתים': '1 Corinthians',
+  'אל הקורינתים ב': '2 Corinthians', 'השניה אל הקורינתים': '2 Corinthians',
   'גלטים': 'Galatians', 'אפסים': 'Ephesians', 'פיליפים': 'Philippians',
   'קולוסים': 'Colossians', 'תסלוניקים א': '1 Thessalonians',
-  'תסלוניקים ב': '2 Thessalonians', 'טימותיאוס א': '1 Timothy',
-  'טימותיאוס ב': '2 Timothy', 'טיטוס': 'Titus', 'פילימון': 'Philemon',
+  'תסלוניקים ב': '2 Thessalonians',
+  'אל התסלוניקים א': '1 Thessalonians', 'הראשונה אל התסלוניקים': '1 Thessalonians',
+  'אל התסלוניקים ב': '2 Thessalonians', 'השניה אל התסלוניקים': '2 Thessalonians',
+  'טימותיאוס א': '1 Timothy', 'טימותיאוס ב': '2 Timothy',
+  'אל טימותיוס א': '1 Timothy', 'הראשונה אל טימותיאוס': '1 Timothy',
+  'אל טימותיוס ב': '2 Timothy', 'השניה אל טימותיאוס': '2 Timothy',
+  'טיטוס': 'Titus', 'פילימון': 'Philemon',
   'עברים': 'Hebrews', 'יעקב': 'James', 'פטרוס א': '1 Peter',
-  'פטרוס ב': '2 Peter', 'יוחנן א': '1 John', 'יוחנן ב': '2 John',
-  'יוחנן ג': '3 John', 'יהודה': 'Jude', 'התגלות': 'Revelation', 'חזון': 'Revelation'
+  'פטרוס ב': '2 Peter',
+  'הראשונה אל כיפא': '1 Peter', 'השניה אל כיפא': '2 Peter',
+  'יוחנן א': '1 John', 'יוחנן ב': '2 John', 'יוחנן ג': '3 John',
+  'הראשונה אל יוחנן': '1 John', 'השניה אל יוחנן': '2 John', 'השלישית אל יוחנן': '3 John',
+  'יהודה': 'Jude', 'התגלות': 'Revelation', 'חזון': 'Revelation'
 };
 
 // Convert Hebrew numerals to Arabic numbers

@@ -1,4 +1,4 @@
-# SoluPresenter Desktop App - Development Status
+# SoluCast Desktop App - Development Status
 
 Last updated: 2024-12-29 17:55
 
@@ -123,7 +123,7 @@ Dependencies Added:
 - `@huggingface/transformers` - Hugging Face transformers.js library
 
 Model Cache Location:
-- `%APPDATA%/solupresenter-desktop/ml-models/Xenova/nllb-200-distilled-600M`
+- `%APPDATA%/solucast-desktop/ml-models/Xenova/nllb-200-distilled-600M`
 
 ### Quick Slide Feature (Session 2a)
 Added Quick Slide feature to ControlPanel:

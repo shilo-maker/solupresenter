@@ -1461,6 +1461,16 @@ const ControlPanel: React.FC = () => {
     });
   }, [selectedBackground, selectedBibleTheme, selectedPrayerTheme]);
 
+  // Auto-broadcast first Bible verse when chapter is loaded (enables arrow key navigation)
+  const prevBiblePassageIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (biblePassage && biblePassage.id !== prevBiblePassageIdRef.current) {
+      prevBiblePassageIdRef.current = biblePassage.id;
+      // Broadcast the first verse so it's "live" and arrow keys work
+      sendCurrentSlide(biblePassage, 0, displayMode, undefined, 'bible');
+    }
+  }, [biblePassage, displayMode, sendCurrentSlide]);
+
   // Send prayer/sermon presentation slide using prayer theme instead of textbox rendering
   const sendPrayerPresentationSlide = useCallback((
     presentation: Presentation,
@@ -1561,38 +1571,38 @@ const ControlPanel: React.FC = () => {
   const handleVideoSeek = useCallback((time: number) => {
     if (isNaN(time) || time < 0) return;
 
-    // Pause both first for sync
     const video = previewVideoRef.current;
     const wasPlaying = videoStatus.isPlaying;
 
-    // Pause preview
+    // Pause both first for sync
     if (video) {
       video.pause();
     }
-    // Pause display
     window.electronAPI.pauseVideo();
     setVideoStatus(prev => ({ ...prev, isPlaying: false }));
 
-    // Small delay to ensure pause takes effect
-    setTimeout(() => {
-      // Seek preview
-      if (video) {
-        video.currentTime = time;
-      }
-      // Seek display
-      window.electronAPI.seekVideo(time);
+    // Seek both videos
+    if (video) {
+      video.currentTime = time;
+    }
+    window.electronAPI.seekVideo(time);
 
-      // Resume after another small delay if was playing
-      if (wasPlaying) {
-        setTimeout(() => {
-          if (video) {
-            video.play().catch(() => {});
-          }
-          window.electronAPI.resumeVideo();
-          setVideoStatus(prev => ({ ...prev, isPlaying: true }));
-        }, 150);
-      }
-    }, 50);
+    // Use seeked event to know when seek is complete, then resume if was playing
+    if (wasPlaying && video) {
+      const handleSeeked = () => {
+        video.removeEventListener('seeked', handleSeeked);
+        // Resume playback after seek completes
+        video.play().catch(() => {});
+        window.electronAPI.resumeVideo();
+        setVideoStatus(prev => ({ ...prev, isPlaying: true }));
+      };
+      video.addEventListener('seeked', handleSeeked);
+
+      // Fallback timeout in case seeked event doesn't fire (e.g., video not loaded)
+      setTimeout(() => {
+        video.removeEventListener('seeked', handleSeeked);
+      }, 2000);
+    }
   }, [videoStatus.isPlaying]);
 
 
@@ -1956,7 +1966,7 @@ const ControlPanel: React.FC = () => {
       setIsBlank,
       setLiveState
     },
-    { displayMode, isRTL, disabled: showSettings }
+    { displayMode, isRTL, disabled: showSettings || showPrayerEditor || showSongEditor || showSlideEditor || showQuickSlideModal }
   );
 
   // Remote Control hook - handles state sync and command processing

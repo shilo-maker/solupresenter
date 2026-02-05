@@ -299,6 +299,7 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        onMouseDown={() => window.focus()}
         style={{
           background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.98), rgba(18, 18, 21, 0.98))',
           borderRadius: '16px',
@@ -532,7 +533,7 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
               <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {editingSong.slides.map((slide, idx) => (
                   <div
-                    key={`slide-${idx}-${slide.verseType || 'v'}-${(slide.originalText || '').substring(0, 20)}`}
+                    key={`slide-${idx}`}
                     onClick={() => setEditingSlideIndex(idx)}
                     style={{
                       padding: '8px',

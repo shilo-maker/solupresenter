@@ -1,6 +1,6 @@
 import React, { memo, useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { hebrewBookNames, numberToHebrew } from '../../../utils/bibleUtils';
+import { hebrewBookNames, numberToHebrew, getHebrewBookName } from '../../../utils/bibleUtils';
 
 // ========== Types ==========
 
@@ -380,6 +380,16 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
   // Refs
   const bibleSearchRef = useRef<string>('');
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // Focus window when modal opens
+  useEffect(() => {
+    window.focus();
+    // Also focus the modal container to ensure it can receive events
+    if (modalRef.current) {
+      modalRef.current.focus();
+    }
+  }, []);
 
   // Focus title input when entering step 2
   useEffect(() => {
@@ -652,6 +662,42 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
     }
   };
 
+  // Handle book selection from dropdown
+  const handleBookSelect = (bookName: string) => {
+    setBibleBook(bookName);
+    setBibleChapter(null);
+    setBibleVerses([]);
+    setVerseStart(null);
+    setVerseEnd(null);
+    setBibleNoMatch(false);
+
+    // Detect if it's a Hebrew book name
+    const isHebrew = /[\u0590-\u05FF]/.test(bookName);
+    setBibleIsHebrew(isHebrew);
+  };
+
+  // Handle chapter selection from dropdown
+  const handleChapterSelect = async (chapterNum: number) => {
+    if (!bibleBook) return;
+
+    setBibleChapter(chapterNum);
+    setBibleVerses([]);
+    setVerseStart(null);
+    setVerseEnd(null);
+    setBibleLoading(true);
+
+    try {
+      const response = await window.electronAPI.getBibleVerses(bibleBook, chapterNum);
+      const verses = response?.verses || [];
+      setBibleVerses(verses);
+    } catch (error) {
+      console.error('Error fetching Bible verses:', error);
+      setBibleVerses([]);
+    } finally {
+      setBibleLoading(false);
+    }
+  };
+
   // Add Bible reference to subtitle
   const addBibleRefToSubtitle = (index: number) => {
     if (!bibleBook || !bibleChapter || !verseStart || bibleVerses.length === 0) return;
@@ -661,10 +707,9 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
 
     let hebrewText = '';
     let englishText = '';
+    const hebrewBookName = getHebrewBookName(bibleBook);
     let reference = `${bibleBook} ${bibleChapter}:${verseStart}`;
-    let hebrewReference = '';
-
-    const baseHebrewRef = startVerse.hebrewReference?.replace(/:.*$/, '') || '';
+    let hebrewReference = `${hebrewBookName} ${numberToHebrew(bibleChapter)}:${numberToHebrew(verseStart)}`;
 
     if (verseEnd && verseEnd > verseStart) {
       const versesInRange = bibleVerses.filter(
@@ -673,11 +718,10 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
       hebrewText = versesInRange.map(v => v.hebrew || '').filter(Boolean).join(' ');
       englishText = versesInRange.map(v => v.english || '').filter(Boolean).join(' ');
       reference = `${bibleBook} ${bibleChapter}:${verseStart}-${verseEnd}`;
-      hebrewReference = `${baseHebrewRef}:${verseStart}-${verseEnd}`;
+      hebrewReference = `${hebrewBookName} ${numberToHebrew(bibleChapter)}:${numberToHebrew(verseStart)}-${numberToHebrew(verseEnd)}`;
     } else {
       hebrewText = startVerse.hebrew || '';
       englishText = startVerse.english || '';
-      hebrewReference = startVerse.hebrewReference || '';
     }
 
     setSubtitles(prev => prev.map((s, i) =>
@@ -692,7 +736,7 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
           englishText,
           reference,
           hebrewReference,
-          useHebrew: bibleIsHebrew
+          useHebrew: true // Always use Hebrew for the reference display
         }
       } : s
     ));
@@ -849,6 +893,8 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
       }}
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={() => window.focus()}
         style={{
@@ -857,7 +903,8 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
           padding: '24px',
           maxWidth: '550px',
           width: '90%',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
+          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+          outline: 'none'
         }}
       >
         {/* Progress Indicator */}
@@ -879,17 +926,17 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
         {/* Step 1: Select Type */}
         {step === 1 && (
           <>
-            <h2 style={{ margin: '0 0 8px 0', color: 'white', fontSize: '1.4rem' }}>
-              Select Presentation Type
+            <h2 style={{ margin: '0 0 8px 0', color: 'white', fontSize: '1.4rem', direction: 'rtl', textAlign: 'right' }}>
+              בחר סוג מצגת
             </h2>
-            <p style={{ margin: '0 0 20px 0', color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>
-              Choose the type of presentation you want to create
+            <p style={{ margin: '0 0 20px 0', color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', direction: 'rtl', textAlign: 'right' }}>
+              בחר את סוג המצגת שברצונך ליצור
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {[
-                { type: 'sermon' as const, icon: '📋', label: 'Sermon Points', desc: 'Numbered points for sermon' },
-                { type: 'prayer' as const, icon: '🙏', label: 'Prayer Points', desc: 'Bullet points for prayer' },
-                { type: 'announcements' as const, icon: '📢', label: 'Announcements', desc: 'Announcements with details' }
+                { type: 'sermon' as const, icon: '📋', label: 'נקודות דרשה', desc: 'נקודות ממוספרות לדרשה' },
+                { type: 'prayer' as const, icon: '🙏', label: 'נקודות תפילה', desc: 'נקודות לתפילה' },
+                { type: 'announcements' as const, icon: '📢', label: 'הודעות', desc: 'הודעות עם פרטים' }
               ].map((item) => (
                 <div
                   key={item.type}
@@ -907,7 +954,8 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                     border: '2px solid rgba(255,255,255,0.1)',
                     borderRadius: '10px',
                     cursor: 'pointer',
-                    transition: 'all 0.2s'
+                    transition: 'all 0.2s',
+                    direction: 'rtl'
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = 'rgba(0,212,255,0.1)';
@@ -940,7 +988,7 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                 fontSize: '0.9rem'
               }}
             >
-              Cancel
+              ביטול
             </button>
           </>
         )}
@@ -948,17 +996,17 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
         {/* Step 2: Title and Content */}
         {step === 2 && (
           <>
-            <h2 style={{ margin: '0 0 8px 0', color: 'white', fontSize: '1.4rem' }}>
-              {type === 'sermon' ? 'Sermon Points' : type === 'prayer' ? 'Prayer Points' : 'Announcements'}
+            <h2 style={{ margin: '0 0 8px 0', color: 'white', fontSize: '1.4rem', direction: 'rtl', textAlign: 'right' }}>
+              {type === 'sermon' ? 'נקודות דרשה' : type === 'prayer' ? 'נקודות תפילה' : 'הודעות'}
             </h2>
-            <p style={{ margin: '0 0 16px 0', color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>
-              Enter a title and add your {type === 'sermon' ? 'points' : type === 'prayer' ? 'prayer items' : 'announcements'}
+            <p style={{ margin: '0 0 16px 0', color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', direction: 'rtl', textAlign: 'right' }}>
+              הזן כותרת והוסף את ה{type === 'sermon' ? 'נקודות' : type === 'prayer' ? 'נקודות התפילה' : 'הודעות'} שלך
             </p>
 
             {/* Title Input */}
             <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginBottom: '6px', textTransform: 'uppercase' }}>
-                Main Title
+              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginBottom: '6px', direction: 'rtl', textAlign: 'right' }}>
+                כותרת ראשית
               </div>
               <input
                 ref={titleInputRef}
@@ -966,7 +1014,8 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                 autoFocus
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder={type === 'sermon' ? 'e.g., Faith in Action' : type === 'prayer' ? 'e.g., Prayer Requests' : 'e.g., Church Updates'}
+                onKeyDown={(e) => e.stopPropagation()}
+                placeholder={type === 'sermon' ? 'לדוגמה: אמונה בפעולה' : type === 'prayer' ? 'לדוגמה: בקשות תפילה' : 'לדוגמה: עדכוני הקהילה'}
                 style={{
                   width: '100%',
                   padding: '12px',
@@ -975,7 +1024,9 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                   borderRadius: '8px',
                   color: 'white',
                   fontSize: '1rem',
-                  cursor: 'text'
+                  cursor: 'text',
+                  direction: 'rtl',
+                  textAlign: 'right'
                 }}
                 onClick={(e) => {
                   e.currentTarget.focus();
@@ -986,7 +1037,7 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
             <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '16px' }}>
               {subtitles.map((item, index) => (
                 <div
-                  key={`subtitle-${index}-${(item.subtitle || '').substring(0, 15)}`}
+                  key={`subtitle-${index}`}
                   style={{
                     background: 'rgba(0,0,0,0.2)',
                     borderRadius: '8px',
@@ -995,9 +1046,9 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                     border: '1px solid rgba(255,255,255,0.1)'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', direction: 'rtl' }}>
                     <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', minWidth: '60px' }}>
-                      {type === 'sermon' ? `Point ${index + 1}` : `Slide ${index + 1}`}
+                      {type === 'sermon' ? `נקודה ${index + 1}` : `שקף ${index + 1}`}
                     </span>
                     {subtitles.length > 1 && (
                       <button
@@ -1022,7 +1073,7 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                           setSubtitles(subtitles.filter((_, i) => i !== index));
                         }}
                         style={{
-                          marginLeft: 'auto',
+                          marginRight: 'auto',
                           background: 'rgba(255,0,0,0.2)',
                           border: 'none',
                           borderRadius: '4px',
@@ -1032,7 +1083,7 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                           fontSize: '0.75rem'
                         }}
                       >
-                        Remove
+                        הסר
                       </button>
                     )}
                   </div>
@@ -1045,7 +1096,8 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                         i === index ? { ...s, subtitle: newValue } : s
                       ));
                     }}
-                    placeholder={type === 'sermon' ? `${index + 1}. Enter point title` : 'Enter subtitle'}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    placeholder={type === 'sermon' ? `${index + 1}. הזן כותרת נקודה` : 'הזן כותרת משנה'}
                     style={{
                       width: '100%',
                       padding: '10px',
@@ -1054,7 +1106,9 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                       borderRadius: '6px',
                       color: 'white',
                       fontSize: '0.9rem',
-                      marginBottom: '8px'
+                      marginBottom: '8px',
+                      direction: 'rtl',
+                      textAlign: 'right'
                     }}
                   />
                   <textarea
@@ -1065,7 +1119,8 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                         i === index ? { ...s, description: newValue } : s
                       ));
                     }}
-                    placeholder="Description (optional)"
+                    onKeyDown={(e) => e.stopPropagation()}
+                    placeholder="תיאור (אופציונלי)"
                     rows={2}
                     style={{
                       width: '100%',
@@ -1075,7 +1130,9 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                       borderRadius: '6px',
                       color: 'rgba(255,255,255,0.8)',
                       fontSize: '0.85rem',
-                      resize: 'vertical'
+                      resize: 'vertical',
+                      direction: 'rtl',
+                      textAlign: 'right'
                     }}
                   />
 
@@ -1088,9 +1145,9 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                       border: '1px solid rgba(0,212,255,0.3)',
                       borderRadius: '6px'
                     }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                        <span style={{ color: '#00d4ff', fontSize: '0.8rem', fontWeight: 600, direction: item.bibleRef.useHebrew ? 'rtl' : 'ltr' }}>
-                          {'\u{1F4D6}'} {item.bibleRef.useHebrew ? (item.bibleRef.hebrewReference || item.bibleRef.reference) : item.bibleRef.reference}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', direction: 'rtl' }}>
+                        <span style={{ color: '#00d4ff', fontSize: '0.85rem', fontWeight: 600 }}>
+                          {'\u{1F4D6}'} {item.bibleRef.hebrewReference || item.bibleRef.reference}
                         </span>
                         <button
                           onClick={() => removeBibleRefFromSubtitle(index)}
@@ -1101,25 +1158,24 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                             color: '#ff6b6b',
                             padding: '2px 6px',
                             cursor: 'pointer',
-                            fontSize: '0.7rem'
+                            fontSize: '0.75rem'
                           }}
                         >
-                          Remove
+                          הסר
                         </button>
                       </div>
                       <div style={{
-                        fontSize: '0.75rem',
+                        fontSize: '0.8rem',
                         color: 'rgba(255,255,255,0.7)',
-                        direction: item.bibleRef.useHebrew ? 'rtl' : 'ltr',
-                        textAlign: item.bibleRef.useHebrew ? 'right' : 'left'
+                        direction: 'rtl',
+                        textAlign: 'right',
+                        lineHeight: 1.5
                       }}>
                         {(() => {
-                          const displayText = item.bibleRef.useHebrew
-                            ? (item.bibleRef.hebrewText || item.bibleRef.englishText || '')
-                            : (item.bibleRef.englishText || item.bibleRef.hebrewText || '');
+                          const displayText = item.bibleRef.hebrewText || item.bibleRef.englishText || '';
                           return displayText.length > 100
                             ? displayText.substring(0, 100) + '...'
-                            : (displayText || 'No text available');
+                            : (displayText || 'אין טקסט זמין');
                         })()}
                       </div>
                     </div>
@@ -1131,142 +1187,88 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                       border: '1px solid rgba(0,212,255,0.3)',
                       borderRadius: '6px'
                     }}>
-                      <div style={{ marginBottom: '8px', position: 'relative' }}>
-                        <input
-                          type="text"
-                          value={bibleSearch}
-                          onChange={(e) => handleBibleSearch(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (!showBibleSuggestions || bibleSuggestions.length === 0) return;
-                            if (e.key === 'ArrowDown') {
-                              e.preventDefault();
-                              setSelectedBibleSuggestionIndex(prev => prev < bibleSuggestions.length - 1 ? prev + 1 : 0);
-                            } else if (e.key === 'ArrowUp') {
-                              e.preventDefault();
-                              setSelectedBibleSuggestionIndex(prev => prev > 0 ? prev - 1 : bibleSuggestions.length - 1);
-                            } else if (e.key === 'Enter' && selectedBibleSuggestionIndex >= 0) {
-                              e.preventDefault();
-                              const suggestion = bibleSuggestions[selectedBibleSuggestionIndex];
-                              setShowBibleSuggestions(false);
-                              setSelectedBibleSuggestionIndex(-1);
-                              handleBibleSearch(suggestion.value, true);
-                            } else if (e.key === 'Escape') {
-                              setShowBibleSuggestions(false);
-                            }
-                          }}
-                          onFocus={() => bibleSearch.trim() && setShowBibleSuggestions(true)}
-                          onBlur={() => setTimeout(() => setShowBibleSuggestions(false), 200)}
-                          placeholder="e.g., John 3:16 or Psalms 23:1-6"
-                          style={{
-                            width: '100%',
-                            padding: '8px',
-                            background: 'rgba(0,0,0,0.3)',
-                            border: '1px solid rgba(255,255,255,0.2)',
-                            borderRadius: showBibleSuggestions && bibleSuggestions.length > 0 ? '4px 4px 0 0' : '4px',
-                            color: 'white',
-                            fontSize: '0.85rem'
-                          }}
-                        />
-                        {/* Autocomplete Suggestions Dropdown */}
-                        {showBibleSuggestions && bibleSuggestions.length > 0 && (
-                          <div
+                      {/* Book and Chapter Selectors */}
+                      <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap', direction: 'rtl' }}>
+                        {/* Book Selector */}
+                        <div style={{ flex: 1, minWidth: '140px' }}>
+                          <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', marginBottom: '4px' }}>ספר:</div>
+                          <select
+                            value={bibleBook}
+                            onChange={(e) => handleBookSelect(e.target.value)}
                             style={{
-                              position: 'absolute',
-                              top: '100%',
-                              left: 0,
-                              right: 0,
-                              background: '#2a2a4a',
+                              width: '100%',
+                              padding: '8px',
+                              background: 'rgba(0,0,0,0.4)',
                               border: '1px solid rgba(255,255,255,0.2)',
-                              borderTop: 'none',
-                              borderRadius: '0 0 4px 4px',
-                              maxHeight: '180px',
-                              overflowY: 'auto',
-                              zIndex: 1000
+                              borderRadius: '4px',
+                              color: 'white',
+                              fontSize: '0.85rem',
+                              direction: 'rtl'
                             }}
                           >
-                            {bibleSuggestions.map((suggestion, index) => (
-                              <div
-                                key={`${suggestion.bookName}-${suggestion.chapter}`}
-                                onClick={() => { setShowBibleSuggestions(false); setSelectedBibleSuggestionIndex(-1); handleBibleSearch(suggestion.value, true); }}
-                                style={{
-                                  padding: '8px 10px',
-                                  cursor: 'pointer',
-                                  background: index === selectedBibleSuggestionIndex ? 'rgba(0,212,255,0.15)' : 'transparent',
-                                  borderBottom: index < bibleSuggestions.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px'
-                                }}
-                                onMouseEnter={() => setSelectedBibleSuggestionIndex(index)}
-                              >
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(0,212,255,0.6)" strokeWidth="2">
-                                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                                </svg>
-                                <span style={{ color: 'white', fontSize: '0.8rem' }}>
-                                  {suggestion.display}
-                                </span>
-                              </div>
+                            <option value="">בחר ספר...</option>
+                            {bibleBooks.map(book => (
+                              <option key={book.name} value={book.name}>{getHebrewBookName(book.name)}</option>
                             ))}
-                          </div>
-                        )}
+                          </select>
+                        </div>
+
+                        {/* Chapter Selector */}
+                        <div style={{ minWidth: '80px' }}>
+                          <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', marginBottom: '4px' }}>פרק:</div>
+                          <select
+                            value={bibleChapter || ''}
+                            onChange={(e) => e.target.value && handleChapterSelect(parseInt(e.target.value))}
+                            disabled={!bibleBook}
+                            style={{
+                              width: '100%',
+                              padding: '8px',
+                              background: 'rgba(0,0,0,0.4)',
+                              border: '1px solid rgba(255,255,255,0.2)',
+                              borderRadius: '4px',
+                              color: bibleBook ? 'white' : 'rgba(255,255,255,0.4)',
+                              fontSize: '0.85rem',
+                              cursor: bibleBook ? 'pointer' : 'not-allowed',
+                              direction: 'rtl'
+                            }}
+                          >
+                            <option value="">בחר...</option>
+                            {bibleBook && bibleBooks.find(b => b.name === bibleBook) &&
+                              Array.from({ length: bibleBooks.find(b => b.name === bibleBook)!.chapters }, (_, i) => i + 1).map(ch => (
+                                <option key={ch} value={ch}>{numberToHebrew(ch)}</option>
+                              ))
+                            }
+                          </select>
+                        </div>
                       </div>
+
                       {booksLoading && (
-                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', textAlign: 'center', padding: '10px' }}>
-                          Loading Bible books...
+                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', textAlign: 'center', padding: '10px', direction: 'rtl' }}>
+                          טוען ספרי תנ״ך...
                         </div>
                       )}
                       {bibleLoading && (
-                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', textAlign: 'center' }}>
-                          Loading verses...
+                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', textAlign: 'center', padding: '6px', direction: 'rtl' }}>
+                          טוען פסוקים...
                         </div>
                       )}
                       {!booksLoading && bibleBooks.length === 0 && (
-                        <div style={{ color: 'rgba(255,100,100,0.7)', fontSize: '0.8rem', textAlign: 'center', padding: '10px' }}>
-                          <div>Failed to load Bible books.</div>
-                          <button
-                            onClick={async () => {
-                              setBooksLoading(true);
-                              try {
-                                // This would need to be handled by parent
-                              } catch (error) {
-                                console.error('Error loading Bible books:', error);
-                              }
-                              setBooksLoading(false);
-                            }}
-                            style={{
-                              marginTop: '8px',
-                              padding: '4px 12px',
-                              background: 'rgba(0,212,255,0.2)',
-                              border: '1px solid rgba(0,212,255,0.4)',
-                              borderRadius: '4px',
-                              color: '#00d4ff',
-                              cursor: 'pointer',
-                              fontSize: '0.8rem'
-                            }}
-                          >
-                            Retry
-                          </button>
-                        </div>
-                      )}
-                      {bibleNoMatch && !bibleLoading && (
-                        <div style={{ color: 'rgba(255,200,100,0.8)', fontSize: '0.8rem', textAlign: 'center', padding: '6px' }}>
-                          No match found. Try: "John 3:16" or "Genesis 1:1-5"
+                        <div style={{ color: 'rgba(255,100,100,0.7)', fontSize: '0.8rem', textAlign: 'center', padding: '10px', direction: 'rtl' }}>
+                          שגיאה בטעינת ספרי התנ״ך.
                         </div>
                       )}
                       {bibleBook && bibleChapter && !bibleLoading && bibleVerses.length === 0 && (
-                        <div style={{ color: 'rgba(255,200,100,0.8)', fontSize: '0.8rem', textAlign: 'center', padding: '6px' }}>
-                          No verses found for {bibleBook} {bibleChapter}
+                        <div style={{ color: 'rgba(255,200,100,0.8)', fontSize: '0.8rem', textAlign: 'center', padding: '6px', direction: 'rtl' }}>
+                          לא נמצאו פסוקים ב{getHebrewBookName(bibleBook)} פרק {numberToHebrew(bibleChapter)}
                         </div>
                       )}
+
+                      {/* Verse Selectors */}
                       {bibleBook && bibleChapter && bibleVerses.length > 0 && (
                         <div>
-                          <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', marginBottom: '6px' }}>
-                            {bibleBook} {bibleChapter} ({bibleVerses.length} verses)
-                          </div>
-                          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem' }}>From:</span>
+                          <div style={{ display: 'flex', gap: '12px', marginBottom: '8px', flexWrap: 'wrap', direction: 'rtl' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem' }}>מפסוק:</span>
                               <select
                                 value={verseStart || ''}
                                 onChange={(e) => {
@@ -1277,46 +1279,48 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                                   }
                                 }}
                                 style={{
-                                  padding: '4px 8px',
+                                  padding: '6px 10px',
                                   background: 'rgba(0,0,0,0.4)',
                                   border: '1px solid rgba(255,255,255,0.2)',
                                   borderRadius: '4px',
                                   color: 'white',
-                                  fontSize: '0.8rem'
+                                  fontSize: '0.85rem',
+                                  direction: 'rtl'
                                 }}
                               >
-                                <option value="">{t('controlPanel.selectVerse')}</option>
+                                <option value="">בחר...</option>
                                 {bibleVerses.map(v => (
-                                  <option key={v.verseNumber} value={v.verseNumber}>{v.verseNumber}</option>
+                                  <option key={v.verseNumber} value={v.verseNumber}>{numberToHebrew(v.verseNumber)}</option>
                                 ))}
                               </select>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem' }}>To (optional):</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem' }}>עד פסוק:</span>
                               <select
                                 value={verseEnd || ''}
                                 onChange={(e) => setVerseEnd(e.target.value ? parseInt(e.target.value) : null)}
                                 style={{
-                                  padding: '4px 8px',
+                                  padding: '6px 10px',
                                   background: 'rgba(0,0,0,0.4)',
                                   border: '1px solid rgba(255,255,255,0.2)',
                                   borderRadius: '4px',
                                   color: 'white',
-                                  fontSize: '0.8rem'
+                                  fontSize: '0.85rem',
+                                  direction: 'rtl'
                                 }}
                               >
-                                <option value="">{t('controlPanel.singleVerse')}</option>
+                                <option value="">פסוק בודד</option>
                                 {bibleVerses
                                   .filter(v => !verseStart || v.verseNumber > verseStart)
                                   .map(v => (
-                                    <option key={v.verseNumber} value={v.verseNumber}>{v.verseNumber}</option>
+                                    <option key={v.verseNumber} value={v.verseNumber}>{numberToHebrew(v.verseNumber)}</option>
                                   ))}
                               </select>
                             </div>
                           </div>
                           {verseStart && (
                             <div style={{
-                              padding: '6px',
+                              padding: '8px',
                               background: 'rgba(0,0,0,0.2)',
                               borderRadius: '4px',
                               marginBottom: '8px',
@@ -1324,10 +1328,11 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                               overflowY: 'auto'
                             }}>
                               <div style={{
-                                fontSize: '0.75rem',
+                                fontSize: '0.8rem',
                                 color: 'rgba(255,255,255,0.8)',
                                 direction: bibleIsHebrew ? 'rtl' : 'ltr',
-                                textAlign: bibleIsHebrew ? 'right' : 'left'
+                                textAlign: bibleIsHebrew ? 'right' : 'left',
+                                lineHeight: 1.5
                               }}>
                                 {bibleVerses
                                   .filter(v => v.verseNumber >= verseStart! && v.verseNumber <= (verseEnd || verseStart!))
@@ -1339,7 +1344,24 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                           )}
                         </div>
                       )}
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '8px', direction: 'rtl' }}>
+                        <button
+                          onClick={() => addBibleRefToSubtitle(index)}
+                          disabled={!verseStart}
+                          style={{
+                            flex: 1,
+                            padding: '8px',
+                            background: verseStart ? '#00d4ff' : 'rgba(0,212,255,0.3)',
+                            border: 'none',
+                            borderRadius: '4px',
+                            color: verseStart ? 'black' : 'rgba(0,0,0,0.5)',
+                            cursor: verseStart ? 'pointer' : 'not-allowed',
+                            fontSize: '0.85rem',
+                            fontWeight: 600
+                          }}
+                        >
+                          הוסף פסוק
+                        </button>
                         <button
                           onClick={() => {
                             setBiblePickerIndex(null);
@@ -1356,33 +1378,16 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                           }}
                           style={{
                             flex: 1,
-                            padding: '6px',
+                            padding: '8px',
                             background: 'transparent',
                             border: '1px solid rgba(255,255,255,0.2)',
                             borderRadius: '4px',
                             color: 'rgba(255,255,255,0.7)',
                             cursor: 'pointer',
-                            fontSize: '0.8rem'
+                            fontSize: '0.85rem'
                           }}
                         >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => addBibleRefToSubtitle(index)}
-                          disabled={!verseStart}
-                          style={{
-                            flex: 1,
-                            padding: '6px',
-                            background: verseStart ? '#00d4ff' : 'rgba(0,212,255,0.3)',
-                            border: 'none',
-                            borderRadius: '4px',
-                            color: verseStart ? 'black' : 'rgba(0,0,0,0.5)',
-                            cursor: verseStart ? 'pointer' : 'not-allowed',
-                            fontSize: '0.8rem',
-                            fontWeight: 600
-                          }}
-                        >
-                          Add Verse
+                          ביטול
                         </button>
                       </div>
                     </div>
@@ -1405,16 +1410,17 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                       style={{
                         marginTop: '8px',
                         width: '100%',
-                        padding: '6px',
+                        padding: '8px',
                         background: 'transparent',
                         border: '1px dashed rgba(0,212,255,0.4)',
                         borderRadius: '4px',
                         color: 'rgba(0,212,255,0.8)',
                         cursor: 'pointer',
-                        fontSize: '0.8rem'
+                        fontSize: '0.85rem',
+                        direction: 'rtl'
                       }}
                     >
-                      + Add Bible Reference (optional)
+                      + הוסף פסוק מהתנ״ך (אופציונלי)
                     </button>
                   )}
                 </div>
@@ -1433,22 +1439,23 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                 color: 'rgba(255,255,255,0.7)',
                 cursor: 'pointer',
                 fontSize: '0.9rem',
-                marginBottom: '16px'
+                marginBottom: '16px',
+                direction: 'rtl'
               }}
             >
-              + Add Another {type === 'sermon' ? 'Point' : 'Slide'}
+              + הוסף {type === 'sermon' ? 'נקודה' : 'שקף'} נוסף
             </button>
 
             {/* Translation Mode Options */}
             <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginBottom: '8px', textTransform: 'uppercase' }}>
-                Translation Options
+              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginBottom: '8px', direction: 'rtl', textAlign: 'right' }}>
+                אפשרויות תרגום
               </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '8px', direction: 'rtl' }}>
                 {[
-                  { mode: 'none' as const, label: 'No Translation', desc: 'Single language' },
-                  { mode: 'auto' as const, label: 'Auto-Generate', desc: 'AI translation' },
-                  { mode: 'manual' as const, label: 'Manual', desc: 'Enter yourself' }
+                  { mode: 'none' as const, label: 'ללא תרגום', desc: 'שפה אחת' },
+                  { mode: 'auto' as const, label: 'תרגום אוטומטי', desc: 'תרגום AI' },
+                  { mode: 'manual' as const, label: 'ידני', desc: 'הזן בעצמך' }
                 ].map((option) => (
                   <button
                     key={option.mode}
@@ -1474,22 +1481,7 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={() => setStep(1)}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  borderRadius: '8px',
-                  color: 'rgba(255,255,255,0.7)',
-                  cursor: 'pointer',
-                  fontSize: '0.9rem'
-                }}
-              >
-                Back
-              </button>
+            <div style={{ display: 'flex', gap: '10px', direction: 'rtl' }}>
               <button
                 onClick={() => translationMode === 'manual' ? setStep(3) : handleCreate()}
                 disabled={!title.trim() || !subtitles.some(s => s.subtitle.trim()) || creating}
@@ -1505,132 +1497,10 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                   fontWeight: 600
                 }}
               >
-                {creating ? 'Creating...' : translationMode === 'manual' ? 'Next: Add Translations' : `Create Presentation (${subtitles.filter(s => s.subtitle.trim()).length} slides)`}
+                {creating ? 'יוצר...' : translationMode === 'manual' ? 'הבא: הוסף תרגומים' : `צור מצגת (${subtitles.filter(s => s.subtitle.trim()).length} שקפים)`}
               </button>
-            </div>
-          </>
-        )}
-
-        {/* Step 3: Manual Translations */}
-        {step === 3 && (
-          <>
-            <h2 style={{ margin: '0 0 8px 0', color: 'white', fontSize: '1.4rem' }}>
-              Add Translations
-            </h2>
-            <p style={{ margin: '0 0 16px 0', color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>
-              Enter English translations for each field
-            </p>
-
-            <div style={{ maxHeight: '350px', overflowY: 'auto', marginBottom: '16px' }}>
-              {/* Title Translation */}
-              <div style={{
-                background: 'rgba(0,0,0,0.2)',
-                borderRadius: '8px',
-                padding: '12px',
-                marginBottom: '12px',
-                border: '1px solid rgba(255,255,255,0.1)'
-              }}>
-                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginBottom: '6px', textTransform: 'uppercase' }}>
-                  Main Title Translation
-                </div>
-                <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', marginBottom: '8px', direction: containsHebrew(title) ? 'rtl' : 'ltr' }}>
-                  Original: {title}
-                </div>
-                <input
-                  type="text"
-                  value={titleTranslation}
-                  onChange={(e) => setTitleTranslation(e.target.value)}
-                  placeholder="Enter English translation..."
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: '6px',
-                    color: 'white',
-                    fontSize: '0.9rem'
-                  }}
-                />
-              </div>
-
-              {/* Subtitle Translations */}
-              {subtitles.filter(s => s.subtitle.trim()).map((item, index) => (
-                <div
-                  key={`subtitle-translation-${index}-${(item.subtitle || '').substring(0, 15)}`}
-                  style={{
-                    background: 'rgba(0,0,0,0.2)',
-                    borderRadius: '8px',
-                    padding: '12px',
-                    marginBottom: '10px',
-                    border: '1px solid rgba(255,255,255,0.1)'
-                  }}
-                >
-                  <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginBottom: '6px', textTransform: 'uppercase' }}>
-                    {type === 'sermon' ? `Point ${index + 1}` : `Slide ${index + 1}`} Translation
-                  </div>
-
-                  {/* Subtitle */}
-                  <div style={{ marginBottom: '10px' }}>
-                    <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '4px', direction: containsHebrew(item.subtitle) ? 'rtl' : 'ltr' }}>
-                      Subtitle: {item.subtitle}
-                    </div>
-                    <input
-                      type="text"
-                      value={item.subtitleTranslation || ''}
-                      onChange={(e) => {
-                        const realIndex = subtitles.findIndex(s => s === item);
-                        setSubtitles(prev => prev.map((s, i) =>
-                          i === realIndex ? { ...s, subtitleTranslation: e.target.value } : s
-                        ));
-                      }}
-                      placeholder="Enter subtitle translation..."
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        background: 'rgba(0,0,0,0.3)',
-                        border: '1px solid rgba(255,255,255,0.15)',
-                        borderRadius: '6px',
-                        color: 'white',
-                        fontSize: '0.85rem'
-                      }}
-                    />
-                  </div>
-
-                  {/* Description (if exists) */}
-                  {item.description.trim() && (
-                    <div>
-                      <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '4px', direction: containsHebrew(item.description) ? 'rtl' : 'ltr' }}>
-                        Description: {item.description.length > 50 ? item.description.substring(0, 50) + '...' : item.description}
-                      </div>
-                      <input
-                        type="text"
-                        value={item.descriptionTranslation || ''}
-                        onChange={(e) => {
-                          const realIndex = subtitles.findIndex(s => s === item);
-                          setSubtitles(prev => prev.map((s, i) =>
-                            i === realIndex ? { ...s, descriptionTranslation: e.target.value } : s
-                          ));
-                        }}
-                        placeholder="Enter description translation..."
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          background: 'rgba(0,0,0,0.3)',
-                          border: '1px solid rgba(255,255,255,0.15)',
-                          borderRadius: '6px',
-                          color: 'white',
-                          fontSize: '0.85rem'
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px' }}>
               <button
-                onClick={() => setStep(2)}
+                onClick={() => setStep(1)}
                 style={{
                   flex: 1,
                   padding: '12px',
@@ -1642,8 +1512,139 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                   fontSize: '0.9rem'
                 }}
               >
-                Back
+                חזור
               </button>
+            </div>
+          </>
+        )}
+
+        {/* Step 3: Manual Translations */}
+        {step === 3 && (
+          <>
+            <h2 style={{ margin: '0 0 8px 0', color: 'white', fontSize: '1.4rem', direction: 'rtl', textAlign: 'right' }}>
+              הוסף תרגומים
+            </h2>
+            <p style={{ margin: '0 0 16px 0', color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', direction: 'rtl', textAlign: 'right' }}>
+              הזן תרגום לאנגלית עבור כל שדה
+            </p>
+
+            <div style={{ maxHeight: '350px', overflowY: 'auto', marginBottom: '16px' }}>
+              {/* Title Translation */}
+              <div style={{
+                background: 'rgba(0,0,0,0.2)',
+                borderRadius: '8px',
+                padding: '12px',
+                marginBottom: '12px',
+                border: '1px solid rgba(255,255,255,0.1)'
+              }}>
+                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginBottom: '6px', direction: 'rtl', textAlign: 'right' }}>
+                  תרגום כותרת ראשית
+                </div>
+                <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', marginBottom: '8px', direction: 'rtl', textAlign: 'right' }}>
+                  מקור: {title}
+                </div>
+                <input
+                  type="text"
+                  value={titleTranslation}
+                  onChange={(e) => setTitleTranslation(e.target.value)}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  placeholder="הזן תרגום לאנגלית..."
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    background: 'rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '6px',
+                    color: 'white',
+                    fontSize: '0.9rem',
+                    direction: 'ltr',
+                    textAlign: 'left'
+                  }}
+                />
+              </div>
+
+              {/* Subtitle Translations */}
+              {subtitles.filter(s => s.subtitle.trim()).map((item, index) => (
+                <div
+                  key={`subtitle-translation-${index}`}
+                  style={{
+                    background: 'rgba(0,0,0,0.2)',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    marginBottom: '10px',
+                    border: '1px solid rgba(255,255,255,0.1)'
+                  }}
+                >
+                  <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginBottom: '6px', direction: 'rtl', textAlign: 'right' }}>
+                    תרגום {type === 'sermon' ? `נקודה ${index + 1}` : `שקף ${index + 1}`}
+                  </div>
+
+                  {/* Subtitle */}
+                  <div style={{ marginBottom: '10px' }}>
+                    <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '4px', direction: 'rtl', textAlign: 'right' }}>
+                      כותרת משנה: {item.subtitle}
+                    </div>
+                    <input
+                      type="text"
+                      value={item.subtitleTranslation || ''}
+                      onChange={(e) => {
+                        const realIndex = subtitles.findIndex(s => s === item);
+                        setSubtitles(prev => prev.map((s, i) =>
+                          i === realIndex ? { ...s, subtitleTranslation: e.target.value } : s
+                        ));
+                      }}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      placeholder="הזן תרגום לכותרת משנה..."
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        background: 'rgba(0,0,0,0.3)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: '6px',
+                        color: 'white',
+                        fontSize: '0.85rem',
+                        direction: 'ltr',
+                        textAlign: 'left'
+                      }}
+                    />
+                  </div>
+
+                  {/* Description (if exists) */}
+                  {item.description.trim() && (
+                    <div>
+                      <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '4px', direction: 'rtl', textAlign: 'right' }}>
+                        תיאור: {item.description.length > 50 ? item.description.substring(0, 50) + '...' : item.description}
+                      </div>
+                      <input
+                        type="text"
+                        value={item.descriptionTranslation || ''}
+                        onChange={(e) => {
+                          const realIndex = subtitles.findIndex(s => s === item);
+                          setSubtitles(prev => prev.map((s, i) =>
+                            i === realIndex ? { ...s, descriptionTranslation: e.target.value } : s
+                          ));
+                        }}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        placeholder="הזן תרגום לתיאור..."
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          background: 'rgba(0,0,0,0.3)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: '6px',
+                          color: 'white',
+                          fontSize: '0.85rem',
+                          direction: 'ltr',
+                          textAlign: 'left'
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', direction: 'rtl' }}>
               <button
                 onClick={handleCreate}
                 disabled={creating}
@@ -1659,7 +1660,22 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                   fontWeight: 600
                 }}
               >
-                {creating ? 'Creating...' : `Create Presentation (${subtitles.filter(s => s.subtitle.trim()).length} slides)`}
+                {creating ? 'יוצר...' : `צור מצגת (${subtitles.filter(s => s.subtitle.trim()).length} שקפים)`}
+              </button>
+              <button
+                onClick={() => setStep(2)}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  color: 'rgba(255,255,255,0.7)',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem'
+                }}
+              >
+                חזור
               </button>
             </div>
           </>

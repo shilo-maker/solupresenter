@@ -226,6 +226,7 @@ const DisplayThemeOverrideModal = memo<DisplayThemeOverrideModalProps>(({
           boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
         }}
         onClick={e => e.stopPropagation()}
+        onMouseDown={() => window.focus()}
       >
         {/* Header */}
         <div style={{

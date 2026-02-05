@@ -2366,7 +2366,11 @@ textarea::placeholder {
   opacity: 1;
 }
 
-/* Song slide cards - show edit button on hover */
+/* Song slide cards - edit button hidden by default, shown on hover */
+.slide-edit-btn {
+  opacity: 0;
+}
+
 .song-slide-card:hover .slide-edit-btn {
   opacity: 1;
 }

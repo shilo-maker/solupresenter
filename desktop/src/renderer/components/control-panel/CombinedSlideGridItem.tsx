@@ -36,6 +36,8 @@ const CombinedSlideGridItem: React.FC<CombinedSlideGridItemProps> = memo(({
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault(); // Prevent text selection
     onSelect(combinedIndex);
+    // Blur so arrow keys work globally after clicking
+    (e.currentTarget as HTMLElement).blur();
   }, [combinedIndex, onSelect]);
 
   const verseType = item.verseType || '';

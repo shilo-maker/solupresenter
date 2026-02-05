@@ -48,6 +48,7 @@ const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        onMouseDown={() => window.focus()}
         style={{
           background: '#1a1a2e',
           borderRadius: '16px',

@@ -167,7 +167,7 @@ const AboutModal = memo<AboutModalProps>(({ onClose }) => {
 
   return (
     <div onClick={onClose} style={overlayStyle}>
-      <div onClick={(e) => e.stopPropagation()} style={contentStyle}>
+      <div onClick={(e) => e.stopPropagation()} onMouseDown={() => window.focus()} style={contentStyle}>
         {/* Header with logo */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
           <img

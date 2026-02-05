@@ -93,6 +93,7 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
           boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
         }}
         onClick={(e) => e.stopPropagation()}
+        onMouseDown={() => window.focus()}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF9800" strokeWidth="2">

@@ -31,6 +31,7 @@ const NewThemeTypeModal = memo<NewThemeTypeModalProps>(({ onClose }) => {
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        onMouseDown={() => window.focus()}
         style={{
           background: 'rgba(24, 24, 27, 0.98)',
           borderRadius: '16px',

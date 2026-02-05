@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo, memo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { hebrewBookNames, numberToHebrew } from '../../../utils/bibleUtils';
 
 // Slide colors defined outside component to avoid recreation on each render
@@ -68,7 +68,7 @@ interface PrayerEditorModalProps {
 
 const containsHebrew = (text: string): boolean => /[\u0590-\u05FF]/.test(text);
 
-const PrayerEditorModal = memo<PrayerEditorModalProps>(({
+const PrayerEditorModal: React.FC<PrayerEditorModalProps> = ({
   presentation,
   bibleBooks = [],
   onClose,
@@ -83,6 +83,10 @@ const PrayerEditorModal = memo<PrayerEditorModalProps>(({
   const [subtitles, setSubtitles] = useState<QuickModeSubtitle[]>(
     qmd?.subtitles?.length ? qmd.subtitles.map(s => ({ ...s })) : [{ subtitle: '', description: '' }]
   );
+  // TEST: Simple string state for first subtitle (like title)
+  const [firstSubtitle, setFirstSubtitle] = useState(qmd?.subtitles?.[0]?.subtitle || '');
+  // TEST2: Completely unrelated state
+  const [testInput, setTestInput] = useState('test value');
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState(1); // 1 = Hebrew, 2 = English translations
 
@@ -101,6 +105,31 @@ const PrayerEditorModal = memo<PrayerEditorModalProps>(({
   const [selectedBibleSuggestionIndex, setSelectedBibleSuggestionIndex] = useState(-1);
 
   const bibleSearchRef = useRef<string>('');
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // Block ALL keyboard events at the document level when this modal is open
+  // This prevents the global keyboard shortcuts from ever seeing the events
+  useEffect(() => {
+    const blockKeyboardEvents = (e: KeyboardEvent) => {
+      // Allow Escape to close the modal
+      if (e.key === 'Escape') return;
+
+      // For all other keys, stop propagation at capture phase
+      // This prevents useKeyboardShortcuts and useSlideKeyboardNav from seeing these events
+      e.stopPropagation();
+    };
+
+    // Add listener in capture phase (third argument true) so it runs before bubbling handlers
+    document.addEventListener('keydown', blockKeyboardEvents, true);
+    document.addEventListener('keyup', blockKeyboardEvents, true);
+    document.addEventListener('keypress', blockKeyboardEvents, true);
+
+    return () => {
+      document.removeEventListener('keydown', blockKeyboardEvents, true);
+      document.removeEventListener('keyup', blockKeyboardEvents, true);
+      document.removeEventListener('keypress', blockKeyboardEvents, true);
+    };
+  }, []);
 
   // Memoize original values to avoid recalculation on every render
   const originalValues = useMemo(() => ({
@@ -453,6 +482,7 @@ const PrayerEditorModal = memo<PrayerEditorModalProps>(({
       }}
     >
       <div
+        ref={modalRef}
         onClick={(e) => e.stopPropagation()}
         style={{
           background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.98), rgba(18, 18, 21, 0.98))',
@@ -506,9 +536,12 @@ const PrayerEditorModal = memo<PrayerEditorModalProps>(({
               Main Title (Hebrew)
             </div>
             <input
+              id="prayer-title-input"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
+              autoComplete="off"
               placeholder="הכנס כותרת ראשית..."
               dir="rtl"
               style={{
@@ -535,9 +568,12 @@ const PrayerEditorModal = memo<PrayerEditorModalProps>(({
               {title || '(No title)'}
             </div>
             <input
+              id="prayer-title-translation-input"
               type="text"
               value={titleTranslation}
               onChange={(e) => setTitleTranslation(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
+              autoComplete="off"
               placeholder="Enter English translation..."
               style={{
                 width: '100%',
@@ -559,7 +595,7 @@ const PrayerEditorModal = memo<PrayerEditorModalProps>(({
 
             return (
             <div
-              key={`subtitle-${index}-${(item.subtitle || '').substring(0, 15)}`}
+              key={`subtitle-${index}`}
               style={{
                 background: color.bg,
                 borderRadius: '8px',
@@ -594,61 +630,104 @@ const PrayerEditorModal = memo<PrayerEditorModalProps>(({
 
               {/* Step 1: Hebrew Content */}
               {step === 1 && (
-                <>
-                  {/* Subtitle (Hebrew) */}
+                <div>
+                {/* TEST INPUT - uses completely unrelated state */}
+                {index === 0 && (
                   <input
+                    id="test-unrelated-input"
                     type="text"
-                    value={item.subtitle}
-                    onChange={(e) => updateSubtitle(index, 'subtitle', e.target.value)}
-                    placeholder={type === 'sermon' ? `${index + 1}. הכנס כותרת נקודה` : 'הכנס כותרת משנה'}
-                    dir="rtl"
+                    value={testInput}
+                    onChange={(e) => setTestInput(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    placeholder="TEST INPUT - type here"
                     style={{
                       width: '100%',
                       padding: '8px',
-                      background: 'rgba(0,0,0,0.3)',
-                      border: '1px solid rgba(255,255,255,0.15)',
+                      background: 'rgba(255,0,0,0.3)',
+                      border: '2px solid red',
                       borderRadius: '6px',
                       color: 'white',
                       fontSize: '0.9rem',
-                      marginBottom: '8px',
-                      textAlign: 'right'
+                      marginBottom: '8px'
                     }}
                   />
+                )}
+                {/* Subtitle (Hebrew) - TEST: Using simple state for index 0 */}
+                <input
+                  id={`subtitle-hebrew-input-${index}`}
+                  type="text"
+                  value={index === 0 ? firstSubtitle : item.subtitle}
+                  onChange={(e) => {
+                    if (index === 0) {
+                      setFirstSubtitle(e.target.value);
+                    } else {
+                      const val = e.target.value;
+                      setSubtitles(prev => {
+                        const copy = [...prev];
+                        copy[index] = { ...copy[index], subtitle: val };
+                        return copy;
+                      });
+                    }
+                  }}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder={type === 'sermon' ? `${index + 1}. הכנס כותרת נקודה` : 'הכנס כותרת משנה'}
+                  dir="rtl"
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    background: 'rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '6px',
+                    color: 'white',
+                    fontSize: '0.9rem',
+                    marginBottom: '8px',
+                    textAlign: 'right'
+                  }}
+                />
 
-                  {/* Description (Hebrew) */}
-                  <textarea
-                    value={item.description || ''}
-                    onChange={(e) => updateSubtitle(index, 'description', e.target.value)}
-                    placeholder="תיאור (אופציונלי)"
-                    dir="rtl"
-                    rows={2}
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      background: 'rgba(0,0,0,0.3)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '6px',
-                      color: 'rgba(255,255,255,0.8)',
-                      fontSize: '0.85rem',
-                      resize: 'vertical',
-                      textAlign: 'right'
-                    }}
-                  />
-                </>
+                {/* Description (Hebrew) - Controlled textarea matching Step 2 pattern */}
+                <textarea
+                  id={`description-hebrew-input-${index}`}
+                  value={item.description || ''}
+                  onChange={(e) => updateSubtitle(index, 'description', e.target.value)}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="תיאור (אופציונלי)"
+                  dir="rtl"
+                  rows={2}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    background: 'rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '6px',
+                    color: 'rgba(255,255,255,0.8)',
+                    fontSize: '0.85rem',
+                    resize: 'vertical',
+                    textAlign: 'right'
+                  }}
+                />
+              </div>
               )}
 
               {/* Step 2: English Translations */}
               {step === 2 && (
-                <>
+                <div key={`step2-inputs-${index}`}>
                   {/* Show Hebrew subtitle as reference */}
                   <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', marginBottom: '6px', direction: 'rtl', textAlign: 'right' }}>
                     {item.subtitle || '(No subtitle)'}
                   </div>
                   {/* Subtitle Translation */}
                   <input
+                    id={`subtitle-translation-input-${index}`}
                     type="text"
                     value={item.subtitleTranslation || ''}
                     onChange={(e) => updateSubtitle(index, 'subtitleTranslation', e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    autoComplete="off"
                     placeholder="Subtitle translation (English)"
                     style={{
                       width: '100%',
@@ -664,15 +743,18 @@ const PrayerEditorModal = memo<PrayerEditorModalProps>(({
 
                   {/* Show Hebrew description as reference if exists */}
                   {item.description && (
-                    <>
+                    <div key={`step2-desc-${index}`}>
                       <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '6px', direction: 'rtl', textAlign: 'right' }}>
                         {item.description}
                       </div>
                       {/* Description Translation */}
                       <input
+                        id={`description-translation-input-${index}`}
                         type="text"
                         value={item.descriptionTranslation || ''}
                         onChange={(e) => updateSubtitle(index, 'descriptionTranslation', e.target.value)}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        autoComplete="off"
                         placeholder="Description translation (English)"
                         style={{
                           width: '100%',
@@ -684,9 +766,9 @@ const PrayerEditorModal = memo<PrayerEditorModalProps>(({
                           fontSize: '0.85rem'
                         }}
                       />
-                    </>
+                    </div>
                   )}
-                </>
+                </div>
               )}
 
               {/* Bible Reference Section - Only in Step 1 */}
@@ -747,6 +829,7 @@ const PrayerEditorModal = memo<PrayerEditorModalProps>(({
                       value={bibleSearch}
                       onChange={(e) => handleBibleSearch(e.target.value)}
                       onKeyDown={(e) => {
+                        e.stopPropagation();
                         if (!showBibleSuggestions || bibleSuggestions.length === 0) return;
                         if (e.key === 'ArrowDown') {
                           e.preventDefault();
@@ -1075,8 +1158,6 @@ const PrayerEditorModal = memo<PrayerEditorModalProps>(({
       </div>
     </div>
   );
-});
-
-PrayerEditorModal.displayName = 'PrayerEditorModal';
+};
 
 export default PrayerEditorModal;

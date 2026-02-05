@@ -107,6 +107,7 @@ const SlideEditorModal: React.FC<SlideEditorModalProps> = ({
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        onMouseDown={() => window.focus()}
         style={{
           background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.98), rgba(18, 18, 21, 0.98))',
           borderRadius: '16px',

@@ -95,6 +95,7 @@ const VirtualDisplayModal = memo<VirtualDisplayModalProps>(({
     >
       <div
         onClick={handleContentClick}
+        onMouseDown={() => window.focus()}
         style={{
           background: 'rgba(24, 24, 27, 0.98)',
           borderRadius: '12px',

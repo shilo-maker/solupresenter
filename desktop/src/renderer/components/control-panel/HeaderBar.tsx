@@ -1162,9 +1162,16 @@ const HeaderBar = memo<HeaderBarProps>(({
         {/* Modals that can be triggered from headless mode */}
         {showDisplaySettingsModal && displayForSettings && (
           <DisplaySettingsModal
+            isOpen={showDisplaySettingsModal}
+            onClose={handleCloseDisplaySettingsModal}
             display={displayForSettings}
-            onClose={handleCloseDisplaySettings}
+            themes={themes}
+            stageThemes={stageMonitorThemes}
+            bibleThemes={bibleThemes}
+            prayerThemes={prayerThemes}
+            obsThemes={obsThemes}
             onStart={handleDisplaySettingsStart}
+            onThemeOverrideChanged={handleThemeOverrideChanged}
           />
         )}
 

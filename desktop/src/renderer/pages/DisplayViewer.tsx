@@ -299,9 +299,6 @@ const DisplayViewer: React.FC = () => {
   };
 
   useEffect(() => {
-    // Report ready
-    window.displayAPI.reportReady();
-
     // Listen for slide updates
     const slideCleanup = window.displayAPI.onSlideUpdate((data) => {
       if (data.isBlank) {
@@ -557,6 +554,10 @@ const DisplayViewer: React.FC = () => {
       }
     });
 
+    // Report ready AFTER all listeners are registered to avoid race condition
+    // where main process sends initial state before listeners are set up
+    window.displayAPI.reportReady();
+
     return () => {
       slideCleanup();
       mediaCleanup();
@@ -639,10 +640,15 @@ const DisplayViewer: React.FC = () => {
       return;
     }
 
+    // Track if this effect is still active (prevents stale callbacks after unmount/re-render)
+    let isActive = true;
     let retryCount = 0;
     const MAX_RETRIES = 50; // 5 seconds max wait for YouTube API
 
     const createPlayer = () => {
+      // Check if effect was cleaned up while waiting
+      if (!isActive) return;
+
       if (!window.YT || !window.YT.Player || !youtubeContainerRef.current) {
         if (retryCount++ >= MAX_RETRIES) {
           log.error('YouTube API failed to load after maximum retries');
@@ -679,23 +685,31 @@ const DisplayViewer: React.FC = () => {
         },
         events: {
           onReady: async () => {
+            // Check if effect was cleaned up while player was loading
+            if (!isActive) return;
+
             youtubeReadyRef.current = true;
             // Request current position from preview and sync immediately
             try {
               const pos = await window.displayAPI.getYoutubePosition();
-              if (pos && youtubePlayerRef.current) {
+              // Check again after async operation
+              if (!isActive || !youtubePlayerRef.current) return;
+
+              if (pos) {
                 youtubePlayerRef.current.seekTo(pos.time, true);
                 if (pos.isPlaying) {
                   youtubePlayerRef.current.playVideo();
                 }
               }
             } catch (err) {
+              if (!isActive) return;
               log.error('Failed to get YouTube position:', err);
               // Fallback: just start playing
               youtubePlayerRef.current?.playVideo();
             }
           },
           onError: (event: any) => {
+            if (!isActive) return;
             const errorCodes: Record<number, string> = {
               2: 'Invalid video ID',
               5: 'Video cannot be played in HTML5 player',
@@ -714,6 +728,8 @@ const DisplayViewer: React.FC = () => {
     createPlayer();
 
     return () => {
+      // Mark effect as inactive to prevent stale callbacks
+      isActive = false;
       // Use the helper function for cleanup
       // Note: For normal state changes, cleanupYoutubePlayer is called BEFORE the state change
       // This cleanup is mainly for when the component unmounts or videoId changes to a new value

@@ -18,7 +18,7 @@ interface SlideGridItemProps {
   slideCode?: string;  // e.g., "V11", "C12"
 }
 
-// Static styles for edit button (shown via CSS :hover)
+// Static styles for edit button (opacity controlled via CSS :hover on parent)
 const editButtonStyle: React.CSSProperties = {
   position: 'absolute',
   top: '4px',
@@ -34,8 +34,8 @@ const editButtonStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  opacity: 0,
   transition: 'opacity 0.15s ease'
+  // Note: opacity is controlled via CSS class .slide-edit-btn
 };
 
 const SlideGridItem: React.FC<SlideGridItemProps> = memo(({
@@ -52,6 +52,8 @@ const SlideGridItem: React.FC<SlideGridItemProps> = memo(({
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault(); // Prevent text selection
     onSelect(index);
+    // Blur the element so arrow keys work globally after clicking
+    (e.currentTarget as HTMLElement).blur();
   }, [index, onSelect]);
 
   const handleEditClick = useCallback((e: React.MouseEvent) => {

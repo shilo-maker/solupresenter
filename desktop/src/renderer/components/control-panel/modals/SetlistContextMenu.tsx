@@ -121,6 +121,7 @@ const SetlistContextMenu: React.FC<SetlistContextMenuProps> = ({
           zIndex: 2001
         }}
         onClick={(e) => e.stopPropagation()}
+        onMouseDown={() => window.focus()}
       >
         {/* Edit Song */}
         {item.type === 'song' && item.song && (

@@ -302,9 +302,6 @@ const DisplayStage: React.FC = () => {
   const stageMessageFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // Report ready
-    window.displayAPI.reportReady();
-
     // Listen for slide updates
     const slideCleanup = window.displayAPI.onSlideUpdate((data) => {
       if (data.isBlank) {
@@ -404,6 +401,10 @@ const DisplayStage: React.FC = () => {
     const clockInterval = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
+
+    // Report ready AFTER all listeners are registered to avoid race condition
+    // where main process sends initial state before listeners are set up
+    window.displayAPI.reportReady();
 
     return () => {
       slideCleanup();

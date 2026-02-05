@@ -1,6 +1,6 @@
-# SoluPresenter Desktop
+# SoluCast Desktop
 
-A desktop version of SoluPresenter with native multi-display support for HDMI/projector outputs.
+A desktop version of SoluCast with native multi-display support for HDMI/projector outputs.
 
 ## Features
 
@@ -77,7 +77,7 @@ desktop/
 ## Multi-Display Usage
 
 1. Connect your display(s) to your computer
-2. Launch SoluPresenter Desktop
+2. Launch SoluCast Desktop
 3. In the "Displays" panel, you'll see all connected displays
 4. Click "Viewer" to open a fullscreen viewer window on that display
 5. Click "Stage" to open a stage monitor window

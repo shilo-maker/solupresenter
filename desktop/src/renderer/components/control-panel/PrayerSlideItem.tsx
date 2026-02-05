@@ -24,7 +24,11 @@ const PrayerSlideItem = memo<PrayerSlideItemProps>(({
 }) => {
   return (
     <div
-      onClick={onSelect}
+      onClick={(e) => {
+        onSelect();
+        // Blur so arrow keys work globally after clicking
+        (e.currentTarget as HTMLElement).blur();
+      }}
       style={{
         position: 'relative',
         border: isSelected ? '2px solid #00d4ff' : '2px solid rgba(255,255,255,0.1)',

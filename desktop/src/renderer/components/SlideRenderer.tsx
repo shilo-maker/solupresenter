@@ -644,7 +644,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
 
     setMeasuredHeights(newMeasuredHeights);
     setFlowPositions(newFlowPositions);
-  }, [mergedLinePositions, lineOrder, refHeight, slideData, sampleText, editorMode]);
+  }, [mergedLinePositions, lineOrder, refHeight, slideData, sampleText, editorMode, displayMode]);
 
   // Use the merged positions for rendering (already includes defaults and reference positions)
   const effectiveLinePositions = mergedLinePositions;

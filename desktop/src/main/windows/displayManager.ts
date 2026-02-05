@@ -130,7 +130,7 @@ export class DisplayManager {
   private currentVideoState: {
     currentTime: number;
     isPlaying: boolean;
-    playStartedAt?: number;  // Timestamp when play started (for calculating current position)
+    lastReportedTime?: number;  // Last time position was reported from display (for sync)
   } | null = null;
 
   private currentYoutubeState: {
@@ -833,34 +833,24 @@ export class DisplayManager {
     log.debug(' broadcastVideoCommand:', command.type, 'displays:', this.displays.size);
 
     // Track video state for late-joining displays
+    // Note: Actual position is updated via updateVideoPosition() from display reports
     switch (command.type) {
       case 'play':
-        this.currentVideoState = { currentTime: 0, isPlaying: true, playStartedAt: Date.now() };
+        this.currentVideoState = { currentTime: 0, isPlaying: true };
         break;
       case 'pause':
         if (this.currentVideoState) {
-          // Calculate current position before pausing
-          if (this.currentVideoState.isPlaying && this.currentVideoState.playStartedAt) {
-            const elapsed = (Date.now() - this.currentVideoState.playStartedAt) / 1000;
-            this.currentVideoState.currentTime += elapsed;
-          }
           this.currentVideoState.isPlaying = false;
-          this.currentVideoState.playStartedAt = undefined;
         }
         break;
       case 'resume':
         if (this.currentVideoState) {
           this.currentVideoState.isPlaying = true;
-          this.currentVideoState.playStartedAt = Date.now();
         }
         break;
       case 'seek':
         if (this.currentVideoState && typeof command.time === 'number' && isFinite(command.time) && command.time >= 0) {
           this.currentVideoState.currentTime = command.time;
-          // Reset play start time if playing
-          if (this.currentVideoState.isPlaying) {
-            this.currentVideoState.playStartedAt = Date.now();
-          }
         }
         break;
       case 'stop':
@@ -898,7 +888,7 @@ export class DisplayManager {
 
       // Initialize video state when video starts - paused until display is ready
       if (mediaData.type === 'video') {
-        this.currentVideoState = { currentTime: 0, isPlaying: false, playStartedAt: undefined };
+        this.currentVideoState = { currentTime: 0, isPlaying: false };
         log.debug(' broadcastMedia - initialized video state (paused, waiting for display ready)');
       }
     } else {
@@ -932,20 +922,31 @@ export class DisplayManager {
   }
 
   /**
-   * Calculate the current video position based on tracked state
+   * Get the current video position based on last reported state
    * Used both internally and by IPC handler for display sync
    */
   getVideoPosition(): { time: number; isPlaying: boolean } | null {
     if (!this.currentVideoState) return null;
 
-    let time = this.currentVideoState.currentTime;
-    if (this.currentVideoState.isPlaying && this.currentVideoState.playStartedAt) {
-      // Calculate elapsed time since playback started
-      const elapsed = (Date.now() - this.currentVideoState.playStartedAt) / 1000;
-      time += elapsed;
-    }
+    return {
+      time: this.currentVideoState.currentTime,
+      isPlaying: this.currentVideoState.isPlaying
+    };
+  }
 
-    return { time, isPlaying: this.currentVideoState.isPlaying };
+  /**
+   * Update video position from display window reports
+   * This prevents drift by using actual reported position instead of calculating from timestamps
+   */
+  updateVideoPosition(time: number, isPlaying?: boolean): void {
+    if (!this.currentVideoState) return;
+    if (typeof time === 'number' && isFinite(time) && time >= 0) {
+      this.currentVideoState.currentTime = time;
+      this.currentVideoState.lastReportedTime = Date.now();
+      if (typeof isPlaying === 'boolean') {
+        this.currentVideoState.isPlaying = isPlaying;
+      }
+    }
   }
 
   /**

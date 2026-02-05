@@ -178,6 +178,7 @@ const DisplaySettingsModal = memo<DisplaySettingsModalProps>(({
           boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
         }}
         onClick={handleContentClick}
+        onMouseDown={() => window.focus()}
       >
         {/* Header */}
         <div style={{

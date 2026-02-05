@@ -3064,11 +3064,11 @@ const ControlPanel: React.FC = () => {
               </div>
             )}
 
-            {/* Resource Content */}
+            {/* Resource Content - Conditional rendering for performance (unmounts inactive panels) */}
             <div style={{ flex: 1, overflow: 'auto' }}>
               {/* Songs Panel */}
-              <div style={{ display: activeResourcePanel === 'songs' ? 'contents' : 'none' }}>
-                <React.Suspense fallback={null}>
+              {activeResourcePanel === 'songs' && (
+                <React.Suspense fallback={<div style={{ padding: '20px', color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>Loading...</div>}>
                   <SongsPanel
                     songs={songs}
                     selectedSong={selectedSong}
@@ -3083,11 +3083,11 @@ const ControlPanel: React.FC = () => {
                     onDragEnd={handleSongDragEnd}
                   />
                 </React.Suspense>
-              </div>
+              )}
 
-              {/* Media Panel */}
+              {/* Media Panel - kept mounted with display:none to avoid expensive IPC remounts */}
               <div style={{ display: activeResourcePanel === 'media' ? 'contents' : 'none' }}>
-                <React.Suspense fallback={null}>
+                <React.Suspense fallback={<div style={{ padding: '20px', color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>Loading...</div>}>
                 <MediaPanel
                   youtubeUrlInput={youtubeUrlInput}
                   youtubeLoading={youtubeLoading}
@@ -3108,8 +3108,8 @@ const ControlPanel: React.FC = () => {
               </div>
 
               {/* Tools Panel */}
-              <div style={{ display: activeResourcePanel === 'tools' ? 'contents' : 'none' }}>
-                <React.Suspense fallback={null}>
+              {activeResourcePanel === 'tools' && (
+                <React.Suspense fallback={<div style={{ padding: '20px', color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>Loading...</div>}>
                 <ToolsPanel
                   countdownTargetTime={countdownTargetTime}
                   countdownRemaining={countdownRemaining}
@@ -3145,11 +3145,11 @@ const ControlPanel: React.FC = () => {
                   onStopStopwatchBroadcast={stopStopwatchBroadcast}
                 />
                 </React.Suspense>
-              </div>
+              )}
 
               {/* Bible Panel */}
-              <div style={{ display: activeResourcePanel === 'bible' ? 'contents' : 'none' }}>
-                <React.Suspense fallback={null}>
+              {activeResourcePanel === 'bible' && (
+                <React.Suspense fallback={<div style={{ padding: '20px', color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>Loading...</div>}>
                 <BiblePanel
                   bibleBooks={bibleBooks}
                   selectedBibleBook={selectedBibleBook}
@@ -3164,11 +3164,11 @@ const ControlPanel: React.FC = () => {
                   onAddBibleToSetlist={addBibleToSetlist}
                 />
                 </React.Suspense>
-              </div>
+              )}
 
               {/* Presentations Panel */}
-              <div style={{ display: activeResourcePanel === 'presentations' ? 'contents' : 'none' }}>
-                <React.Suspense fallback={null}>
+              {activeResourcePanel === 'presentations' && (
+                <React.Suspense fallback={<div style={{ padding: '20px', color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>Loading...</div>}>
                 <PresentationsPanel
                   presentations={presentations}
                   selectedPresentation={selectedPresentation}
@@ -3182,7 +3182,7 @@ const ControlPanel: React.FC = () => {
                   onNewPresentation={handleNewPresentation}
                 />
                 </React.Suspense>
-              </div>
+              )}
             </div>
           </div>
         </div>{/* End of Top Row */}

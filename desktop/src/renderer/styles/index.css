@@ -2362,6 +2362,15 @@ textarea::placeholder {
   box-shadow: var(--shadow-md);
 }
 
+.slide-grid-item:hover .slide-edit-btn {
+  opacity: 1;
+}
+
+/* Song slide cards - show edit button on hover */
+.song-slide-card:hover .slide-edit-btn {
+  opacity: 1;
+}
+
 .slide-grid-item.selected {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px var(--color-primary-glow);

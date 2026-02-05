@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useState, useMemo } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 
 interface SlideData {
   originalText?: string;
@@ -18,6 +18,26 @@ interface SlideGridItemProps {
   slideCode?: string;  // e.g., "V11", "C12"
 }
 
+// Static styles for edit button (shown via CSS :hover)
+const editButtonStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: '4px',
+  left: '4px',
+  background: 'rgba(255, 255, 255, 0.15)',
+  border: 'none',
+  borderRadius: '4px',
+  padding: '4px 6px',
+  color: 'white',
+  cursor: 'pointer',
+  fontSize: '0.7rem',
+  zIndex: 10,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  opacity: 0,
+  transition: 'opacity 0.15s ease'
+};
+
 const SlideGridItem: React.FC<SlideGridItemProps> = memo(({
   slide,
   index,
@@ -28,8 +48,6 @@ const SlideGridItem: React.FC<SlideGridItemProps> = memo(({
   onEdit,
   slideCode
 }) => {
-  const [isHovered, setIsHovered] = useState(false);
-
   // Use onMouseDown instead of onClick for instant response (no wait for mouseup)
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault(); // Prevent text selection
@@ -41,9 +59,6 @@ const SlideGridItem: React.FC<SlideGridItemProps> = memo(({
     e.preventDefault();
     onEdit?.(index);
   }, [index, onEdit]);
-
-  const handleMouseEnter = useCallback(() => setIsHovered(true), []);
-  const handleMouseLeave = useCallback(() => setIsHovered(false), []);
 
   const containerStyle = useMemo(() => ({
     position: 'relative' as const,
@@ -70,30 +85,15 @@ const SlideGridItem: React.FC<SlideGridItemProps> = memo(({
   return (
     <div
       onMouseDown={handleMouseDown}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
       style={containerStyle}
+      className="song-slide-card"
     >
-      {/* Edit button - appears on hover */}
-      {isHovered && onEdit && (
+      {/* Edit button - shown via CSS :hover on parent */}
+      {onEdit && (
         <button
           onMouseDown={handleEditClick}
-          style={{
-            position: 'absolute',
-            top: '4px',
-            left: '4px',
-            background: 'rgba(255, 255, 255, 0.15)',
-            border: 'none',
-            borderRadius: '4px',
-            padding: '4px 6px',
-            color: 'white',
-            cursor: 'pointer',
-            fontSize: '0.7rem',
-            zIndex: 10,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
+          style={editButtonStyle}
+          className="slide-edit-btn"
           title="Edit slide"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

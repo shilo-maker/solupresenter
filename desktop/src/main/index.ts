@@ -1,29 +1,16 @@
-import { app, BrowserWindow, ipcMain, screen, dialog, protocol, net } from 'electron';
+/**
+ * MINIMAL BOOTSTRAP - Shows splash screen instantly, then loads the app
+ *
+ * This file is intentionally minimal to ensure the splash screen appears
+ * within milliseconds of the user clicking the app icon.
+ *
+ * Heavy imports (database, IPC, services) are loaded AFTER the window is visible.
+ */
+import { app, BrowserWindow, screen, protocol } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as http from 'http';
-import { DisplayManager, setLocalServerPort } from './windows/displayManager';
-import { registerIpcHandlers, setSocketControlWindow } from './ipc';
-import { initDatabase, flushDatabase } from './database';
-import { initTranslator } from './services/mlTranslation';
-import { cleanupOrphanedFiles } from './services/mediaProcessor';
 
-// Local server for production (needed for YouTube to work - requires http:// origin)
-let localServer: http.Server | null = null;
-let localServerPort = 0;
-
-// Export getter function for localServerPort (ES modules don't provide live bindings for reassigned let variables)
-export function getLocalServerPort(): number {
-  return localServerPort;
-}
-
-// Enable hardware acceleration for video
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
-app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-zero-copy');
-app.commandLine.appendSwitch('enable-accelerated-video-decode');
-
-// Register custom protocols
+// Register custom protocols BEFORE app is ready (required by Electron)
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'media',
@@ -47,64 +34,36 @@ protocol.registerSchemesAsPrivileged([
   }
 ]);
 
-// Global references
+// Enable hardware acceleration for video
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('enable-accelerated-video-decode');
+
+// Global window reference
 let controlWindow: BrowserWindow | null = null;
-let displayManager: DisplayManager;
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
-// Cache icon path at module level (computed once on first call)
-let cachedIconPath: string | null = null;
-
-function getIconPath(): string {
-  if (cachedIconPath !== null) return cachedIconPath;
-
-  const iconExt = process.platform === 'win32' ? 'favicon.ico' : 'logo512.png';
-  const possiblePaths = [
-    path.join(process.resourcesPath || '', 'icons', iconExt),
-    path.join(__dirname, '..', '..', '..', 'resources', 'icons', iconExt),
-    path.join(__dirname, '..', '..', 'resources', 'icons', iconExt),
-    path.join(app.getAppPath(), 'resources', 'icons', iconExt),
+// Load splash logo as base64 at startup (avoids esbuild truncation issues with inline base64)
+function getSplashLogoDataUri(): string {
+  const logoPaths = [
+    path.join(process.resourcesPath || '', 'icons', 'splash_logo.png'),
+    path.join(__dirname, '..', '..', '..', 'resources', 'icons', 'splash_logo.png'),
+    path.join(__dirname, '..', '..', 'resources', 'icons', 'splash_logo.png'),
+    path.join(app.getAppPath(), 'resources', 'icons', 'splash_logo.png'),
   ];
-
-  for (const p of possiblePaths) {
+  for (const p of logoPaths) {
     if (fs.existsSync(p)) {
-      cachedIconPath = p;
-      return cachedIconPath;
+      const buf = fs.readFileSync(p);
+      return 'data:image/png;base64,' + buf.toString('base64');
     }
   }
-  cachedIconPath = '';
-  return cachedIconPath;
-}
-
-/**
- * Check if Vite dev server is ready
- */
-async function isViteReady(): Promise<boolean> {
-  return new Promise((resolve) => {
-    const req = http.get('http://localhost:5173', (res) => {
-      resolve(res.statusCode === 200);
-    });
-    req.on('error', () => resolve(false));
-    req.setTimeout(500, () => {
-      req.destroy();
-      resolve(false);
-    });
-  });
-}
-
-/**
- * Wait for Vite dev server with polling
- */
-async function waitForVite(maxAttempts = 100): Promise<boolean> {
-  for (let i = 0; i < maxAttempts; i++) {
-    if (await isViteReady()) return true;
-    await new Promise(r => setTimeout(r, 100));
-  }
-  return false;
+  return '';
 }
 
 // Professional splash screen HTML - inline for instant load (no file I/O latency)
+const splashLogoUri = getSplashLogoDataUri();
 const splashScreenHTML = `<!DOCTYPE html>
 <html>
 <head>
@@ -122,7 +81,6 @@ const splashScreenHTML = `<!DOCTYPE html>
       overflow: hidden;
       position: relative;
     }
-    /* Animated background gradient */
     body::before {
       content: '';
       position: absolute;
@@ -146,7 +104,6 @@ const splashScreenHTML = `<!DOCTYPE html>
       align-items: center;
       gap: 32px;
     }
-    /* Logo container with glow effect */
     .logo-container {
       position: relative;
       width: 100px;
@@ -173,7 +130,6 @@ const splashScreenHTML = `<!DOCTYPE html>
       position: relative;
       z-index: 1;
     }
-    /* App name with gradient */
     .app-name {
       font-size: 28px;
       font-weight: 700;
@@ -183,7 +139,6 @@ const splashScreenHTML = `<!DOCTYPE html>
       background-clip: text;
       letter-spacing: -0.5px;
     }
-    /* Loading bar */
     .loader-container {
       width: 200px;
       height: 3px;
@@ -206,7 +161,6 @@ const splashScreenHTML = `<!DOCTYPE html>
       50% { background-position: 100% 50%; }
       100% { left: 100%; background-position: 0% 50%; }
     }
-    /* Loading text */
     .loading-text {
       color: rgba(255, 255, 255, 0.5);
       font-size: 13px;
@@ -224,7 +178,6 @@ const splashScreenHTML = `<!DOCTYPE html>
       75% { content: '...'; }
       100% { content: ''; }
     }
-    /* Version badge */
     .version {
       position: absolute;
       bottom: 24px;
@@ -238,17 +191,7 @@ const splashScreenHTML = `<!DOCTYPE html>
   <div class="content">
     <div class="logo-container">
       <div class="logo-glow"></div>
-      <svg class="logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#06b6d4"/>
-            <stop offset="100%" style="stop-color:#3b82f6"/>
-          </linearGradient>
-        </defs>
-        <circle cx="50" cy="50" r="45" stroke="url(#logoGrad)" stroke-width="3" fill="none" opacity="0.3"/>
-        <circle cx="50" cy="50" r="35" stroke="url(#logoGrad)" stroke-width="2" fill="none" opacity="0.5"/>
-        <path d="M40 30 L70 50 L40 70 Z" fill="url(#logoGrad)"/>
-      </svg>
+      <img class="logo" src="${splashLogoUri}" alt="SoluCast" style="border-radius: 16px;" />
     </div>
     <div class="app-name">SoluCast</div>
     <div class="loader-container">
@@ -260,11 +203,33 @@ const splashScreenHTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
-function createControlWindow(): void {
+// Get icon path (cached)
+let cachedIconPath: string | null = null;
+function getIconPath(): string {
+  if (cachedIconPath !== null) return cachedIconPath;
+  const iconExt = process.platform === 'win32' ? 'favicon.ico' : 'logo512.png';
+  const possiblePaths = [
+    path.join(process.resourcesPath || '', 'icons', iconExt),
+    path.join(__dirname, '..', '..', '..', 'resources', 'icons', iconExt),
+    path.join(__dirname, '..', '..', 'resources', 'icons', iconExt),
+    path.join(app.getAppPath(), 'resources', 'icons', iconExt),
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      cachedIconPath = p;
+      return cachedIconPath;
+    }
+  }
+  cachedIconPath = '';
+  return cachedIconPath;
+}
+
+// Create the window with splash screen - FAST, no heavy imports
+function createWindowWithSplash(onShown: () => void): BrowserWindow {
   const primaryDisplay = screen.getPrimaryDisplay();
   const iconPath = getIconPath();
 
-  controlWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     x: primaryDisplay.bounds.x + 50,
     y: primaryDisplay.bounds.y + 50,
     width: 1400,
@@ -284,773 +249,23 @@ function createControlWindow(): void {
     }
   });
 
-  controlWindow.setMenu(null);
+  win.setMenu(null);
 
-  // Show window immediately when splash screen DOM is ready (no white flash)
-  controlWindow.webContents.once('dom-ready', () => {
-    controlWindow?.show();
+  // Show window as soon as splash DOM is ready, THEN load heavy modules
+  win.webContents.once('dom-ready', () => {
+    win.show();
+    // Use setImmediate to ensure the window is actually painted before loading heavy modules
+    setImmediate(onShown);
   });
 
-  // Load splash screen first (instant - no file I/O)
-  controlWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(splashScreenHTML)}`);
+  // Load splash screen (instant - data URL, no file I/O)
+  win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(splashScreenHTML)}`);
 
-  if (isDev) {
-    // Dev mode: poll for Vite and load when ready
-    waitForVite().then((ready) => {
-      if (ready && controlWindow && !controlWindow.isDestroyed()) {
-        controlWindow.loadURL('http://localhost:5173');
-        controlWindow.webContents.openDevTools({ mode: 'detach' });
-      }
-    });
-  } else {
-    // Production: load main app after a brief moment to show splash
-    setTimeout(() => {
-      if (controlWindow && !controlWindow.isDestroyed()) {
-        controlWindow.loadURL(`http://127.0.0.1:${localServerPort}/`);
-      }
-    }, 300);
-  }
-
-  controlWindow.on('closed', () => {
-    controlWindow = null;
-    // Close all display windows when control window closes
-    displayManager.closeAllDisplays();
-    app.quit();
-  });
+  return win;
 }
 
-/**
- * Start local HTTP server for serving renderer files in production
- * This is needed because YouTube requires http:// origin for embedding
- */
-async function startLocalServer(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const rendererPath = path.join(__dirname, '../../renderer');
-
-    const mimeTypes: Record<string, string> = {
-      '.html': 'text/html',
-      '.js': 'application/javascript',
-      '.css': 'text/css',
-      '.json': 'application/json',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.gif': 'image/gif',
-      '.svg': 'image/svg+xml',
-      '.ico': 'image/x-icon',
-      '.woff': 'font/woff',
-      '.woff2': 'font/woff2',
-      '.ttf': 'font/ttf',
-      '.eot': 'application/vnd.ms-fontobject',
-      '.mp4': 'video/mp4',
-      '.webm': 'video/webm',
-      '.mp3': 'audio/mpeg',
-      '.wav': 'audio/wav'
-    };
-
-    // Whitelist of allowed media extensions
-    const allowedMediaExtensions = new Set([
-      '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg',
-      '.mp4', '.webm', '.mov', '.avi', '.mkv', '.wmv', '.m4v',
-      '.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac'
-    ]);
-
-    localServer = http.createServer(async (req, res) => {
-      const reqUrl = req.url || '/';
-      console.log('[LocalServer] Incoming request:', req.method, reqUrl.substring(0, 100));
-
-      // Add CORS headers for all responses (needed for display windows in dev mode)
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type');
-      res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
-
-      // Handle preflight OPTIONS requests
-      if (req.method === 'OPTIONS') {
-        res.writeHead(204);
-        res.end();
-        return;
-      }
-
-      // Handle media requests: /media/<base64-encoded-path>
-      if (reqUrl.startsWith('/media/')) {
-        try {
-          const encodedPath = reqUrl.substring(7); // Remove '/media/'
-          // Convert URL-safe base64 back to standard base64
-          // Replace - with +, _ with /, and add padding if needed
-          let base64Path = decodeURIComponent(encodedPath)
-            .replace(/-/g, '+')
-            .replace(/_/g, '/');
-          // Add padding if needed
-          while (base64Path.length % 4 !== 0) {
-            base64Path += '=';
-          }
-          const mediaPath = Buffer.from(base64Path, 'base64').toString('utf8');
-          console.log('[LocalServer] Media request for:', mediaPath);
-
-          // Security: validate file extension
-          const ext = path.extname(mediaPath).toLowerCase();
-          if (!allowedMediaExtensions.has(ext)) {
-            console.error('[LocalServer] Disallowed file extension:', ext);
-            res.writeHead(403);
-            res.end('Forbidden');
-            return;
-          }
-
-          // Security: ensure path is absolute and doesn't contain traversal
-          if (!path.isAbsolute(mediaPath) || mediaPath.includes('..')) {
-            console.error('[LocalServer] Invalid media path:', mediaPath);
-            res.writeHead(403);
-            res.end('Forbidden');
-            return;
-          }
-
-          // Check if file exists
-          if (!fs.existsSync(mediaPath)) {
-            console.error('[LocalServer] Media file not found:', mediaPath);
-            res.writeHead(404);
-            res.end('Not Found');
-            return;
-          }
-
-          const stat = await fs.promises.stat(mediaPath);
-          const fileSize = stat.size;
-          const contentType = mimeTypes[ext] || 'application/octet-stream';
-          console.log('[LocalServer] File size:', fileSize, 'Content-Type:', contentType);
-
-          // Handle range requests for video/audio streaming
-          const rangeHeader = req.headers.range;
-          console.log('[LocalServer] Range header:', rangeHeader);
-
-          if (rangeHeader) {
-            const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-            if (rangeMatch) {
-              const start = parseInt(rangeMatch[1], 10);
-              const hasEndByte = rangeMatch[2] && rangeMatch[2].length > 0;
-              let end = hasEndByte ? parseInt(rangeMatch[2], 10) : fileSize - 1;
-              if (end >= fileSize) end = fileSize - 1;
-              if (start >= fileSize) {
-                res.writeHead(416, { 'Content-Range': `bytes */${fileSize}` });
-                res.end();
-                return;
-              }
-              const chunkSize = end - start + 1;
-              console.log('[LocalServer] Serving range:', start, '-', end, 'chunk size:', chunkSize);
-
-              // Always use 206 for range requests - this tells the browser we support seeking
-              res.writeHead(206, {
-                'Content-Type': contentType,
-                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-                'Accept-Ranges': 'bytes',
-                'Content-Length': chunkSize
-              });
-
-              // Manual streaming with explicit drain handling
-              const fileStream = fs.createReadStream(mediaPath, { start, end, highWaterMark: 1024 * 1024 }); // 1MB chunks
-              let bytesSent = 0;
-              let isClientConnected = true;
-
-              res.on('close', () => {
-                console.log('[LocalServer] Response closed, bytes sent:', bytesSent);
-                isClientConnected = false;
-                fileStream.destroy();
-              });
-
-              res.on('error', (err) => {
-                console.error('[LocalServer] Response error:', err);
-                isClientConnected = false;
-                fileStream.destroy();
-              });
-
-              fileStream.on('error', (err) => {
-                console.error('[LocalServer] File stream error:', err);
-                if (!res.headersSent) {
-                  res.writeHead(500);
-                }
-                res.end();
-              });
-
-              fileStream.on('data', (chunk) => {
-                if (!isClientConnected) {
-                  fileStream.destroy();
-                  return;
-                }
-
-                bytesSent += chunk.length;
-                if (bytesSent <= 1000000 || bytesSent % 10000000 < 1100000) {
-                  console.log('[LocalServer] Sending chunk, total bytes:', bytesSent);
-                }
-
-                const canContinue = res.write(chunk);
-                if (!canContinue) {
-                  // Backpressure - pause until drained
-                  fileStream.pause();
-                  res.once('drain', () => {
-                    if (isClientConnected) {
-                      fileStream.resume();
-                    }
-                  });
-                }
-              });
-
-              fileStream.on('end', () => {
-                console.log('[LocalServer] Stream complete, total bytes:', bytesSent);
-                res.end();
-              });
-
-              return;
-            }
-          }
-
-          // Full file response - no Range header (rare case)
-          console.log('[LocalServer] Serving full file (no range), size:', fileSize);
-          res.writeHead(200, {
-            'Content-Type': contentType,
-            'Content-Length': fileSize,
-            'Accept-Ranges': 'bytes'
-          });
-
-          // Use same manual streaming for consistency
-          const fileStream = fs.createReadStream(mediaPath, { highWaterMark: 1024 * 1024 });
-          let bytesSent = 0;
-          let isClientConnected = true;
-
-          res.on('close', () => {
-            console.log('[LocalServer] Response closed (full file), bytes sent:', bytesSent);
-            isClientConnected = false;
-            fileStream.destroy();
-          });
-
-          res.on('error', (err) => {
-            console.error('[LocalServer] Response error (full file):', err);
-            isClientConnected = false;
-            fileStream.destroy();
-          });
-
-          fileStream.on('error', (err) => {
-            console.error('[LocalServer] File stream error (full file):', err);
-            if (!res.headersSent) {
-              res.writeHead(500);
-            }
-            res.end();
-          });
-
-          fileStream.on('data', (chunk) => {
-            if (!isClientConnected) {
-              fileStream.destroy();
-              return;
-            }
-            bytesSent += chunk.length;
-            if (bytesSent <= 1000000 || bytesSent % 10000000 < 1100000) {
-              console.log('[LocalServer] Full file chunk, total bytes:', bytesSent);
-            }
-            const canContinue = res.write(chunk);
-            if (!canContinue) {
-              fileStream.pause();
-              res.once('drain', () => {
-                if (isClientConnected) {
-                  fileStream.resume();
-                }
-              });
-            }
-          });
-
-          fileStream.on('end', () => {
-            console.log('[LocalServer] Full file stream complete, total bytes:', bytesSent);
-            res.end();
-          });
-
-          return;
-        } catch (error) {
-          console.error('[LocalServer] Media request error:', error);
-          res.writeHead(500);
-          res.end('Internal Server Error');
-          return;
-        }
-      }
-
-      let filePath = reqUrl;
-
-      // Handle hash routes - serve index.html
-      if (filePath.includes('#')) {
-        filePath = '/index.html';
-      }
-
-      // Handle root and paths without extension
-      if (filePath === '/' || !path.extname(filePath)) {
-        filePath = '/index.html';
-      }
-
-      const fullPath = path.join(rendererPath, filePath);
-
-      // Security check
-      const normalizedPath = path.normalize(fullPath);
-      if (!normalizedPath.startsWith(path.normalize(rendererPath))) {
-        res.writeHead(403);
-        res.end('Forbidden');
-        return;
-      }
-
-      fs.readFile(fullPath, (err, data) => {
-        try {
-          if (err) {
-            // Try index.html for SPA routing
-            fs.readFile(path.join(rendererPath, 'index.html'), (err2, data2) => {
-              try {
-                if (err2) {
-                  res.writeHead(404);
-                  res.end('Not Found');
-                } else {
-                  res.writeHead(200, { 'Content-Type': 'text/html' });
-                  res.end(data2);
-                }
-              } catch (responseError) {
-                console.error('[LocalServer] Error sending fallback response:', responseError);
-              }
-            });
-            return;
-          }
-
-          const ext = path.extname(fullPath).toLowerCase();
-          const contentType = mimeTypes[ext] || 'application/octet-stream';
-          res.writeHead(200, { 'Content-Type': contentType });
-          res.end(data);
-        } catch (responseError) {
-          console.error('[LocalServer] Error sending response:', responseError);
-        }
-      });
-    });
-
-    // Find available port starting from 45678
-    const tryPort = (port: number) => {
-      localServer!.listen(port, '127.0.0.1', () => {
-        localServerPort = port;
-        resolve(port);
-      }).on('error', (err: any) => {
-        if (err.code === 'EADDRINUSE') {
-          tryPort(port + 1);
-        } else {
-          reject(err);
-        }
-      });
-    };
-
-    tryPort(45678);
-  });
-}
-
-async function initializeApp(): Promise<void> {
-  const startTime = Date.now();
-
-  // Initialize display manager early (synchronous, fast)
-  displayManager = new DisplayManager();
-
-  // Register IPC handlers early so they're ready when window loads
-  registerIpcHandlers(displayManager);
-
-  // Start database initialization (don't await yet)
-  const dbPromise = initDatabase().catch((err) => {
-    console.error('Database initialization failed:', err);
-  });
-
-  // Cleanup orphaned media files from previous crashes (background)
-  cleanupOrphanedFiles().catch((err) => {
-    console.warn('Media cleanup warning:', err);
-  });
-
-  // Initialize ML translator in background (downloads model on first run)
-  initTranslator().then((success) => {
-    if (success) {
-      console.log('ML Translation model ready');
-    } else {
-      console.warn('ML Translation model failed to load, will use dictionary fallback');
-    }
-  }).catch((err) => {
-    console.warn('ML Translation initialization error:', err);
-  });
-
-  // Register media protocol handler with streaming support
-
-  // Whitelist of allowed file extensions for security
-  const ALLOWED_MEDIA_EXTENSIONS = new Set([
-    // Images
-    '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg',
-    // Videos
-    '.mp4', '.webm', '.mov', '.avi', '.mkv', '.wmv', '.m4v',
-    // Audio
-    '.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac'
-  ]);
-
-  try {
-    protocol.handle('media', async (request) => {
-      try {
-        // Extract file path from media:// URL
-        const url = new URL(request.url);
-        console.log('[media protocol] Request URL:', request.url);
-        console.log('[media protocol] pathname:', url.pathname);
-
-        let filePath = decodeURIComponent(url.pathname);
-        console.log('[media protocol] Decoded pathname:', filePath);
-
-        // Remove /file/ prefix if present (used in media://file/C:/path format)
-        if (filePath.startsWith('/file/')) {
-          filePath = filePath.substring(6); // Remove '/file/'
-          console.log('[media protocol] After removing /file/:', filePath);
-        } else if (filePath.startsWith('/')) {
-          // On Windows, pathname starts with / before drive letter, remove it
-          filePath = filePath.substring(1);
-          console.log('[media protocol] After removing leading /:', filePath);
-        }
-
-        // Convert forward slashes to backslashes on Windows
-        if (process.platform === 'win32') {
-          filePath = filePath.replace(/\//g, '\\');
-        }
-
-        // Normalize path to resolve any . or redundant separators
-        filePath = path.normalize(filePath);
-        console.log('[media protocol] Final path:', filePath);
-        console.log('[media protocol] File exists:', fs.existsSync(filePath));
-
-        // Security: prevent directory traversal
-        if (filePath.includes('..')) {
-          console.error('[media protocol] Path traversal attempt blocked:', request.url);
-          return new Response('Forbidden', { status: 403 });
-        }
-
-        // Security: ensure path is absolute
-        if (!path.isAbsolute(filePath)) {
-          console.error('[media protocol] Non-absolute path rejected:', filePath);
-          return new Response('Forbidden', { status: 403 });
-        }
-
-        // Security: validate file extension
-        const ext = path.extname(filePath).toLowerCase();
-        if (!ALLOWED_MEDIA_EXTENSIONS.has(ext)) {
-          console.error('[media protocol] Disallowed file extension:', ext);
-          return new Response('Forbidden', { status: 403 });
-        }
-
-        // Check if file exists
-        if (!fs.existsSync(filePath)) {
-          console.error('[media protocol] File not found:', filePath);
-          return new Response('Not Found', { status: 404 });
-        }
-
-        // Security: check for symlinks and resolve to real path
-        const lstatResult = await fs.promises.lstat(filePath);
-        if (lstatResult.isSymbolicLink()) {
-          const realPath = await fs.promises.realpath(filePath);
-          // Ensure the real path still has an allowed extension
-          const realExt = path.extname(realPath).toLowerCase();
-          if (!ALLOWED_MEDIA_EXTENSIONS.has(realExt)) {
-            console.error('[media protocol] Symlink target has disallowed extension:', realPath);
-            return new Response('Forbidden', { status: 403 });
-          }
-          // Use the real path for serving
-          filePath = realPath;
-          console.log('[media protocol] Resolved symlink to:', filePath);
-        }
-
-      const mimeTypes: Record<string, string> = {
-        '.jpg': 'image/jpeg',
-        '.jpeg': 'image/jpeg',
-        '.png': 'image/png',
-        '.gif': 'image/gif',
-        '.webp': 'image/webp',
-        '.bmp': 'image/bmp',
-        '.mp4': 'video/mp4',
-        '.webm': 'video/webm',
-        '.mov': 'video/quicktime',
-        '.avi': 'video/x-msvideo',
-        '.mkv': 'video/x-matroska',
-        '.mp3': 'audio/mpeg',
-        '.wav': 'audio/wav',
-        '.ogg': 'audio/ogg',
-        '.m4a': 'audio/mp4',
-        '.flac': 'audio/flac',
-        '.aac': 'audio/aac',
-      };
-      const contentType = mimeTypes[ext] || 'application/octet-stream';
-      const stat = await fs.promises.stat(filePath);
-      const fileSize = stat.size;
-
-      const isVideo = ['.mp4', '.mov', '.m4v', '.webm', '.mkv', '.avi'].includes(ext);
-      const isAudio = ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac'].includes(ext);
-      const isStreamable = isVideo || isAudio;
-      const rangeHeader = request.headers.get('range');
-
-      // For videos and audio: use ReadableStream for proper streaming
-      console.log('[media protocol] isStreamable:', isStreamable, 'rangeHeader:', rangeHeader, 'fileSize:', fileSize);
-
-      if (isStreamable) {
-        // Parse range header
-        let start = 0;
-        let end = fileSize - 1;
-        let isRangeRequest = false;
-
-        if (rangeHeader) {
-          const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-          if (rangeMatch) {
-            start = parseInt(rangeMatch[1], 10);
-            if (rangeMatch[2]) {
-              end = parseInt(rangeMatch[2], 10);
-            }
-            isRangeRequest = true;
-          }
-        }
-
-        // Clamp values
-        if (end >= fileSize) end = fileSize - 1;
-        if (start >= fileSize) {
-          return new Response('Range Not Satisfiable', {
-            status: 416,
-            headers: { 'Content-Range': `bytes */${fileSize}` }
-          });
-        }
-
-        const contentLength = end - start + 1;
-        console.log('[media protocol] Streaming range:', start, '-', end, 'length:', contentLength);
-
-        // Create a ReadableStream from the file
-        let fileStream: fs.ReadStream | null = null;
-        let isClosed = false;
-
-        const stream = new ReadableStream({
-          start(controller) {
-            fileStream = fs.createReadStream(filePath, { start, end });
-
-            fileStream.on('data', (chunk: Buffer | string) => {
-              if (isClosed) return; // Don't enqueue if already closed
-              try {
-                if (typeof chunk === 'string') {
-                  controller.enqueue(new TextEncoder().encode(chunk));
-                } else {
-                  controller.enqueue(new Uint8Array(chunk));
-                }
-              } catch (err) {
-                // Controller may have been closed
-                console.log('[media protocol] Enqueue failed (controller likely closed)');
-                fileStream?.destroy();
-              }
-            });
-
-            fileStream.on('end', () => {
-              if (isClosed) return;
-              isClosed = true;
-              try {
-                controller.close();
-              } catch (err) {
-                // Already closed
-              }
-            });
-
-            fileStream.on('error', (err) => {
-              if (isClosed) return;
-              isClosed = true;
-              console.error('[media protocol] Stream error:', err);
-              try {
-                controller.error(err);
-              } catch (e) {
-                // Already closed
-              }
-            });
-          },
-          cancel() {
-            console.log('[media protocol] Stream cancelled by consumer');
-            isClosed = true;
-            fileStream?.destroy();
-          }
-        });
-
-        const headers: Record<string, string> = {
-          'Content-Type': contentType,
-          'Content-Length': String(contentLength),
-          'Accept-Ranges': 'bytes'
-        };
-
-        if (isRangeRequest) {
-          headers['Content-Range'] = `bytes ${start}-${end}/${fileSize}`;
-          console.log('[media protocol] Returning 206 with Content-Range:', headers['Content-Range']);
-          return new Response(stream, {
-            status: 206,
-            headers
-          });
-        } else {
-          console.log('[media protocol] Returning 200 with full stream');
-          return new Response(stream, {
-            status: 200,
-            headers
-          });
-        }
-      }
-
-      // For images and other files, just serve the full file
-      const fileBuffer = await fs.promises.readFile(filePath);
-      return new Response(fileBuffer, {
-        status: 200,
-        headers: {
-          'Content-Type': contentType,
-          'Content-Length': String(fileSize),
-          'Accept-Ranges': 'bytes'
-        }
-      });
-      } catch (error) {
-        console.error('[media protocol] Error handling request:', error);
-        return new Response('Internal Server Error', { status: 500 });
-      }
-    });
-  } catch (err) {
-    console.error('Failed to register media protocol:', err);
-  }
-
-  // Register app protocol for serving renderer files (needed for YouTube to work)
-  if (!isDev) {
-    try {
-      const rendererPath = path.join(__dirname, '../../renderer');
-
-      protocol.handle('app', async (request) => {
-        const url = new URL(request.url);
-        let filePath = url.pathname;
-
-        // Handle root path
-        if (filePath === '/' || filePath === '') {
-          filePath = '/index.html';
-        }
-
-        // Remove leading slash
-        if (filePath.startsWith('/')) {
-          filePath = filePath.substring(1);
-        }
-
-        const fullPath = path.join(rendererPath, filePath);
-
-        // Security: ensure path is within renderer directory
-        const normalizedPath = path.normalize(fullPath);
-        if (!normalizedPath.startsWith(path.normalize(rendererPath))) {
-          console.error('[app protocol] Path traversal attempt blocked:', filePath);
-          return new Response('Forbidden', { status: 403 });
-        }
-
-        try {
-          const fileBuffer = await fs.promises.readFile(fullPath);
-
-          // Determine content type
-          const ext = path.extname(fullPath).toLowerCase();
-          const mimeTypes: Record<string, string> = {
-            '.html': 'text/html',
-            '.js': 'application/javascript',
-            '.css': 'text/css',
-            '.json': 'application/json',
-            '.png': 'image/png',
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.gif': 'image/gif',
-            '.svg': 'image/svg+xml',
-            '.ico': 'image/x-icon',
-            '.woff': 'font/woff',
-            '.woff2': 'font/woff2',
-            '.ttf': 'font/ttf',
-            '.eot': 'application/vnd.ms-fontobject'
-          };
-          const contentType = mimeTypes[ext] || 'application/octet-stream';
-
-          return new Response(fileBuffer, {
-            status: 200,
-            headers: {
-              'Content-Type': contentType,
-              'Content-Length': String(fileBuffer.length)
-            }
-          });
-        } catch (err) {
-          console.error('[app protocol] File not found:', fullPath);
-          return new Response('Not Found', { status: 404 });
-        }
-      });
-    } catch (err) {
-      console.error('Failed to register app protocol:', err);
-    }
-
-    // Start local HTTP server for production (needed for YouTube)
-    try {
-      const port = await startLocalServer();
-      setLocalServerPort(port);
-    } catch (err) {
-      console.error('Failed to start local server:', err);
-    }
-
-    // Wait for database before creating window in production
-    await dbPromise;
-
-    // Create main control window
-    createControlWindow();
-  } else {
-    // DEV MODE: Create window immediately (loads from Vite at localhost:5173)
-    // Don't wait for database or local server - window can load while they initialize
-    createControlWindow();
-
-    // Start local HTTP server for media file serving in background
-    startLocalServer().then((port) => {
-      setLocalServerPort(port);
-      console.log(`[Dev] Media server started on port ${port}`);
-    }).catch((err) => {
-      console.error('Failed to start media server:', err);
-    });
-
-    // Wait for database to finish (window is already loading)
-    await dbPromise;
-  }
-
-  // Set control window reference for socket service (for status notifications)
-  if (controlWindow) {
-    setSocketControlWindow(controlWindow);
-  }
-
-  // Start watching for display changes
-  displayManager.startWatching((displays) => {
-    if (controlWindow) {
-      controlWindow.webContents.send('displays:changed', displays);
-    }
-  });
-
-  console.log(`[App] Initialization complete in ${Date.now() - startTime}ms`);
-}
-
-// App lifecycle
-app.whenReady().then(initializeApp);
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-// Cleanup on quit to ensure all resources are properly released
-app.on('before-quit', () => {
-  // Stop watching for display changes
-  if (displayManager) {
-    displayManager.stopWatching();
-  }
-
-  // Close local HTTP server
-  if (localServer) {
-    localServer.close();
-    localServer = null;
-  }
-
-  // Flush database
-  flushDatabase();
-});
-
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createControlWindow();
-  }
-});
-
-// Handle second instance (single instance lock)
+// Handle single instance
 const gotTheLock = app.requestSingleInstanceLock();
-
 if (!gotTheLock) {
   app.quit();
 } else {
@@ -1062,5 +277,28 @@ if (!gotTheLock) {
   });
 }
 
-// Export for IPC handlers
-export { controlWindow, displayManager };
+// Main startup
+app.whenReady().then(() => {
+  // STEP 1: Show splash screen IMMEDIATELY
+  // STEP 2: Load heavy modules only AFTER window is visible (in the callback)
+  controlWindow = createWindowWithSplash(() => {
+    // This runs AFTER the splash screen is painted
+    const { initializeFullApp } = require('./appLoader.js');
+    initializeFullApp(controlWindow, isDev);
+  });
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0 && controlWindow === null) {
+    controlWindow = createWindowWithSplash();
+  }
+});
+
+// Export for other modules
+export { controlWindow };

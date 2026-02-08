@@ -385,13 +385,8 @@ function MidiBridgePage() {
     // Command mapping
     let command = null;
 
-    // Program Change (any channel) → select song from setlist
-    if (messageType === 0xc0) {
-      const index = data1;
-      if (currentSetlist[index]) {
-        command = { type: 'setlist:select', payload: { id: currentSetlist[index].id } };
-      }
-    }
+    // Program Change — ignored (song selection is handled by song identity notes 96–127)
+
     // Note On on configured channel — split by note range
     else if (messageType === 0x90 && data2 > 0 && channel === currentChannel) {
       if (data1 >= 96) {
@@ -622,11 +617,6 @@ function MidiBridgePage() {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td style={styles.td}>Program Change (any ch)</td>
-              <td style={styles.td}>Select song by index</td>
-              <td style={styles.td}>PC 0 = first song</td>
-            </tr>
             <tr>
               <td style={styles.td}>Note 0–59 (ch {midiChannel})</td>
               <td style={styles.td}>Go to slide by index</td>

@@ -385,10 +385,8 @@ function MidiBridgePage() {
     // Command mapping
     let command = null;
 
-    // Program Change — ignored (song selection is handled by song identity notes 96–127)
-
     // Note On on configured channel — split by note range
-    else if (messageType === 0x90 && data2 > 0 && channel === currentChannel) {
+    if (messageType === 0x90 && data2 > 0 && channel === currentChannel) {
       if (data1 >= 96) {
         // Song identity zone (C7+): buffer/decode 2-note pair
         handleSongIdNote(data1, data2);

@@ -215,6 +215,14 @@ const roomActivePrayerTheme = new Map(); // Map of roomPin -> prayer theme (for 
 const midiBridgeSockets = new Map(); // Map of socketId -> roomPin (for MIDI bridge connections)
 const roomSetlistData = new Map(); // Map of roomPin -> setlist array (for MIDI bridges joining late)
 
+// O(n) scan helper — checks if any MIDI bridge is still connected to a room
+function hasMidiBridgeInRoom(roomPin) {
+  for (const pin of midiBridgeSockets.values()) {
+    if (pin === roomPin) return true;
+  }
+  return false;
+}
+
 io.on('connection', (socket) => {
   // Operator joins their room
   socket.on('operator:join', async (data) => {
@@ -923,6 +931,9 @@ io.on('connection', (socket) => {
 
       socket.emit('midi:joined', { roomPin: room.pin });
 
+      // Notify room that a MIDI bridge connected
+      io.to(`room:${room.pin}`).emit('midi:bridgeStatus', { connected: true });
+
       // Send current setlist if available
       const currentSetlist = roomSetlistData.get(room.pin);
       if (currentSetlist) {
@@ -957,6 +968,19 @@ io.on('connection', (socket) => {
     if (roomPin) {
       socket.leave(`room:${roomPin}`);
       midiBridgeSockets.delete(socket.id);
+      io.to(`room:${roomPin}`).emit('midi:bridgeStatus', { connected: hasMidiBridgeInRoom(roomPin) });
+    }
+  });
+
+  // Operator queries MIDI bridge status (used after reconnection)
+  socket.on('midi:getBridgeStatus', (data) => {
+    try {
+      const { roomPin } = data || {};
+      if (roomPin) {
+        socket.emit('midi:bridgeStatus', { connected: hasMidiBridgeInRoom(roomPin) });
+      }
+    } catch (error) {
+      console.error('Error in midi:getBridgeStatus:', error);
     }
   });
 
@@ -1002,7 +1026,11 @@ io.on('connection', (socket) => {
       }
 
       // Check if this was a MIDI bridge
-      midiBridgeSockets.delete(socket.id);
+      const midiRoomPin = midiBridgeSockets.get(socket.id);
+      if (midiRoomPin) {
+        midiBridgeSockets.delete(socket.id);
+        io.to(`room:${midiRoomPin}`).emit('midi:bridgeStatus', { connected: hasMidiBridgeInRoom(midiRoomPin) });
+      }
 
       // Check if this was an operator
       for (const [userId, socketId] of operatorSockets.entries()) {

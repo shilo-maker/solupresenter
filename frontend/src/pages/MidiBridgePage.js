@@ -298,16 +298,19 @@ function MidiBridgePage() {
 
   // Decode 2 MIDI notes (pitch 96–127, velocity 1–127) back into a 24-bit song hash
   const decodeSongHash = useCallback((note1, note2) => {
-    const highPart = (note1.pitch - 96) * 127 + (note1.velocity - 1);
-    const lowPart = (note2.pitch - 96) * 127 + (note2.velocity - 1);
-    return highPart * 4064 + lowPart;
+    const part1 = (note1.pitch - 96) * 127 + (note1.velocity - 1);
+    const part2 = (note2.pitch - 96) * 127 + (note2.velocity - 1);
+    // Sort so decode is order-independent (DAWs can reorder simultaneous MIDI events)
+    const minPart = Math.min(part1, part2);
+    const maxPart = Math.max(part1, part2);
+    return minPart * 4064 + maxPart;
   }, []);
 
   // Handle a song identity note (pitch >= 96). Buffers first note; on second, decodes and sends command.
   const handleSongIdNote = useCallback((pitch, velocity) => {
     const now = Date.now();
 
-    if (songIdBufferRef.current && (now - songIdBufferRef.current.time) < 200) {
+    if (songIdBufferRef.current && (now - songIdBufferRef.current.time) < 1000) {
       // Second note arrived within window — decode the pair
       if (songIdTimerRef.current) {
         clearTimeout(songIdTimerRef.current);
@@ -330,7 +333,7 @@ function MidiBridgePage() {
       songIdTimerRef.current = setTimeout(() => {
         songIdBufferRef.current = null;
         songIdTimerRef.current = null;
-      }, 200);
+      }, 1000);
     }
   }, [decodeSongHash, sendCommand]);
 

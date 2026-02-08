@@ -186,6 +186,9 @@ function MidiBridgePage() {
   const setlistRef = useRef(setlist);
   const midiChannelRef = useRef(midiChannel);
   const roomPinRef = useRef(roomPin);
+  // Song identity note buffering: stores first note of a 2-note pair
+  const songIdBufferRef = useRef(null); // { pitch, velocity, time }
+  const songIdTimerRef = useRef(null);
 
   // Keep refs in sync
   useEffect(() => { setlistRef.current = setlist; }, [setlist]);
@@ -293,6 +296,44 @@ function MidiBridgePage() {
     setLastCommand(command);
   }, []);
 
+  // Decode 2 MIDI notes (pitch 96–127, velocity 1–127) back into a 24-bit song hash
+  const decodeSongHash = useCallback((note1, note2) => {
+    const highPart = (note1.pitch - 96) * 127 + (note1.velocity - 1);
+    const lowPart = (note2.pitch - 96) * 127 + (note2.velocity - 1);
+    return highPart * 4064 + lowPart;
+  }, []);
+
+  // Handle a song identity note (pitch >= 96). Buffers first note; on second, decodes and sends command.
+  const handleSongIdNote = useCallback((pitch, velocity) => {
+    const now = Date.now();
+
+    if (songIdBufferRef.current && (now - songIdBufferRef.current.time) < 200) {
+      // Second note arrived within window — decode the pair
+      if (songIdTimerRef.current) {
+        clearTimeout(songIdTimerRef.current);
+        songIdTimerRef.current = null;
+      }
+      const songHash = decodeSongHash(
+        songIdBufferRef.current,
+        { pitch, velocity }
+      );
+      songIdBufferRef.current = null;
+
+      const currentRoomPin = roomPinRef.current;
+      if (currentRoomPin) {
+        sendCommand({ type: 'song:identify', payload: { songHash } });
+      }
+    } else {
+      // First note — buffer it and set a timeout to clear if second never arrives
+      songIdBufferRef.current = { pitch, velocity, time: now };
+      if (songIdTimerRef.current) clearTimeout(songIdTimerRef.current);
+      songIdTimerRef.current = setTimeout(() => {
+        songIdBufferRef.current = null;
+        songIdTimerRef.current = null;
+      }, 200);
+    }
+  }, [decodeSongHash, sendCommand]);
+
   // MIDI message handler — reads from refs to avoid stale closures and re-binds
   const handleMidiMessage = useCallback((event) => {
     const status = event.data[0];
@@ -351,9 +392,16 @@ function MidiBridgePage() {
         command = { type: 'setlist:select', payload: { id: currentSetlist[index].id } };
       }
     }
-    // Note On on configured channel → go to slide by index
+    // Note On on configured channel — split by note range
     else if (messageType === 0x90 && data2 > 0 && channel === currentChannel) {
-      command = { type: 'slide:goto', payload: { index: data1 } };
+      if (data1 >= 96) {
+        // Song identity zone (C7+): buffer/decode 2-note pair
+        handleSongIdNote(data1, data2);
+      } else if (data1 <= 59) {
+        // Slide zone (C0–B4): go to slide by index
+        command = { type: 'slide:goto', payload: { index: data1 } };
+      }
+      // Notes 60–95: dead zone, ignored
     }
     // CC 1 on configured channel → next slide
     else if (messageType === 0xb0 && data1 === 1 && data2 > 0 && channel === currentChannel) {
@@ -367,7 +415,7 @@ function MidiBridgePage() {
     if (command && currentRoomPin) {
       sendCommand(command);
     }
-  }, [sendCommand]); // sendCommand is stable (no deps), so this callback is stable too
+  }, [sendCommand, handleSongIdNote]);
 
   // Bind/unbind MIDI input listener
   useEffect(() => {
@@ -580,9 +628,19 @@ function MidiBridgePage() {
               <td style={styles.td}>PC 0 = first song</td>
             </tr>
             <tr>
-              <td style={styles.td}>Note On (ch {midiChannel})</td>
+              <td style={styles.td}>Note 0–59 (ch {midiChannel})</td>
               <td style={styles.td}>Go to slide by index</td>
               <td style={styles.td}>Note 0 = slide 1</td>
+            </tr>
+            <tr>
+              <td style={styles.td}>Note 96–127 (ch {midiChannel})</td>
+              <td style={styles.td}>Song identity (2-note pair)</td>
+              <td style={styles.td}>Auto-selects song by hash</td>
+            </tr>
+            <tr>
+              <td style={styles.td}>Note 60–95 (ch {midiChannel})</td>
+              <td style={styles.td}>Reserved (ignored)</td>
+              <td style={styles.td}>Dead zone</td>
             </tr>
             <tr>
               <td style={styles.td}>CC 1 (ch {midiChannel}, val &gt; 0)</td>

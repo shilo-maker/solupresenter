@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { CombinedSlidesResult } from '../utils/slideUtils';
+import { songIdToMidiHash } from '../utils/midiWriter';
 
 interface Song {
   id: string;
@@ -386,6 +387,48 @@ export function useRemoteControl(
                   window.electronAPI.displayMedia({ type: item.mediaType, url: mediaUrl });
                 }
               }
+            }
+          }
+          break;
+        case 'song:identify':
+          if (command.payload?.songHash !== undefined) {
+            const targetHash = command.payload.songHash;
+            // 1. Search setlist for a matching song hash
+            let found = false;
+            for (const item of setlist) {
+              const itemSong = item.type === 'song' ? item.song : item.type === 'bible' ? item.song : null;
+              if (itemSong && songIdToMidiHash(itemSong.id) === targetHash) {
+                // Match found in setlist — select it (mirrors setlist:select logic)
+                if (item.type === 'song' && item.song) {
+                  setSelectedPresentation(null);
+                  setSelectedSong(item.song);
+                  setCurrentSlideIndex(0);
+                  setCurrentContentType('song');
+                  setIsBlank(false);
+                } else if (item.type === 'bible' && item.song) {
+                  setSelectedPresentation(null);
+                  setSelectedSong(item.song);
+                  setCurrentSlideIndex(0);
+                  setCurrentContentType('bible');
+                  setIsBlank(false);
+                }
+                found = true;
+                break;
+              }
+            }
+            // 2. Not in setlist — search all songs
+            if (!found) {
+              const matchedSong = songs.find(s => songIdToMidiHash(s.id) === targetHash);
+              if (matchedSong) {
+                // Add to setlist then select
+                setSetlist(prev => [...prev, { id: crypto.randomUUID(), type: 'song' as const, song: matchedSong }]);
+                setSelectedPresentation(null);
+                setSelectedSong(matchedSong);
+                setCurrentSlideIndex(0);
+                setCurrentContentType('song');
+                setIsBlank(false);
+              }
+              // If not found anywhere, silently ignore
             }
           }
           break;

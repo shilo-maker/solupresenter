@@ -37,6 +37,9 @@ export class SocketService {
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 10;
 
+  // MIDI bridge control
+  private midiControlEnabled: boolean = true;
+
   // Rate limiting for broadcasts
   private lastBroadcastTime: { [key: string]: number } = {};
   private minBroadcastIntervalMs: number = 50; // Minimum 50ms between broadcasts of same type
@@ -95,6 +98,7 @@ export class SocketService {
           this.status.roomPin = undefined;
           this.status.roomId = undefined;
           this.status.viewerCount = 0;
+          this.midiControlEnabled = true;
           this.notifyStatusChange();
         });
 
@@ -112,6 +116,8 @@ export class SocketService {
         this.socket.on('operator:joined', (data: { roomPin: string }) => {
           this.status.roomPin = data.roomPin;
           this.notifyStatusChange();
+          // Query MIDI bridge status for this room (covers reconnect/late-join scenarios)
+          this.socket?.emit('midi:getBridgeStatus', { roomPin: data.roomPin });
         });
 
         this.socket.on('room:viewerCount', (data: { count: number }) => {
@@ -122,11 +128,14 @@ export class SocketService {
         // MIDI bridge commands — relay to control window via existing remote:command IPC
         // Only allow whitelisted commands to prevent unsafe operations
         this.socket.on('midi:command', (data: { command: any }) => {
+          if (!this.midiControlEnabled) return;
           if (data?.command && this.controlWindow && !this.controlWindow.isDestroyed()) {
             const allowedMidiCommands = [
               'next', 'prev', 'nextSlide', 'prevSlide',
               'nextSong', 'prevSong', 'goToSong', 'goToSlide',
-              'blank', 'unblank', 'toggleBlank'
+              'blank', 'unblank', 'toggleBlank',
+              'slide:next', 'slide:prev', 'slide:goto', 'slide:blank',
+              'setlist:select', 'song:identify'
             ];
             const commandType = data.command.type || data.command.action;
             if (typeof commandType === 'string' && allowedMidiCommands.includes(commandType)) {
@@ -134,6 +143,13 @@ export class SocketService {
             } else {
               console.warn('[SocketService] Blocked unauthorized MIDI command:', commandType);
             }
+          }
+        });
+
+        // MIDI bridge connection status
+        this.socket.on('midi:bridgeStatus', (data: { connected: boolean }) => {
+          if (this.controlWindow && !this.controlWindow.isDestroyed()) {
+            this.controlWindow.webContents.send('midi:bridgeStatus', data.connected);
           }
         });
 
@@ -150,6 +166,13 @@ export class SocketService {
         resolve(false);
       }
     });
+  }
+
+  /**
+   * Enable or disable MIDI control from bridge
+   */
+  setMidiControlEnabled(enabled: boolean): void {
+    this.midiControlEnabled = enabled;
   }
 
   /**
@@ -180,6 +203,7 @@ export class SocketService {
     };
     // Clear cached state to prevent memory leaks
     this.clearCachedState();
+    this.midiControlEnabled = true;
     this.reconnectAttempts = 0;
     this.lastBroadcastTime = {};
     this.notifyStatusChange();
@@ -197,6 +221,7 @@ export class SocketService {
     try {
       // Step 1: Create room via REST API
       // Create abort controller for this request
+      if (this.axiosAbortController) this.axiosAbortController.abort();
       this.axiosAbortController = new AbortController();
       const response = await axios.post(
         `${this.status.serverUrl}/api/rooms/create`,
@@ -236,6 +261,8 @@ export class SocketService {
         this.roomJoinTimeoutId = setTimeout(() => {
           this.roomJoinTimeoutId = null;
           this.notifyStatusChange();
+          // Broadcast cached themes to the newly created room so viewers get them immediately
+          this.broadcastCachedState();
           resolve({ roomPin: room.pin, roomId: room.id });
         }, 500);
       });
@@ -256,6 +283,7 @@ export class SocketService {
     try {
       const url = `${this.status.serverUrl}/api/public-rooms/my-rooms`;
 
+      if (this.axiosAbortController) this.axiosAbortController.abort();
       this.axiosAbortController = new AbortController();
       const response = await axios.get(url, {
         headers: {
@@ -282,6 +310,7 @@ export class SocketService {
     }
 
     try {
+      if (this.axiosAbortController) this.axiosAbortController.abort();
       this.axiosAbortController = new AbortController();
       if (publicRoomId) {
         await axios.post(
@@ -327,6 +356,7 @@ export class SocketService {
     }
 
     try {
+      if (this.axiosAbortController) this.axiosAbortController.abort();
       this.axiosAbortController = new AbortController();
       const response = await axios.post(
         `${this.status.serverUrl}/api/public-rooms/create-or-get`,
@@ -357,6 +387,7 @@ export class SocketService {
     }
 
     try {
+      if (this.axiosAbortController) this.axiosAbortController.abort();
       this.axiosAbortController = new AbortController();
       await axios.post(
         `${this.status.serverUrl}/api/rooms/${this.status.roomId}/link-public-room`,
@@ -386,6 +417,7 @@ export class SocketService {
     }
 
     try {
+      if (this.axiosAbortController) this.axiosAbortController.abort();
       this.axiosAbortController = new AbortController();
       await axios.post(
         `${this.status.serverUrl}/api/rooms/${this.status.roomId}/unlink-public-room`,
@@ -747,15 +779,43 @@ export class SocketService {
   }
 
   /**
-   * Restore broadcast state after reconnection
-   * NOTE: Themes are intentionally NOT re-broadcast on reconnect to prevent
-   * unexpected theme changes. Themes should only be applied via explicit user action.
-   * Only content state (slides, background, YouTube, tools) is restored.
+   * Broadcast all cached state (themes + content) to the room.
+   * Called after initial room creation so viewers get themes immediately.
+   */
+  private broadcastCachedState(): void {
+    if (this.lastTheme) {
+      this.broadcastTheme(this.lastTheme);
+    }
+    if (this.lastBibleTheme) {
+      this.broadcastBibleTheme(this.lastBibleTheme);
+    }
+    if (this.lastPrayerTheme) {
+      this.broadcastPrayerTheme(this.lastPrayerTheme);
+    }
+    if (this.lastBackground) {
+      this.broadcastBackground(this.lastBackground);
+    }
+    if (this.lastSlideData) {
+      this.broadcastSlide(this.lastSlideData);
+    }
+  }
+
+  /**
+   * Restore broadcast state after socket reconnection
    */
   private restoreStateOnReconnect(): void {
-    // Re-broadcast last known CONTENT state to sync viewers
-    // Themes are NOT re-broadcast - they should only be applied on explicit user action
+    // Re-broadcast last known state to sync viewers
     setTimeout(() => {
+      // Re-broadcast themes so viewers show the correct theme from the start
+      if (this.lastTheme) {
+        this.broadcastTheme(this.lastTheme);
+      }
+      if (this.lastBibleTheme) {
+        this.broadcastBibleTheme(this.lastBibleTheme);
+      }
+      if (this.lastPrayerTheme) {
+        this.broadcastPrayerTheme(this.lastPrayerTheme);
+      }
       if (this.lastBackground) {
         this.broadcastBackground(this.lastBackground);
       }
@@ -783,6 +843,7 @@ export class SocketService {
     }
 
     try {
+      if (this.axiosAbortController) this.axiosAbortController.abort();
       this.axiosAbortController = new AbortController();
       const response = await axios.get(`${this.status.serverUrl}/api/setlists`, {
         headers: {
@@ -808,6 +869,7 @@ export class SocketService {
     }
 
     try {
+      if (this.axiosAbortController) this.axiosAbortController.abort();
       this.axiosAbortController = new AbortController();
       const response = await axios.get(`${this.status.serverUrl}/api/setlists/${id}`, {
         headers: {

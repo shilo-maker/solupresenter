@@ -393,11 +393,14 @@ function MidiBridgePage() {
       if (data1 >= 96) {
         // Song identity zone (C7+): buffer/decode 2-note pair
         handleSongIdNote(data1, data2);
+      } else if (data1 === 60) {
+        // Blank/clear screen
+        command = { type: 'slide:blank' };
       } else if (data1 <= 59) {
         // Slide zone (C0–B4): go to slide by index
         command = { type: 'slide:goto', payload: { index: data1 } };
       }
-      // Notes 60–95: dead zone, ignored
+      // Notes 61–95: dead zone, ignored
     }
     // CC 1 on configured channel → next slide
     else if (messageType === 0xb0 && data1 === 1 && data2 > 0 && channel === currentChannel) {
@@ -624,12 +627,17 @@ function MidiBridgePage() {
               <td style={styles.td}>Note 0 = slide 1</td>
             </tr>
             <tr>
+              <td style={styles.td}>Note 60 (ch {midiChannel})</td>
+              <td style={styles.td}>Blank / clear screen</td>
+              <td style={styles.td}>Clears display text</td>
+            </tr>
+            <tr>
               <td style={styles.td}>Note 96–127 (ch {midiChannel})</td>
               <td style={styles.td}>Song identity (2-note pair)</td>
               <td style={styles.td}>Auto-selects song by hash</td>
             </tr>
             <tr>
-              <td style={styles.td}>Note 60–95 (ch {midiChannel})</td>
+              <td style={styles.td}>Note 61–95 (ch {midiChannel})</td>
               <td style={styles.td}>Reserved (ignored)</td>
               <td style={styles.td}>Dead zone</td>
             </tr>

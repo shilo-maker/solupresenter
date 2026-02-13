@@ -130,6 +130,14 @@ sequelize.authenticate()
     // Seed the Classic theme if it doesn't exist
     await ViewerTheme.seedClassicTheme();
     await StageMonitorTheme.seedBuiltInThemes();
+
+    // One-time migration: apply Czech translations
+    try {
+      const applyCzechTranslations = require('./migrations/apply-czech-translations');
+      await applyCzechTranslations(Song);
+    } catch (err) {
+      console.error('[migration] Czech translations failed:', err.message);
+    }
   })
   .catch(err => {
     console.error('❌ Unable to connect to PostgreSQL:', err);

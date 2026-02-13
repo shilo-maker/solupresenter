@@ -138,6 +138,14 @@ sequelize.authenticate()
     } catch (err) {
       console.error('[migration] Czech translations failed:', err.message);
     }
+
+    // One-time migration: apply Russian translations
+    try {
+      const applyRussianTranslations = require('./migrations/apply-russian-translations');
+      await applyRussianTranslations(Song);
+    } catch (err) {
+      console.error('[migration] Russian translations failed:', err.message);
+    }
   })
   .catch(err => {
     console.error('❌ Unable to connect to PostgreSQL:', err);

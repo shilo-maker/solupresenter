@@ -16,24 +16,14 @@ async function applyLocalSync(Song) {
     return;
   }
 
-  // Check if corruption still exists by sampling a known corrupted song
-  const sample = await Song.findByPk('5443245e-04eb-4b58-9500-5229cc7b89d6');
-  if (sample && sample.slides && sample.slides.length > 2) {
-    const text = sample.slides[2].originalText || '';
-    if (!text.includes('\uFFFD') && !text.includes('��')) {
-      console.log('[migration] Local sync already applied (no corruption found), skipping');
-      return;
-    }
-  }
-
-  console.log('[migration] Applying local sync (fixing corrupted Hebrew text)...');
+  console.log('[migration] Checking local sync (fixing corrupted Hebrew text)...');
 
   const updates = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
   const songIds = Object.keys(updates);
-  console.log('[migration] Songs to update: ' + songIds.length);
 
   let updated = 0;
   let notFound = 0;
+  let skipped = 0;
 
   for (const songId of songIds) {
     const song = await Song.findByPk(songId);
@@ -44,6 +34,25 @@ async function applyLocalSync(Song) {
 
     const localSlides = updates[songId];
     const prodSlides = song.slides || [];
+
+    // Check if this song actually needs updating (compare originalText)
+    let needsUpdate = false;
+    for (let i = 0; i < localSlides.length; i++) {
+      const prodText = (prodSlides[i] && prodSlides[i].originalText) || '';
+      const localText = localSlides[i].originalText || '';
+      if (prodText !== localText) {
+        needsUpdate = true;
+        break;
+      }
+    }
+    if (localSlides.length !== prodSlides.length) {
+      needsUpdate = true;
+    }
+
+    if (!needsUpdate) {
+      skipped++;
+      continue;
+    }
 
     // Merge: use local slide text but preserve production translations
     const mergedSlides = localSlides.map(function(localSlide, i) {
@@ -63,7 +72,7 @@ async function applyLocalSync(Song) {
     updated++;
   }
 
-  console.log('[migration] Local sync applied: ' + updated + ' songs updated, ' + notFound + ' not found');
+  console.log('[migration] Local sync: ' + updated + ' updated, ' + skipped + ' already ok, ' + notFound + ' not found');
 }
 
 module.exports = applyLocalSync;

@@ -1,253 +1,4 @@
 {
-  "9d8d1252-a0bf-4331-a0ad-af4052576ca1": [
-    {
-      "verseType": "Chorus",
-      "translation": "O Lord, our Lord, how majestic is your name",
-      "originalText": "אדוני אדוננו מה אדיר שמך",
-      "transliteration": "adonai adonenu, ma adir shimkha",
-      "translationOverflow": "",
-      "translations": {
-        "en": "O Lord, our Lord, how majestic is your name",
-        "cs": "HOSPODINE, PANE NÁŠ, JAK VZNEŠENÉ JE TVÉ JMÉNO",
-        "ru": "ГОСПОДИ, БОЖЕ НАШ, КАК ВЕЛИЧЕСТВЕННО ИМЯ ТВОЁ",
-        "es": "OH SEÑOR, SEÑOR NUESTRO, ¡CUÁN MAJESTUOSO ES TU NOMBRE"
-      }
-    },
-    {
-      "verseType": "Chorus",
-      "translation": "in all the earth! You have set your glory above the heavens.",
-      "originalText": "בְּכָל הָאָרֶץ, אֲשֶׁר תְּנָה הוֹדְךָ עַל הַשָׁמָיִם",
-      "transliteration": "bekhol haarets asher tena hodkha al hashamaim",
-      "translationOverflow": "",
-      "translations": {
-        "en": "in all the earth! You have set your glory above the heavens.",
-        "cs": "PO CELÉ ZEMI, TY JSI VLOŽIL SVOU SLÁVU NAD NEBESA",
-        "ru": "ПО ВСЕЙ ЗЕМЛЕ, ТЫ ВОЗНЁС СЛАВУ СВОЮ ПРЕВЫШЕ НЕБЕС",
-        "es": "EN TODA LA TIERRA! HAS PUESTO TU GLORIA SOBRE LOS CIELOS"
-      }
-    },
-    {
-      "verseType": "Verse1",
-      "translation": "Out of the mouth of babies and infants,",
-      "originalText": "מִפִּי עוֹלְלִים וְיוֹנְקִים",
-      "transliteration": "mipi olelim veyonkim",
-      "translationOverflow": "",
-      "translations": {
-        "en": "Out of the mouth of babies and infants,",
-        "cs": "Z ÚST NEMLUVŇAT A KOJENCŮ",
-        "ru": "ИЗ УСТ МЛАДЕНЦЕВ И ГРУДНЫХ ДЕТЕЙ",
-        "es": "DE LA BOCA DE LOS NIÑOS Y LOS LACTANTES"
-      }
-    },
-    {
-      "verseType": "Verse1",
-      "translation": "You have established strength",
-      "originalText": "יִסַּדְתָּ עוֹז",
-      "transliteration": "yisadeta oz",
-      "translationOverflow": "",
-      "translations": {
-        "en": "You have established strength",
-        "cs": "JSI ZALOŽIL SÍLU",
-        "ru": "ТЫ УТВЕРДИЛ СИЛУ",
-        "es": "HAS ESTABLECIDO TU FORTALEZA"
-      }
-    },
-    {
-      "verseType": "Verse1",
-      "translation": "because of Your foes",
-      "originalText": "לְמַעַן צוֹרְרֶיךָ",
-      "transliteration": "lema'an tsorerekha",
-      "translationOverflow": "",
-      "translations": {
-        "en": "because of Your foes",
-        "cs": "KVŮLI SVÝM NEPŘÁTELŮM",
-        "ru": "РАДИ ВРАГОВ ТВОИХ",
-        "es": "A CAUSA DE TUS ENEMIGOS"
-      }
-    },
-    {
-      "verseType": "Verse1",
-      "translation": "to still the enemy and the avenger",
-      "originalText": "לְהַשְׁבִּית אוֹיֵב וּמִתְנַקֵּם",
-      "transliteration": "lehashbit oyev umitnakem",
-      "translationOverflow": "",
-      "translations": {
-        "en": "to still the enemy and the avenger",
-        "cs": "ABY JSI UMLČEL NEPŘÍTELE A MSTITELE",
-        "ru": "ДАБЫ СОМКНУТЬ УСТА ВРАГУ И МСТИТЕЛЮ",
-        "es": "PARA HACER CALLAR AL ENEMIGO Y AL VENGADOR"
-      }
-    },
-    {
-      "verseType": "Verse2",
-      "translation": "When I look at your heavens",
-      "originalText": "כִּי אֶרְאֶה שָׁמֶיךָ",
-      "transliteration": "ki ereh shamekha",
-      "translationOverflow": "",
-      "translations": {
-        "en": "When I look at your heavens",
-        "cs": "KDYŽ HLEDÍM NA TVÁ NEBESA",
-        "ru": "КОГДА ВЗИРАЮ Я НА НЕБЕСА ТВОИ",
-        "es": "CUANDO VEO TUS CIELOS"
-      }
-    },
-    {
-      "verseType": "Verse2",
-      "translation": "the work of your fingers",
-      "originalText": "מַעֲשֵׂה אֶצְבְּעוֹתֶיךָ,",
-      "transliteration": "maaseh etsbeotekha",
-      "translationOverflow": "",
-      "translations": {
-        "en": "the work of your fingers",
-        "cs": "DÍLO TVÝCH PRSTŮ",
-        "ru": "ДЕЛО ПЕРСТОВ ТВОИХ",
-        "es": "OBRA DE TUS DEDOS"
-      }
-    },
-    {
-      "verseType": "Verse2",
-      "translation": "the moon and the stars, which you have set in place",
-      "originalText": "יָרֵח וְכוֹכָבִים אֲשֶׁר כּוֹנָנְתָּה.",
-      "transliteration": "yare'akh vekhokhavim asher konanta",
-      "translationOverflow": "",
-      "translations": {
-        "en": "the moon and the stars, which you have set in place",
-        "cs": "MĚSÍC A HVĚZDY, KTERÉ JSI UMÍSTIL",
-        "ru": "ЛУНУ И ЗВЁЗДЫ, КОТОРЫЕ ТЫ ПОСТАВИЛ",
-        "es": "LA LUNA Y LAS ESTRELLAS QUE TÚ FORMASTE"
-      }
-    },
-    {
-      "verseType": "Verse3",
-      "translation": "what is man that you are mindful of him",
-      "originalText": "מָה אֱנוֹשׁ כִּי תִּזְכְּרֶנוּ",
-      "transliteration": "ma enosh ki tizkerenu",
-      "translationOverflow": "",
-      "translations": {
-        "en": "what is man that you are mindful of him",
-        "cs": "CO JE ČLOVĚK, ŽE NA NĚJ PAMATUJEŠ",
-        "ru": "ЧТО ЕСТЬ ЧЕЛОВЕК, ЧТО ТЫ ПОМНИШЬ ЕГО",
-        "es": "¿QUÉ ES EL HOMBRE PARA QUE TE ACUERDES DE ÉL"
-      }
-    },
-    {
-      "verseType": "Verse3",
-      "translation": "and the son of man that you care for him?",
-      "originalText": "וּבֵן אָדָם כִּי תִּפְקְדֶנוּ,",
-      "transliteration": "uven adam ki tifkedenu",
-      "translationOverflow": "",
-      "translations": {
-        "en": "and the son of man that you care for him?",
-        "cs": "A SYN ČLOVĚKA, ŽE SE O NĚJ STARÁŠ?",
-        "ru": "И СЫН ЧЕЛОВЕЧЕСКИЙ, ЧТО ТЫ ПОСЕЩАЕШЬ ЕГО",
-        "es": "Y EL HIJO DEL HOMBRE PARA QUE LO CUIDES?"
-      }
-    },
-    {
-      "verseType": "Verse3",
-      "translation": "Yet you have made him a little lower than the heavenly beings",
-      "originalText": "וַתְּחַסְּרֵהוּ מְעַט מֵאֱלוֹהִים,",
-      "transliteration": "vatekhasrehu me'at me'elohim",
-      "translationOverflow": "",
-      "translations": {
-        "en": "Yet you have made him a little lower than the heavenly beings",
-        "cs": "UČINIL JSI HO O MÁLO MENŠÍM NEŽ NEBESKÉ BYTOSTI",
-        "ru": "НЕ МНОГО ТЫ УМАЛИЛ ЕГО ПРЕД АНГЕЛАМИ",
-        "es": "LO HICISTE UN POCO MENOR QUE LOS SERES CELESTIALES"
-      }
-    },
-    {
-      "verseType": "Verse3",
-      "translation": "and crowned him with glory and honor",
-      "originalText": "וְכָבוֹד וְהָדָר תְּעַטְּרֵהוּ",
-      "transliteration": "vekhavod vehadar te'atrehu",
-      "translationOverflow": "",
-      "translations": {
-        "en": "and crowned him with glory and honor",
-        "cs": "A KORUNOVAL JSI HO SLÁVOU A CTÍ",
-        "ru": "СЛАВОЮ И ЧЕСТЬЮ УВЕНЧАЛ ЕГО",
-        "es": "Y LO CORONASTE DE GLORIA Y HONOR"
-      }
-    },
-    {
-      "verseType": "Verse4",
-      "translation": "You have given him dominion over the works of your hands",
-      "originalText": "תַּמְשִׁילֵהוּ בְּמַעֲשֵׂי יָדֶיךָ",
-      "transliteration": "tamshilehu bema'aseh yadekha",
-      "translationOverflow": "",
-      "translations": {
-        "en": "You have given him dominion over the works of your hands",
-        "cs": "DAL JSI MU VLÁDU NAD DÍLEM SVÝCH RUKOU",
-        "ru": "ПОСТАВИЛ ЕГО ВЛАДЫКОЮ НАД ДЕЛАМИ РУК ТВОИХ",
-        "es": "LE DISTE DOMINIO SOBRE LAS OBRAS DE TUS MANOS"
-      }
-    },
-    {
-      "verseType": "Verse4",
-      "translation": "you have put all things under his feet",
-      "originalText": "כָּל שַׁתָּה תַּחַת רַגְלָיו",
-      "transliteration": "kol shata takhat raglav",
-      "translationOverflow": "",
-      "translations": {
-        "en": "you have put all things under his feet",
-        "cs": "VŠE JSI POLOŽIL POD JEHO NOHY",
-        "ru": "ВСЁ ПОЛОЖИЛ ПОД НОГИ ЕГО",
-        "es": "TODO LO PUSISTE BAJO SUS PIES"
-      }
-    },
-    {
-      "verseType": "Verse4",
-      "translation": "all sheep and oxen",
-      "originalText": "צונה ואלפים כולם",
-      "transliteration": "tsoneh ve'alafim kulam",
-      "translationOverflow": "",
-      "translations": {
-        "en": "all sheep and oxen",
-        "cs": "VŠECHNY OVCE A VOLY",
-        "ru": "ОВЕЦ И ВОЛОВ ВСЕХ",
-        "es": "OVEJAS Y BUEYES, TODOS ELLOS"
-      }
-    },
-    {
-      "verseType": "Verse4",
-      "translation": "and also the beasts of the field",
-      "originalText": "וְגַם בַּהֲמוֹת שדי",
-      "transliteration": "vegam bahamot shaday",
-      "translationOverflow": "",
-      "translations": {
-        "en": "and also the beasts of the field",
-        "cs": "I POLNÍ ZVĚŘ",
-        "ru": "А ТАКЖЕ ПОЛЕВЫХ ЗВЕРЕЙ",
-        "es": "Y TAMBIÉN LAS BESTIAS DEL CAMPO"
-      }
-    },
-    {
-      "verseType": "Verse4",
-      "translation": "the birds of the heavens, and the fish of the sea",
-      "originalText": "צִפּוֹר שָׁמַיִם, וּדְגֵי הַיָּם",
-      "transliteration": "tsipor shamaim, udgey hayam",
-      "translationOverflow": "",
-      "translations": {
-        "en": "the birds of the heavens, and the fish of the sea",
-        "cs": "NEBESKÉ PTÁKY A MOŘSKÉ RYBY",
-        "ru": "ПТИЦ НЕБЕСНЫХ И РЫБ МОРСКИХ",
-        "es": "LAS AVES DE LOS CIELOS Y LOS PECES DEL MAR"
-      }
-    },
-    {
-      "verseType": "Verse4",
-      "translation": "whatever passes along the paths of the seas",
-      "originalText": "עוֹבֵר אָרְחוֹת -יַמִּים",
-      "transliteration": "over orkhot yamim",
-      "translationOverflow": "",
-      "translations": {
-        "en": "whatever passes along the paths of the seas",
-        "cs": "VŠE CO SE POHYBUJE PO STEZKÁCH MOŘÍ",
-        "ru": "ВСЁ, ЧТО ПРОХОДИТ МОРСКИМИ ПУТЯМИ",
-        "es": "TODO LO QUE CRUZA LOS CAMINOS DE LOS MARES"
-      }
-    }
-  ],
   "5443245e-04eb-4b58-9500-5229cc7b89d6": [
     {
       "verseType": "Verse1",
@@ -587,6 +338,727 @@
         "cs": "ALE JEDEN HLAS VE MNĚ HOŘÍ",
         "ru": "НО ОДИН ГОЛОС ВО МНЕ ГОРИТ",
         "es": "PERO UNA SOLA VOZ ARDE EN MÍ"
+      }
+    }
+  ],
+  "2e2687d5-4c0c-4630-aac8-dc9a9aa42b73": [
+    {
+      "verseType": "",
+      "translation": "Mighty God, Prince of peace, Everlasting Father, Wonderful counsler",
+      "originalText": "אל גיבור שר שלום  אבי עד פלא יועץ",
+      "transliteration": "el gibor sar shalom avi ad peleh yoets",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Mighty God, Prince of peace, Everlasting Father, Wonderful counsler",
+        "cs": "MOCNÝ BOŽE, KNÍŽE POKOJE, VĚČNÝ OTČE, PŘEDIVNÝ RÁDCE",
+        "ru": "БОГ МОГУЧИЙ, КНЯЗЬ МИРА, ОТЕЦ ВЕЧНОСТИ, ЧУДНЫЙ СОВЕТНИК",
+        "es": "DIOS PODEROSO, PRÍNCIPE DE PAZ, PADRE ETERNO, CONSEJERO ADMIRABLE"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Yeshua, only You will I worship",
+      "originalText": "ישוע רק אותך, כל חיי ארומם",
+      "transliteration": "Yeshua rak otcha kol chayay aromem",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Yeshua, only You will I worship",
+        "cs": "JEŠUO, JEN TEBE BUDU CELÝ ŽIVOT VYVYŠOVAT",
+        "ru": "ИЕШУА, ЛИШЬ ТЕБЯ ВСЮ ЖИЗНЬ БУДУ ПРЕВОЗНОСИТЬ",
+        "es": "YESHÚA, SOLO A TI, TODA MI VIDA TE EXALTARÉ"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Angles and seraphims bow their heads",
+      "originalText": "מלאכים ושרפים ראשם הם מרכינים",
+      "transliteration": "malachim userafim rosham hem markinim",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Angles and seraphims bow their heads",
+        "cs": "ANDĚLÉ A SERAFÍNI SKLÁNĚJÍ SVÉ HLAVY",
+        "ru": "АНГЕЛЫ И СЕРАФИМЫ СКЛОНЯЮТ СВОИ ГОЛОВЫ",
+        "es": "ÁNGELES Y SERAFINES INCLINAN SUS CABEZAS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Covering their faces and saying",
+      "originalText": "את פניהם הם מכסים ואומרים",
+      "transliteration": "et pnehem hem mechasim ve'omrim",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Covering their faces and saying",
+        "cs": "ZAKRÝVAJÍ SVÉ TVÁŘE A ŘÍKAJÍ",
+        "ru": "ЗАКРЫВАЮТ СВОИ ЛИЦА И ГОВОРЯТ",
+        "es": "CUBREN SUS ROSTROS Y DICEN"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "To the one who sits on the throne and unto the Lamb",
+      "originalText": "ליושב על הכסא ולשה",
+      "transliteration": "layoshev al hakiseh velaseh",
+      "translationOverflow": "",
+      "translations": {
+        "en": "To the one who sits on the throne and unto the Lamb",
+        "cs": "TOMU, KTERÝ SEDÍ NA TRŮNU, A BERÁNKOVI",
+        "ru": "СИДЯЩЕМУ НА ПРЕСТОЛЕ И АГНЦУ",
+        "es": "AL QUE ESTÁ SENTADO EN EL TRONO Y AL CORDERO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Blessing, glory and power forever",
+      "originalText": "ברכה כבוד ועוז לעולמים",
+      "transliteration": "bracha kavod vaoz le'olamim",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Blessing, glory and power forever",
+        "cs": "POŽEHNÁNÍ, SLÁVA A MOC NAVĚKY",
+        "ru": "БЛАГОСЛОВЕНИЕ, СЛАВА И СИЛА ВОВЕКИ",
+        "es": "BENDICIÓN, GLORIA Y PODER POR LOS SIGLOS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Holy, Holy, Holy is the Lord God Almighty",
+      "originalText": "קדוש, קדוש, קדוש אדוני  צבאות",
+      "transliteration": "kadosh kadosh kadosh adonai tsevaot",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Holy, Holy, Holy is the Lord God Almighty",
+        "cs": "SVATÝ, SVATÝ, SVATÝ JE PÁN BŮH VŠEMOHOUCÍ",
+        "ru": "СВЯТ, СВЯТ, СВЯТ ГОСПОДЬ БОГ САВАОФ",
+        "es": "SANTO, SANTO, SANTO ES EL SEÑOR DIOS TODOPODEROSO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "The one who was and is and is to come",
+      "originalText": "אשר היה והווה ויבוא",
+      "transliteration": "asher haya vehoveh veyavo",
+      "translationOverflow": "",
+      "translations": {
+        "en": "The one who was and is and is to come",
+        "cs": "KTERÝ BYL A JEST A PŘIJDE",
+        "ru": "КОТОРЫЙ БЫЛ, И ЕСТЬ, И ГРЯДЁТ",
+        "es": "EL QUE ERA, EL QUE ES Y EL QUE HA DE VENIR"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Worthy is the Lamb that purchased us by His blood",
+      "originalText": "ראוי השה אשר קננו בדמו",
+      "transliteration": "raui haseh asher kananu bedamo",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Worthy is the Lamb that purchased us by His blood",
+        "cs": "HODEN JE BERÁNEK, KTERÝ NÁS VYKOUPIL SVOU KRVÍ",
+        "ru": "ДОСТОИН АГНЕЦ, ИСКУПИВШИЙ НАС КРОВЬЮ СВОЕЙ",
+        "es": "DIGNO ES EL CORDERO QUE NOS COMPRÓ CON SU SANGRE"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "The one who sits to the right of the Father",
+      "originalText": "אשר יושב לימינו  של האב",
+      "transliteration": "asher yoshev limino shel haav",
+      "translationOverflow": "",
+      "translations": {
+        "en": "The one who sits to the right of the Father",
+        "cs": "KTERÝ SEDÍ PO PRAVICI OTCE",
+        "ru": "СИДЯЩИЙ ПО ПРАВУЮ РУКУ ОТЦА",
+        "es": "EL QUE ESTÁ SENTADO A LA DIESTRA DEL PADRE"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Here on my face I bow",
+      "originalText": "כאן על פני אני משתחווה",
+      "transliteration": "kan al panai ani mishtachaveh",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Here on my face I bow",
+        "cs": "ZDE NA TVÁŘI SE KLANÍM",
+        "ru": "ЗДЕСЬ НА ЛИЦЕ СВОЁМ Я ПРЕКЛОНЯЮСЬ",
+        "es": "AQUÍ SOBRE MI ROSTRO ME POSTRO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "In the Holy of Holies I will see You",
+      "originalText": "בקודש הקודשים אותך אראה",
+      "transliteration": "bekodesh hakodashim otcha ereh",
+      "translationOverflow": "",
+      "translations": {
+        "en": "In the Holy of Holies I will see You",
+        "cs": "VE SVATYNI SVATÝCH TĚ UVIDÍM",
+        "ru": "ВО СВЯТОМ СВЯТЫХ ТЕБЯ Я УВИЖУ",
+        "es": "EN EL LUGAR SANTÍSIMO TE VERÉ"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Here my life and soul I dedicate to You",
+      "originalText": "כאן את נפשי ואת חיי אקדיש",
+      "transliteration": "kan et nafshi ve'et chayay akdish",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Here my life and soul I dedicate to You",
+        "cs": "ZDE SVŮJ ŽIVOT A DUŠI TI ZASVĚCUJI",
+        "ru": "ЗДЕСЬ СВОЮ ДУШУ И ЖИЗНЬ ПОСВЯЩАЮ ТЕБЕ",
+        "es": "AQUÍ MI ALMA Y MI VIDA TE CONSAGRO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Before the throne of mercy",
+      "originalText": "מול כס הרחמים",
+      "transliteration": "mul kes harachamim",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Before the throne of mercy",
+        "cs": "PŘED TRŮNEM MILOSTI",
+        "ru": "ПРЕД ПРЕСТОЛОМ МИЛОСТИ",
+        "es": "ANTE EL TRONO DE LA MISERICORDIA"
+      }
+    }
+  ],
+  "0787cb5b-9e87-4d6b-beae-c45ee7acd8e8": [
+    {
+      "verseType": "",
+      "translation": "I will sing to the Lord for He is highly exalted",
+      "originalText": "אשירה לה', כי גאו גאה",
+      "transliteration": "ashira la'Adonai ki gao ga'a",
+      "translationOverflow": "",
+      "translations": {
+        "en": "I will sing to the Lord for He is highly exalted",
+        "cs": "BUDU ZPÍVAT HOSPODINU, NEBOŤ JE VELICE VZNEŠENÝ",
+        "ru": "ВОСПОЮ ГОСПОДУ, ИБО ВЫСОКО ПРЕВОЗНЁССЯ ОН",
+        "es": "CANTARÉ AL SEÑOR PORQUE ÉL ES GRANDEMENTE EXALTADO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Both horse and his rider He has hurled into the sea",
+      "originalText": "סוס ורוכבו רמה בים",
+      "transliteration": "sus ve'rukhvo rama ba'yam",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Both horse and his rider He has hurled into the sea",
+        "cs": "KŮŇ I JEHO JEZDEC BYLI SVRŽENI DO MOŘE",
+        "ru": "КОНЯ И ВСАДНИКА ЕГО ВВЕРГ В МОРЕ",
+        "es": "AL CABALLO Y SU JINETE HA ECHADO EN EL MAR"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "with the might of his right hand",
+      "originalText": "בכוח ימינו",
+      "transliteration": "be'koakh yemino",
+      "translationOverflow": "",
+      "translations": {
+        "en": "with the might of his right hand",
+        "cs": "MOCÍ SVÉ PRAVICE",
+        "ru": "СИЛОЙ ДЕСНИЦЫ СВОЕЙ",
+        "es": "CON EL PODER DE SU DIESTRA"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "The Lord is my strength and my song He is my salvation",
+      "originalText": "עוזי וזמרת יה, ויהי לי לישועה",
+      "transliteration": "ozi ve'zimrat ya va'yehi li li'yshua",
+      "translationOverflow": "",
+      "translations": {
+        "en": "The Lord is my strength and my song He is my salvation",
+        "cs": "HOSPODIN JE MÁ SÍLA A MÁ PÍSEŇ, STAL SE MOU SPÁSOU",
+        "ru": "ГОСПОДЬ — СИЛА МОЯ И ПЕСНЬ МОЯ, ОН МОЁ СПАСЕНИЕ",
+        "es": "EL SEÑOR ES MI FUERZA Y MI CANCIÓN, ÉL ES MI SALVACIÓN"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "The God of my Father, i will exalt you",
+      "originalText": "אלוהי אבי, ארומם אותך",
+      "transliteration": "Elohei avi aromem otkha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "The God of my Father, i will exalt you",
+        "cs": "BŮH MÉHO OTCE, BUDU TĚ VYVYŠOVAT",
+        "ru": "БОГ ОТЦА МОЕГО, ПРЕВОЗНЕСУ ТЕБЯ",
+        "es": "DIOS DE MI PADRE, TE EXALTARÉ"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "For all the miracles that You have done for us Father",
+      "originalText": "על כל הניסים, שעשית לנו אבא",
+      "transliteration": "al kol ha'nisim she'asita lanu abba",
+      "translationOverflow": "",
+      "translations": {
+        "en": "For all the miracles that You have done for us Father",
+        "cs": "ZA VŠECHNY ZÁZRAKY, KTERÉ JSI PRO NÁS UČINIL, OTČE",
+        "ru": "ЗА ВСЕ ЧУДЕСА, ЧТО ТЫ СОТВОРИЛ ДЛЯ НАС, ОТЕЦ",
+        "es": "POR TODOS LOS MILAGROS QUE HAS HECHO POR NOSOTROS PADRE"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "And for all of the wonders that You will do",
+      "originalText": "ועל הנפלאות שעוד תעשה",
+      "transliteration": "ve'al ha'niflaot she'od ta'ase",
+      "translationOverflow": "",
+      "translations": {
+        "en": "And for all of the wonders that You will do",
+        "cs": "A ZA VŠECHNY DIVY, KTERÉ JEŠTĚ UČINÍŠ",
+        "ru": "И ЗА ВСЕ ДИВНЫЕ ДЕЛА, ЧТО ЕЩЁ СОВЕРШИШЬ",
+        "es": "Y POR TODAS LAS MARAVILLAS QUE AÚN HARÁS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "With Your outstreched arm",
+      "originalText": "עם זרועך הנטויה",
+      "transliteration": "eim zroakha ha'netuya",
+      "translationOverflow": "",
+      "translations": {
+        "en": "With Your outstreched arm",
+        "cs": "SVOU VZTAŽENOU PAŽÍ",
+        "ru": "ТВОЕЙ ПРОСТЁРТОЙ РУКОЙ",
+        "es": "CON TU BRAZO EXTENDIDO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "That is not too short to save",
+      "originalText": "שלא קצרה מלהושיע",
+      "transliteration": "she'lo katzra mi'lehoshia",
+      "translationOverflow": "",
+      "translations": {
+        "en": "That is not too short to save",
+        "cs": "KTERÁ NENÍ PŘÍLIŠ KRÁTKÁ, ABY ZACHRÁNILA",
+        "ru": "КОТОРАЯ НЕ КОРОТКА, ЧТОБЫ СПАСАТЬ",
+        "es": "QUE NO ES CORTO PARA SALVAR"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "father Let us see You the one whO IS ENTHRONED OUR praise",
+      "originalText": "אבא תן לנו לראות, יושב התהילות",
+      "transliteration": "aba ten lanu lirot yoshev ha'tehilot",
+      "translationOverflow": "",
+      "translations": {
+        "en": "father Let us see You the one whO IS ENTHRONED OUR praise",
+        "cs": "OTČE, DEJ NÁM TĚ SPATŘIT, JENŽ TRŮNÍŠ NAD CHVÁLAMI",
+        "ru": "ОТЕЦ, ДАЙ НАМ УВИДЕТЬ ТЕБЯ, ВОССЕДАЮЩИЙ НА ХВАЛАХ",
+        "es": "PADRE DÉJANOS VERTE, TÚ QUE ESTÁS ENTRONADO EN NUESTRA ALABANZA"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Not to us but unto You, the battle belongs to you",
+      "originalText": "לא לנו כי לך, לך המלחמה",
+      "transliteration": "lo lanu ki lekha, lekha ha'milkhama",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Not to us but unto You, the battle belongs to you",
+        "cs": "NE NÁM, ALE TOBĚ, TOBĚ PATŘÍ TEN BOJ",
+        "ru": "НЕ НАМ, НО ТЕБЕ, ТЕБЕ ПРИНАДЛЕЖИТ БИТВА",
+        "es": "NO A NOSOTROS SINO A TI, LA BATALLA ES TUYA"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "We've seen what happens when you intervene",
+      "originalText": "ראינו מה קורה, כשאתה מתערב",
+      "transliteration": "rainu ma kore kshe'ata mitarev",
+      "translationOverflow": "",
+      "translations": {
+        "en": "We've seen what happens when you intervene",
+        "cs": "VIDĚLI JSME, CO SE DĚJE, KDYŽ TY ZASÁHNEŠ",
+        "ru": "МЫ ВИДЕЛИ, ЧТО БЫВАЕТ, КОГДА ТЫ ВМЕШИВАЕШЬСЯ",
+        "es": "HEMOS VISTO LO QUE PASA CUANDO TÚ INTERVIENES"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "the victory is yours, all the power is yours",
+      "originalText": "לך הניצחון, לך כל הגבורה",
+      "transliteration": "lekha ha'nitzakhon lekha kol ha'gvura",
+      "translationOverflow": "",
+      "translations": {
+        "en": "the victory is yours, all the power is yours",
+        "cs": "TVÉ JE VÍTĚZSTVÍ, TVÁ JE VŠECHNA MOCI",
+        "ru": "ТЕБЕ ПОБЕДА, ТЕБЕ ВСЯ СИЛА",
+        "es": "TUYA ES LA VICTORIA, TUYO ES TODO EL PODER"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "With our eyes lifted high, we sing thanks to You",
+      "originalText": "עם עיננו נשואות, שרים לך תודה",
+      "transliteration": "eim eineinu nesuot sharim lekha toda",
+      "translationOverflow": "",
+      "translations": {
+        "en": "With our eyes lifted high, we sing thanks to You",
+        "cs": "S OČIMA POZVEDNUTÝMA ZPÍVÁME TI DÍKY",
+        "ru": "С ГЛАЗАМИ, ПОДНЯТЫМИ ВВЫСЬ, ПОЁМ ТЕБЕ БЛАГОДАРЕНИЕ",
+        "es": "CON NUESTROS OJOS EN ALTO, TE CANTAMOS GRATITUD"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Not by might, not by power",
+      "originalText": "לא בחיל, לא בכוח",
+      "transliteration": "lo ba'khail lo ba'koach",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Not by might, not by power",
+        "cs": "NE SILOU, NE MOCÍ",
+        "ru": "НЕ СИЛОЙ, НЕ КРЕПОСТЬЮ",
+        "es": "NO CON EJÉRCITO NI CON FUERZA"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "But by The spirit of the Lord of hosts",
+      "originalText": "כי אם ברוח אדוני צבאות",
+      "transliteration": "ki eim be'ruakh Adonai tzevaot",
+      "translationOverflow": "",
+      "translations": {
+        "en": "But by The spirit of the Lord of hosts",
+        "cs": "ALE DUCHEM HOSPODINA ZÁSTUPŮ",
+        "ru": "НО ДУХОМ ГОСПОДА САВАОФА",
+        "es": "SINO CON EL ESPÍRITU DEL SEÑOR DE LOS EJÉRCITOS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "We will not fear, we will continue to trust",
+      "originalText": "לא נירא, נמשיך לבטוח",
+      "transliteration": "lo nira namshikh li'vtoakh",
+      "translationOverflow": "",
+      "translations": {
+        "en": "We will not fear, we will continue to trust",
+        "cs": "NEBUDEME SE BÁT, BUDEME DÁL DŮVĚŘOVAT",
+        "ru": "НЕ УБОИМСЯ, БУДЕМ ПРОДОЛЖАТЬ УПОВАТЬ",
+        "es": "NO TEMEREMOS, SEGUIREMOS CONFIANDO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Keeper of the covenant, fulfiller of the promises",
+      "originalText": "שומר הברית, מקיים ההבטחות",
+      "transliteration": "shomer ha'brit mekayem ha'havtakhot",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Keeper of the covenant, fulfiller of the promises",
+        "cs": "STRÁŽCE SMLOUVY, PLNITELI ZASLÍBENÍ",
+        "ru": "ХРАНИТЕЛЬ ЗАВЕТА, ИСПОЛНИТЕЛЬ ОБЕЩАНИЙ",
+        "es": "GUARDIÁN DEL PACTO, CUMPLIDOR DE LAS PROMESAS"
+      }
+    }
+  ],
+  "3407335c-992d-4504-b85d-6ae990755079": [
+    {
+      "verseType": "",
+      "translation": "Oh God how You provided in the desert",
+      "originalText": "הו אלוהים איך סיפקת במדבר",
+      "transliteration": "oh Elohim eikh sipakta ba'midbar",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Oh God how You provided in the desert",
+        "cs": "Ó BOŽE, JAK JSI ZAOPATŘIL NA POUŠTI",
+        "ru": "О БОЖЕ, КАК ТЫ ОБЕСПЕЧИЛ В ПУСТЫНЕ",
+        "es": "OH DIOS, CÓMO PROVISTE EN EL DESIERTO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "In the place where there is nothing",
+      "originalText": "במקום שאין בו שום דבר",
+      "transliteration": "ba'makom she'ein bo shum davar",
+      "translationOverflow": "",
+      "translations": {
+        "en": "In the place where there is nothing",
+        "cs": "NA MÍSTĚ, KDE NENÍ NIC",
+        "ru": "В МЕСТЕ, ГДЕ НЕТ НИЧЕГО",
+        "es": "EN EL LUGAR DONDE NO HAY NADA"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "In the world they think they have it all",
+      "originalText": "בעולם חושבים שיש הכל",
+      "transliteration": "ba'olam omrim she'yesh ha'kol",
+      "translationOverflow": "",
+      "translations": {
+        "en": "In the world they think they have it all",
+        "cs": "NA SVĚTĚ SI MYSLÍ, ŽE MAJÍ VŠE",
+        "ru": "В МИРЕ ДУМАЮТ, ЧТО ЕСТЬ ВСЁ",
+        "es": "EN EL MUNDO PIENSAN QUE LO TIENEN TODO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Yet somehow in the end they find there's a lack",
+      "originalText": "ואיכשהו בסוף מוצאים מחסור",
+      "transliteration": "ve'eikhshehu basof motzim makhsor",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Yet somehow in the end they find there's a lack",
+        "cs": "A PŘESTO NAKONEC NACHÁZEJÍ NEDOSTATEK",
+        "ru": "НО В КОНЦЕ НАХОДЯТ НЕДОСТАТОК",
+        "es": "Y DE ALGÚN MODO AL FINAL ENCUENTRAN QUE HAY CARENCIA"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Oh God we are in the desert",
+      "originalText": "הו אלוהים אנחנו במדבר",
+      "transliteration": "oh Elohim anakhnu ba'midbar",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Oh God we are in the desert",
+        "cs": "Ó BOŽE, JSME NA POUŠTI",
+        "ru": "О БОЖЕ, МЫ В ПУСТЫНЕ",
+        "es": "OH DIOS, ESTAMOS EN EL DESIERTO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "In the place where there is nothing",
+      "originalText": "במקום שאין בו שום דבר",
+      "transliteration": "ba'makom she'ein bo shum davar",
+      "translationOverflow": "",
+      "translations": {
+        "en": "In the place where there is nothing",
+        "cs": "NA MÍSTĚ, KDE NENÍ NIC",
+        "ru": "В МЕСТЕ, ГДЕ НЕТ НИЧЕГО",
+        "es": "EN EL LUGAR DONDE NO HAY NADA"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "In a world that has it all",
+      "originalText": "בעולם שיש בו את הכל",
+      "transliteration": "be'olam she'yesh bo et ha'kol",
+      "translationOverflow": "",
+      "translations": {
+        "en": "In a world that has it all",
+        "cs": "VE SVĚTĚ, KTERÝ MÁ VŠE",
+        "ru": "В МИРЕ, ГДЕ ЕСТЬ ВСЁ",
+        "es": "EN UN MUNDO QUE LO TIENE TODO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "We say Father, put in us a hunger",
+      "originalText": "אנו אומרים אבא, שים בנו רעב",
+      "transliteration": "anu omrim abba sim banu ra'av",
+      "translationOverflow": "",
+      "translations": {
+        "en": "We say Father, put in us a hunger",
+        "cs": "ŘÍKÁME OTČE, VLOŽ DO NÁS HLAD",
+        "ru": "МЫ ГОВОРИМ: ОТЧЕ, ВЛОЖИ В НАС ГОЛОД",
+        "es": "NOSOTROS DECIMOS PADRE, PON EN NOSOTROS HAMBRE"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Put a hunger and thirst in us",
+      "originalText": "שים בנו רעב שים בנו צמא",
+      "transliteration": "sim banu raav sim banu tzama",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Put a hunger and thirst in us",
+        "cs": "VLOŽ DO NÁS HLAD, VLOŽ DO NÁS ŽÍZEŇ",
+        "ru": "ВЛОЖИ В НАС ГОЛОД, ВЛОЖИ В НАС ЖАЖДУ",
+        "es": "PON HAMBRE EN NOSOTROS, PON SED EN NOSOTROS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Let us taste and receive passion",
+      "originalText": "תן לנו  לטעום ולקבל תשוקה",
+      "transliteration": "ten lanu litom u'lekabel tshuka",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Let us taste and receive passion",
+        "cs": "DEJ NÁM OKUSIT A PŘIJMOUT TOUHU",
+        "ru": "ДАЙ НАМ ВКУСИТЬ И ОБРЕСТИ СТРАСТЬ",
+        "es": "DÉJANOS PROBAR Y RECIBIR PASIÓN"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Put a hunger and thirst in us",
+      "originalText": "שים בנו רעב שים בנו צמא",
+      "transliteration": "sim banu raav sim banu tzama",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Put a hunger and thirst in us",
+        "cs": "VLOŽ DO NÁS HLAD, VLOŽ DO NÁS ŽÍZEŇ",
+        "ru": "ВЛОЖИ В НАС ГОЛОД, ВЛОЖИ В НАС ЖАЖДУ",
+        "es": "PON HAMBRE EN NOSOTROS, PON SED EN NOSOTROS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "To seek Your kingdom",
+      "originalText": "לדרוש את מלכותך",
+      "transliteration": "lidrosh et malkhutkha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "To seek Your kingdom",
+        "cs": "HLEDAT TVÉ KRÁLOVSTVÍ",
+        "ru": "ИСКАТЬ ТВОЁ ЦАРСТВО",
+        "es": "PARA BUSCAR TU REINO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Oh God creator of the heart of man",
+      "originalText": "אלוהים יוצר לב האדם",
+      "transliteration": "Elohim yotzer lev ha'adam",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Oh God creator of the heart of man",
+        "cs": "Ó BOŽE, STVOŘITELI LIDSKÉHO SRDCE",
+        "ru": "БОЖЕ, ТВОРЕЦ СЕРДЦА ЧЕЛОВЕКА",
+        "es": "OH DIOS, CREADOR DEL CORAZÓN DEL HOMBRE"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Our hearts get filled up all the time",
+      "originalText": "ליבנו מתמלא כל הזמן",
+      "transliteration": "libeinu mitmaleh kol ha'zman",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Our hearts get filled up all the time",
+        "cs": "NAŠE SRDCE SE NEUSTÁLE PLNÍ",
+        "ru": "НАШИ СЕРДЦА НАПОЛНЯЮТСЯ ВСЁ ВРЕМЯ",
+        "es": "NUESTROS CORAZONES SE LLENAN TODO EL TIEMPO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "But today our hands are empty",
+      "originalText": "אבל היום ידינו הן ריקות",
+      "transliteration": "aval ha'yom yadeinu hen reikot",
+      "translationOverflow": "",
+      "translations": {
+        "en": "But today our hands are empty",
+        "cs": "ALE DNES JSOU NAŠE RUCE PRÁZDNÉ",
+        "ru": "НО СЕГОДНЯ НАШИ РУКИ ПУСТЫ",
+        "es": "PERO HOY NUESTRAS MANOS ESTÁN VACÍAS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "We've left the nonsense behind",
+      "originalText": "עזבנו מאחור את השטויות",
+      "transliteration": "azavnu me'akhor et ha'shtuyot",
+      "translationOverflow": "",
+      "translations": {
+        "en": "We've left the nonsense behind",
+        "cs": "NECHALI JSME ZA SEBOU MARNOSTI",
+        "ru": "МЫ ОСТАВИЛИ ПОЗАДИ ВСЮ СУЕТУ",
+        "es": "DEJAMOS ATRÁS LAS VANIDADES"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Oh God the one who is near to all who call on Him",
+      "originalText": "אלוהים קרוב לכל קוראיו",
+      "transliteration": "Elohim karov le'khol korav",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Oh God the one who is near to all who call on Him",
+        "cs": "Ó BOŽE, BLÍZKÝ VŠEM, KDO TĚ VZÝVAJÍ",
+        "ru": "БОЖЕ, БЛИЗКИЙ КО ВСЕМ ПРИЗЫВАЮЩИМ ТЕБЯ",
+        "es": "OH DIOS, QUE ESTÁS CERCA DE TODOS LOS QUE TE INVOCAN"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Many prayers go up to The Father",
+      "originalText": "תפילות רבות עלו תמיד לאב",
+      "transliteration": "tfilot rabot alu tamid la'av",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Many prayers go up to The Father",
+        "cs": "MNOHO MODLITEB STOUPÁ K OTCI",
+        "ru": "МНОГО МОЛИТВ ВСЕГДА ВОЗНОСИЛОСЬ К ОТЦУ",
+        "es": "MUCHAS ORACIONES HAN SUBIDO SIEMPRE AL PADRE"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Today there is only one prayer in our mouths",
+      "originalText": "היום בפינו רק תפילה אחת",
+      "transliteration": "hayom be'feinu rak tfilah akhat",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Today there is only one prayer in our mouths",
+        "cs": "DNES JE V NAŠICH ÚSTECH JEN JEDNA MODLITBA",
+        "ru": "СЕГОДНЯ В НАШИХ УСТАХ ЛИШЬ ОДНА МОЛИТВА",
+        "es": "HOY EN NUESTRA BOCA HAY SOLO UNA ORACIÓN"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Father, put in us a hunger",
+      "originalText": "אבא, שים בנו רעב",
+      "transliteration": "abba sim banu ra'av",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Father, put in us a hunger",
+        "cs": "OTČE, VLOŽ DO NÁS HLAD",
+        "ru": "ОТЧЕ, ВЛОЖИ В НАС ГОЛОД",
+        "es": "PADRE, PON EN NOSOTROS HAMBRE"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Not a hunger for bread, not a thirst for water",
+      "originalText": "לא רעב ללחם, ולא צמא למיים",
+      "transliteration": "lo ra'av le'lekhem ve'lo tzama la'maim",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Not a hunger for bread, not a thirst for water",
+        "cs": "NE HLAD PO CHLEBU, ANI ŽÍZEŇ PO VODĚ",
+        "ru": "НЕ ГОЛОД ПО ХЛЕБУ, НЕ ЖАЖДУ ВОДЫ",
+        "es": "NO HAMBRE DE PAN, NI SED DE AGUA"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "But a hunger to hear",
+      "originalText": "כי אם רעב לשמוע",
+      "transliteration": "ki im ra'av lishmoa",
+      "translationOverflow": "",
+      "translations": {
+        "en": "But a hunger to hear",
+        "cs": "ALE HLAD SLYŠET",
+        "ru": "НО ГОЛОД УСЛЫШАТЬ",
+        "es": "SINO HAMBRE DE ESCUCHAR"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Lord open up the heavens",
+      "originalText": "אדון תפתח את השמיים",
+      "transliteration": "Adon tiftakh et ha'shamaim",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Lord open up the heavens",
+        "cs": "PANE, OTEVŘI NEBESA",
+        "ru": "ГОСПОДЬ, ОТКРОЙ НЕБЕСА",
+        "es": "SEÑOR, ABRE LOS CIELOS"
       }
     }
   ]

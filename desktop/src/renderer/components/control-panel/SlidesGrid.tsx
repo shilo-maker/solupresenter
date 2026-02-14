@@ -9,6 +9,8 @@ import ArrangementEditor from './ArrangementEditor';
 import { generateSlideCodes, SlideCodeMap } from '../../utils/slideCodeUtils';
 import { ArrangementStateReturn } from '../../hooks/useArrangementState';
 import { getSectionRanges } from '../../utils/arrangementUtils';
+import { resolveTranslation } from '../../utils/translationUtils';
+import { useSettings } from '../../contexts/SettingsContext';
 
 interface Song {
   id: string;
@@ -113,6 +115,7 @@ const SlidesGrid = memo<SlidesGridProps>(({
 }) => {
   const { t, i18n } = useTranslation();
   const isRTL = i18n.dir() === 'rtl';
+  const { settings } = useSettings();
   const isArrangementMode = arrangementState?.isArrangementMode ?? false;
   const activeArrangement = arrangementState?.activeArrangement;
 
@@ -322,10 +325,12 @@ const SlidesGrid = memo<SlidesGridProps>(({
                 </div>
                 {/* Slides in this section */}
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  {section.slides.map(item => (
+                  {section.slides.map(item => {
+                    const resolvedItem = { ...item.slide, ...resolveTranslation(item.slide, settings.translationLanguage) };
+                    return (
                     <div key={`${section.sectionIndex}-${item.slideInSection}`} data-flat-index={item.flatIndex} style={{ width: '200px', flexShrink: 0 }}>
                       <SlideGridItem
-                        slide={item.slide}
+                        slide={resolvedItem}
                         index={item.flatIndex}
                         isSelected={item.flatIndex === arrangementState?.flatSlideIndex && !isBlank && liveSongId === selectedSong.id}
                         displayMode={displayMode}
@@ -335,7 +340,8 @@ const SlidesGrid = memo<SlidesGridProps>(({
                         slideCode={showSlideCodes ? slideCodeMap?.codes[item.originalIndex]?.code : undefined}
                       />
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </React.Fragment>
@@ -367,10 +373,12 @@ const SlidesGrid = memo<SlidesGridProps>(({
         ) : (
           // Regular single-slide view (no arrangement)
           <>
-            {selectedSong.slides.map((slide, idx) => (
+            {selectedSong.slides.map((slide, idx) => {
+              const resolvedSlide = { ...slide, ...resolveTranslation(slide, settings.translationLanguage) };
+              return (
               <SlideGridItem
                 key={`${selectedSong.id}-slide-${idx}`}
-                slide={slide}
+                slide={resolvedSlide}
                 index={idx}
                 isSelected={idx === currentSlideIndex && !isBlank && liveSongId === selectedSong.id}
                 displayMode={displayMode}
@@ -379,7 +387,8 @@ const SlidesGrid = memo<SlidesGridProps>(({
                 onEdit={onEditSlide}
                 slideCode={showSlideCodes ? slideCodeMap?.codes[idx]?.code : undefined}
               />
-            ))}
+              );
+            })}
             {/* Add Slide card */}
             {onAddSlide && (
               <div

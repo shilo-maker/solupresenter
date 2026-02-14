@@ -8,13 +8,14 @@ import OBSSettingsModal from './modals/OBSSettingsModal';
 import AboutModal from './modals/AboutModal';
 import DisplayItem from './DisplayItem';
 import logoImage from '../../assets/logo.png';
+import { DisplayAssignedType } from './panels/types';
 
 interface Display {
   id: number;
   label: string;
   bounds: { x: number; y: number; width: number; height: number };
   isAssigned?: boolean;
-  assignedType?: 'viewer' | 'stage';
+  assignedType?: DisplayAssignedType;
 }
 
 interface Theme {
@@ -58,6 +59,7 @@ export interface HeaderBarProps {
   stageMonitorThemes: Theme[];
   bibleThemes: Theme[];
   prayerThemes: Theme[];
+  dualTranslationThemes?: Theme[];
   obsThemes?: Theme[];
   selectedOBSSongsTheme?: Theme | null;
   selectedOBSBibleTheme?: Theme | null;
@@ -70,17 +72,18 @@ export interface HeaderBarProps {
   selectedBibleTheme: Theme | null;
   selectedPrayerTheme: Theme | null;
   selectedStageTheme: Theme | null;
+  selectedDualTranslationTheme?: Theme | null;
   onShowThemePanelChange: (show: boolean) => void;
   onApplyViewerTheme: (theme: Theme) => void;
   onApplyBibleTheme: (theme: Theme) => void;
   onApplyPrayerTheme: (theme: Theme) => void;
   onApplyStageTheme: (theme: Theme) => void;
-  onCreateTheme: (themeType: 'songs' | 'bible' | 'prayer' | 'stage' | 'obs-songs' | 'obs-bible' | 'obs-prayer') => void;
-  onEditTheme: (themeType: 'songs' | 'bible' | 'prayer' | 'stage' | 'obs-songs' | 'obs-bible' | 'obs-prayer', themeId: string) => void;
+  onApplyDualTranslationTheme?: (theme: Theme) => void;
+  onCreateTheme: (themeType: 'songs' | 'bible' | 'prayer' | 'stage' | 'obs-songs' | 'obs-bible' | 'obs-prayer' | 'dual-translation') => void;
+  onEditTheme: (themeType: 'songs' | 'bible' | 'prayer' | 'stage' | 'obs-songs' | 'obs-bible' | 'obs-prayer' | 'dual-translation', themeId: string) => void;
 
-  // OBS state
-  obsServerRunning: boolean;
-  obsServerUrl: string | null;
+  // Streaming state
+  isStreaming?: boolean;
 
   // UI callbacks
   onShowDisplayPanelChange: (show: boolean) => void;
@@ -91,13 +94,10 @@ export interface HeaderBarProps {
 
   // Display callbacks
   onControlDisplayChange: (displayId: number) => Promise<void>;
-  onOpenDisplay: (displayId: number, type: 'viewer' | 'stage') => void;
+  onOpenDisplay: (displayId: number, type: DisplayAssignedType, deviceId?: string, audioDeviceId?: string) => void;
   onCloseDisplay: (displayId: number) => void;
   onIdentifyDisplay: (displayId: number) => Promise<void>;
   onCloseDisplayPanel: () => void;
-
-  // OBS callbacks
-  onToggleOBSServer: () => Promise<void>;
 
   // Auth callbacks
   onConnectOnline: () => void;
@@ -121,6 +121,111 @@ export interface HeaderBarProps {
   headless?: boolean;
 }
 
+// --- Shared constants for display rows ---
+
+const GEAR_SVG_PATH = "M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z";
+
+const ROW_LEFT_STYLE: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 };
+const ROW_ACTIONS_STYLE: React.CSSProperties = { display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 };
+const ROW_LABEL_STYLE: React.CSSProperties = { color: 'white', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' };
+const ROW_SUBTITLE_STYLE: React.CSSProperties = { color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+const ROW_TEXT_WRAP_STYLE: React.CSSProperties = { minWidth: 0, flex: 1 };
+const ROW_STOP_BTN_STYLE: React.CSSProperties = { background: colors.button.danger, border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer' };
+
+// --- Extracted OBSRow (used in both headless and non-headless blocks) ---
+
+const OBS_ICON_STYLE: React.CSSProperties = {
+  width: '28px', height: '28px', borderRadius: '6px',
+  background: 'rgba(23, 162, 184, 0.2)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+};
+
+const OBS_START_BTN_STYLE: React.CSSProperties = {
+  background: 'rgba(23, 162, 184, 0.3)', border: '1px solid rgba(23, 162, 184, 0.5)', borderRadius: '6px',
+  padding: '6px 12px', color: 'white', fontSize: '0.75rem', cursor: 'pointer'
+};
+
+const OBS_BADGE_STYLE: React.CSSProperties = {
+  fontSize: '0.7rem', background: '#17a2b8', padding: '2px 6px', borderRadius: '4px',
+  color: 'white', fontWeight: 700
+};
+
+interface OBSRowProps {
+  isRunning: boolean;
+  isStopping: boolean;
+  hovered: boolean;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+  onOpenSettings: () => void;
+  onStop: () => void;
+  t: (key: string, fallback?: string) => string;
+}
+
+const OBSRow = memo<OBSRowProps>(({ isRunning, isStopping, hovered, onMouseEnter, onMouseLeave, onOpenSettings, onStop, t }) => (
+  <div
+    className="display-row"
+    onMouseEnter={onMouseEnter}
+    onMouseLeave={onMouseLeave}
+    style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '10px', borderRadius: '8px', marginBottom: '8px',
+      background: isRunning ? 'rgba(23, 162, 184, 0.15)' : 'rgba(255,255,255,0.05)',
+      border: isRunning ? '1px solid rgba(23, 162, 184, 0.4)' : '1px solid transparent'
+    }}
+  >
+    <div style={ROW_LEFT_STYLE}>
+      <div style={OBS_ICON_STYLE}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#17a2b8" strokeWidth="2">
+          <circle cx="12" cy="12" r="10"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+      </div>
+      <div style={ROW_TEXT_WRAP_STYLE}>
+        <div style={ROW_LABEL_STYLE}>
+          OBS
+          {isRunning && <span style={OBS_BADGE_STYLE}>ON</span>}
+        </div>
+        <div style={ROW_SUBTITLE_STYLE}>
+          {t('controlPanel.obsBrowserSource', 'Browser Source')}
+        </div>
+      </div>
+    </div>
+    <div style={ROW_ACTIONS_STYLE}>
+      {isRunning && (
+        <button
+          onClick={onOpenSettings}
+          title="OBS settings"
+          style={{
+            background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '6px',
+            padding: '6px', color: 'white', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'all 0.2s',
+            opacity: hovered ? 1 : 0, pointerEvents: hovered ? 'auto' : 'none'
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="3" />
+            <path d={GEAR_SVG_PATH} />
+          </svg>
+        </button>
+      )}
+      {isRunning ? (
+        <button onClick={onStop} disabled={isStopping} style={{
+          ...ROW_STOP_BTN_STYLE,
+          ...(isStopping ? { opacity: 0.6, cursor: 'not-allowed' } : {})
+        }}>
+          {isStopping ? 'Stopping...' : t('common.stop', 'Stop')}
+        </button>
+      ) : (
+        <button onClick={onOpenSettings} style={OBS_START_BTN_STYLE}>
+          {t('common.start', 'Start')}
+        </button>
+      )}
+    </div>
+  </div>
+));
+OBSRow.displayName = 'OBSRow';
+
 const HeaderBar = memo<HeaderBarProps>(({
   showDisplayPanel,
   displays,
@@ -135,6 +240,7 @@ const HeaderBar = memo<HeaderBarProps>(({
   stageMonitorThemes,
   bibleThemes,
   prayerThemes,
+  dualTranslationThemes = [],
   obsThemes,
   selectedOBSSongsTheme,
   selectedOBSBibleTheme,
@@ -145,15 +251,16 @@ const HeaderBar = memo<HeaderBarProps>(({
   selectedBibleTheme,
   selectedPrayerTheme,
   selectedStageTheme,
+  selectedDualTranslationTheme,
   onShowThemePanelChange,
   onApplyViewerTheme,
   onApplyBibleTheme,
   onApplyPrayerTheme,
   onApplyStageTheme,
+  onApplyDualTranslationTheme,
   onCreateTheme,
   onEditTheme,
-  obsServerRunning,
-  obsServerUrl,
+  isStreaming = false,
   onShowDisplayPanelChange,
   onShowUserMenuChange,
   onShowAuthModal,
@@ -164,7 +271,6 @@ const HeaderBar = memo<HeaderBarProps>(({
   onCloseDisplay,
   onIdentifyDisplay,
   onCloseDisplayPanel,
-  onToggleOBSServer,
   onConnectOnline,
   onLogout,
   onThemeOverrideChanged,
@@ -179,13 +285,14 @@ const HeaderBar = memo<HeaderBarProps>(({
 }) => {
   const { t, i18n } = useTranslation();
   const isRTL = i18n.language === 'he';
-  const [obsUrlCopied, setObsUrlCopied] = useState(false);
   const [showThemeOverrideModal, setShowThemeOverrideModal] = useState(false);
   const [selectedDisplayForSettings, setSelectedDisplayForSettings] = useState<number | 'obs' | null>(null);
-  const [obsHovered, setObsHovered] = useState(false);
   const [showDisplaySettingsModal, setShowDisplaySettingsModal] = useState(false);
   const [displayForSettings, setDisplayForSettings] = useState<Display | null>(null);
-  const [showOBSSettingsModal, setShowOBSSettingsModal] = useState(false);
+  const [showOBSModal, setShowOBSModal] = useState(false);
+  const [obsHovered, setObsHovered] = useState(false);
+  const [obsRunning, setObsRunning] = useState(false);
+  const [obsUrl, setObsUrl] = useState<string | null>(null);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [vdUrlCopiedId, setVdUrlCopiedId] = useState<string | null>(null);
   const [vdQrCode, setVdQrCode] = useState<{ id: string; dataUrl: string } | null>(null);
@@ -194,7 +301,6 @@ const HeaderBar = memo<HeaderBarProps>(({
   const [pinCopied, setPinCopied] = useState(false);
   const [urlCopied, setUrlCopied] = useState(false);
   const vdQrCodeRef = useRef<string | null>(null);
-  const obsUrlCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const vdCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pinCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const urlCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -202,9 +308,6 @@ const HeaderBar = memo<HeaderBarProps>(({
   // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
-      if (obsUrlCopyTimeoutRef.current) {
-        clearTimeout(obsUrlCopyTimeoutRef.current);
-      }
       if (vdCopyTimeoutRef.current) {
         clearTimeout(vdCopyTimeoutRef.current);
       }
@@ -232,32 +335,67 @@ const HeaderBar = memo<HeaderBarProps>(({
 
   // Memoized callback for opening display settings
   const handleOpenDisplaySettings = useCallback((display: Display) => {
+    onCloseDisplayPanel();
     setDisplayForSettings(display);
     setShowDisplaySettingsModal(true);
-  }, []);
+  }, [onCloseDisplayPanel]);
+
+
 
   // Memoized callbacks for OBS row
   const handleObsMouseEnter = useCallback(() => setObsHovered(true), []);
   const handleObsMouseLeave = useCallback(() => setObsHovered(false), []);
+  const handleOpenOBSSettings = useCallback(() => { onCloseDisplayPanel(); setShowOBSModal(true); }, [onCloseDisplayPanel]);
+  const handleCloseOBSModal = useCallback(() => setShowOBSModal(false), []);
 
-  const handleCopyObsUrl = useCallback(() => {
-    if (obsServerUrl) {
-      navigator.clipboard.writeText(obsServerUrl);
-      setObsUrlCopied(true);
-      if (obsUrlCopyTimeoutRef.current) {
-        clearTimeout(obsUrlCopyTimeoutRef.current);
+  const [obsStopping, setObsStopping] = useState(false);
+
+  // Check OBS status on mount and periodically
+  useEffect(() => {
+    const checkOBS = async () => {
+      try {
+        const running = await window.electronAPI.isOBSServerRunning();
+        setObsRunning(running);
+        if (running) {
+          const url = await window.electronAPI.getOBSServerUrl();
+          setObsUrl(url);
+        } else {
+          setObsUrl(null);
+        }
+        setObsStopping(false);
+      } catch {}
+    };
+    checkOBS();
+    const interval = setInterval(checkOBS, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleStartOBS = useCallback(async () => {
+    try {
+      const result = await window.electronAPI.startOBSServer();
+      if (result.success) {
+        setObsRunning(true);
+        setObsUrl(result.url || await window.electronAPI.getOBSServerUrl());
       }
-      obsUrlCopyTimeoutRef.current = setTimeout(() => setObsUrlCopied(false), 2000);
+    } catch {}
+  }, []);
+
+  const handleStopOBS = useCallback(async () => {
+    setObsStopping(true);
+    try {
+      await window.electronAPI.stopOBSServer();
+      setObsRunning(false);
+      setObsUrl(null);
+    } catch {}
+    setObsStopping(false);
+  }, []);
+
+  // Adapter: OBSSettingsModal expects (themeType, theme) but HeaderBar has onApplyOBSTheme(theme)
+  const handleApplyOBSModalTheme = useCallback((themeType: 'songs' | 'bible' | 'prayer', theme: Theme | null) => {
+    if (theme && onApplyOBSTheme) {
+      onApplyOBSTheme({ ...theme, type: themeType });
     }
-  }, [obsServerUrl]);
-
-  const handleOpenOBSSettings = useCallback(() => {
-    setShowOBSSettingsModal(true);
-  }, []);
-
-  const handleCloseOBSSettingsModal = useCallback(() => {
-    setShowOBSSettingsModal(false);
-  }, []);
+  }, [onApplyOBSTheme]);
 
   const handleCopyVdUrl = useCallback((id: string, url: string) => {
     if (onCopyVirtualDisplayUrl) {
@@ -288,12 +426,6 @@ const HeaderBar = memo<HeaderBarProps>(({
     }
   }, []);
 
-  const handleOBSApplyTheme = useCallback((themeType: 'songs' | 'bible' | 'prayer', theme: Theme | null) => {
-    if (onApplyOBSTheme && theme) {
-      onApplyOBSTheme(theme);
-    }
-  }, [onApplyOBSTheme]);
-
   // Memoized modal callbacks
   const handleCloseThemeOverrideModal = useCallback(() => {
     setShowThemeOverrideModal(false);
@@ -305,8 +437,8 @@ const HeaderBar = memo<HeaderBarProps>(({
     setDisplayForSettings(null);
   }, []);
 
-  const handleDisplaySettingsStart = useCallback((displayId: number, type: 'viewer' | 'stage') => {
-    onOpenDisplay(displayId, type);
+  const handleDisplaySettingsStart = useCallback((displayId: number, type: DisplayAssignedType, deviceId?: string, audioDeviceId?: string) => {
+    onOpenDisplay(displayId, type, deviceId, audioDeviceId);
     setShowDisplaySettingsModal(false);
     setDisplayForSettings(null);
   }, [onOpenDisplay]);
@@ -396,120 +528,17 @@ const HeaderBar = memo<HeaderBarProps>(({
                 />
               ))}
 
-              {/* OBS Virtual Display */}
-              <div
-                className="display-row"
+              {/* OBS Browser Source */}
+              <OBSRow
+                isRunning={obsRunning}
+                isStopping={obsStopping}
+                hovered={obsHovered}
                 onMouseEnter={handleObsMouseEnter}
                 onMouseLeave={handleObsMouseLeave}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px',
-                  background: obsServerRunning ? 'rgba(23, 162, 184, 0.15)' : 'rgba(255,255,255,0.05)',
-                  borderRadius: '8px',
-                  marginBottom: '8px',
-                  border: obsServerRunning ? '1px solid rgba(23, 162, 184, 0.4)' : '1px solid transparent'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '6px',
-                      background: 'rgba(23, 162, 184, 0.2)',
-                      border: '1px solid rgba(23, 162, 184, 0.5)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#17a2b8" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10"/>
-                      <circle cx="12" cy="12" r="3"/>
-                    </svg>
-                  </div>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ color: 'white', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      OBS
-                      {obsServerRunning && (
-                        <span style={{ fontSize: '0.7rem', background: '#17a2b8', padding: '2px 6px', borderRadius: '4px' }}>
-                          {t('controlPanel.running', 'Running')}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{
-                      color: 'rgba(255,255,255,0.5)',
-                      fontSize: '0.75rem',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {obsServerRunning && obsServerUrl ? obsServerUrl : t('controlPanel.browserSource', 'Browser Source')}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
-                  {obsServerRunning && (
-                    <button
-                      onClick={handleOpenOBSSettings}
-                      title={t('displayThemeOverrides.configureOBSTheme', 'Configure OBS themes')}
-                      style={{
-                        background: 'rgba(255,255,255,0.1)',
-                        border: 'none',
-                        borderRadius: '6px',
-                        padding: '6px',
-                        color: 'white',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.2s',
-                        opacity: obsHovered ? 1 : 0,
-                        pointerEvents: obsHovered ? 'auto' : 'none'
-                      }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="3" />
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                      </svg>
-                    </button>
-                  )}
-                  {obsServerRunning ? (
-                    <button
-                      onClick={onToggleOBSServer}
-                      style={{
-                        background: colors.button.danger,
-                        border: 'none',
-                        borderRadius: '6px',
-                        padding: '6px 12px',
-                        color: 'white',
-                        fontSize: '0.75rem',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {t('common.stop', 'Stop')}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleOpenOBSSettings}
-                      style={{
-                        background: colors.button.primary,
-                        border: 'none',
-                        borderRadius: '6px',
-                        padding: '6px 12px',
-                        color: 'white',
-                        fontSize: '0.75rem',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {t('common.start', 'Start')}
-                    </button>
-                  )}
-                </div>
-              </div>
+                onOpenSettings={handleOpenOBSSettings}
+                onStop={handleStopOBS}
+                t={t}
+              />
 
               {/* Virtual Displays Section */}
               {authState.isAuthenticated && (
@@ -815,6 +844,60 @@ const HeaderBar = memo<HeaderBarProps>(({
                   </button>
                 </div>
               </div>
+
+              {/* Dual Translation Theme Section */}
+              {dualTranslationThemes.length > 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', marginBottom: '8px', fontWeight: 600 }}>
+                  {t('controlPanel.dualTranslationTheme', 'Dual Translation Theme')}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {dualTranslationThemes.map(theme => (
+                    <button
+                      key={theme.id}
+                      onClick={() => onApplyDualTranslationTheme?.(theme)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        background: selectedDualTranslationTheme?.id === theme.id ? 'rgba(76, 175, 80, 0.2)' : 'rgba(255,255,255,0.05)',
+                        border: selectedDualTranslationTheme?.id === theme.id ? '1px solid rgba(76, 175, 80, 0.5)' : '1px solid transparent',
+                        borderRadius: '6px',
+                        color: 'white',
+                        fontSize: '0.8rem',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}
+                    >
+                      <span>{theme.name}</span>
+                      {selectedDualTranslationTheme?.id === theme.id && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4caf50" strokeWidth="2">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => onCreateTheme('dual-translation')}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      background: 'transparent',
+                      border: '1px dashed rgba(255,255,255,0.2)',
+                      borderRadius: '6px',
+                      color: 'rgba(255,255,255,0.5)',
+                      fontSize: '0.75rem',
+                      cursor: 'pointer',
+                      textAlign: 'center'
+                    }}
+                  >
+                    + {t('controlPanel.createTheme', 'Create Theme')}
+                  </button>
+                </div>
+              </div>
+              )}
 
               {/* Bible Theme Section */}
               <div style={{ marginBottom: '16px' }}>
@@ -1159,6 +1242,203 @@ const HeaderBar = memo<HeaderBarProps>(({
           </div>
         )}
 
+        {/* User Menu Dropdown - Fixed Position next to sidebar */}
+        {showUserMenu && (
+          <>
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 9999 }}
+              onClick={() => onShowUserMenuChange(false)}
+            />
+            <div style={{
+              position: 'fixed',
+              top: '162px',
+              left: '80px',
+              zIndex: 10000,
+              background: 'rgba(24, 24, 27, 0.98)',
+              borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.2)',
+              padding: '4px',
+              minWidth: onlineConnected ? '280px' : '150px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+            }}>
+              <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '4px' }}>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>{t('settings.loggedInAs')}</div>
+                <div style={{ color: 'white', fontSize: '0.85rem', fontWeight: 500 }}>{authState.user?.email}</div>
+              </div>
+
+              {/* Room PIN Section */}
+              {onlineConnected && roomPin && (
+                <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '4px' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '4px' }}>Room PIN</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: 'white', fontSize: '1rem', fontWeight: 600, fontFamily: 'monospace', letterSpacing: '2px' }}>{roomPin}</span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(roomPin);
+                        setPinCopied(true);
+                        if (pinCopyTimeoutRef.current) clearTimeout(pinCopyTimeoutRef.current);
+                        pinCopyTimeoutRef.current = setTimeout(() => setPinCopied(false), 2000);
+                      }}
+                      style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '2px 8px',
+                        color: pinCopied ? '#4caf50' : 'rgba(255,255,255,0.6)',
+                        cursor: 'pointer',
+                        fontSize: '0.7rem'
+                      }}
+                    >
+                      {pinCopied ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Public Room Section */}
+              {onlineConnected && (
+                <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '4px' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '4px' }}>Public Room</div>
+                  {activePublicRoom ? (
+                    <div>
+                      <div style={{
+                        color: 'rgba(255,255,255,0.7)',
+                        fontSize: '0.75rem',
+                        marginBottom: '6px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        solucast.app/viewer?room={activePublicRoom.slug}
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(`https://solucast.app/viewer?room=${activePublicRoom.slug}`);
+                            setUrlCopied(true);
+                            if (urlCopyTimeoutRef.current) clearTimeout(urlCopyTimeoutRef.current);
+                            urlCopyTimeoutRef.current = setTimeout(() => setUrlCopied(false), 2000);
+                          }}
+                          style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 10px',
+                            color: urlCopied ? '#4caf50' : 'rgba(255,255,255,0.7)',
+                            cursor: 'pointer',
+                            fontSize: '0.7rem'
+                          }}
+                        >
+                          {urlCopied ? 'Copied!' : 'Copy URL'}
+                        </button>
+                        {onUnlinkPublicRoom && (
+                          <button
+                            onClick={onUnlinkPublicRoom}
+                            style={{
+                              background: 'rgba(220, 53, 69, 0.15)',
+                              border: '1px solid rgba(220, 53, 69, 0.3)',
+                              borderRadius: '4px',
+                              padding: '4px 10px',
+                              color: '#dc3545',
+                              cursor: 'pointer',
+                              fontSize: '0.7rem'
+                            }}
+                          >
+                            Unlink
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : onCreatePublicRoom ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', flexShrink: 0 }}>
+                        {authState.user?.email?.split('@')[0]?.toLowerCase().replace(/[^\w-]/g, '') || 'user'}-
+                      </span>
+                      <input
+                        type="text"
+                        value={publicRoomName}
+                        onChange={(e) => setPublicRoomName(e.target.value.toLowerCase().replace(/[^\w-]/g, ''))}
+                        placeholder="worship"
+                        onKeyDown={async (e) => {
+                          if (e.key === 'Enter' && publicRoomName.trim() && !publicRoomCreating) {
+                            setPublicRoomCreating(true);
+                            try {
+                              await onCreatePublicRoom(publicRoomName.trim());
+                              setPublicRoomName('');
+                            } catch { /* error handled in parent */ }
+                            setPublicRoomCreating(false);
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          background: 'rgba(255,255,255,0.1)',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          borderRadius: '4px',
+                          padding: '4px 8px',
+                          color: 'white',
+                          fontSize: '0.75rem',
+                          outline: 'none'
+                        }}
+                      />
+                      <button
+                        onClick={async () => {
+                          if (publicRoomName.trim() && !publicRoomCreating) {
+                            setPublicRoomCreating(true);
+                            try {
+                              await onCreatePublicRoom(publicRoomName.trim());
+                              setPublicRoomName('');
+                            } catch { /* error handled in parent */ }
+                            setPublicRoomCreating(false);
+                          }
+                        }}
+                        disabled={!publicRoomName.trim() || publicRoomCreating}
+                        style={{
+                          background: publicRoomName.trim() && !publicRoomCreating ? 'rgba(76, 175, 80, 0.2)' : 'rgba(255,255,255,0.05)',
+                          border: publicRoomName.trim() && !publicRoomCreating ? '1px solid rgba(76, 175, 80, 0.4)' : '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: '4px',
+                          padding: '4px 10px',
+                          color: publicRoomName.trim() && !publicRoomCreating ? '#4caf50' : 'rgba(255,255,255,0.3)',
+                          cursor: publicRoomName.trim() && !publicRoomCreating ? 'pointer' : 'default',
+                          fontSize: '0.7rem',
+                          flexShrink: 0
+                        }}
+                      >
+                        {publicRoomCreating ? 'Creating...' : 'Create'}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
+              <button
+                onClick={() => { onNavigateToSettings(); onShowUserMenuChange(false); }}
+                className="user-menu-btn"
+                style={{ textAlign: isRTL ? 'right' : 'left' }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d={GEAR_SVG_PATH} />
+                </svg>
+                {t('nav.settings')}
+              </button>
+              <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
+              <button
+                onClick={() => { onLogout(); onShowUserMenuChange(false); }}
+                className="user-menu-btn danger"
+                style={{ textAlign: isRTL ? 'right' : 'left' }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+                {t('nav.logout')}
+              </button>
+            </div>
+          </>
+        )}
+
         {/* Modals that can be triggered from headless mode */}
         {showDisplaySettingsModal && displayForSettings && (
           <DisplaySettingsModal
@@ -1175,22 +1455,21 @@ const HeaderBar = memo<HeaderBarProps>(({
           />
         )}
 
-        {showOBSSettingsModal && (
-          <OBSSettingsModal
-            isOpen={showOBSSettingsModal}
-            onClose={() => setShowOBSSettingsModal(false)}
-            obsServerRunning={obsServerRunning}
-            obsServerUrl={obsServerUrl}
-            onToggleServer={onToggleOBSServer}
-            obsThemes={obsThemes}
-            selectedOBSSongsTheme={selectedOBSSongsTheme}
-            selectedOBSBibleTheme={selectedOBSBibleTheme}
-            selectedOBSPrayerTheme={selectedOBSPrayerTheme}
-            onApplyOBSTheme={onApplyOBSTheme}
-            onCreateTheme={onCreateTheme}
-            onEditTheme={onEditTheme}
-          />
-        )}
+        {/* OBS Settings Modal */}
+        <OBSSettingsModal
+          isOpen={showOBSModal}
+          onClose={handleCloseOBSModal}
+          isRunning={obsRunning}
+          obsUrl={obsUrl}
+          themes={themes}
+          bibleThemes={bibleThemes}
+          prayerThemes={prayerThemes}
+          selectedSongsTheme={selectedOBSSongsTheme}
+          selectedBibleTheme={selectedOBSBibleTheme}
+          selectedPrayerTheme={selectedOBSPrayerTheme}
+          onApplyTheme={handleApplyOBSModalTheme}
+          onStart={handleStartOBS}
+        />
 
         {showThemeOverrideModal && displayForThemeOverride && (
           <DisplayThemeOverrideModal
@@ -1316,121 +1595,17 @@ const HeaderBar = memo<HeaderBarProps>(({
               />
             ))}
 
-            {/* OBS Virtual Display */}
-            <div
-              className="display-row"
+            {/* OBS Browser Source */}
+            <OBSRow
+              isRunning={obsRunning}
+              isStopping={obsStopping}
+              hovered={obsHovered}
               onMouseEnter={handleObsMouseEnter}
               onMouseLeave={handleObsMouseLeave}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '10px',
-                background: obsServerRunning ? 'rgba(23, 162, 184, 0.15)' : 'rgba(255,255,255,0.05)',
-                borderRadius: '8px',
-                marginBottom: '8px',
-                border: obsServerRunning ? '1px solid rgba(23, 162, 184, 0.4)' : '1px solid transparent'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
-                    width: '28px',
-                    height: '28px',
-                    borderRadius: '6px',
-                    background: 'rgba(23, 162, 184, 0.2)',
-                    border: '1px solid rgba(23, 162, 184, 0.5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0
-                  }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#17a2b8" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                </div>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ color: 'white', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    OBS
-                    {obsServerRunning && (
-                      <span style={{ fontSize: '0.7rem', background: '#17a2b8', padding: '2px 6px', borderRadius: '4px' }}>
-                        {t('controlPanel.running', 'Running')}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{
-                    color: 'rgba(255,255,255,0.5)',
-                    fontSize: '0.75rem',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                  }}>
-                    {obsServerRunning && obsServerUrl ? obsServerUrl : t('controlPanel.browserSource', 'Browser Source')}
-                  </div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
-                {/* Settings icon - only visible on hover when OBS is running */}
-                {obsServerRunning && (
-                  <button
-                    onClick={handleOpenOBSSettings}
-                    title={t('displayThemeOverrides.configureOBSTheme', 'Configure OBS themes')}
-                    style={{
-                      background: 'rgba(255,255,255,0.1)',
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '6px',
-                      color: 'white',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.2s',
-                      opacity: obsHovered ? 1 : 0,
-                      pointerEvents: obsHovered ? 'auto' : 'none'
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="3" />
-                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                    </svg>
-                  </button>
-                )}
-                {obsServerRunning ? (
-                  <button
-                    onClick={onToggleOBSServer}
-                    style={{
-                      background: colors.button.danger,
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '6px 12px',
-                      color: 'white',
-                      fontSize: '0.75rem',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {t('common.stop', 'Stop')}
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleOpenOBSSettings}
-                    style={{
-                      background: '#17a2b8',
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '6px 12px',
-                      color: 'white',
-                      fontSize: '0.75rem',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {t('common.start', 'Start')}
-                  </button>
-                )}
-              </div>
-            </div>
+              onOpenSettings={handleOpenOBSSettings}
+              onStop={handleStopOBS}
+              t={t}
+            />
 
             {/* Virtual Displays Section */}
             <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
@@ -1740,6 +1915,71 @@ const HeaderBar = memo<HeaderBarProps>(({
                 ))}
               </div>
             </div>
+
+            {/* Dual Translation Theme */}
+            {dualTranslationThemes.length > 0 && (
+            <div style={{
+              padding: '10px',
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: '8px',
+              marginBottom: '8px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '6px',
+                    background: 'rgba(160, 200, 224, 0.2)',
+                    border: '1px solid rgba(160, 200, 224, 0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a0c8e0" strokeWidth="2">
+                      <path d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                    </svg>
+                  </div>
+                  <span style={{ color: 'white', fontWeight: 500, fontSize: '0.85rem' }}>
+                    {t('controlPanel.dualTranslationTheme', 'Dual Translation')}
+                  </span>
+                </div>
+                <button
+                  onClick={() => onCreateTheme('dual-translation')}
+                  title={t('common.new', 'New')}
+                  style={{
+                    background: 'rgba(160, 200, 224, 0.2)',
+                    border: '1px solid rgba(160, 200, 224, 0.4)',
+                    borderRadius: '4px',
+                    padding: '4px 8px',
+                    color: '#a0c8e0',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem'
+                  }}
+                >
+                  + {t('common.new', 'New')}
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '120px', overflowY: 'auto' }}>
+                {dualTranslationThemes.map(theme => (
+                  <div
+                    key={theme.id}
+                    onClick={() => onApplyDualTranslationTheme?.(theme)}
+                    className={`theme-item theme-songs${selectedDualTranslationTheme?.id === theme.id ? ' selected' : ''}`}
+                  >
+                    <span>{theme.name}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onEditTheme('dual-translation', theme.id); }}
+                      title={t('common.edit', 'Edit')}
+                      className="theme-item-edit-btn"
+                    >
+                      {t('common.edit', 'Edit')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            )}
 
             {/* Bible Theme */}
             <div style={{
@@ -2307,7 +2547,7 @@ const HeaderBar = memo<HeaderBarProps>(({
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <circle cx="12" cy="12" r="3" />
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                        <path d={GEAR_SVG_PATH} />
                       </svg>
                       {t('nav.settings')}
                     </button>
@@ -2349,7 +2589,7 @@ const HeaderBar = memo<HeaderBarProps>(({
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            <path d={GEAR_SVG_PATH} />
           </svg>
         </button>
 
@@ -2401,18 +2641,18 @@ const HeaderBar = memo<HeaderBarProps>(({
 
       {/* OBS Settings Modal */}
       <OBSSettingsModal
-        isOpen={showOBSSettingsModal}
-        onClose={handleCloseOBSSettingsModal}
-        isRunning={obsServerRunning}
-        obsUrl={obsServerUrl}
-        themes={obsThemes || themes}
+        isOpen={showOBSModal}
+        onClose={handleCloseOBSModal}
+        isRunning={obsRunning}
+        obsUrl={obsUrl}
+        themes={themes}
         bibleThemes={bibleThemes}
         prayerThemes={prayerThemes}
         selectedSongsTheme={selectedOBSSongsTheme}
         selectedBibleTheme={selectedOBSBibleTheme}
         selectedPrayerTheme={selectedOBSPrayerTheme}
-        onApplyTheme={handleOBSApplyTheme}
-        onStart={onToggleOBSServer}
+        onApplyTheme={handleApplyOBSModalTheme}
+        onStart={handleStartOBS}
       />
 
       {/* About Modal */}

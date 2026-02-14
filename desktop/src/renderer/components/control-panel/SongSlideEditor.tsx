@@ -25,6 +25,7 @@ interface SongSlide {
   translation: string;
   translationOverflow: string;
   verseType: string;
+  translations?: Record<string, string>;
 }
 
 interface Song {
@@ -390,7 +391,8 @@ const SongSlideEditor = memo<SongSlideEditorProps>(({
         transliteration: '',
         translation: '',
         translationOverflow: '',
-        verseType: 'Verse'
+        verseType: 'Verse',
+        translations: {}
       };
     }
     const existing = song.slides[editingSlideIndex];
@@ -399,7 +401,8 @@ const SongSlideEditor = memo<SongSlideEditorProps>(({
       transliteration: existing?.transliteration || '',
       translation: existing?.translation || '',
       translationOverflow: existing?.translationOverflow || '',
-      verseType: existing?.verseType || 'Verse'
+      verseType: existing?.verseType || 'Verse',
+      translations: (existing as any)?.translations || {}
     };
   });
 
@@ -414,7 +417,21 @@ const SongSlideEditor = memo<SongSlideEditorProps>(({
   );
 
   const updateField = useCallback((field: keyof SongSlide, value: string) => {
-    setEditedSlide(prev => ({ ...prev, [field]: value }));
+    setEditedSlide(prev => {
+      const updated = { ...prev, [field]: value };
+      // Sync translations map when translation field changes
+      if (field === 'translation') {
+        const translations = { ...(prev.translations || {}) };
+        const parts = [value || '', prev.translationOverflow || ''].filter(Boolean);
+        if (parts.length > 0) {
+          translations['en'] = parts.join('\n');
+        } else {
+          delete translations['en'];
+        }
+        updated.translations = translations;
+      }
+      return updated;
+    });
   }, []);
 
   const handleAutoGenerate = useCallback(async () => {
@@ -423,11 +440,19 @@ const SongSlideEditor = memo<SongSlideEditorProps>(({
     setIsGenerating(true);
     try {
       const result = await window.electronAPI.processQuickSlide(editedSlide.originalText);
-      setEditedSlide(prev => ({
-        ...prev,
-        transliteration: result?.transliteration ?? prev.transliteration,
-        translation: result?.translation ?? prev.translation
-      }));
+      setEditedSlide(prev => {
+        const newTranslation = result?.translation ?? prev.translation;
+        const translations = { ...(prev.translations || {}) };
+        if (newTranslation) {
+          translations['en'] = newTranslation;
+        }
+        return {
+          ...prev,
+          transliteration: result?.transliteration ?? prev.transliteration,
+          translation: newTranslation,
+          translations
+        };
+      });
     } catch (error) {
       console.error('Error auto-generating:', error);
     } finally {

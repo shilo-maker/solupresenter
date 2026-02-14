@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback, memo } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../../../styles/controlPanelStyles';
 import { Song } from './types';
@@ -181,13 +181,20 @@ const SongsPanel = memo<SongsPanelProps>(({
   onEditSong,
   onDeleteSong,
   onDragStart,
-  onDragEnd
+  onDragEnd,
 }) => {
   const { t, i18n } = useTranslation();
   const isRTL = i18n.language === 'he';
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [visibleSongsCount, setVisibleSongsCount] = useState(50);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, []);
 
   // Filter songs based on search query (title/author matches first, then content matches)
   const filteredSongs = useMemo(() => {
@@ -197,11 +204,18 @@ const SongsPanel = memo<SongsPanelProps>(({
     // Helper to search in slide content
     const searchInSlides = (slides: any[] | undefined): boolean => {
       if (!Array.isArray(slides)) return false;
-      return slides.some(slide =>
-        (slide.originalText || '').toLowerCase().includes(query) ||
-        (slide.transliteration || '').toLowerCase().includes(query) ||
-        (slide.translation || '').toLowerCase().includes(query)
-      );
+      return slides.some(slide => {
+        if ((slide.originalText || '').toLowerCase().includes(query)) return true;
+        if ((slide.transliteration || '').toLowerCase().includes(query)) return true;
+        if ((slide.translation || '').toLowerCase().includes(query)) return true;
+        // Search in multi-translation map values
+        if (slide.translations && typeof slide.translations === 'object') {
+          for (const text of Object.values(slide.translations)) {
+            if (typeof text === 'string' && text.toLowerCase().includes(query)) return true;
+          }
+        }
+        return false;
+      });
     };
 
     // Separate into title/author matches and content-only matches

@@ -192,10 +192,69 @@
   100% { background-position: 200% 0; }
 }
 
+@keyframes midiBuilderPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* DisplayViewer announcement slide animations */
+@keyframes viewerSlideUp {
+  from { opacity: 0; transform: translateY(50px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes viewerSlideDown {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(50px); }
+}
+
+/* Rotating messages animation */
+@keyframes messageSlideIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* SlidePreview announcement slide animations */
+@keyframes previewSlideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes previewSlideDown {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(100%); opacity: 0; }
+}
+
+/* ControlPanel quick mode pulse */
+@keyframes quickModePulse {
+  0%, 100% { box-shadow: 0 0 10px #6f42c1, 0 0 20px rgba(111, 66, 193, 0.5); }
+  50% { box-shadow: 0 0 15px #6f42c1, 0 0 30px rgba(111, 66, 193, 0.7); }
+}
+
+/* LivePreviewPanel glow animation */
+@keyframes glowRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Display selector dropdown option hover */
+.dps-option:not(.dps-active):hover {
+  background: rgba(255,255,255,0.05);
+}
+
+/* SlideCodeIndicator blink */
+@keyframes slideCodeBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 @keyframes gradientFlow {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
+}
+
+@keyframes streamingPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px #f44336; }
+  50% { opacity: 0.4; box-shadow: 0 0 12px #f44336; }
 }
 
 /* ============ Reset & Base ============ */

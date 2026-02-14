@@ -79,7 +79,7 @@ interface BottomRowPanelProps {
   arrangementState?: ArrangementStateReturn;
   // Song slide editing props - index of slide being edited, -1 for new slide, null for not editing
   editingSongSlideIndex?: number | null;
-  onSaveSongSlides?: (slides: Array<{ originalText: string; transliteration: string; translation: string; translationOverflow: string; verseType: string }>) => Promise<void>;
+  onSaveSongSlides?: (slides: Array<{ originalText: string; transliteration: string; translation: string; translationOverflow: string; verseType: string; translations?: Record<string, string> }>) => Promise<void>;
   onCancelEditSongSlides?: () => void;
 }
 

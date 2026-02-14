@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DisplayAssignedType } from '../panels/types';
 
 interface Theme {
   id: string;
@@ -11,11 +12,11 @@ interface Display {
   label: string;
   bounds: { width: number; height: number };
   isAssigned?: boolean;
-  assignedType?: 'viewer' | 'stage';
+  assignedType?: DisplayAssignedType;
 }
 
 interface DisplaySettings {
-  displayType: 'viewer' | 'stage';
+  displayType: DisplayAssignedType;
   useGlobalTheme: boolean;
   customThemeId?: string;
 }
@@ -35,7 +36,7 @@ interface DisplaySettingsModalProps {
   bibleThemes: Theme[];
   prayerThemes: Theme[];
   obsThemes?: OBSTheme[];
-  onStart: (displayId: number, type: 'viewer' | 'stage') => void;
+  onStart: (displayId: number, type: DisplayAssignedType, deviceId?: string, audioDeviceId?: string) => void;
   onThemeOverrideChanged: () => void;
 }
 
@@ -52,9 +53,17 @@ const DisplaySettingsModal = memo<DisplaySettingsModalProps>(({
   onThemeOverrideChanged
 }) => {
   const { t } = useTranslation();
-  const [displayType, setDisplayType] = useState<'viewer' | 'stage'>('viewer');
+  const [displayType, setDisplayType] = useState<DisplayAssignedType>('viewer');
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState<string>('');
+  const [cameraError, setCameraError] = useState<string>('');
+  const [enumerating, setEnumerating] = useState(false);
+  // Track whether we already obtained getUserMedia permission this session
+  const hasMediaPermission = useRef(false);
 
   // Load overrides for specific display (optimized - uses getForDisplay instead of getAll)
   const loadOverrides = useCallback(async (displayId: number) => {
@@ -79,12 +88,101 @@ const DisplaySettingsModal = memo<DisplaySettingsModalProps>(({
     }
   }, [isOpen, display, loadOverrides]);
 
-  // Reset state when modal closes
+  // Core device enumeration logic - extracted so it can be called by both
+  // the initial mount effect and the devicechange listener
+  const refreshCameraDevices = useCallback(async () => {
+    setEnumerating(true);
+    setCameraError('');
+    try {
+      // Try enumerateDevices first without getUserMedia.
+      // In Electron with proper permissions, labels are often already available.
+      let devices = await navigator.mediaDevices.enumerateDevices();
+      let videoDevices = devices.filter(d => d.kind === 'videoinput');
+
+      // If we got devices but labels are empty, we need getUserMedia to unlock labels
+      const needsPermission = videoDevices.length > 0 && !videoDevices[0].label;
+      if (needsPermission && !hasMediaPermission.current) {
+        let tempStream: MediaStream | null = null;
+        try {
+          tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          // Stop the stream immediately - we only needed it for the permission grant
+          tempStream.getTracks().forEach(t => t.stop());
+          hasMediaPermission.current = true;
+        } catch (err: any) {
+          // Permission denied or no camera available
+          if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+            setCameraError('permission_denied');
+          } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
+            setCameraError('no_devices');
+          } else {
+            setCameraError('unknown');
+          }
+          // Still set whatever devices we found (they'll lack labels but have deviceIds)
+          setCameraDevices(videoDevices);
+          setAudioDevices([]);
+          setEnumerating(false);
+          return;
+        }
+        // Re-enumerate now that permission is granted to get labels
+        devices = await navigator.mediaDevices.enumerateDevices();
+        videoDevices = devices.filter(d => d.kind === 'videoinput');
+      } else if (needsPermission) {
+        // We already have permission from a previous call, re-enumerate should have labels
+        devices = await navigator.mediaDevices.enumerateDevices();
+        videoDevices = devices.filter(d => d.kind === 'videoinput');
+      }
+
+      setCameraDevices(videoDevices);
+      // Also collect audio input devices from the same enumeration
+      const audioInputDevices = devices.filter(d => d.kind === 'audioinput');
+      setAudioDevices(audioInputDevices);
+      // Preserve existing selection if the device still exists, otherwise pick first
+      setSelectedDeviceId(prev => {
+        if (prev && videoDevices.some(d => d.deviceId === prev)) return prev;
+        return videoDevices.length > 0 ? videoDevices[0].deviceId : '';
+      });
+      setSelectedAudioDeviceId(prev => {
+        if (prev && audioInputDevices.some(d => d.deviceId === prev)) return prev;
+        return ''; // Default to no audio
+      });
+    } catch (err) {
+      console.error('Failed to enumerate camera devices:', err);
+      setCameraDevices([]);
+      setAudioDevices([]);
+      setCameraError('unknown');
+    } finally {
+      setEnumerating(false);
+    }
+  }, []);
+
+  // Enumerate camera devices when modal opens AND listen for devicechange
+  useEffect(() => {
+    if (!isOpen) return;
+
+    refreshCameraDevices();
+
+    // Listen for device changes (plug/unplug) while modal is open
+    const handleDeviceChange = () => {
+      refreshCameraDevices();
+    };
+    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+
+    return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+    };
+  }, [isOpen, refreshCameraDevices]);
+
+  // Reset non-persistent state when modal closes
+  // Note: selectedDeviceId is intentionally NOT reset so the user's choice
+  // persists across open/close cycles while the component is mounted
   useEffect(() => {
     if (!isOpen) {
       setDisplayType('viewer');
       setOverrides({});
       setLoading(false);
+      setCameraError('');
+      setCameraDevices([]);
+      setAudioDevices([]);
     }
   }, [isOpen]);
 
@@ -114,7 +212,7 @@ const DisplaySettingsModal = memo<DisplaySettingsModalProps>(({
     }
   }, [display, onThemeOverrideChanged]);
 
-  const handleStart = useCallback(() => {
+  const handleStart = useCallback(async () => {
     if (!display) return;
 
     // If display is already assigned with the same type, just close the modal
@@ -124,14 +222,34 @@ const DisplaySettingsModal = memo<DisplaySettingsModalProps>(({
       return;
     }
 
-    // Only restart if starting a new display or changing type
-    onStart(display.id, displayType);
+    // For camera type, validate that the selected device still exists before starting
+    if (displayType === 'camera') {
+      if (!selectedDeviceId) return;
+      try {
+        const currentDevices = await navigator.mediaDevices.enumerateDevices();
+        const stillExists = currentDevices.some(
+          d => d.kind === 'videoinput' && d.deviceId === selectedDeviceId
+        );
+        if (!stillExists) {
+          // Device was unplugged between selection and clicking Start
+          setCameraError('device_lost');
+          refreshCameraDevices();
+          return;
+        }
+      } catch {
+        // Enumeration failed, proceed anyway and let DisplayViewer handle it
+      }
+      onStart(display.id, 'camera', selectedDeviceId, selectedAudioDeviceId || undefined);
+    } else {
+      onStart(display.id, displayType);
+    }
     onClose();
-  }, [display, displayType, onStart, onClose]);
+  }, [display, displayType, selectedDeviceId, selectedAudioDeviceId, onStart, onClose, refreshCameraDevices]);
 
   // Memoized handlers for display type selection
   const handleSetViewer = useCallback(() => setDisplayType('viewer'), []);
   const handleSetStage = useCallback(() => setDisplayType('stage'), []);
+  const handleSetCamera = useCallback(() => setDisplayType('camera'), []);
 
   // Memoized OBS themes filtered by type
   const obsThemesFiltered = useMemo(() => ({
@@ -258,10 +376,126 @@ const DisplaySettingsModal = memo<DisplaySettingsModalProps>(({
             >
               {t('controlPanel.stage', 'Stage')}
             </button>
+            <button
+              onClick={handleSetCamera}
+              style={{
+                flex: 1,
+                padding: '12px',
+                borderRadius: '8px',
+                border: displayType === 'camera' ? '2px solid #00897b' : '2px solid rgba(255,255,255,0.2)',
+                background: displayType === 'camera' ? 'rgba(0, 137, 123, 0.2)' : 'rgba(255,255,255,0.05)',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                fontWeight: displayType === 'camera' ? 600 : 400
+              }}
+            >
+              {t('controlPanel.camera', 'Camera')}
+            </button>
           </div>
         </div>
 
+        {/* Camera Device Selection */}
+        {displayType === 'camera' && (
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <label style={{ color: 'white', fontSize: '0.9rem', fontWeight: 500 }}>
+                {t('displaySettings.cameraDevice', 'Camera Device')}
+              </label>
+              <button
+                onClick={refreshCameraDevices}
+                disabled={enumerating}
+                title={t('displaySettings.refreshDevices', 'Refresh device list')}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '4px 8px',
+                  color: 'rgba(255,255,255,0.7)',
+                  cursor: enumerating ? 'wait' : 'pointer',
+                  fontSize: '0.75rem'
+                }}
+              >
+                {enumerating ? t('displaySettings.scanning', 'Scanning...') : t('displaySettings.refresh', 'Refresh')}
+              </button>
+            </div>
+            {cameraError === 'permission_denied' ? (
+              <p style={{ fontSize: '0.85rem', color: '#ef5350' }}>
+                {t('displaySettings.cameraPermissionDenied', 'Camera access was denied. Please allow camera permissions in your system settings and try again.')}
+              </p>
+            ) : cameraError === 'device_lost' ? (
+              <p style={{ fontSize: '0.85rem', color: '#ffa726' }}>
+                {t('displaySettings.cameraDeviceLost', 'The selected camera was disconnected. Please select another device.')}
+              </p>
+            ) : cameraDevices.length === 0 && !enumerating ? (
+              <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)' }}>
+                {t('displaySettings.noCameras', 'No camera devices found. Connect a webcam or capture card.')}
+              </p>
+            ) : cameraDevices.length > 0 ? (
+              <select
+                value={selectedDeviceId}
+                onChange={(e) => setSelectedDeviceId(e.target.value)}
+                style={{
+                  width: '100%',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '6px',
+                  padding: '10px 12px',
+                  color: 'white',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer'
+                }}
+              >
+                {cameraDevices.map(device => (
+                  <option key={device.deviceId} value={device.deviceId} style={{ background: '#18181b' }}>
+                    {device.label || `Camera ${device.deviceId.substring(0, 8)}`}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', marginTop: '8px' }}>
+              {t('displaySettings.cameraDescription', 'Live camera feed as background with all presentation overlays on top.')}
+            </p>
+
+            {/* Audio Source Selection - only show when camera devices are available and no error */}
+            {cameraDevices.length > 0 && !cameraError && (
+              <>
+                <label style={{ display: 'block', color: 'white', fontSize: '0.9rem', fontWeight: 500, marginTop: '16px', marginBottom: '8px' }}>
+                  {t('displaySettings.audioSource', 'Audio Source')}
+                </label>
+                <select
+                  value={selectedAudioDeviceId}
+                  onChange={(e) => setSelectedAudioDeviceId(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '6px',
+                    padding: '10px 12px',
+                    color: 'white',
+                    fontSize: '0.85rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="" style={{ background: '#18181b' }}>
+                    {t('displaySettings.noAudio', '-- No Audio --')}
+                  </option>
+                  {audioDevices.map(device => (
+                    <option key={device.deviceId} value={device.deviceId} style={{ background: '#18181b' }}>
+                      {device.label || `Audio ${device.deviceId.substring(0, 8)}`}
+                    </option>
+                  ))}
+                </select>
+                <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', marginTop: '6px' }}>
+                  {t('displaySettings.audioDescription', 'Send audio from a microphone or sound card to the camera display.')}
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Theme Overrides */}
+        {(
         <div style={{ marginBottom: '24px' }}>
           <label style={{ display: 'block', marginBottom: '12px', color: 'white', fontSize: '0.9rem', fontWeight: 500 }}>
             {t('displaySettings.themeSettings', 'Theme Settings')}
@@ -317,6 +551,7 @@ const DisplaySettingsModal = memo<DisplaySettingsModalProps>(({
             ))}
           </div>
         </div>
+        )}
 
         {/* Footer Buttons */}
         <div style={{
@@ -342,15 +577,19 @@ const DisplaySettingsModal = memo<DisplaySettingsModalProps>(({
           </button>
           <button
             onClick={handleStart}
+            disabled={displayType === 'camera' && (!selectedDeviceId || cameraDevices.length === 0 || !!cameraError)}
             style={{
-              background: 'linear-gradient(135deg, #28a745, #20c997)',
+              background: (displayType === 'camera' && (!selectedDeviceId || cameraDevices.length === 0 || !!cameraError))
+                ? 'rgba(255,255,255,0.1)'
+                : 'linear-gradient(135deg, #28a745, #20c997)',
               border: 'none',
               borderRadius: '8px',
               padding: '10px 24px',
               color: 'white',
-              cursor: 'pointer',
+              cursor: (displayType === 'camera' && (!selectedDeviceId || cameraDevices.length === 0 || !!cameraError)) ? 'not-allowed' : 'pointer',
               fontSize: '0.9rem',
-              fontWeight: 600
+              fontWeight: 600,
+              opacity: (displayType === 'camera' && (!selectedDeviceId || cameraDevices.length === 0 || !!cameraError)) ? 0.5 : 1
             }}
           >
             {display.isAssigned

@@ -38,6 +38,9 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
   const [remoteControlQRCode, setRemoteControlQRCode] = useState<string | null>(null);
   const [syncLoading, setSyncLoading] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ status: 'idle' });
+  const [obsRunning, setObsRunning] = useState(false);
+  const [obsUrl, setObsUrl] = useState<string | null>(null);
+  const [obsUrlCopied, setObsUrlCopied] = useState(false);
 
   // Theme state
   const {
@@ -46,6 +49,7 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
     bibleThemes,
     prayerThemes,
     obsThemes,
+    dualTranslationThemes,
     selectedTheme,
     selectedStageTheme,
     selectedBibleTheme,
@@ -53,12 +57,14 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
     selectedOBSSongsTheme,
     selectedOBSBibleTheme,
     selectedOBSPrayerTheme,
+    selectedDualTranslationTheme,
     loadThemes,
     applyViewerTheme,
     applyStageTheme,
     applyBibleTheme,
     applyPrayerTheme,
     applyOBSTheme,
+    applyDualTranslationTheme,
   } = useThemeState();
 
   // Theme dropdown state
@@ -92,6 +98,14 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
     // Load remote control status
     loadRemoteControlStatus();
 
+    // Load OBS server status
+    window.electronAPI.isOBSServerRunning().then(running => {
+      setObsRunning(running);
+      if (running) {
+        window.electronAPI.getOBSServerUrl().then(url => setObsUrl(url));
+      }
+    }).catch(err => console.error('Failed to load OBS status:', err));
+
     // Load themes
     loadThemes();
 
@@ -106,9 +120,22 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
     });
 
     // Poll for status updates while component is mounted
-    const interval = setInterval(loadRemoteControlStatus, 5000);
+    const rcInterval = setInterval(loadRemoteControlStatus, 5000);
+    const obsInterval = setInterval(async () => {
+      try {
+        const running = await window.electronAPI.isOBSServerRunning();
+        setObsRunning(running);
+        if (running) {
+          const url = await window.electronAPI.getOBSServerUrl();
+          setObsUrl(url);
+        } else {
+          setObsUrl(null);
+        }
+      } catch { /* ignore */ }
+    }, 3000);
     return () => {
-      clearInterval(interval);
+      clearInterval(rcInterval);
+      clearInterval(obsInterval);
       unsubscribeUpdate();
     };
   }, [loadRemoteControlStatus, loadThemes]);
@@ -175,6 +202,36 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
       await window.electronAPI.autoUpdate.install();
     } catch (error) {
       console.error('Failed to install update:', error);
+    }
+  };
+
+  const handleToggleOBS = async () => {
+    try {
+      if (obsRunning) {
+        await window.electronAPI.stopOBSServer();
+        setObsRunning(false);
+        setObsUrl(null);
+      } else {
+        const result = await window.electronAPI.startOBSServer();
+        if (result.success) {
+          setObsRunning(true);
+          setObsUrl(result.url || await window.electronAPI.getOBSServerUrl());
+        }
+      }
+    } catch (error) {
+      console.error('Failed to toggle OBS server:', error);
+      // Re-check actual server state on error
+      const running = await window.electronAPI.isOBSServerRunning();
+      setObsRunning(running);
+      setObsUrl(running ? await window.electronAPI.getOBSServerUrl() : null);
+    }
+  };
+
+  const handleCopyObsUrl = () => {
+    if (obsUrl) {
+      navigator.clipboard.writeText(obsUrl);
+      setObsUrlCopied(true);
+      setTimeout(() => setObsUrlCopied(false), 2000);
     }
   };
 
@@ -441,6 +498,39 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
               </button>
             </div>
           </div>
+
+          {/* Translation Language */}
+          <div style={{ marginTop: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>
+              {t('settings.translationLanguage', 'Translation Language')}
+            </label>
+            <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '8px' }}>
+              {t('settings.translationLanguageDescription', 'Choose which translation language to display for songs with multiple translations.')}
+            </p>
+            <select
+              value={settings.translationLanguage}
+              onChange={(e) => updateSetting('translationLanguage', e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                background: 'rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '8px',
+                color: 'white',
+                fontSize: '0.9rem',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="en" style={{ background: '#18181b' }}>English</option>
+              <option value="cs" style={{ background: '#18181b' }}>Czech (Čeština)</option>
+              <option value="es" style={{ background: '#18181b' }}>Spanish (Español)</option>
+              <option value="fr" style={{ background: '#18181b' }}>French (Français)</option>
+              <option value="de" style={{ background: '#18181b' }}>German (Deutsch)</option>
+              <option value="ru" style={{ background: '#18181b' }}>Russian (Русский)</option>
+              <option value="pt" style={{ background: '#18181b' }}>Portuguese (Português)</option>
+              <option value="it" style={{ background: '#18181b' }}>Italian (Italiano)</option>
+            </select>
+          </div>
         </section>
 
         {/* UI Scale Section */}
@@ -461,7 +551,7 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
               {t('settings.uiScaleDescription')}
             </label>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', direction: 'ltr' }}>
               <input
                 type="range"
                 min="0.8"
@@ -489,10 +579,11 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
               </span>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>
-              <span>80%</span>
-              <span>100%</span>
-              <span>150%</span>
+            <div style={{ position: 'relative', marginTop: '8px', marginRight: '76px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', direction: 'ltr', padding: '0 8px' }}>
+              <span style={{ position: 'absolute', left: 0 }}>80%</span>
+              <span style={{ position: 'absolute', left: `${((1.0 - 0.8) / (1.5 - 0.8)) * 100}%`, transform: 'translateX(-50%)' }}>100%</span>
+              <span style={{ position: 'absolute', right: 0 }}>150%</span>
+              <span style={{ visibility: 'hidden' }}>.</span>
             </div>
 
             {settings.uiScale !== 1.0 && (
@@ -560,6 +651,7 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
             {renderThemeDropdown('stage', t('controlPanel.stageMonitorTheme', 'Stage Monitor'), stageMonitorThemes, selectedStageTheme, applyStageTheme, '/stage-monitor-editor', 'rgba(240, 147, 251, 0.5)')}
             {renderThemeDropdown('bible', t('controlPanel.bibleTheme', 'Bible'), bibleThemes, selectedBibleTheme, applyBibleTheme, '/bible-theme-editor', 'rgba(76, 175, 80, 0.5)')}
             {renderThemeDropdown('prayer', t('controlPanel.prayerTheme', 'Prayer/Sermon'), prayerThemes, selectedPrayerTheme, applyPrayerTheme, '/prayer-theme-editor', 'rgba(6, 182, 212, 0.5)')}
+            {dualTranslationThemes.length > 0 && renderThemeDropdown('dual-translation', t('controlPanel.dualTranslationTheme', 'Dual Translation'), dualTranslationThemes, selectedDualTranslationTheme, applyDualTranslationTheme, '/dual-translation-theme-editor', 'rgba(160, 200, 224, 0.5)')}
           </div>
 
           {/* OBS Themes */}
@@ -571,6 +663,142 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
             {renderThemeDropdown('obs-bible', t('controlPanel.obsBibleTheme', 'OBS Bible'), obsBibleThemes, selectedOBSBibleTheme || null, applyOBSTheme, '/obs-bible-theme-editor', 'rgba(76, 175, 80, 0.5)')}
             {renderThemeDropdown('obs-prayer', t('controlPanel.obsPrayerTheme', 'OBS Prayer'), obsPrayerThemes, selectedOBSPrayerTheme || null, applyOBSTheme, '/obs-prayer-theme-editor', 'rgba(6, 182, 212, 0.5)')}
           </div>
+        </section>
+
+        {/* OBS Browser Source Section */}
+        <section
+          style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '20px'
+          }}
+        >
+          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#17a2b8' }}>
+            {t('settings.obsBrowserSource', 'OBS Browser Source')}
+          </h2>
+          <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginBottom: '16px' }}>
+            {t('controlPanel.obsDescription', 'OBS Browser Source allows you to display slides in OBS Studio or similar streaming software.')}
+          </p>
+
+          {/* OBS URL - shown when running */}
+          {obsRunning && obsUrl && (
+            <div style={{
+              background: 'rgba(23, 162, 184, 0.15)',
+              borderRadius: '8px',
+              padding: '12px',
+              marginBottom: '16px',
+              border: '1px solid rgba(23, 162, 184, 0.3)'
+            }}>
+              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', marginBottom: '6px' }}>
+                {t('controlPanel.browserSourceUrl', 'Browser Source URL')}
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={obsUrl}
+                  readOnly
+                  style={{
+                    flex: 1,
+                    background: 'rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
+                    color: 'white',
+                    fontSize: '0.85rem'
+                  }}
+                />
+                <button
+                  onClick={handleCopyObsUrl}
+                  style={{
+                    background: obsUrlCopied ? '#28a745' : 'rgba(255,255,255,0.1)',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '8px 16px',
+                    color: 'white',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                    minWidth: '70px',
+                    transition: 'background 0.2s'
+                  }}
+                >
+                  {obsUrlCopied ? t('common.copied', 'Copied!') : t('common.copy', 'Copy')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Theme Overrides - shown when running */}
+          {obsRunning && (
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '12px', color: 'white', fontSize: '0.9rem', fontWeight: 500 }}>
+                {t('displaySettings.themeSettings', 'Theme Settings')}
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {[
+                  { label: t('displayThemeOverrides.songsTheme', 'Songs Theme'), themes: obsSongsThemes, selected: selectedOBSSongsTheme },
+                  { label: t('displayThemeOverrides.bibleTheme', 'Bible Theme'), themes: obsBibleThemes, selected: selectedOBSBibleTheme },
+                  { label: t('displayThemeOverrides.prayerTheme', 'Prayer Theme'), themes: obsPrayerThemes, selected: selectedOBSPrayerTheme }
+                ].map(({ label, themes: themeList, selected }) => (
+                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', minWidth: '100px' }}>
+                      {label}:
+                    </label>
+                    <select
+                      value={selected?.id || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val) return; // "Use Global" selected - no clear mechanism yet
+                        const found = themeList.find(tm => tm.id === val);
+                        if (found) applyOBSTheme(found);
+                      }}
+                      style={{
+                        flex: 1,
+                        background: 'rgba(255,255,255,0.1)',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        borderRadius: '6px',
+                        padding: '8px 12px',
+                        color: 'white',
+                        fontSize: '0.85rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="" style={{ background: '#18181b' }}>
+                        {t('displayThemeOverrides.useGlobal', '-- Use Global --')}
+                      </option>
+                      {themeList.map(theme => (
+                        <option key={theme.id} value={theme.id} style={{ background: '#18181b' }}>
+                          {theme.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Start/Stop Button */}
+          <button
+            onClick={handleToggleOBS}
+            style={{
+              width: '100%',
+              padding: '14px',
+              background: obsRunning
+                ? 'rgba(239, 68, 68, 0.2)'
+                : 'linear-gradient(135deg, #17a2b8, #138496)',
+              border: obsRunning ? '1px solid rgba(239, 68, 68, 0.4)' : 'none',
+              borderRadius: '8px',
+              color: obsRunning ? '#ef4444' : 'white',
+              cursor: 'pointer',
+              fontSize: '0.95rem',
+              fontWeight: 600
+            }}
+          >
+            {obsRunning
+              ? t('settings.stopOBS', 'Stop OBS Server')
+              : t('settings.startOBS', 'Start OBS Server')}
+          </button>
         </section>
 
         {/* Account Section */}
@@ -1674,6 +1902,55 @@ export default function SettingsPage({ onBack }: { onBack?: () => void } = {}) {
               </button>
             </div>
           )}
+        </section>
+
+        {/* Extensions Section */}
+        <section
+          style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '20px'
+          }}
+        >
+          <h2 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: '#06b6d4' }}>
+            {t('settings.extensions', 'Extensions')}
+          </h2>
+
+          <button
+            onClick={() => navigate('/midi-builder')}
+            style={{
+              width: '100%',
+              padding: '14px 20px',
+              background: 'rgba(6, 182, 212, 0.1)',
+              border: '1px solid rgba(6, 182, 212, 0.25)',
+              borderRadius: '8px',
+              color: '#22d3ee',
+              cursor: 'pointer',
+              fontSize: '0.9rem',
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(6, 182, 212, 0.2)';
+              e.currentTarget.style.borderColor = 'rgba(6, 182, 212, 0.4)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(6, 182, 212, 0.1)';
+              e.currentTarget.style.borderColor = 'rgba(6, 182, 212, 0.25)';
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2" y="14" width="4" height="8" rx="1" />
+              <rect x="7" y="10" width="4" height="12" rx="1" />
+              <rect x="12" y="6" width="4" height="16" rx="1" />
+              <rect x="17" y="2" width="4" height="20" rx="1" />
+            </svg>
+            {t('settings.midiArrangementBuilder', 'MIDI Arrangement Builder')}
+          </button>
         </section>
 
         {/* About Section */}

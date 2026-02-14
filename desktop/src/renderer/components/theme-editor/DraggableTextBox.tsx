@@ -117,6 +117,7 @@ const DEFAULT_SAMPLE_TEXT: Record<string, string> = {
   original: 'שִׁירוּ לַיהוָה שִׁיר חָדָשׁ',
   transliteration: 'Shiru lAdonai shir chadash',
   translation: 'Sing to the Lord a new song',
+  translationB: 'Zpívejte Hospodinu novou píseň',
   // Bible lines
   hebrew: 'בְּרֵאשִׁית בָּרָא אֱלֹהִים',
   english: 'In the beginning God created',
@@ -132,11 +133,30 @@ const DEFAULT_SAMPLE_TEXT: Record<string, string> = {
   referenceTranslation: 'James 5:16'
 };
 
+const LINE_LABELS: Record<string, string> = {
+  original: 'original',
+  transliteration: 'transliteration',
+  translation: 'translation',
+  translationB: 'Translation B',
+  hebrew: 'hebrew',
+  english: 'english',
+  reference: 'reference',
+  referenceEnglish: 'referenceEnglish',
+  title: 'title',
+  titleTranslation: 'titleTranslation',
+  subtitle: 'subtitle',
+  subtitleTranslation: 'subtitleTranslation',
+  description: 'description',
+  descriptionTranslation: 'descriptionTranslation',
+  referenceTranslation: 'referenceTranslation'
+};
+
 const LINE_COLORS: Record<string, string> = {
   // Song lines
   original: '#06b6d4',
   transliteration: '#06b6d4',
   translation: '#28a745',
+  translationB: '#a0c8e0',
   // Bible lines
   hebrew: '#06b6d4',
   english: '#28a745',
@@ -963,7 +983,7 @@ const DraggableTextBox: React.FC<DraggableTextBoxProps> = ({
             gap: '4px'
           }}
         >
-          {lineType}
+          {LINE_LABELS[lineType] || lineType}
           {isFlowMode && (
             <span style={{
               background: 'rgba(255,255,255,0.3)',

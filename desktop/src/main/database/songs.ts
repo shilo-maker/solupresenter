@@ -22,6 +22,7 @@ export interface SongData {
     transliteration?: string;
     translation?: string;
     translationOverflow?: string;
+    translations?: Record<string, string>;
     verseType?: string;
   }>;
   tags?: string[];
@@ -31,16 +32,46 @@ export interface SongData {
 }
 
 /**
+ * Normalize a slide's translations: if no `translations` map exists,
+ * create one from the flat translation/translationOverflow fields.
+ */
+function normalizeSlideTranslations(slide: any): any {
+  if (slide.translations && typeof slide.translations === 'object' && !Array.isArray(slide.translations) && Object.keys(slide.translations).length > 0) return slide;
+  const result = { ...slide };
+  const parts = [slide.translation || '', slide.translationOverflow || ''].filter(Boolean);
+  result.translations = parts.length > 0 ? { en: parts.join('\n') } : {};
+  return result;
+}
+
+/**
+ * Normalize all slides in a song row (parses JSON if needed, adds translations maps).
+ */
+function normalizeSongSlides(song: any): any {
+  if (!song) return song;
+  const slides = typeof song.slides === 'string' ? JSON.parse(song.slides) : (song.slides || []);
+  return { ...song, slides: slides.map(normalizeSlideTranslations) };
+}
+
+/**
  * Extract searchable text content from slides array
  */
 function extractSearchableContent(slides: any[]): string {
   if (!Array.isArray(slides)) return '';
   return slides
-    .map(slide => [
-      slide.originalText || '',
-      slide.transliteration || '',
-      slide.translation || ''
-    ].join(' '))
+    .map(slide => {
+      const parts = [
+        slide.originalText || '',
+        slide.transliteration || '',
+        slide.translation || ''
+      ];
+      // Also index all translations map values
+      if (slide.translations && typeof slide.translations === 'object') {
+        for (const text of Object.values(slide.translations)) {
+          if (typeof text === 'string') parts.push(text);
+        }
+      }
+      return parts.join(' ');
+    })
     .join(' ')
     .toLowerCase()
     .replace(/\s+/g, ' ')
@@ -76,65 +107,50 @@ export async function getSongs(query?: string): Promise<any[]> {
     // Get IDs of songs already matched
     const matchedIds = new Set(titleAuthorMatches.map(s => s.id));
 
-    // Search content in remaining songs (parse JSON only for non-matched songs)
-    const allSongs = queryAll(`SELECT * FROM songs`);
-    const contentMatches: any[] = [];
-
-    for (const song of allSongs) {
-      if (matchedIds.has(song.id)) continue;
-
-      // Parse slides and search in content
-      let slides: any[] = [];
-      try {
-        slides = typeof song.slides === 'string' ? JSON.parse(song.slides) : (song.slides || []);
-      } catch {
-        continue;
-      }
-
-      const content = extractSearchableContent(slides);
-      if (content.includes(searchLower)) {
-        contentMatches.push({ ...song, matchPriority: 2 });
-      }
-    }
-
-    // Sort content matches: Hebrew first, then alphabetically
-    contentMatches.sort((a, b) => {
-      const langA = a.originalLanguage === 'he' ? 0 : 1;
-      const langB = b.originalLanguage === 'he' ? 0 : 1;
-      if (langA !== langB) return langA - langB;
-      return (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' });
-    });
+    // Search content in slides JSON via SQL LIKE (avoids loading all songs into JS)
+    const contentMatches = queryAll(
+      `SELECT *, 2 as matchPriority FROM songs
+       WHERE (slides LIKE ? OR tags LIKE ?)
+       AND id NOT IN (${matchedIds.size > 0 ? Array.from(matchedIds).map(() => '?').join(',') : "''"})
+       ORDER BY
+         CASE WHEN originalLanguage = 'he' THEN 0 ELSE 1 END,
+         title COLLATE NOCASE ASC`,
+      [searchPattern, searchPattern, ...Array.from(matchedIds)]
+    );
 
     // Return title/author matches first, then content matches
-    return [...titleAuthorMatches, ...contentMatches];
+    return [...titleAuthorMatches, ...contentMatches].map(normalizeSongSlides);
   }
 
   // No query - return all songs ordered by Hebrew first, then alphabetically
   return queryAll(
     `SELECT * FROM songs
      ORDER BY CASE WHEN originalLanguage = 'he' THEN 0 ELSE 1 END, title COLLATE NOCASE ASC`
-  );
+  ).map(normalizeSongSlides);
 }
 
 /**
  * Get a single song by ID
  */
 export async function getSong(id: string): Promise<any | null> {
-  return queryOne('SELECT * FROM songs WHERE id = ?', [id]);
+  const song = queryOne('SELECT * FROM songs WHERE id = ?', [id]);
+  return song ? normalizeSongSlides(song) : null;
 }
 
 /**
  * Get a single song by its remoteId (backend ID)
  */
 export async function getSongByRemoteId(remoteId: string): Promise<any | null> {
-  return queryOne('SELECT * FROM songs WHERE remoteId = ?', [remoteId]);
+  const song = queryOne('SELECT * FROM songs WHERE remoteId = ?', [remoteId]);
+  return song ? normalizeSongSlides(song) : null;
 }
 
 /**
  * Get a single song by title (case-insensitive)
  */
 export async function getSongByTitle(title: string): Promise<any | null> {
-  return queryOne('SELECT * FROM songs WHERE title = ? COLLATE NOCASE LIMIT 1', [title]);
+  const song = queryOne('SELECT * FROM songs WHERE title = ? COLLATE NOCASE LIMIT 1', [title]);
+  return song ? normalizeSongSlides(song) : null;
 }
 
 /**
@@ -187,7 +203,7 @@ export async function batchResolveSongs(items: Array<{ remoteId?: string; title?
     if (!song && item.title) {
       song = songsByTitle[item.title.toLowerCase()];
     }
-    if (song) result[i] = song;
+    if (song) result[i] = normalizeSongSlides(song);
   }
 
   return result;
@@ -264,13 +280,41 @@ export async function createSong(data: SongData): Promise<any> {
 
   // Validate and limit slides
   let slides = Array.isArray(data.slides) ? data.slides.slice(0, MAX_SLIDES_COUNT) : [];
-  slides = slides.map(slide => ({
-    originalText: slide.originalText ? String(slide.originalText).substring(0, MAX_SLIDE_TEXT_LENGTH) : '',
-    transliteration: slide.transliteration ? String(slide.transliteration).substring(0, MAX_SLIDE_TEXT_LENGTH) : '',
-    translation: slide.translation ? String(slide.translation).substring(0, MAX_SLIDE_TEXT_LENGTH) : '',
-    translationOverflow: slide.translationOverflow ? String(slide.translationOverflow).substring(0, MAX_SLIDE_TEXT_LENGTH) : '',
-    verseType: slide.verseType ? String(slide.verseType).substring(0, 50) : ''
-  }));
+  slides = slides.map(slide => {
+    // Preserve translations map if present
+    const translations: Record<string, string> = {};
+    if (slide.translations && typeof slide.translations === 'object' && !Array.isArray(slide.translations)) {
+      for (const [lang, text] of Object.entries(slide.translations)) {
+        if (typeof text === 'string') {
+          translations[lang] = text.substring(0, MAX_SLIDE_TEXT_LENGTH);
+        }
+      }
+    }
+    // Normalize: ensure translations map exists (migrate from flat fields if needed)
+    if (Object.keys(translations).length === 0) {
+      const parts = [
+        slide.translation ? String(slide.translation) : '',
+        slide.translationOverflow ? String(slide.translationOverflow) : ''
+      ].filter(Boolean);
+      if (parts.length > 0) {
+        translations['en'] = parts.join('\n').substring(0, MAX_SLIDE_TEXT_LENGTH);
+      }
+    }
+    // Mirror flat fields from translations map for backward compat
+    const enText = translations['en'] || Object.values(translations)[0] || '';
+    const nlIdx = enText.indexOf('\n');
+    const flatTranslation = nlIdx !== -1 ? enText.substring(0, nlIdx) : enText;
+    const flatOverflow = nlIdx !== -1 ? enText.substring(nlIdx + 1) : '';
+
+    return {
+      originalText: slide.originalText ? String(slide.originalText).substring(0, MAX_SLIDE_TEXT_LENGTH) : '',
+      transliteration: slide.transliteration ? String(slide.transliteration).substring(0, MAX_SLIDE_TEXT_LENGTH) : '',
+      translation: flatTranslation.substring(0, MAX_SLIDE_TEXT_LENGTH),
+      translationOverflow: flatOverflow.substring(0, MAX_SLIDE_TEXT_LENGTH),
+      translations,
+      verseType: slide.verseType ? String(slide.verseType).substring(0, 50) : ''
+    };
+  });
 
   // Validate tags
   const tags = Array.isArray(data.tags) ? data.tags.filter(t => typeof t === 'string').slice(0, 100) : [];
@@ -355,9 +399,41 @@ export async function updateSong(id: string, data: Partial<SongData>): Promise<a
     updatedSong.originalLanguage = data.originalLanguage;
   }
   if (data.slides !== undefined) {
+    // Normalize slides: ensure translations map exists and flat fields are mirrored
+    const normalizedSlides = (Array.isArray(data.slides) ? data.slides.slice(0, MAX_SLIDES_COUNT) : []).map((slide: any) => {
+      const translations: Record<string, string> = {};
+      if (slide.translations && typeof slide.translations === 'object' && !Array.isArray(slide.translations)) {
+        for (const [lang, text] of Object.entries(slide.translations)) {
+          if (typeof text === 'string') {
+            translations[lang] = text.substring(0, MAX_SLIDE_TEXT_LENGTH);
+          }
+        }
+      }
+      if (Object.keys(translations).length === 0) {
+        const parts = [
+          slide.translation ? String(slide.translation) : '',
+          slide.translationOverflow ? String(slide.translationOverflow) : ''
+        ].filter(Boolean);
+        if (parts.length > 0) {
+          translations['en'] = parts.join('\n').substring(0, MAX_SLIDE_TEXT_LENGTH);
+        }
+      }
+      const enText = translations['en'] || Object.values(translations)[0] || '';
+      const nlIdx = enText.indexOf('\n');
+      const flatTranslation = nlIdx !== -1 ? enText.substring(0, nlIdx) : enText;
+      const flatOverflow = nlIdx !== -1 ? enText.substring(nlIdx + 1) : '';
+      return {
+        originalText: slide.originalText ? String(slide.originalText).substring(0, MAX_SLIDE_TEXT_LENGTH) : '',
+        transliteration: slide.transliteration ? String(slide.transliteration).substring(0, MAX_SLIDE_TEXT_LENGTH) : '',
+        translation: flatTranslation.substring(0, MAX_SLIDE_TEXT_LENGTH),
+        translationOverflow: flatOverflow.substring(0, MAX_SLIDE_TEXT_LENGTH),
+        translations,
+        verseType: slide.verseType ? String(slide.verseType).substring(0, 50) : ''
+      };
+    });
     updates.push('slides = ?');
-    values.push(JSON.stringify(data.slides));
-    updatedSong.slides = data.slides;
+    values.push(JSON.stringify(normalizedSlides));
+    updatedSong.slides = normalizedSlides;
   }
   if (data.tags !== undefined) {
     updates.push('tags = ?');
@@ -451,9 +527,39 @@ export async function importSongsFromBackend(backendUrl: string): Promise<{ impo
             errors++;
             continue;
           }
-          // Validate slides is an array if provided
-          const slides = Array.isArray(remoteSong.slides) ? remoteSong.slides : [];
-          const tags = Array.isArray(remoteSong.tags) ? remoteSong.tags : [];
+          // Validate slides is an array if provided, normalize with full processing
+          const rawSlides = Array.isArray(remoteSong.slides) ? remoteSong.slides.slice(0, MAX_SLIDES_COUNT) : [];
+          const slides = rawSlides.map((slide: any) => {
+            const translations: Record<string, string> = {};
+            if (slide.translations && typeof slide.translations === 'object' && !Array.isArray(slide.translations)) {
+              for (const [lang, text] of Object.entries(slide.translations)) {
+                if (typeof text === 'string') {
+                  translations[lang] = text.substring(0, MAX_SLIDE_TEXT_LENGTH);
+                }
+              }
+            }
+            if (Object.keys(translations).length === 0) {
+              const parts = [
+                slide.translation ? String(slide.translation) : '',
+                slide.translationOverflow ? String(slide.translationOverflow) : ''
+              ].filter(Boolean);
+              if (parts.length > 0) {
+                translations['en'] = parts.join('\n').substring(0, MAX_SLIDE_TEXT_LENGTH);
+              }
+            }
+            // Mirror flat fields from translations map
+            const flatText = translations['en'] || Object.values(translations)[0] || '';
+            const nlIdx = flatText.indexOf('\n');
+            return {
+              originalText: String(slide.originalText || '').substring(0, MAX_SLIDE_TEXT_LENGTH),
+              transliteration: String(slide.transliteration || '').substring(0, MAX_SLIDE_TEXT_LENGTH),
+              translation: nlIdx !== -1 ? flatText.substring(0, nlIdx) : flatText,
+              translationOverflow: nlIdx !== -1 ? flatText.substring(nlIdx + 1) : '',
+              translations,
+              verseType: String(slide.verseType || '').substring(0, 50)
+            };
+          });
+          const tags = Array.isArray(remoteSong.tags) ? remoteSong.tags.filter((t: any) => typeof t === 'string').slice(0, 100) : [];
           const arrangements = Array.isArray(remoteSong.arrangements) ? remoteSong.arrangements : [];
 
           // Check if song exists by remoteId
@@ -591,13 +697,36 @@ export async function importSongsFromJSON(jsonData: string): Promise<{ imported:
 
           // Validate and prepare data
           const slides = Array.isArray(song.slides) ? song.slides.slice(0, MAX_SLIDES_COUNT) : [];
-          const validatedSlides = slides.map((slide: any) => ({
-            originalText: slide.originalText ? String(slide.originalText).substring(0, MAX_SLIDE_TEXT_LENGTH) : '',
-            transliteration: slide.transliteration ? String(slide.transliteration).substring(0, MAX_SLIDE_TEXT_LENGTH) : '',
-            translation: slide.translation ? String(slide.translation).substring(0, MAX_SLIDE_TEXT_LENGTH) : '',
-            translationOverflow: slide.translationOverflow ? String(slide.translationOverflow).substring(0, MAX_SLIDE_TEXT_LENGTH) : '',
-            verseType: slide.verseType ? String(slide.verseType).substring(0, 50) : ''
-          }));
+          const validatedSlides = slides.map((slide: any) => {
+            // Preserve translations map
+            const translations: Record<string, string> = {};
+            if (slide.translations && typeof slide.translations === 'object') {
+              for (const [lang, text] of Object.entries(slide.translations)) {
+                if (typeof text === 'string') {
+                  translations[lang] = text.substring(0, MAX_SLIDE_TEXT_LENGTH);
+                }
+              }
+            }
+            if (Object.keys(translations).length === 0) {
+              const parts = [
+                slide.translation ? String(slide.translation) : '',
+                slide.translationOverflow ? String(slide.translationOverflow) : ''
+              ].filter(Boolean);
+              if (parts.length > 0) {
+                translations['en'] = parts.join('\n').substring(0, MAX_SLIDE_TEXT_LENGTH);
+              }
+            }
+            const enText = translations['en'] || Object.values(translations)[0] || '';
+            const nlIdx = enText.indexOf('\n');
+            return {
+              originalText: slide.originalText ? String(slide.originalText).substring(0, MAX_SLIDE_TEXT_LENGTH) : '',
+              transliteration: slide.transliteration ? String(slide.transliteration).substring(0, MAX_SLIDE_TEXT_LENGTH) : '',
+              translation: (nlIdx !== -1 ? enText.substring(0, nlIdx) : enText).substring(0, MAX_SLIDE_TEXT_LENGTH),
+              translationOverflow: (nlIdx !== -1 ? enText.substring(nlIdx + 1) : '').substring(0, MAX_SLIDE_TEXT_LENGTH),
+              translations,
+              verseType: slide.verseType ? String(slide.verseType).substring(0, 50) : ''
+            };
+          });
 
           const tags = Array.isArray(song.tags) ? song.tags.filter((t: any) => typeof t === 'string').slice(0, 100) : [];
           const arrangements = Array.isArray(song.arrangements) ? song.arrangements : [];

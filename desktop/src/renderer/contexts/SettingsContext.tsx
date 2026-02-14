@@ -1,6 +1,19 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+export type CustomLineSource =
+  | { type: 'original' }
+  | { type: 'transliteration' }
+  | { type: 'translation'; lang?: string }
+  | { type: 'none' };
+
+export interface CustomDisplayLines {
+  line1: CustomLineSource;
+  line2: CustomLineSource;
+  line3: CustomLineSource;
+  line4: CustomLineSource;
+}
+
 export interface UserSettings {
   language: 'en' | 'he';
   displayMode: 'bilingual' | 'original';
@@ -14,6 +27,10 @@ export interface UserSettings {
   youtubeSearchTimeout: number;
   // UI Scale (zoom factor: 0.8 = 80%, 1.0 = 100%, 1.5 = 150%)
   uiScale: number;
+  // Translation language for multi-translation songs (e.g. 'en', 'cs', 'es')
+  translationLanguage: string;
+  // Custom display line assignments for custom display mode
+  customDisplayLines: CustomDisplayLines;
 }
 
 const defaultSettings: UserSettings = {
@@ -28,7 +45,16 @@ const defaultSettings: UserSettings = {
   thumbnailGenerationTimeout: 8,
   youtubeSearchTimeout: 15,
   // Default UI scale (100%)
-  uiScale: 1.0
+  uiScale: 1.0,
+  // Default translation language
+  translationLanguage: 'en',
+  // Default custom display lines
+  customDisplayLines: {
+    line1: { type: 'original' },
+    line2: { type: 'transliteration' },
+    line3: { type: 'translation' },
+    line4: { type: 'none' }
+  }
 };
 
 interface SettingsContextType {
@@ -58,6 +84,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (stored) {
           const parsed = JSON.parse(stored);
           const merged = { ...defaultSettings, ...parsed };
+          // Migrate: ensure customDisplayLines has line4 (added in v2)
+          if (merged.customDisplayLines && !('line4' in merged.customDisplayLines)) {
+            merged.customDisplayLines = { ...merged.customDisplayLines, line4: { type: 'none' } };
+          }
           setSettings(merged);
 
           // Apply language
@@ -69,6 +99,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           if (merged.uiScale && window.electronAPI?.setZoomFactor) {
             window.electronAPI.setZoomFactor(merged.uiScale);
           }
+        } else {
+          // Fresh install: sync settings.language to what i18n detected from browser
+          const detectedLang = (i18n.language === 'he' || i18n.language === 'en') ? i18n.language : 'en';
+          setSettings(prev => ({ ...prev, language: detectedLang as 'en' | 'he' }));
         }
       } catch (error) {
         console.error('Failed to load settings:', error);
@@ -95,9 +129,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         const serverLang = authState.user.preferences?.language as 'en' | 'he' | undefined;
         if (serverLang && (serverLang === 'en' || serverLang === 'he') && serverLang !== settings.language) {
           // Server has different language - use server's preference
-          setSettings(prev => ({ ...prev, language: serverLang }));
+          let updatedSettings: UserSettings;
+          setSettings(prev => {
+            updatedSettings = { ...prev, language: serverLang };
+            return updatedSettings;
+          });
           await i18n.changeLanguage(serverLang);
-          saveToLocalStorage({ ...settings, language: serverLang });
+          saveToLocalStorage(updatedSettings!);
         }
       } catch (error) {
         console.error('Failed to sync settings with server:', error);
@@ -175,9 +213,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     key: K,
     value: UserSettings[K]
   ) => {
-    const newSettings = { ...settings, [key]: value };
-    setSettings(newSettings);
-    saveToLocalStorage(newSettings);
+    let newSettings: UserSettings;
+    setSettings(prev => {
+      newSettings = { ...prev, [key]: value };
+      return newSettings;
+    });
+    saveToLocalStorage(newSettings!);
 
     // Apply language change immediately
     if (key === 'language') {
@@ -197,12 +238,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     if (key === 'language' || key === 'syncEnabled') {
       await syncToServer(newSettings);
     }
-  }, [settings, saveToLocalStorage, syncToServer, i18n]);
+  }, [saveToLocalStorage, syncToServer, i18n]);
 
   const updateSettings = useCallback(async (newSettings: Partial<UserSettings>) => {
-    const merged = { ...settings, ...newSettings };
-    setSettings(merged);
-    saveToLocalStorage(merged);
+    let merged: UserSettings;
+    setSettings(prev => {
+      merged = { ...prev, ...newSettings };
+      return merged;
+    });
+    saveToLocalStorage(merged!);
 
     // Apply language change if included
     if (newSettings.language && newSettings.language !== i18n.language) {
@@ -215,7 +259,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     // Sync to server
     await syncToServer(merged);
-  }, [settings, saveToLocalStorage, syncToServer, i18n]);
+  }, [saveToLocalStorage, syncToServer, i18n]);
 
   const resetSettings = useCallback(async () => {
     setSettings(defaultSettings);

@@ -98,6 +98,8 @@ export interface Slide {
 export interface QuickModeMetadata {
   type: 'sermon' | 'prayer' | 'announcements';
   title: string;  // Original title (e.g., "Prayer Requests")
+  titleTranslation?: string;  // English translation of title
+  generateTranslation?: boolean;  // Whether translations were generated
   subtitles: Array<{
     subtitle: string;
     subtitleTranslation?: string;

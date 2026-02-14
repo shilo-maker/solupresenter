@@ -7,8 +7,12 @@ export const app = {
     if (name === 'userData') {
       return path.join(os.tmpdir(), 'solupresenter-test');
     }
+    if (name === 'exe') {
+      return path.join(os.tmpdir(), 'solupresenter-test', 'app.exe');
+    }
     return os.tmpdir();
   },
+  getAppPath: () => path.join(os.tmpdir(), 'solupresenter-test-app'),
   isPackaged: false
 };
 

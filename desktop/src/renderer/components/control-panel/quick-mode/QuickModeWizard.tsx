@@ -376,6 +376,7 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
   const [bibleIsHebrew, setBibleIsHebrew] = useState(false);
   const [showBibleSuggestions, setShowBibleSuggestions] = useState(false);
   const [selectedBibleSuggestionIndex, setSelectedBibleSuggestionIndex] = useState(-1);
+  const [sameVerseForAll, setSameVerseForAll] = useState(false);
 
   // Refs
   const bibleSearchRef = useRef<string>('');
@@ -432,6 +433,7 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
     setBibleLoading(false);
     setBibleIsHebrew(false);
     setTranslationMode('none');
+    setSameVerseForAll(false);
     setCreating(false);
     onClose();
   };
@@ -724,21 +726,20 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
       englishText = startVerse.english || '';
     }
 
+    const newBibleRef = {
+      book: bibleBook,
+      chapter: bibleChapter!,
+      verseStart: verseStart!,
+      verseEnd: verseEnd || undefined,
+      hebrewText,
+      englishText,
+      reference,
+      hebrewReference,
+      useHebrew: true // Always use Hebrew for the reference display
+    };
+
     setSubtitles(prev => prev.map((s, i) =>
-      i === index ? {
-        ...s,
-        bibleRef: {
-          book: bibleBook,
-          chapter: bibleChapter!,
-          verseStart: verseStart!,
-          verseEnd: verseEnd || undefined,
-          hebrewText,
-          englishText,
-          reference,
-          hebrewReference,
-          useHebrew: true // Always use Hebrew for the reference display
-        }
-      } : s
+      (sameVerseForAll || i === index) ? { ...s, bibleRef: newBibleRef } : s
     ));
 
     // Reset picker state
@@ -758,7 +759,7 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
   // Remove Bible reference from subtitle
   const removeBibleRefFromSubtitle = (index: number) => {
     setSubtitles(prev => prev.map((s, i) =>
-      i === index ? { ...s, bibleRef: undefined } : s
+      (sameVerseForAll || i === index) ? { ...s, bibleRef: undefined } : s
     ));
   };
 
@@ -1034,6 +1035,45 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                 }}
               />
             </div>
+            {/* Same verse for all slides checkbox */}
+            {subtitles.length > 1 && (
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '12px',
+                  cursor: 'pointer',
+                  direction: 'rtl',
+                  padding: '8px 12px',
+                  background: sameVerseForAll ? 'rgba(0,212,255,0.1)' : 'transparent',
+                  border: `1px solid ${sameVerseForAll ? 'rgba(0,212,255,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                  borderRadius: '8px',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={sameVerseForAll}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setSameVerseForAll(checked);
+                    if (checked) {
+                      // Copy the first found bibleRef to all slides
+                      const existingRef = subtitles.find(s => s.bibleRef)?.bibleRef;
+                      if (existingRef) {
+                        setSubtitles(prev => prev.map(s => ({ ...s, bibleRef: existingRef })));
+                      }
+                    }
+                  }}
+                  style={{ accentColor: '#00d4ff', width: '16px', height: '16px', cursor: 'pointer' }}
+                />
+                <span style={{ color: sameVerseForAll ? '#00d4ff' : 'rgba(255,255,255,0.7)', fontSize: '0.85rem' }}>
+                  השתמש באותו פסוק לכל השקפים
+                </span>
+              </label>
+            )}
+
             <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '16px' }}>
               {subtitles.map((item, index) => (
                 <div
@@ -1137,7 +1177,23 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
                   />
 
                   {/* Bible Reference Section */}
-                  {item.bibleRef ? (
+                  {sameVerseForAll && index > 0 ? (
+                    // When "same verse for all" is on, non-first slides show compact indicator
+                    item.bibleRef && (
+                      <div style={{
+                        marginTop: '8px',
+                        padding: '6px 8px',
+                        background: 'rgba(0,212,255,0.05)',
+                        border: '1px solid rgba(0,212,255,0.15)',
+                        borderRadius: '6px',
+                        direction: 'rtl'
+                      }}>
+                        <span style={{ color: 'rgba(0,212,255,0.6)', fontSize: '0.8rem' }}>
+                          {'\u{1F4D6}'} {item.bibleRef.hebrewReference || item.bibleRef.reference} (משותף)
+                        </span>
+                      </div>
+                    )
+                  ) : item.bibleRef ? (
                     <div style={{
                       marginTop: '8px',
                       padding: '8px',
@@ -1428,7 +1484,8 @@ const QuickModeWizard = memo<QuickModeWizardProps>(({
             </div>
             <button
               onClick={() => {
-                setSubtitles([...subtitles, { subtitle: '', description: '' }]);
+                const sharedRef = sameVerseForAll ? subtitles.find(s => s.bibleRef)?.bibleRef : undefined;
+                setSubtitles([...subtitles, { subtitle: '', description: '', bibleRef: sharedRef }]);
               }}
               style={{
                 width: '100%',

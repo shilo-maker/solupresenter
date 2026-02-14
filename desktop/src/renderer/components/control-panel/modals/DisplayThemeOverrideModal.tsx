@@ -6,12 +6,14 @@ interface Theme {
   name: string;
 }
 
+import { DisplayAssignedType, isViewerLike } from '../panels/types';
+
 interface Display {
   id: number;
   label: string;
   bounds: { width: number; height: number };
   isAssigned?: boolean;
-  assignedType?: 'viewer' | 'stage';
+  assignedType?: DisplayAssignedType;
 }
 
 interface ThemeOverride {
@@ -50,7 +52,7 @@ interface DisplayThemeOverrideModalProps {
 const getThemeTypesForDisplay = (display: Display): Array<'viewer' | 'stage' | 'bible' | 'prayer'> => {
   if (display.assignedType === 'stage') {
     return ['stage'];
-  } else if (display.assignedType === 'viewer') {
+  } else if (isViewerLike(display.assignedType)) {
     return ['viewer', 'bible', 'prayer'];
   }
   // Not assigned - show all options for future assignment
@@ -508,7 +510,7 @@ const DisplayThemeOverrideModal = memo<DisplayThemeOverrideModalProps>(({
                       {display.label}
                     </div>
                     <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>
-                      {display.bounds.width}x{display.bounds.height} - {display.assignedType === 'stage' ? t('controlPanel.stage', 'Stage') : t('controlPanel.viewer', 'Viewer')}
+                      {display.bounds.width}x{display.bounds.height} - {display.assignedType === 'stage' ? t('controlPanel.stage', 'Stage') : display.assignedType === 'camera' ? t('controlPanel.camera', 'Camera') : t('controlPanel.viewer', 'Viewer')}
                     </div>
                   </div>
                 </div>

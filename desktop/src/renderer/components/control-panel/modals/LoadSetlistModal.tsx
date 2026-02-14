@@ -13,6 +13,7 @@ interface SavedSetlist {
   id: string;
   name: string;
   venue?: string;
+  background?: string;
   items: SetlistItem[];
   createdAt: string;
   updatedAt?: string;
@@ -226,6 +227,7 @@ const LoadSetlistModal: React.FC<LoadSetlistModalProps> = ({
       const convertedSetlist: SavedSetlist = {
         id: '',
         name: fullSetlist.name || onlineSetlist.name,
+        background: fullSetlist.background || undefined,
         items,
         createdAt: fullSetlist.createdAt || new Date().toISOString()
       };
@@ -436,7 +438,6 @@ const LoadSetlistModal: React.FC<LoadSetlistModalProps> = ({
                   margin: '0 auto 12px'
                 }} />
                 {t('common.loading', 'Loading...')}
-                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
               </div>
             ) : onlineSetlists.length === 0 ? (
               <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>

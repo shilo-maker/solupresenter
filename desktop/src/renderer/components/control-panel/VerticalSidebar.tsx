@@ -1,6 +1,7 @@
-import React, { memo, useState, useMemo } from 'react';
+import React, { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import logoImage from '../../assets/logo.png';
+import { DisplayAssignedType } from './panels/types';
 
 // Tooltip component moved outside to prevent recreation on each render
 const Tooltip = memo<{ text: string; visible: boolean }>(({ text, visible }) => (
@@ -32,7 +33,7 @@ interface Display {
   label: string;
   bounds: { x: number; y: number; width: number; height: number };
   isAssigned?: boolean;
-  assignedType?: 'viewer' | 'stage';
+  assignedType?: DisplayAssignedType;
 }
 
 interface Theme {
@@ -69,10 +70,20 @@ export interface VerticalSidebarProps {
   themes: Theme[];
   selectedTheme: Theme | null;
 
+  // Update state
+  updateAvailable?: boolean;
+  onShowUpdateModal?: () => void;
+
+  // MIDI bridge state
+  midiBridgeConnected?: boolean;
+  midiControlEnabled?: boolean;
+  onToggleMidiControl?: () => void;
+
   // UI callbacks
   onShowDisplayPanel: () => void;
   onShowThemePanel: () => void;
   onShowAuthModal: () => void;
+  onShowUserMenu: () => void;
   onNavigateToSettings: () => void;
   onShowAboutModal: () => void;
 }
@@ -100,6 +111,46 @@ const ICON_BUTTON_ACTIVE: React.CSSProperties = {
   color: '#4caf50'
 };
 
+const ICON_BUTTON_MIDI_OFF: React.CSSProperties = {
+  ...ICON_BUTTON_BASE,
+  background: 'rgba(244, 67, 54, 0.15)',
+  borderColor: 'rgba(244, 67, 54, 0.4)',
+  color: '#f44336'
+};
+
+const ICON_BUTTON_UPDATE: React.CSSProperties = {
+  ...ICON_BUTTON_BASE,
+  background: 'rgba(255, 193, 7, 0.15)',
+  borderColor: 'rgba(255, 193, 7, 0.4)',
+  color: '#ffc107'
+};
+
+// MIDI indicator dot styles (static to avoid allocations per render)
+const MIDI_DOT_ON: React.CSSProperties = {
+  position: 'absolute',
+  top: '4px',
+  right: '4px',
+  width: '8px',
+  height: '8px',
+  borderRadius: '50%',
+  background: '#4caf50',
+  boxShadow: '0 0 6px #4caf50'
+};
+
+const MIDI_DOT_OFF: React.CSSProperties = {
+  position: 'absolute',
+  top: '4px',
+  right: '4px',
+  width: '8px',
+  height: '8px',
+  borderRadius: '50%',
+  background: '#f44336',
+  boxShadow: '0 0 6px #f44336'
+};
+
+// Reuse green dot for online indicator (same style as MIDI_DOT_ON)
+const ONLINE_INDICATOR_DOT = MIDI_DOT_ON;
+
 const VerticalSidebar = memo<VerticalSidebarProps>(({
   displays,
   assignedDisplays,
@@ -108,9 +159,15 @@ const VerticalSidebar = memo<VerticalSidebarProps>(({
   authState,
   themes,
   selectedTheme,
+  updateAvailable,
+  onShowUpdateModal,
+  midiBridgeConnected,
+  midiControlEnabled,
+  onToggleMidiControl,
   onShowDisplayPanel,
   onShowThemePanel,
   onShowAuthModal,
+  onShowUserMenu,
   onNavigateToSettings,
   onShowAboutModal
 }) => {
@@ -118,11 +175,7 @@ const VerticalSidebar = memo<VerticalSidebarProps>(({
   const isRTL = i18n.language === 'he';
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
 
-  // Memoize button styles based on state
-  const displayButtonStyle = useMemo(() =>
-    assignedDisplays.length > 0 || onlineConnected ? ICON_BUTTON_ACTIVE : ICON_BUTTON_BASE,
-    [assignedDisplays.length, onlineConnected]
-  );
+  const displayButtonStyle = assignedDisplays.length > 0 || onlineConnected ? ICON_BUTTON_ACTIVE : ICON_BUTTON_BASE;
 
   return (
     <div style={{
@@ -172,19 +225,7 @@ const VerticalSidebar = memo<VerticalSidebarProps>(({
             <line x1="8" y1="21" x2="16" y2="21"/>
             <line x1="12" y1="17" x2="12" y2="21"/>
           </svg>
-          {/* Online indicator dot */}
-          {onlineConnected && (
-            <div style={{
-              position: 'absolute',
-              top: '4px',
-              right: '4px',
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: '#4caf50',
-              boxShadow: '0 0 6px #4caf50'
-            }} />
-          )}
+          {onlineConnected && <div style={ONLINE_INDICATOR_DOT} />}
         </button>
         <Tooltip text={t('controlPanel.displays', 'Displays')} visible={hoveredButton === 'displays'} />
       </div>
@@ -210,7 +251,7 @@ const VerticalSidebar = memo<VerticalSidebarProps>(({
       <div style={{ position: 'relative' }}>
         {authState.isAuthenticated ? (
           <button
-            onClick={onNavigateToSettings}
+            onClick={onShowUserMenu}
             onMouseEnter={() => setHoveredButton('user')}
             onMouseLeave={() => setHoveredButton(null)}
             style={ICON_BUTTON_BASE}
@@ -252,6 +293,49 @@ const VerticalSidebar = memo<VerticalSidebarProps>(({
         </button>
         <Tooltip text={t('nav.settings', 'Settings')} visible={hoveredButton === 'settings'} />
       </div>
+
+      {/* MIDI Bridge Toggle */}
+      {midiBridgeConnected && onToggleMidiControl && (
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={onToggleMidiControl}
+            onMouseEnter={() => setHoveredButton('midi')}
+            onMouseLeave={() => setHoveredButton(null)}
+            style={midiControlEnabled ? ICON_BUTTON_ACTIVE : ICON_BUTTON_MIDI_OFF}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"/>
+              <circle cx="7.5" cy="9.5" r="1.2" fill="currentColor" stroke="none"/>
+              <circle cx="9.5" cy="7.5" r="1.2" fill="currentColor" stroke="none"/>
+              <circle cx="12" cy="6.5" r="1.2" fill="currentColor" stroke="none"/>
+              <circle cx="14.5" cy="7.5" r="1.2" fill="currentColor" stroke="none"/>
+              <circle cx="16.5" cy="9.5" r="1.2" fill="currentColor" stroke="none"/>
+            </svg>
+            <div style={midiControlEnabled ? MIDI_DOT_ON : MIDI_DOT_OFF} />
+          </button>
+          <Tooltip
+            text={midiControlEnabled ? t('nav.midiControlOn', 'MIDI Control: ON') : t('nav.midiControlOff', 'MIDI Control: OFF')}
+            visible={hoveredButton === 'midi'}
+          />
+        </div>
+      )}
+
+      {/* Update Available Button */}
+      {updateAvailable && onShowUpdateModal && (
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={onShowUpdateModal}
+            onMouseEnter={() => setHoveredButton('update')}
+            onMouseLeave={() => setHoveredButton(null)}
+            style={ICON_BUTTON_UPDATE}
+          >
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.399l-.399.047-.058-.294L8.04 6.146h.892l-.93 4.442zm.053-3.224a.95.95 0 1 1-1.9 0 .95.95 0 0 1 1.9 0z"/>
+            </svg>
+          </button>
+          <Tooltip text={t('nav.updateAvailable', 'Update Available')} visible={hoveredButton === 'update'} />
+        </div>
+      )}
     </div>
   );
 });

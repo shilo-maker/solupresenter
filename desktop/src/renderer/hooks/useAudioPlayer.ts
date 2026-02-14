@@ -264,7 +264,14 @@ export function useAudioPlayer(
     // Play next track
     setActivePlaylistIndex(nextIndex);
     const nextTrackIdx = activePlaylistOrder[nextIndex];
-    const nextTrack = tracks[nextTrackIdx];
+    const nextTrack = nextTrackIdx < tracks.length ? tracks[nextTrackIdx] : undefined;
+    if (!nextTrack) {
+      // Track index out of bounds (playlist was modified while playing)
+      setActivePlaylistId(null);
+      setActivePlaylistIndex(0);
+      setActivePlaylistOrder([]);
+      return false;
+    }
     handlePlayAudio(nextTrack.path, nextTrack.name);
     return true;
   }, [activePlaylistId, activePlaylistIndex, activePlaylistOrder, setlist, handlePlayAudio, setActivePlaylistId, setActivePlaylistIndex, setActivePlaylistOrder]);

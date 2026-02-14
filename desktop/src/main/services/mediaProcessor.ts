@@ -54,7 +54,7 @@ export function ensureMediaLibrary(): void {
  * Get the path to ffmpeg executable
  * Try ffmpeg-static first, then system ffmpeg
  */
-function getFfmpegPath(): string | null {
+export function getFfmpegPath(): string | null {
   const isWindows = process.platform === 'win32';
   const ffmpegName = isWindows ? 'ffmpeg.exe' : 'ffmpeg';
 

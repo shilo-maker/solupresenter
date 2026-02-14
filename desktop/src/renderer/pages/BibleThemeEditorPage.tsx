@@ -777,10 +777,13 @@ const BibleThemeEditorPage: React.FC = () => {
                     <input
                       type="radio"
                       checked={theme.viewerBackground.type === 'color'}
-                      onChange={() => setTheme(prev => ({
-                        ...prev,
-                        viewerBackground: { type: 'color', color: prev.viewerBackground.color || '#000000' }
-                      }))}
+                      onChange={() => {
+                        setTheme(prev => ({
+                          ...prev,
+                          viewerBackground: { type: 'color', color: prev.viewerBackground.color || '#000000' }
+                        }));
+                        setHasChanges(true);
+                      }}
                     />
                     <span style={{ fontSize: '13px' }}>Solid Color</span>
                   </label>

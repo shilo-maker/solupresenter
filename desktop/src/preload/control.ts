@@ -5,8 +5,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ============ Display Management ============
   getDisplays: () => ipcRenderer.invoke('displays:getAll'),
   getExternalDisplays: () => ipcRenderer.invoke('displays:getExternal'),
-  openDisplayWindow: (displayId: number, type: 'viewer' | 'stage') =>
-    ipcRenderer.invoke('displays:open', displayId, type),
+  openDisplayWindow: (displayId: number, type: 'viewer' | 'stage' | 'camera', deviceId?: string, audioDeviceId?: string) =>
+    ipcRenderer.invoke('displays:open', displayId, type, deviceId, audioDeviceId),
   closeDisplayWindow: (displayId: number) => ipcRenderer.invoke('displays:close', displayId),
   closeAllDisplays: () => ipcRenderer.invoke('displays:closeAll'),
   captureViewer: () => ipcRenderer.invoke('displays:captureViewer'),
@@ -75,6 +75,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   resumeVideo: () => ipcRenderer.invoke('video:resume'),
   seekVideo: (time: number) => ipcRenderer.invoke('video:seek', time),
   stopVideo: () => ipcRenderer.invoke('video:stop'),
+  setVideoLoop: (loop: boolean) => ipcRenderer.invoke('video:loop', loop),
   muteVideo: (muted: boolean) => ipcRenderer.invoke('video:mute', muted),
   setVideoVolume: (volume: number) => ipcRenderer.invoke('video:volume', volume),
 
@@ -119,6 +120,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   showOpenDialog: (options: { filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke('dialog:openFile', options),
   writeFile: (filePath: string, content: string) => ipcRenderer.invoke('fs:writeFile', filePath, content),
   readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
+  writeBinaryFile: (filePath: string, base64Content: string) => ipcRenderer.invoke('fs:writeBinaryFile', filePath, base64Content),
+  readBinaryFile: (filePath: string) => ipcRenderer.invoke('fs:readBinaryFile', filePath),
 
   // ============ Database - Setlists ============
   getSetlists: () => ipcRenderer.invoke('db:setlists:getAll'),
@@ -170,9 +173,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deletePrayerTheme: (id: string) => ipcRenderer.invoke('db:prayerThemes:delete', id),
   applyPrayerTheme: (theme: any) => ipcRenderer.invoke('prayerTheme:apply', theme),
 
+  // ============ Database - Dual Translation Themes ============
+  getDualTranslationThemes: () => ipcRenderer.invoke('db:dualTranslationThemes:getAll'),
+  getDualTranslationTheme: (id: string) => ipcRenderer.invoke('db:dualTranslationThemes:get', id),
+  getDefaultDualTranslationTheme: () => ipcRenderer.invoke('db:dualTranslationThemes:getDefault'),
+  createDualTranslationTheme: (data: any) => ipcRenderer.invoke('db:dualTranslationThemes:create', data),
+  updateDualTranslationTheme: (id: string, data: any) => ipcRenderer.invoke('db:dualTranslationThemes:update', id, data),
+  deleteDualTranslationTheme: (id: string) => ipcRenderer.invoke('db:dualTranslationThemes:delete', id),
+
   // ============ Theme Selection Persistence ============
   getSelectedThemeIds: () => ipcRenderer.invoke('settings:getSelectedThemeIds'),
-  saveSelectedThemeId: (themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'obsBible' | 'prayer' | 'obsPrayer', themeId: string | null) =>
+  saveSelectedThemeId: (themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'obsBible' | 'prayer' | 'obsPrayer' | 'dualTranslation', themeId: string | null) =>
     ipcRenderer.invoke('settings:saveSelectedThemeId', themeType, themeId),
 
   // ============ Display Theme Overrides ============
@@ -241,6 +252,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('online:status', handler);
     return () => ipcRenderer.removeListener('online:status', handler);
   },
+
+  // ============ MIDI Bridge Control ============
+  onMidiBridgeStatus: (callback: (connected: boolean) => void) => {
+    const handler = (_: any, connected: boolean) => callback(connected);
+    ipcRenderer.on('midi:bridgeStatus', handler);
+    return () => ipcRenderer.removeListener('midi:bridgeStatus', handler);
+  },
+  setMidiControlEnabled: (enabled: boolean) => ipcRenderer.send('midi:setControlEnabled', enabled),
 
   // ============ App ============
   getAppVersion: () => ipcRenderer.invoke('app:version'),
@@ -313,6 +332,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   getZoomFactor: () => webFrame.getZoomFactor(),
 
+  // ============ Streaming (RTMP) ============
+  streaming: {
+    start: (config: { rtmpUrl: string; streamKey: string; displayId: number; audioDeviceName: string; videoDeviceName?: string; qualityPreset: 'low' | 'medium' | 'high' }) =>
+      ipcRenderer.invoke('streaming:start', config),
+    stop: () => ipcRenderer.invoke('streaming:stop'),
+    getStatus: () => ipcRenderer.invoke('streaming:getStatus'),
+    listAudioDevices: () => ipcRenderer.invoke('streaming:listAudioDevices'),
+    listVideoDevices: () => ipcRenderer.invoke('streaming:listVideoDevices'),
+    onStatus: (callback: (status: any) => void) => {
+      const handler = (_: any, status: any) => callback(status);
+      ipcRenderer.on('streaming:status', handler);
+      return () => ipcRenderer.removeListener('streaming:status', handler);
+    }
+  },
+
   // ============ Auto Update ============
   autoUpdate: {
     check: () => ipcRenderer.invoke('autoUpdate:check'),
@@ -335,7 +369,7 @@ declare global {
       // Display Management
       getDisplays: () => Promise<any[]>;
       getExternalDisplays: () => Promise<any[]>;
-      openDisplayWindow: (displayId: number, type: 'viewer' | 'stage') => Promise<boolean>;
+      openDisplayWindow: (displayId: number, type: 'viewer' | 'stage' | 'camera', deviceId?: string, audioDeviceId?: string) => Promise<boolean>;
       closeDisplayWindow: (displayId: number) => Promise<boolean>;
       closeAllDisplays: () => Promise<boolean>;
       captureViewer: () => Promise<string | null>;
@@ -409,6 +443,7 @@ declare global {
       resumeVideo: () => Promise<boolean>;
       seekVideo: (time: number) => Promise<boolean>;
       stopVideo: () => Promise<boolean>;
+      setVideoLoop: (loop: boolean) => Promise<boolean>;
       muteVideo: (muted: boolean) => Promise<boolean>;
       setVideoVolume: (volume: number) => Promise<boolean>;
       onVideoStatus: (callback: (status: { currentTime: number; duration: number }) => void) => () => void;
@@ -442,6 +477,8 @@ declare global {
       showOpenDialog: (options: { filters?: { name: string; extensions: string[] }[] }) => Promise<{ canceled: boolean; filePaths: string[] }>;
       writeFile: (filePath: string, content: string) => Promise<boolean>;
       readFile: (filePath: string) => Promise<string>;
+      writeBinaryFile: (filePath: string, base64Content: string) => Promise<boolean>;
+      readBinaryFile: (filePath: string) => Promise<Uint8Array>;
 
       // Database - Setlists
       getSetlists: () => Promise<any[]>;
@@ -493,6 +530,14 @@ declare global {
       deletePrayerTheme: (id: string) => Promise<boolean>;
       applyPrayerTheme: (theme: any) => Promise<boolean>;
 
+      // Database - Dual Translation Themes
+      getDualTranslationThemes: () => Promise<any[]>;
+      getDualTranslationTheme: (id: string) => Promise<any>;
+      getDefaultDualTranslationTheme: () => Promise<any>;
+      createDualTranslationTheme: (data: any) => Promise<any>;
+      updateDualTranslationTheme: (id: string, data: any) => Promise<any>;
+      deleteDualTranslationTheme: (id: string) => Promise<boolean>;
+
       // Theme Selection Persistence
       getSelectedThemeIds: () => Promise<{
         viewerThemeId: string | null;
@@ -502,8 +547,9 @@ declare global {
         obsBibleThemeId: string | null;
         prayerThemeId: string | null;
         obsPrayerThemeId: string | null;
+        dualTranslationThemeId: string | null;
       }>;
-      saveSelectedThemeId: (themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'obsBible' | 'prayer' | 'obsPrayer', themeId: string | null) => Promise<boolean>;
+      saveSelectedThemeId: (themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'obsBible' | 'prayer' | 'obsPrayer' | 'dualTranslation', themeId: string | null) => Promise<boolean>;
 
       // Display Theme Overrides
       displayThemeOverrides: {
@@ -630,6 +676,10 @@ declare global {
       onViewerCountChanged: (callback: (count: number) => void) => () => void;
       onOnlineStatusChanged: (callback: (status: any) => void) => () => void;
 
+      // MIDI Bridge Control
+      onMidiBridgeStatus: (callback: (connected: boolean) => void) => () => void;
+      setMidiControlEnabled: (enabled: boolean) => void;
+
       // App
       getAppVersion: () => Promise<string>;
       getAppPath: (name: string) => Promise<string>;
@@ -687,6 +737,7 @@ declare global {
           activeAudio?: { name: string; isPlaying: boolean; currentTime: number; duration: number; volume: number } | null;
           activeVideo?: { name: string; isPlaying: boolean; currentTime: number; duration: number; volume: number } | null;
           activeYoutube?: { videoId: string; title: string; isPlaying: boolean; currentTime: number; duration: number } | null;
+          translationLanguage?: string;
         }) => void;
         setCommandHandlerActive: (active: boolean) => void;
         onCommand: (callback: (command: { type: string; payload?: any }) => void) => () => void;
@@ -698,6 +749,35 @@ declare global {
       // UI Scaling
       setZoomFactor: (factor: number) => void;
       getZoomFactor: () => number;
+
+      // Streaming (RTMP)
+      streaming: {
+        start: (config: { rtmpUrl: string; streamKey: string; displayId: number; audioDeviceName: string; videoDeviceName?: string; qualityPreset: 'low' | 'medium' | 'high' }) =>
+          Promise<{ success: boolean; error?: string }>;
+        stop: () => Promise<boolean>;
+        getStatus: () => Promise<{
+          isStreaming: boolean;
+          stopping: boolean;
+          startedAt: number | null;
+          fps: number;
+          bitrate: string;
+          droppedFrames: number;
+          duration: string;
+          error: string | null;
+        }>;
+        listAudioDevices: () => Promise<string[]>;
+        listVideoDevices: () => Promise<string[]>;
+        onStatus: (callback: (status: {
+          isStreaming: boolean;
+          stopping: boolean;
+          startedAt: number | null;
+          fps: number;
+          bitrate: string;
+          droppedFrames: number;
+          duration: string;
+          error: string | null;
+        }) => void) => () => void;
+      };
 
       // Auto Update
       autoUpdate: {

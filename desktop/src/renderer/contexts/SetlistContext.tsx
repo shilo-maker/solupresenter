@@ -75,12 +75,15 @@ export interface SetlistItem {
   youtubeVideoId?: string;
   youtubeTitle?: string;
   youtubeThumbnail?: string;
+  // Per-item background override (viewer only)
+  background?: string;
 }
 
 export interface SavedSetlist {
   id: string;
   name: string;
   venue?: string;
+  background?: string;
   items: SetlistItem[];
   createdAt: string;  // ISO timestamp string
   updatedAt?: string;
@@ -97,13 +100,17 @@ interface SetlistContextType {
   currentSetlistName: string;
   setCurrentSetlistName: React.Dispatch<React.SetStateAction<string>>;
 
+  // Setlist-level background
+  setlistBackground: string;
+  setSetlistBackground: React.Dispatch<React.SetStateAction<string>>;
+
   // Unsaved changes tracking
   hasUnsavedChanges: boolean;
   setHasUnsavedChanges: React.Dispatch<React.SetStateAction<boolean>>;
   lastSavedSetlistRef: React.MutableRefObject<string>;
 
   // Helper functions
-  updateSavedSnapshot: (items: SetlistItem[]) => void;
+  updateSavedSnapshot: (items: SetlistItem[], background?: string) => void;
   clearSetlist: () => void;
 }
 
@@ -115,7 +122,9 @@ interface DraftSetlist {
   items: SetlistItem[];
   currentSetlistId: string | null;
   currentSetlistName: string;
+  setlistBackground: string;
   lastSavedSnapshot: string;
+  lastSavedBackgroundSnapshot: string;
 }
 
 // Helper to serialize setlist items for comparison (avoids duplicate code)
@@ -139,7 +148,8 @@ const serializeSetlistForComparison = (items: SetlistItem[]): string => {
     youtubeVideoId: item.youtubeVideoId,
     youtubeTitle: item.youtubeTitle,
     youtubeThumbnail: item.youtubeThumbnail,
-    audioPlaylist: item.audioPlaylist
+    audioPlaylist: item.audioPlaylist,
+    background: item.background
   })));
 };
 
@@ -195,29 +205,42 @@ export const SetlistProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [setlist, setSetlist] = useState<SetlistItem[]>([]);
   const [currentSetlistId, setCurrentSetlistId] = useState<string | null>(null);
   const [currentSetlistName, setCurrentSetlistName] = useState<string>('');
+  const [setlistBackground, setSetlistBackground] = useState<string>('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const lastSavedSetlistRef = useRef<string>('[]');
+  const lastSavedBackgroundRef = useRef<string>('');
 
   // Memoize the serialized setlist to avoid recalculating on every render
   const serializedSetlist = useMemo(() => serializeSetlistForComparison(setlist), [setlist]);
 
-  // Track unsaved changes - only runs when serializedSetlist changes
+  // Track unsaved changes - only runs when serializedSetlist or background changes
   useEffect(() => {
-    setHasUnsavedChanges(serializedSetlist !== lastSavedSetlistRef.current);
-  }, [serializedSetlist]);
+    setHasUnsavedChanges(
+      serializedSetlist !== lastSavedSetlistRef.current ||
+      setlistBackground !== lastSavedBackgroundRef.current
+    );
+  }, [serializedSetlist, setlistBackground]);
 
-  // Persist draft setlist to localStorage whenever it changes
+  // Persist draft setlist to localStorage whenever it changes (debounced to avoid excessive writes)
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    saveDraftSetlist({
-      items: setlist,
-      currentSetlistId,
-      currentSetlistName,
-      lastSavedSnapshot: lastSavedSetlistRef.current
-    });
-  }, [setlist, currentSetlistId, currentSetlistName]);
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      saveDraftSetlist({
+        items: setlist,
+        currentSetlistId,
+        currentSetlistName,
+        setlistBackground,
+        lastSavedSnapshot: lastSavedSetlistRef.current,
+        lastSavedBackgroundSnapshot: lastSavedBackgroundRef.current
+      });
+    }, 500);
+    return () => { if (draftTimerRef.current) clearTimeout(draftTimerRef.current); };
+  }, [setlist, currentSetlistId, currentSetlistName, setlistBackground]);
 
-  const updateSavedSnapshot = useCallback((items: SetlistItem[]) => {
+  const updateSavedSnapshot = useCallback((items: SetlistItem[], background?: string) => {
     lastSavedSetlistRef.current = serializeSetlistForComparison(items);
+    lastSavedBackgroundRef.current = background || '';
     setHasUnsavedChanges(false);
   }, []);
 
@@ -225,7 +248,9 @@ export const SetlistProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSetlist([]);
     setCurrentSetlistName('');
     setCurrentSetlistId(null);
+    setSetlistBackground('');
     lastSavedSetlistRef.current = '[]';
+    lastSavedBackgroundRef.current = '';
     setHasUnsavedChanges(false);
     // Clear localStorage draft
     try {
@@ -243,6 +268,8 @@ export const SetlistProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setCurrentSetlistId,
     currentSetlistName,
     setCurrentSetlistName,
+    setlistBackground,
+    setSetlistBackground,
     hasUnsavedChanges,
     setHasUnsavedChanges,
     lastSavedSetlistRef,
@@ -252,6 +279,7 @@ export const SetlistProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setlist,
     currentSetlistId,
     currentSetlistName,
+    setlistBackground,
     hasUnsavedChanges,
     updateSavedSnapshot,
     clearSetlist

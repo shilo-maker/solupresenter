@@ -5,6 +5,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { BrowserWindow } from 'electron';
 import { EventEmitter } from 'events';
 import { getRemoteControlUI } from './remoteControlUI';
+import { getMidiBridgeUI } from './midiBridgeUI';
 import { getSongs } from '../database/songs';
 import { getAllMediaItems, getMediaItem } from '../database/media';
 import { getBibleBooks, getBibleVerses } from './bibleService';
@@ -18,16 +19,50 @@ import type { DisplayManager } from '../windows/displayManager';
 
 const FIREWALL_RULE_NAME = 'SoluCast Remote Control';
 
+/**
+ * Resolve translation from a slide's translations map (main process version).
+ * Mirrors resolveTranslation from src/renderer/utils/translationUtils.ts.
+ */
+function resolveSlideTranslation(
+  slide: any,
+  preferredLang: string
+): { translation: string; translationOverflow: string } {
+  if (slide?.translations && typeof slide.translations === 'object' && !Array.isArray(slide.translations) && Object.keys(slide.translations).length > 0) {
+    const text = slide.translations[preferredLang]
+      || slide.translations['en']
+      || Object.values(slide.translations)[0]
+      || '';
+    if (typeof text !== 'string') {
+      return { translation: slide?.translation || '', translationOverflow: slide?.translationOverflow || '' };
+    }
+    const nlIdx = text.indexOf('\n');
+    if (nlIdx !== -1) {
+      return { translation: text.substring(0, nlIdx), translationOverflow: text.substring(nlIdx + 1) };
+    }
+    return { translation: text, translationOverflow: '' };
+  }
+  return { translation: slide?.translation || '', translationOverflow: slide?.translationOverflow || '' };
+}
+
 const DEFAULT_PORT = 45680;
 const MAX_PORT_RETRIES = 10;
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const MAX_COMMANDS_PER_SECOND = 20;
 const MAX_AUTH_ATTEMPTS = 5;
+const DEVICE_ID_REGEX = /^[a-zA-Z0-9_\-=.:]+$/; // Valid Chromium device ID characters
+
+// MIDI bridge command whitelist (strict subset of VALID_COMMANDS)
+const MIDI_ALLOWED_COMMANDS = new Set([
+  'slide:next', 'slide:prev', 'slide:goto', 'slide:blank',
+  'setlist:select', 'song:identify', 'item:identify',
+  'item:activate', 'item:pause', 'item:stop', 'item:loopOn', 'item:loopOff'
+]);
 
 // Valid command types whitelist
 const VALID_COMMANDS = new Set([
   'slide:next', 'slide:prev', 'slide:goto', 'slide:blank',
-  'setlist:select',
+  'setlist:select', 'song:identify', 'item:identify',
+  'item:activate', 'item:pause', 'item:stop', 'item:loopOn', 'item:loopOff',
   'mode:set',
   'library:addSong', 'library:selectSong',
   'library:addBible', 'library:selectBible',
@@ -335,6 +370,8 @@ export interface RemoteControlState {
     currentTime: number;
     duration: number;
   } | null;
+  // Translation language for multi-translation songs
+  translationLanguage?: string;
 }
 
 export interface RemoteCommand {
@@ -449,6 +486,7 @@ class RemoteControlServer extends EventEmitter {
     currentSlideIndex: 0,
     totalSlides: 0,
     displayMode: 'bilingual',
+    translationLanguage: 'en',
     isBlank: false,
     setlist: [],
     slides: [],
@@ -463,6 +501,9 @@ class RemoteControlServer extends EventEmitter {
   private combinedSlidesCache: CombinedSlideItem[] = [];
   private rawSlidesCache: any[] = [];
   private sessionTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private midiBridgeSockets: Set<string> = new Set();
+  private midiControlEnabled: boolean = true;
+  private translationLanguage: string = 'en';
 
   constructor() {
     super();
@@ -613,8 +654,9 @@ class RemoteControlServer extends EventEmitter {
       this.broadcastDebounceTimer = null;
     }
 
-    // Clear authenticated sockets and auth attempts
+    // Clear authenticated sockets, MIDI bridge sockets, and auth attempts
     this.authenticatedSockets.clear();
+    this.midiBridgeSockets.clear();
     clientRateLimits.clear();
     authAttempts.clear();
 
@@ -687,6 +729,14 @@ class RemoteControlServer extends EventEmitter {
   }
 
   /**
+   * Enable or disable MIDI bridge command processing
+   */
+  setMidiControlEnabled(enabled: boolean): void {
+    this.midiControlEnabled = enabled;
+    console.log(`[RemoteControlServer] MIDI control enabled: ${enabled}`);
+  }
+
+  /**
    * Get current state (for reading without modification)
    */
   getCurrentState(): RemoteControlState {
@@ -723,6 +773,10 @@ class RemoteControlServer extends EventEmitter {
     }
 
     this.currentState = { ...this.currentState, ...state };
+    // Track translation language for resolving multi-translation slides
+    if (state.translationLanguage !== undefined) {
+      this.translationLanguage = state.translationLanguage;
+    }
     // When ControlPanel syncs fullSlides with actual content, it's taking over content control
     // Only reset directlyLoadedContent if:
     // 1. ControlPanel is sending non-empty slides
@@ -831,6 +885,21 @@ class RemoteControlServer extends EventEmitter {
       const socket = this.io.sockets.sockets.get(socketId);
       if (socket) {
         socket.emit('state', optimizedState);
+      }
+    }
+
+    // Send setlist:summary to MIDI bridge sockets when setlist changes
+    if (setlistChanged && this.midiBridgeSockets.size > 0) {
+      const setlistSummary = (stateForClients.setlist || []).map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        type: item.type
+      }));
+      for (const socketId of this.midiBridgeSockets) {
+        const socket = this.io.sockets.sockets.get(socketId);
+        if (socket) {
+          socket.emit('setlist:summary', { setlist: setlistSummary });
+        }
       }
     }
   }
@@ -1051,7 +1120,7 @@ class RemoteControlServer extends EventEmitter {
         }
       });
 
-      socket.on('openDisplay', (data: { displayId: number; type: 'viewer' | 'stage' }, callback: (data: any) => void) => {
+      socket.on('openDisplay', (data: { displayId: number; type: 'viewer' | 'stage' | 'camera'; deviceId?: string; audioDeviceId?: string }, callback: (data: any) => void) => {
         if (typeof callback !== 'function') return;
         if (!this.authenticatedSockets.has(socket.id)) {
           callback({ error: 'Not authenticated' });
@@ -1063,11 +1132,28 @@ class RemoteControlServer extends EventEmitter {
             callback({ error: 'Display manager not available' });
             return;
           }
-          if (typeof data?.displayId !== 'number' || !data?.type || !['viewer', 'stage'].includes(data.type)) {
+          if (typeof data?.displayId !== 'number' || !data?.type || !['viewer', 'stage', 'camera'].includes(data.type)) {
             callback({ error: 'Invalid parameters' });
             return;
           }
-          const success = this.displayManager.openDisplayWindow(data.displayId, data.type);
+          // Only pass deviceId/audioDeviceId for camera type; validate they are reasonable device ID strings
+          let sanitizedDeviceId: string | undefined;
+          let sanitizedAudioDeviceId: string | undefined;
+          if (data.type === 'camera' && data.deviceId) {
+            if (typeof data.deviceId !== 'string' || data.deviceId.length > 256 || !DEVICE_ID_REGEX.test(data.deviceId)) {
+              callback({ error: 'Invalid camera device ID' });
+              return;
+            }
+            sanitizedDeviceId = data.deviceId;
+          }
+          if (data.type === 'camera' && data.audioDeviceId) {
+            if (typeof data.audioDeviceId !== 'string' || data.audioDeviceId.length > 256 || !DEVICE_ID_REGEX.test(data.audioDeviceId)) {
+              callback({ error: 'Invalid audio device ID' });
+              return;
+            }
+            sanitizedAudioDeviceId = data.audioDeviceId;
+          }
+          const success = this.displayManager.openDisplayWindow(data.displayId, data.type, sanitizedDeviceId, sanitizedAudioDeviceId);
           callback({ success });
         } catch (error) {
           console.error('[RemoteControlServer] Error opening display:', error);
@@ -1222,10 +1308,99 @@ class RemoteControlServer extends EventEmitter {
         }
       });
 
+      // MIDI Bridge: authenticate with same PIN, track as MIDI bridge socket
+      socket.on('midi:join', (data: { pin: string }) => {
+        // Brute-force protection (shared with regular auth)
+        const attempts = authAttempts.get(socket.id) || 0;
+        if (attempts >= MAX_AUTH_ATTEMPTS) {
+          socket.emit('midi:error', { message: 'Too many failed attempts. Please reconnect.' });
+          socket.disconnect(true);
+          return;
+        }
+
+        if (data?.pin === this.pin) {
+          authAttempts.delete(socket.id);
+          this.authenticatedSockets.add(socket.id);
+          this.midiBridgeSockets.add(socket.id);
+          this.resetSessionTimeout(socket.id);
+          socket.emit('midi:joined', { roomPin: this.pin });
+
+          // Send current setlist summary
+          const setlistSummary = (this.currentState.setlist || []).map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            type: item.type
+          }));
+          socket.emit('setlist:summary', { setlist: setlistSummary });
+
+          // Notify operator
+          if (this.controlWindow && !this.controlWindow.isDestroyed()) {
+            this.controlWindow.webContents.send('midi:bridgeStatus', true);
+          }
+
+          console.log(`[RemoteControlServer] MIDI bridge client authenticated: ${socket.id}`);
+        } else {
+          authAttempts.set(socket.id, attempts + 1);
+          const remaining = MAX_AUTH_ATTEMPTS - attempts - 1;
+          socket.emit('midi:error', {
+            message: remaining > 0 ? `Invalid PIN. ${remaining} attempts remaining.` : 'Too many failed attempts.'
+          });
+          if (remaining <= 0) {
+            socket.disconnect(true);
+          }
+        }
+      });
+
+      // MIDI Bridge: handle commands with whitelist
+      socket.on('midi:command', (data: { command: RemoteCommand }) => {
+        if (!this.authenticatedSockets.has(socket.id) || !this.midiBridgeSockets.has(socket.id)) {
+          socket.emit('midi:error', { message: 'Not authenticated' });
+          return;
+        }
+
+        // Operator toggled MIDI control off
+        if (!this.midiControlEnabled) return;
+
+        const command = data?.command;
+        if (!command?.type) {
+          socket.emit('midi:error', { message: 'Invalid command' });
+          return;
+        }
+
+        // MIDI bridge whitelist — only slide/setlist/song commands
+        if (!MIDI_ALLOWED_COMMANDS.has(command.type)) {
+          socket.emit('midi:error', { message: 'Command not allowed from MIDI bridge' });
+          return;
+        }
+
+        // Rate limiting
+        if (!checkClientRateLimit(socket.id)) {
+          socket.emit('midi:error', { message: 'Rate limit exceeded' });
+          return;
+        }
+
+        this.resetSessionTimeout(socket.id);
+        this.handleCommand(command);
+      });
+
+      // MIDI Bridge: explicit leave
+      socket.on('midi:leave', () => {
+        const wasMidi = this.midiBridgeSockets.has(socket.id);
+        this.midiBridgeSockets.delete(socket.id);
+        this.authenticatedSockets.delete(socket.id);
+        if (wasMidi && this.controlWindow && !this.controlWindow.isDestroyed()) {
+          const anyMidiLeft = this.midiBridgeSockets.size > 0;
+          this.controlWindow.webContents.send('midi:bridgeStatus', anyMidiLeft);
+        }
+        console.log(`[RemoteControlServer] MIDI bridge client left: ${socket.id}`);
+      });
+
       // Handle disconnect
       socket.on('disconnect', () => {
         console.log(`[RemoteControlServer] Client disconnected: ${socket.id}`);
+        const wasMidi = this.midiBridgeSockets.has(socket.id);
         this.authenticatedSockets.delete(socket.id);
+        this.midiBridgeSockets.delete(socket.id);
         const timeout = this.sessionTimeouts.get(socket.id);
         if (timeout) {
           clearTimeout(timeout);
@@ -1233,6 +1408,12 @@ class RemoteControlServer extends EventEmitter {
         }
         clientRateLimits.delete(socket.id);
         authAttempts.delete(socket.id);
+
+        // Notify operator if a MIDI bridge disconnected
+        if (wasMidi && this.controlWindow && !this.controlWindow.isDestroyed()) {
+          const anyMidiLeft = this.midiBridgeSockets.size > 0;
+          this.controlWindow.webContents.send('midi:bridgeStatus', anyMidiLeft);
+        }
       });
     });
   }
@@ -1482,11 +1663,14 @@ class RemoteControlServer extends EventEmitter {
       // Build fullSlides from combined slides (for display broadcasting)
       this.currentState.fullSlides = combinedSlides.map(cs => {
         if (cs.type === 'combined' && cs.slides) {
-          // Combine the original text from all slides
+          // Combine the original text from all slides; carry forward first slide's translations
+          const first = cs.slides[0];
           return {
             originalText: cs.slides.map(s => s.originalText || '').join('\n'),
             transliteration: '',
-            translation: '',
+            translation: first?.translation || '',
+            translationOverflow: first?.translationOverflow || '',
+            translations: first?.translations,
             verseType: cs.verseType,
             _combined: true,
             _originalIndices: cs.originalIndices
@@ -1494,8 +1678,10 @@ class RemoteControlServer extends EventEmitter {
         } else if (cs.slide) {
           return {
             originalText: cs.slide.originalText || '',
-            transliteration: '',
-            translation: '',
+            transliteration: cs.slide.transliteration || '',
+            translation: cs.slide.translation || '',
+            translationOverflow: cs.slide.translationOverflow || '',
+            translations: cs.slide.translations,
             verseType: cs.verseType,
             _combined: false,
             _originalIndex: cs.originalIndex
@@ -1510,15 +1696,17 @@ class RemoteControlServer extends EventEmitter {
       this.currentState.slides = combinedSlides.map((cs, idx) => {
         let preview: string;
         if (cs.type === 'combined' && cs.slides) {
-          // For combined slides, show first slide's original + translation
+          // For combined slides, show first slide's original + resolved translation
           const first = cs.slides[0];
-          preview = first?.originalText && first?.translation
-            ? (first.originalText || '').slice(0, 30) + ' • ' + (first.translation || '').slice(0, 30)
+          const resolvedFirst = first ? resolveSlideTranslation(first, this.translationLanguage) : { translation: '' };
+          preview = first?.originalText && resolvedFirst.translation
+            ? (first.originalText || '').slice(0, 30) + ' \u2022 ' + resolvedFirst.translation.slice(0, 30)
             : cs.slides.map(s => (s.originalText || '').slice(0, 30)).join(' / ');
         } else if (cs.slide) {
           // For single slides, show both languages if available
-          preview = cs.slide.originalText && cs.slide.translation
-            ? (cs.slide.originalText || '').slice(0, 30) + ' • ' + (cs.slide.translation || '').slice(0, 30)
+          const resolvedSingle = resolveSlideTranslation(cs.slide, this.translationLanguage);
+          preview = cs.slide.originalText && resolvedSingle.translation
+            ? (cs.slide.originalText || '').slice(0, 30) + ' \u2022 ' + resolvedSingle.translation.slice(0, 30)
             : (cs.slide.originalText || '').slice(0, 60);
         } else {
           preview = '';
@@ -1536,13 +1724,16 @@ class RemoteControlServer extends EventEmitter {
       this.currentState.totalSlides = rawSlides.length;
 
       // Build slides preview for mobile (show both languages if available)
-      this.currentState.slides = rawSlides.map((slide, idx) => ({
-        index: idx,
-        preview: slide.originalText && slide.translation
-          ? (slide.originalText || '').slice(0, 30) + ' • ' + (slide.translation || '').slice(0, 30)
-          : (slide.originalText || slide.translation || '').slice(0, 60),
-        verseType: slide.verseType || `Slide ${idx + 1}`
-      }));
+      this.currentState.slides = rawSlides.map((slide, idx) => {
+        const resolved = resolveSlideTranslation(slide, this.translationLanguage);
+        return {
+          index: idx,
+          preview: slide.originalText && resolved.translation
+            ? (slide.originalText || '').slice(0, 30) + ' \u2022 ' + resolved.translation.slice(0, 30)
+            : (slide.originalText || resolved.translation || '').slice(0, 60),
+          verseType: slide.verseType || `Slide ${idx + 1}`
+        };
+      });
     }
 
     // Set the slide index - either translate position or reset to 0
@@ -1597,24 +1788,31 @@ class RemoteControlServer extends EventEmitter {
     }
 
     // For prayer/sermon content, use prayer theme field names
-    // Prayer theme expects: subtitle, subtitleTranslation, description, reference
+    // Prayer theme expects: title, titleTranslation, subtitle, subtitleTranslation, description, descriptionTranslation, reference, referenceTranslation
     if (mappedContentType === 'prayer' || mappedContentType === 'sermon') {
+      const resolvedPrayer = resolveSlideTranslation(slide, this.translationLanguage);
+      const resolvedNextPrayer = nextSlide ? resolveSlideTranslation(nextSlide, this.translationLanguage) : null;
       return {
         slideData: {
+          title: slide._prayerTitle || '',
+          titleTranslation: slide._prayerTitleTranslation || '',
           subtitle: slide.originalText || '',
-          subtitleTranslation: slide.translation || '',
+          subtitleTranslation: resolvedPrayer.translation || '',
           description: slide.description || '',
           descriptionTranslation: slide.descriptionTranslation || '',
-          reference: slide.verseType || '',
+          reference: slide._hebrewReference || slide._reference || '',
+          referenceTranslation: slide._reference || '',
           // Also include original fields for compatibility
           originalText: slide.originalText || '',
-          translation: slide.translation || ''
+          translation: resolvedPrayer.translation || ''
         },
         nextSlideData: nextSlide ? {
           subtitle: nextSlide.originalText || '',
-          subtitleTranslation: nextSlide.translation || '',
+          subtitleTranslation: resolvedNextPrayer!.translation || '',
           description: nextSlide.description || '',
-          reference: nextSlide.verseType || ''
+          descriptionTranslation: nextSlide.descriptionTranslation || '',
+          reference: nextSlide._hebrewReference || nextSlide._reference || '',
+          referenceTranslation: nextSlide._reference || ''
         } : null,
         songTitle: songTitle || '',
         displayMode,
@@ -1623,6 +1821,11 @@ class RemoteControlServer extends EventEmitter {
       };
     }
 
+    // Resolve translations from multi-translation map
+    const lang = this.translationLanguage;
+    const resolvedSlide = resolveSlideTranslation(slide, lang);
+    const resolvedNext = nextSlide ? resolveSlideTranslation(nextSlide, lang) : null;
+
     // For Bible content, include reference fields for Bible theme
     // Bible theme expects: originalText (hebrew), translation (english), reference, referenceEnglish
     if (mappedContentType === 'bible') {
@@ -1630,7 +1833,8 @@ class RemoteControlServer extends EventEmitter {
         slideData: {
           originalText: slide.originalText || '',
           transliteration: slide.transliteration || '',
-          translation: slide.translation || '',
+          translation: resolvedSlide.translation,
+          translationOverflow: resolvedSlide.translationOverflow,
           verseType: slide.verseType || '',
           // Bible theme reference fields
           reference: slide.reference || slide.verseType || '',
@@ -1639,7 +1843,8 @@ class RemoteControlServer extends EventEmitter {
         nextSlideData: nextSlide ? {
           originalText: nextSlide.originalText || '',
           transliteration: nextSlide.transliteration || '',
-          translation: nextSlide.translation || '',
+          translation: resolvedNext!.translation,
+          translationOverflow: resolvedNext!.translationOverflow,
           verseType: nextSlide.verseType || '',
           reference: nextSlide.reference || nextSlide.verseType || '',
           referenceEnglish: nextSlide.referenceEnglish || nextSlide.verseType || ''
@@ -1656,13 +1861,15 @@ class RemoteControlServer extends EventEmitter {
       slideData: {
         originalText: slide.originalText || '',
         transliteration: slide.transliteration || '',
-        translation: slide.translation || '',
+        translation: resolvedSlide.translation,
+        translationOverflow: resolvedSlide.translationOverflow,
         verseType: slide.verseType || ''
       },
       nextSlideData: nextSlide ? {
         originalText: nextSlide.originalText || '',
         transliteration: nextSlide.transliteration || '',
-        translation: nextSlide.translation || '',
+        translation: resolvedNext!.translation,
+        translationOverflow: resolvedNext!.translationOverflow,
         verseType: nextSlide.verseType || ''
       } : null,
       songTitle: songTitle || '',
@@ -1717,10 +1924,15 @@ class RemoteControlServer extends EventEmitter {
           originalText: sub.subtitle || '',
           transliteration: '',
           translation: sub.subtitleTranslation || '',
-          verseType: sub.bibleRef?.reference || sub.description || `Point ${idx + 1}`,
+          verseType: `Point ${idx + 1}`,
           description: sub.description || '',
           descriptionTranslation: sub.descriptionTranslation || '',
-          bibleRef: sub.bibleRef
+          bibleRef: sub.bibleRef,
+          // Prayer-specific fields for buildSlideData
+          _prayerTitle: quickModeData.title || '',
+          _prayerTitleTranslation: quickModeData.titleTranslation || '',
+          _reference: sub.bibleRef?.reference || '',
+          _hebrewReference: sub.bibleRef?.hebrewReference || ''
         }));
         console.log(`[RemoteControlServer] handleSetlistSelect: Built ${slides.length} slides from quickModeData for ${quickModeType}`);
       } else {
@@ -2098,36 +2310,26 @@ class RemoteControlServer extends EventEmitter {
         this.broadcastState();
         return true;
       } else if (command.type === 'library:selectBible') {
-        // Select and display
-        const slides = filteredSlides;
-
-        // Update state
-        this.currentState.fullSlides = slides;
+        // Select and display — use setupSlidesForMode to populate rawSlidesCache
+        // and create combined slides for original mode
         this.currentState.songTitle = title;
-        this.currentState.currentSlideIndex = 0;
-        this.currentState.totalSlides = slides.length;
         this.currentState.isBlank = false;
         this.currentState.currentContentType = 'bible';
         this.currentState.currentItem = {
           id: biblePassage.id,
           type: 'bible',
           title: title,
-          slideCount: slides.length
+          slideCount: filteredSlides.length
         };
 
         // Mark that content was loaded directly (for slide command routing)
         this.directlyLoadedContent = true;
 
-        // Build slides preview (show both languages if available)
-        this.currentState.slides = slides.map((slide: any, idx: number) => ({
-          index: idx,
-          preview: slide.originalText && slide.translation
-            ? (slide.originalText || '').slice(0, 30) + ' • ' + (slide.translation || '').slice(0, 30)
-            : (slide.originalText || slide.translation || '').slice(0, 60),
-          verseType: slide.verseType || `Verse ${idx + 1}`
-        }));
+        // Setup slides with mode support (populates rawSlidesCache, combinedSlidesCache)
+        this.setupSlidesForMode(filteredSlides, title, 'bible');
 
-        // Broadcast to displays
+        // Broadcast first slide to displays
+        const slides = this.currentState.fullSlides || filteredSlides;
         const nextSlide = slides.length > 1 ? slides[1] : null;
         this.displayManager!.broadcastSlide(this.buildSlideData(slides[0], nextSlide, title, 'bible', this.currentState.displayMode));
 
@@ -2172,6 +2374,7 @@ class RemoteControlServer extends EventEmitter {
       if (presentation.quickModeData && presentation.quickModeData.subtitles) {
         // Build slides from quickModeData for proper theme rendering
         const subtitles = presentation.quickModeData.subtitles;
+        const qmd = presentation.quickModeData;
         slides = subtitles.map((item: any, idx: number) => {
           // Format: subtitle is the main text (Hebrew), subtitleTranslation is translation
           // description is additional text, bibleRef is the reference
@@ -2179,11 +2382,16 @@ class RemoteControlServer extends EventEmitter {
             originalText: item.subtitle || '',
             transliteration: '',
             translation: item.subtitleTranslation || '',
-            verseType: item.bibleRef?.reference || item.description || `Point ${idx + 1}`,
+            verseType: `Point ${idx + 1}`,
             // Include additional data for richer rendering
             description: item.description || '',
             descriptionTranslation: item.descriptionTranslation || '',
-            bibleRef: item.bibleRef
+            bibleRef: item.bibleRef,
+            // Prayer-specific fields for buildSlideData
+            _prayerTitle: qmd.title || '',
+            _prayerTitleTranslation: qmd.titleTranslation || '',
+            _reference: item.bibleRef?.reference || '',
+            _hebrewReference: item.bibleRef?.hebrewReference || ''
           };
         });
         console.log(`[RemoteControlServer] Built ${slides.length} slides from quickModeData for ${quickModeType}`);
@@ -2246,11 +2454,9 @@ class RemoteControlServer extends EventEmitter {
         this.broadcastState(true); // Immediate for UI update
         return true;
       } else if (command.type === 'library:selectPresentation') {
-        // Select and display the presentation
-        this.currentState.fullSlides = slides;
+        // Select and display the presentation — use setupSlidesForMode to populate
+        // rawSlidesCache and create combined slides for original mode
         this.currentState.songTitle = presentation.title || '';
-        this.currentState.currentSlideIndex = 0;
-        this.currentState.totalSlides = slides.length;
         this.currentState.isBlank = false;
         this.currentState.currentContentType = contentType;
         this.currentState.currentItem = {
@@ -2263,18 +2469,13 @@ class RemoteControlServer extends EventEmitter {
         // Mark that content was loaded directly (for slide command routing)
         this.directlyLoadedContent = true;
 
-        // Build slides preview (show both languages if available)
-        this.currentState.slides = slides.map((slide: any, idx: number) => ({
-          index: idx,
-          preview: slide.originalText && slide.translation
-            ? (slide.originalText || '').slice(0, 30) + ' • ' + (slide.translation || '').slice(0, 30)
-            : (slide.originalText || slide.translation || '').slice(0, 60),
-          verseType: slide.verseType || `Slide ${idx + 1}`
-        }));
+        // Setup slides with mode support (populates rawSlidesCache, combinedSlidesCache)
+        this.setupSlidesForMode(slides, presentation.title || '', contentType);
 
-        // Broadcast to displays - use the correct contentType for theme selection
-        const nextSlide = slides.length > 1 ? slides[1] : null;
-        this.displayManager!.broadcastSlide(this.buildSlideData(slides[0], nextSlide, presentation.title, contentType, this.currentState.displayMode));
+        // Broadcast first slide to displays - use the correct contentType for theme selection
+        const modeSlides = this.currentState.fullSlides || slides;
+        const nextSlide = modeSlides.length > 1 ? modeSlides[1] : null;
+        this.displayManager!.broadcastSlide(this.buildSlideData(modeSlides[0], nextSlide, presentation.title, contentType, this.currentState.displayMode));
 
         console.log(`[RemoteControlServer] Selected presentation: ${presentation.title} (contentType: ${contentType})`);
         this.broadcastState(true);
@@ -2350,6 +2551,14 @@ class RemoteControlServer extends EventEmitter {
     if (url === '/' || url.startsWith('/?')) {
       // Serve mobile UI with CSP headers
       const html = getRemoteControlUI(this.port);
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:"
+      });
+      res.end(html);
+    } else if (url === '/midi-bridge' || url.startsWith('/midi-bridge?')) {
+      // Serve MIDI Bridge UI
+      const html = getMidiBridgeUI(this.port);
       res.writeHead(200, {
         'Content-Type': 'text/html; charset=utf-8',
         'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:"

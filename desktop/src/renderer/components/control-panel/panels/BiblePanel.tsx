@@ -1,4 +1,4 @@
-import React, { useRef, memo, useState, useCallback } from 'react';
+import React, { useRef, memo, useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BibleBook, BibleSlide, Song } from './types';
 
@@ -33,6 +33,13 @@ const BiblePanel = memo<BiblePanelProps>(({
   const isRTL = i18n.language === 'he';
   const bibleSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [searchInputValue, setSearchInputValue] = useState(bibleSearchQuery || '');
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (bibleSearchDebounceRef.current) clearTimeout(bibleSearchDebounceRef.current);
+    };
+  }, []);
 
   // Separate old and new testament books
   const oldTestamentBooks = bibleBooks.filter(book => book.testament === 'old');

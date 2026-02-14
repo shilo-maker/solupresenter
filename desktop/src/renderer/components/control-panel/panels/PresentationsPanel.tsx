@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, memo } from 'react';
+import React, { useState, useRef, useMemo, useEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../../../styles/controlPanelStyles';
 import { Presentation } from './types';
@@ -189,6 +189,13 @@ const PresentationsPanel = memo<PresentationsPanelProps>(({
   const { t, i18n } = useTranslation();
   const isRTL = i18n.language === 'he';
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, []);
 
   // Filter presentations based on search
   const filteredPresentations = useMemo(() => {

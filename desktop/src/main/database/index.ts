@@ -39,7 +39,7 @@ function getSqlJsWasmPath(): string {
 }
 
 // Current schema version - increment when adding migrations
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 5;
 
 let db: Database | null = null;
 
@@ -115,6 +115,54 @@ function runMigrations(fromVersion: number): void {
     } catch (e) {
       // Column might already exist
       console.log('[Migration] arrangements column may already exist');
+    }
+  }
+
+  if (fromVersion < 4) {
+    console.log('Running migration to version 4: Adding dual_translation_themes table and settings column...');
+    db.run(`
+      CREATE TABLE IF NOT EXISTS dual_translation_themes (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        isBuiltIn INTEGER DEFAULT 0,
+        isDefault INTEGER DEFAULT 0,
+        lineOrder TEXT DEFAULT '["original","transliteration","translation","translationB"]',
+        lineStyles TEXT,
+        positioning TEXT,
+        container TEXT,
+        viewerBackground TEXT,
+        linePositions TEXT,
+        canvasDimensions TEXT,
+        backgroundBoxes TEXT,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    try {
+      db.run('ALTER TABLE settings ADD COLUMN selectedDualTranslationThemeId TEXT');
+    } catch (e) {
+      // Column might already exist
+      console.log('[Migration] selectedDualTranslationThemeId column may already exist');
+    }
+  }
+
+  if (fromVersion < 5) {
+    console.log('Running migration to version 5: Updating default dual translation theme font sizes...');
+    // The original default had 15% smaller fonts (151, 116, 124, 124) from the old patchThemeForFourLines logic.
+    // Update to larger sizes that compensate for 4-line visual density.
+    const updatedStyles = JSON.stringify({
+      original: { fontSize: 195, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true },
+      transliteration: { fontSize: 150, fontWeight: '400', color: '#ffffff', opacity: 0.9, visible: true },
+      translation: { fontSize: 160, fontWeight: '400', color: '#cfcfcf', opacity: 0.85, visible: true },
+      translationB: { fontSize: 160, fontWeight: '400', color: '#a0c8e0', opacity: 0.85, visible: true }
+    });
+    try {
+      db.run(
+        `UPDATE dual_translation_themes SET lineStyles = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = '00000000-0000-0000-0000-000000000009' AND isBuiltIn = 1`,
+        [updatedStyles]
+      );
+    } catch (e) {
+      console.log('[Migration] Could not update dual translation theme font sizes:', e);
     }
   }
 
@@ -337,7 +385,8 @@ export async function initDatabase(): Promise<void> {
         selectedOBSThemeId TEXT,
         selectedOBSBibleThemeId TEXT,
         selectedPrayerThemeId TEXT,
-        selectedOBSPrayerThemeId TEXT
+        selectedOBSPrayerThemeId TEXT,
+        selectedDualTranslationThemeId TEXT
       )
     `);
 
@@ -364,6 +413,9 @@ export async function initDatabase(): Promise<void> {
     }
     if (!columnNames.includes('selectedOBSPrayerThemeId')) {
       db.run('ALTER TABLE settings ADD COLUMN selectedOBSPrayerThemeId TEXT');
+    }
+    if (!columnNames.includes('selectedDualTranslationThemeId')) {
+      db.run('ALTER TABLE settings ADD COLUMN selectedDualTranslationThemeId TEXT');
     }
 
     // Save after creating tables
@@ -480,6 +532,13 @@ export async function initDatabase(): Promise<void> {
     // Migration: Add venue column to setlists if it doesn't exist
     try {
       db.run(`ALTER TABLE setlists ADD COLUMN venue TEXT`);
+    } catch {
+      // Column already exists
+    }
+
+    // Migration: Add background column to setlists if it doesn't exist
+    try {
+      db.run(`ALTER TABLE setlists ADD COLUMN background TEXT`);
     } catch {
       // Column already exists
     }
@@ -697,6 +756,26 @@ export async function initDatabase(): Promise<void> {
         container TEXT,
         viewerBackground TEXT,
         canvasDimensions TEXT DEFAULT '{"width":1920,"height":1080}',
+        backgroundBoxes TEXT,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create dual_translation_themes table
+    db.run(`
+      CREATE TABLE IF NOT EXISTS dual_translation_themes (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        isBuiltIn INTEGER DEFAULT 0,
+        isDefault INTEGER DEFAULT 0,
+        lineOrder TEXT DEFAULT '["original","transliteration","translation","translationB"]',
+        lineStyles TEXT,
+        positioning TEXT,
+        container TEXT,
+        viewerBackground TEXT,
+        linePositions TEXT,
+        canvasDimensions TEXT,
         backgroundBoxes TEXT,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
         updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
@@ -1012,6 +1091,49 @@ export async function initDatabase(): Promise<void> {
       saveDatabase();
     }
 
+    // Check if any default dual translation theme already exists
+    const existingDefaultDualTransTheme = db.exec(`SELECT id FROM dual_translation_themes WHERE isDefault = 1`);
+    const hasDefaultDualTransTheme = existingDefaultDualTransTheme.length > 0 && existingDefaultDualTransTheme[0].values.length > 0;
+
+    // Seed default Dual Translation theme if it doesn't exist
+    const CLASSIC_DUAL_TRANSLATION_THEME_ID = '00000000-0000-0000-0000-000000000009';
+    const existingDualTransTheme = db.exec(`SELECT id FROM dual_translation_themes WHERE id = '${CLASSIC_DUAL_TRANSLATION_THEME_ID}'`);
+
+    if (existingDualTransTheme.length === 0 || existingDualTransTheme[0].values.length === 0) {
+      // Default Dual Translation Theme - 4 lines with slightly larger fonts to compensate for 4-line density
+      const defaultDualTransStyles = {
+        original: { fontSize: 195, fontWeight: '700', color: '#ffffff', opacity: 1, visible: true },
+        transliteration: { fontSize: 150, fontWeight: '400', color: '#ffffff', opacity: 0.9, visible: true },
+        translation: { fontSize: 160, fontWeight: '400', color: '#cfcfcf', opacity: 0.85, visible: true },
+        translationB: { fontSize: 160, fontWeight: '400', color: '#a0c8e0', opacity: 0.85, visible: true }
+      };
+      const defaultDualTransPositions = {
+        original: { x: 0, y: 20, width: 100, height: 11, paddingTop: 0, paddingBottom: 0, alignH: 'center', alignV: 'center', autoHeight: true, growDirection: 'up', positionMode: 'absolute', flowGap: 1 },
+        transliteration: { x: 0, y: 31, width: 100, height: 10, paddingTop: 0, paddingBottom: 0, alignH: 'center', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'original' },
+        translation: { x: 0, y: 41, width: 100, height: 10, paddingTop: 0, paddingBottom: 0, alignH: 'center', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'transliteration' },
+        translationB: { x: 0, y: 51, width: 100, height: 10, paddingTop: 0, paddingBottom: 0, alignH: 'center', alignV: 'center', autoHeight: true, positionMode: 'flow', flowGap: 0, flowAnchor: 'translation' }
+      };
+
+      db.run(`
+        INSERT INTO dual_translation_themes (id, name, isBuiltIn, isDefault, lineOrder, lineStyles, positioning, container, viewerBackground, canvasDimensions, linePositions, backgroundBoxes)
+        VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        CLASSIC_DUAL_TRANSLATION_THEME_ID,
+        'Default',
+        hasDefaultDualTransTheme ? 0 : 1,
+        JSON.stringify(['original', 'transliteration', 'translation', 'translationB']),
+        JSON.stringify(defaultDualTransStyles),
+        JSON.stringify({ vertical: 'center', horizontal: 'center' }),
+        JSON.stringify({ maxWidth: '100%', padding: '2vh 6vw', backgroundColor: 'transparent', borderRadius: '0px' }),
+        JSON.stringify({ type: 'color', color: '#000000' }),
+        JSON.stringify({ width: 1920, height: 1080 }),
+        JSON.stringify(defaultDualTransPositions),
+        JSON.stringify([])
+      ]);
+
+      saveDatabase();
+    }
+
     // End initialization mode and do a single save
     isInitializing = false;
     if (isDirty) {
@@ -1292,37 +1414,44 @@ export function getSelectedThemeIds(): {
   obsBibleThemeId: string | null;
   prayerThemeId: string | null;
   obsPrayerThemeId: string | null;
+  dualTranslationThemeId: string | null;
 } {
-  if (!db) return { viewerThemeId: null, stageThemeId: null, bibleThemeId: null, obsThemeId: null, obsBibleThemeId: null, prayerThemeId: null, obsPrayerThemeId: null };
+  if (!db) return { viewerThemeId: null, stageThemeId: null, bibleThemeId: null, obsThemeId: null, obsBibleThemeId: null, prayerThemeId: null, obsPrayerThemeId: null, dualTranslationThemeId: null };
 
-  const result = db.exec(`
-    SELECT selectedViewerThemeId, selectedStageThemeId, selectedBibleThemeId, selectedOBSThemeId, selectedOBSBibleThemeId, selectedPrayerThemeId, selectedOBSPrayerThemeId
-    FROM settings WHERE id = 1
-  `);
+  const defaultResult = { viewerThemeId: null, stageThemeId: null, bibleThemeId: null, obsThemeId: null, obsBibleThemeId: null, prayerThemeId: null, obsPrayerThemeId: null, dualTranslationThemeId: null };
 
-  if (result.length === 0 || !result[0].values || result[0].values.length === 0) {
-    return { viewerThemeId: null, stageThemeId: null, bibleThemeId: null, obsThemeId: null, obsBibleThemeId: null, prayerThemeId: null, obsPrayerThemeId: null };
+  // Use SELECT * to avoid failing if a column doesn't exist yet (e.g., during migration)
+  const result = db.exec('SELECT * FROM settings WHERE id = 1');
+
+  if (result.length === 0 || !result[0].values || result[0].values.length === 0 || !result[0].columns) {
+    return defaultResult;
   }
 
+  const columns = result[0].columns;
   const row = result[0].values[0];
-  // Bounds check: ensure row has expected number of elements
-  if (!Array.isArray(row) || row.length < 7) {
-    return { viewerThemeId: null, stageThemeId: null, bibleThemeId: null, obsThemeId: null, obsBibleThemeId: null, prayerThemeId: null, obsPrayerThemeId: null };
-  }
+
+  // Map column names to indices for safe lookup
+  const colIndex = (name: string): number => columns.indexOf(name);
+  const getVal = (name: string): string | null => {
+    const idx = colIndex(name);
+    return idx >= 0 ? (row[idx] as string | null) : null;
+  };
+
   return {
-    viewerThemeId: row[0] as string | null,
-    stageThemeId: row[1] as string | null,
-    bibleThemeId: row[2] as string | null,
-    obsThemeId: row[3] as string | null,
-    obsBibleThemeId: row[4] as string | null,
-    prayerThemeId: row[5] as string | null,
-    obsPrayerThemeId: row[6] as string | null
+    viewerThemeId: getVal('selectedViewerThemeId'),
+    stageThemeId: getVal('selectedStageThemeId'),
+    bibleThemeId: getVal('selectedBibleThemeId'),
+    obsThemeId: getVal('selectedOBSThemeId'),
+    obsBibleThemeId: getVal('selectedOBSBibleThemeId'),
+    prayerThemeId: getVal('selectedPrayerThemeId'),
+    obsPrayerThemeId: getVal('selectedOBSPrayerThemeId'),
+    dualTranslationThemeId: getVal('selectedDualTranslationThemeId')
   };
 }
 
 // Save selected theme ID
 export function saveSelectedThemeId(
-  themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'obsBible' | 'prayer' | 'obsPrayer',
+  themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'obsBible' | 'prayer' | 'obsPrayer' | 'dualTranslation',
   themeId: string | null
 ): void {
   if (!db) return;
@@ -1334,7 +1463,8 @@ export function saveSelectedThemeId(
     obs: 'selectedOBSThemeId',
     obsBible: 'selectedOBSBibleThemeId',
     prayer: 'selectedPrayerThemeId',
-    obsPrayer: 'selectedOBSPrayerThemeId'
+    obsPrayer: 'selectedOBSPrayerThemeId',
+    dualTranslation: 'selectedDualTranslationThemeId'
   };
 
   const column = columnMap[themeType];
@@ -1445,6 +1575,7 @@ export const CLASSIC_OBS_SONGS_THEME_ID = '00000000-0000-0000-0000-000000000004'
 export const CLASSIC_OBS_BIBLE_THEME_ID = '00000000-0000-0000-0000-000000000005';
 export const CLASSIC_PRAYER_THEME_ID = '00000000-0000-0000-0000-000000000006';
 export const CLASSIC_OBS_PRAYER_THEME_ID = '00000000-0000-0000-0000-000000000008';
+export const CLASSIC_DUAL_TRANSLATION_THEME_ID = '00000000-0000-0000-0000-000000000009';
 
 // ============ Display Theme Overrides ============
 

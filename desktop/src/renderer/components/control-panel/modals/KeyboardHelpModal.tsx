@@ -12,10 +12,22 @@ const KeyboardHelpModal = memo<KeyboardHelpModalProps>(({ onClose }) => {
     { keys: ['→', '↓'], action: 'Next slide' },
     { keys: ['←', '↑'], action: 'Previous slide' },
     { keys: ['Space'], action: 'Toggle Bilingual/Original mode' },
-    { keys: ['B'], action: 'Toggle blank screen' },
+    { keys: ['.'], action: 'Toggle blank screen' },
     { keys: ['Q'], action: 'Open Quick Slide' },
     { keys: ['?', 'F1'], action: 'Show this help' },
     { keys: ['Esc'], action: 'Close modals' }
+  ];
+
+  const sectionShortcuts = [
+    { keys: ['A'], action: 'Verse 1' },
+    { keys: ['S'], action: 'Verse 2' },
+    { keys: ['D'], action: 'Verse 3' },
+    { keys: ['F'], action: 'Verse 4' },
+    { keys: ['C'], action: 'Chorus 1' },
+    { keys: ['X'], action: 'Chorus 2' },
+    { keys: ['B'], action: 'Bridge 1' },
+    { keys: ['N'], action: 'Bridge 2' },
+    { keys: ['P'], action: 'Pre-Chorus' },
   ];
 
   return (
@@ -76,6 +88,47 @@ const KeyboardHelpModal = memo<KeyboardHelpModalProps>(({ onClose }) => {
               }}
             >
               <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem' }}>{shortcut.action}</span>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {shortcut.keys.map((key, kidx) => (
+                  <kbd
+                    key={kidx}
+                    style={{
+                      background: 'rgba(255,255,255,0.15)',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      borderRadius: '4px',
+                      padding: '4px 8px',
+                      color: 'white',
+                      fontSize: '0.8rem',
+                      fontFamily: 'monospace',
+                      minWidth: '28px',
+                      textAlign: 'center'
+                    }}
+                  >
+                    {key}
+                  </kbd>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ marginTop: '16px', marginBottom: '8px' }}>
+          <h4 style={{ color: 'rgba(255,255,255,0.7)', margin: 0, fontSize: '0.9rem' }}>Section Jump (when song is selected)</h4>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {sectionShortcuts.map((shortcut, idx) => (
+            <div
+              key={idx}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '6px 12px',
+                background: 'rgba(255,255,255,0.05)',
+                borderRadius: '8px'
+              }}
+            >
+              <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem' }}>{shortcut.action}</span>
               <div style={{ display: 'flex', gap: '6px' }}>
                 {shortcut.keys.map((key, kidx) => (
                   <kbd

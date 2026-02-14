@@ -198,6 +198,8 @@ export class MediaManager {
 
     try {
       const files = await this.scanDirectory(folder.path, folder.type, folderId);
+      // Re-check folder still exists after async scan (may have been removed during scan)
+      if (!this.folders.has(folderId)) return;
       this.files.set(folderId, files);
 
       // Update folder info

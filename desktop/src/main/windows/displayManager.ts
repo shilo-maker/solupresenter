@@ -6,6 +6,9 @@ import { getDisplayThemeOverride, DisplayThemeType } from '../database/index';
 // Create logger for this module
 const log = createLogger('DisplayManager');
 
+// Sentinel display ID for stream-only mode (no physical monitor)
+export const STREAMING_DISPLAY_ID = -9999;
+
 // Local server port for production (set from main index.ts)
 let localServerPort = 0;
 export function setLocalServerPort(port: number) {
@@ -24,14 +27,15 @@ export interface DisplayInfo {
   isPrimary: boolean;
   scaleFactor: number;
   isAssigned: boolean;
-  assignedType?: 'viewer' | 'stage' | 'obs';
+  assignedType?: 'viewer' | 'stage' | 'camera' | 'obs';
 }
 
 export interface ManagedDisplay {
   id: number;
-  electronDisplay: Display;
+  electronDisplay?: Display;
   window: BrowserWindow | null;
-  type: 'viewer' | 'stage' | 'obs';
+  type: 'viewer' | 'stage' | 'camera' | 'obs';
+  audioDeviceId?: string;
 }
 
 // OBS Overlay specific window (not tied to a display)
@@ -62,12 +66,14 @@ export interface SlideData {
     originalText?: string;
     transliteration?: string;
     translation?: string;
+    translationB?: string;
     verseType?: string;
   };
   nextSlideData?: {
     originalText?: string;
     transliteration?: string;
     translation?: string;
+    translationB?: string;
     verseType?: string;
   } | null;
   backgroundImage?: string;
@@ -85,6 +91,9 @@ export class DisplayManager {
   private displays: Map<number, ManagedDisplay> = new Map();
   private onDisplayChangeCallback: ((displays: DisplayInfo[]) => void) | null = null;
 
+  /** Display types that behave like viewers (receive viewer themes, backgrounds, media, YouTube, etc.) */
+  private static readonly VIEWER_LIKE_TYPES: ReadonlySet<string> = new Set(['viewer', 'camera']);
+
   // Store screen event listeners for proper cleanup
   private screenListeners: {
     displayAdded?: (event: Electron.Event, display: Display) => void;
@@ -99,8 +108,15 @@ export class DisplayManager {
   private identifyWindows: BrowserWindow[] = [];
   private identifyTimeout: NodeJS.Timeout | null = null;
 
+  // Cache for display theme overrides to avoid DB queries on every slide broadcast
+  // Key format: `${displayId}:${themeType}`, value: { override, timestamp }
+  private themeOverrideCache: Map<string, { override: any; timestamp: number }> = new Map();
+
   // Track windows being closed to avoid misidentifying them as control window
   private closingWindows: Set<BrowserWindow> = new Set();
+
+  // Streaming display (hidden window for FFmpeg capture when no physical display is open)
+  private streamingDisplay: { window: BrowserWindow; id: number } | null = null;
 
   // Theme resolver callbacks - set from IPC to resolve theme IDs to theme objects
   private themeResolvers: {
@@ -130,6 +146,7 @@ export class DisplayManager {
   private currentVideoState: {
     currentTime: number;
     isPlaying: boolean;
+    loop?: boolean;
     lastReportedTime?: number;  // Last time position was reported from display (for sync)
   } | null = null;
 
@@ -142,6 +159,16 @@ export class DisplayManager {
     currentTime: number;
     isPlaying: boolean;
   } | null = null;
+
+  /** Check if a display type behaves like a viewer (receives viewer themes, media, YouTube, etc.) */
+  private isViewerLike(type: string): boolean {
+    return DisplayManager.VIEWER_LIKE_TYPES.has(type);
+  }
+
+  /** Check if a display ID is the hidden streaming display */
+  private isStreamingDisplay(displayId: number): boolean {
+    return this.streamingDisplay !== null && displayId === this.streamingDisplay.id;
+  }
 
   constructor() {
     // Listen for display:ready IPC from renderer processes
@@ -202,7 +229,7 @@ export class DisplayManager {
     if (!managed.window || managed.window.isDestroyed()) return;
 
     try {
-    if (managed.type === 'viewer') {
+    if (this.isViewerLike(managed.type)) {
       // Theme - respect per-display overrides, load default if none set
       let viewerTheme = this.currentViewerTheme;
       if (!viewerTheme && this.defaultThemeResolvers.viewer) {
@@ -215,6 +242,38 @@ export class DisplayManager {
       const viewerThemeToSend = this.getThemeForDisplay(managed.id, 'viewer', viewerTheme);
       if (viewerThemeToSend) {
         managed.window.webContents.send('theme:update', viewerThemeToSend);
+      }
+
+      // Bible theme - send so display has it cached when switching to bible content
+      let bibleTheme = this.currentBibleTheme;
+      if (!bibleTheme && this.defaultThemeResolvers.bible) {
+        bibleTheme = this.defaultThemeResolvers.bible();
+        if (bibleTheme) {
+          this.currentBibleTheme = bibleTheme;
+          log.debug(' Loaded default bible theme for initial state:', bibleTheme.name);
+        }
+      }
+      if (bibleTheme) {
+        const bibleThemeToSend = this.getThemeForDisplay(managed.id, 'bible', bibleTheme);
+        if (bibleThemeToSend) {
+          managed.window.webContents.send('bibleTheme:update', bibleThemeToSend);
+        }
+      }
+
+      // Prayer theme - send so display has it cached when switching to prayer content
+      let prayerTheme = this.currentPrayerTheme;
+      if (!prayerTheme && this.defaultThemeResolvers.prayer) {
+        prayerTheme = this.defaultThemeResolvers.prayer();
+        if (prayerTheme) {
+          this.currentPrayerTheme = prayerTheme;
+          log.debug(' Loaded default prayer theme for initial state:', prayerTheme.name);
+        }
+      }
+      if (prayerTheme) {
+        const prayerThemeToSend = this.getThemeForDisplay(managed.id, 'prayer', prayerTheme);
+        if (prayerThemeToSend) {
+          managed.window.webContents.send('prayerTheme:update', prayerThemeToSend);
+        }
       }
 
       // Background
@@ -256,6 +315,10 @@ export class DisplayManager {
         // Note: The display handles its own video position sync via getVideoPosition()
         // in the onCanPlay handler. This avoids race conditions between the timeout-based
         // sync here and the event-based sync in the display.
+        // Send video loop state if active
+        if (this.currentVideoState?.loop) {
+          managed.window.webContents.send('video:command', { type: 'loop', loop: true });
+        }
       }
 
       // All active tools (countdown, announcement, rotating messages, clock, stopwatch)
@@ -364,7 +427,7 @@ export class DisplayManager {
   /**
    * Open a display window on a specific monitor
    */
-  openDisplayWindow(displayId: number, type: 'viewer' | 'stage'): boolean {
+  openDisplayWindow(displayId: number, type: 'viewer' | 'stage' | 'camera', deviceId?: string, audioDeviceId?: string): boolean {
     const electronDisplay = screen.getAllDisplays().find((d) => d.id === displayId);
     if (!electronDisplay) {
       log.error(`Display ${displayId} not found`);
@@ -415,7 +478,19 @@ export class DisplayManager {
     }
 
     // Build URL with sameScreen parameter if applicable
-    const sameScreenParam = isSameScreenAsControl ? '?sameScreen=true' : '';
+    const queryParams: string[] = [];
+    if (isSameScreenAsControl) queryParams.push('sameScreen=true');
+    if (type === 'camera' && deviceId) queryParams.push(`cameraDeviceId=${encodeURIComponent(deviceId)}`);
+    if (type === 'camera' && audioDeviceId) queryParams.push(`audioDeviceId=${encodeURIComponent(audioDeviceId)}`);
+    const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
+
+    // Camera type uses the viewer route (with camera layer enabled via URL param)
+    const routeType = type === 'camera' ? 'viewer' : type;
+
+    // Set unique window title for FFmpeg gdigrab capture (window is frameless so invisible to user)
+    window.setTitle(`SoluCast Display ${displayId}`);
+    // Prevent HTML <title> tag from overwriting our programmatic title
+    window.on('page-title-updated', (e) => e.preventDefault());
 
     // IMPORTANT: Store reference BEFORE loading URL
     // This ensures the window is registered when display:ready event arrives
@@ -424,7 +499,8 @@ export class DisplayManager {
       id: displayId,
       electronDisplay,
       window,
-      type
+      type,
+      audioDeviceId
     });
 
     // Handle window close - only delete if this window is still the current one for this displayId
@@ -439,12 +515,12 @@ export class DisplayManager {
 
     // Load appropriate content based on type
     if (isDev) {
-      window.loadURL(`http://localhost:5173/#/display/${type}${sameScreenParam}`);
+      window.loadURL(`http://localhost:5173/#/display/${routeType}${queryString}`);
       // Open DevTools in development mode
       window.webContents.openDevTools({ mode: 'detach' });
     } else {
       // In production, use local HTTP server for proper origin (needed for YouTube)
-      window.loadURL(`http://127.0.0.1:${localServerPort}/#/display/${type}${sameScreenParam}`);
+      window.loadURL(`http://127.0.0.1:${localServerPort}/#/display/${routeType}${queryString}`);
     }
 
     // Note: Initial state is now sent when we receive 'display:ready' IPC from the renderer
@@ -476,13 +552,101 @@ export class DisplayManager {
    */
   closeAllDisplays(): void {
     for (const [id, managed] of this.displays) {
+      // Skip the streaming display — it's managed by the streaming lifecycle
+      if (this.isStreamingDisplay(id)) continue;
       if (managed.window) {
         managed.window.close();
       }
+      this.displays.delete(id);
     }
-    this.displays.clear();
     // Also close OBS overlay if open
     this.closeOBSOverlay();
+  }
+
+  /**
+   * Open an offscreen streaming display for FFmpeg capture (no physical monitor required).
+   * Uses Electron offscreen rendering with pipe capture — Node.js pipes frames to FFmpeg stdin.
+   * Synthetic display ID -9999. Registered in displays map so broadcastSlide sends data to it.
+   */
+  openStreamingDisplay(resolution: { width: number; height: number }): boolean {
+    // Close existing streaming display if any
+    this.closeStreamingDisplay();
+
+    const window = new BrowserWindow({
+      x: 0,
+      y: 0,
+      width: resolution.width,
+      height: resolution.height,
+      frame: false,
+      show: false,
+      skipTaskbar: true,
+      transparent: true,
+      backgroundColor: '#00000000',
+      webPreferences: {
+        preload: path.join(__dirname, '..', '..', 'preload', 'display.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
+        offscreen: true,
+        backgroundThrottling: false
+      }
+    });
+
+    // Register in displays map so broadcastSlide and display:ready send data to it
+    this.displays.set(STREAMING_DISPLAY_ID, {
+      id: STREAMING_DISPLAY_ID,
+      window,
+      type: 'viewer'
+    });
+
+    // Store streaming display reference
+    this.streamingDisplay = { window, id: STREAMING_DISPLAY_ID };
+
+    // Handle window close
+    window.on('closed', () => {
+      const current = this.displays.get(STREAMING_DISPLAY_ID);
+      if (current?.window === window) {
+        this.displays.delete(STREAMING_DISPLAY_ID);
+      }
+      if (this.streamingDisplay?.window === window) {
+        this.streamingDisplay = null;
+      }
+    });
+
+    // Load viewer route with transparent background for camera alpha overlay
+    if (isDev) {
+      window.loadURL(`http://localhost:5173/#/display/viewer?transparent=true`);
+    } else {
+      window.loadURL(`http://127.0.0.1:${localServerPort}/#/display/viewer?transparent=true`);
+    }
+
+    log.debug(`Streaming display opened (${resolution.width}x${resolution.height}, offscreen)`);
+    return true;
+  }
+
+  /**
+   * Get the streaming display BrowserWindow (for frame capture).
+   */
+  getStreamingDisplayWindow(): BrowserWindow | null {
+    if (this.streamingDisplay && !this.streamingDisplay.window.isDestroyed()) {
+      return this.streamingDisplay.window;
+    }
+    return null;
+  }
+
+  /**
+   * Close the hidden streaming display window and clean up references.
+   */
+  closeStreamingDisplay(): void {
+    if (this.streamingDisplay) {
+      const { window, id } = this.streamingDisplay;
+      if (!window.isDestroyed()) {
+        window.close();
+      }
+      this.displays.delete(id);
+      this.streamingDisplay = null;
+      log.debug('Streaming display closed');
+    }
   }
 
   /**
@@ -671,8 +835,15 @@ export class DisplayManager {
     for (const managed of this.displays.values()) {
       try {
         if (managed.window && !managed.window.isDestroyed()) {
+          // Stage monitors use their own stage theme, not the viewer/bible/prayer theme
+          let displayTheme = globalTheme;
+          let displayThemeType: DisplayThemeType = themeType;
+          if (managed.type === 'stage') {
+            displayTheme = this.currentStageTheme;
+            displayThemeType = 'stage';
+          }
           // Get the theme for this specific display (may have override)
-          const activeTheme = this.getThemeForDisplay(managed.id, themeType, globalTheme);
+          const activeTheme = this.getThemeForDisplay(managed.id, displayThemeType, displayTheme);
           const slideWithTheme = {
             ...slideData,
             activeTheme
@@ -708,7 +879,11 @@ export class DisplayManager {
   broadcastToType(type: 'viewer' | 'stage', channel: string, data: any): void {
     for (const managed of this.displays.values()) {
       try {
-        if (managed.type === type && managed.window && !managed.window.isDestroyed()) {
+        // Camera displays receive the same data as viewer displays
+        const matches = type === 'viewer'
+          ? this.isViewerLike(managed.type)
+          : managed.type === type;
+        if (matches && managed.window && !managed.window.isDestroyed()) {
           managed.window.webContents.send(channel, data);
         }
       } catch (error) {
@@ -730,9 +905,9 @@ export class DisplayManager {
     this.currentViewerTheme = theme;
     log.debug(' broadcastTheme - storing theme:', theme?.name);
 
-    // Send to each viewer with potential per-display override
+    // Send to each viewer (and camera) with potential per-display override
     for (const managed of this.displays.values()) {
-      if (managed.type === 'viewer') {
+      if (this.isViewerLike(managed.type)) {
         this.sendThemeToDisplay(managed, 'viewer', theme, 'theme:update');
       }
     }
@@ -772,9 +947,9 @@ export class DisplayManager {
     // Store for late-joining displays and content-type detection
     this.currentBibleTheme = theme;
 
-    // Send to each viewer with potential per-display override
+    // Send to each viewer (and camera) with potential per-display override
     for (const managed of this.displays.values()) {
-      if (managed.type === 'viewer') {
+      if (this.isViewerLike(managed.type)) {
         this.sendThemeToDisplay(managed, 'bible', theme, 'bibleTheme:update');
       }
     }
@@ -792,9 +967,9 @@ export class DisplayManager {
     // Store for late-joining displays and content-type detection
     this.currentPrayerTheme = theme;
 
-    // Send to each viewer with potential per-display override
+    // Send to each viewer (and camera) with potential per-display override
     for (const managed of this.displays.values()) {
-      if (managed.type === 'viewer') {
+      if (this.isViewerLike(managed.type)) {
         this.sendThemeToDisplay(managed, 'prayer', theme, 'prayerTheme:update');
       }
     }
@@ -823,7 +998,7 @@ export class DisplayManager {
   /**
    * Send video command to all display windows
    */
-  broadcastVideoCommand(command: { type: string; time?: number; path?: string; muted?: boolean; volume?: number }): void {
+  broadcastVideoCommand(command: { type: string; time?: number; path?: string; muted?: boolean; volume?: number; loop?: boolean }): void {
     // Validate command
     if (!command || !command.type || typeof command.type !== 'string') {
       log.error(' broadcastVideoCommand: invalid command');
@@ -855,6 +1030,11 @@ export class DisplayManager {
         break;
       case 'stop':
         this.currentVideoState = null;
+        break;
+      case 'loop':
+        if (this.currentVideoState) {
+          this.currentVideoState.loop = !!command.loop;
+        }
         break;
     }
 
@@ -1057,7 +1237,7 @@ export class DisplayManager {
     }
 
     for (const managed of this.displays.values()) {
-      if (managed.type === 'viewer' && managed.window && !managed.window.isDestroyed()) {
+      if (this.isViewerLike(managed.type) && managed.window && !managed.window.isDestroyed()) {
         log.debug(' -> Sending youtube command to display:', managed.id);
         managed.window.webContents.send('youtube:command', command);
       }
@@ -1102,11 +1282,22 @@ export class DisplayManager {
   }
 
   /**
-   * Get the theme to apply for a specific display, considering overrides
+   * Get the theme to apply for a specific display, considering overrides.
+   * Uses an in-memory cache to avoid DB queries on every slide broadcast.
    */
   private getThemeForDisplay(displayId: number, themeType: DisplayThemeType, globalTheme: any): any {
-    // Check for display-specific override
-    const override = getDisplayThemeOverride(displayId, themeType);
+    // Check cache first, fall back to DB query
+    const cacheKey = `${displayId}:${themeType}`;
+    let override: any;
+    const cached = this.themeOverrideCache.get(cacheKey);
+    if (cached !== undefined) {
+      override = cached.override;
+    } else {
+      // Query DB and cache the result (including null for "no override")
+      override = getDisplayThemeOverride(displayId, themeType);
+      this.themeOverrideCache.set(cacheKey, { override, timestamp: Date.now() });
+    }
+
     if (override) {
       // Warn if theme resolvers are not set
       if (!this.themeResolvers[themeType]) {
@@ -1124,6 +1315,15 @@ export class DisplayManager {
     }
     // Fall back to global theme
     return globalTheme;
+  }
+
+  /**
+   * Invalidate the theme override cache.
+   * Called when display theme overrides are set or removed.
+   */
+  invalidateThemeOverrideCache(): void {
+    this.themeOverrideCache.clear();
+    log.debug('Theme override cache invalidated');
   }
 
   /**
@@ -1317,12 +1517,34 @@ export class DisplayManager {
   }
 
   /**
+   * Get info about all open display windows that can be streamed via FFmpeg.
+   * Returns display ID, type, window title (for gdigrab), and audio device if set.
+   */
+  getStreamableDisplays(): Array<{ displayId: number; type: string; windowTitle: string; audioDeviceId?: string }> {
+    const result: Array<{ displayId: number; type: string; windowTitle: string; audioDeviceId?: string }> = [];
+    for (const [displayId, managed] of this.displays) {
+      // Skip the hidden streaming display — it's not a user-visible display
+      if (this.isStreamingDisplay(displayId)) continue;
+      if (managed.window && !managed.window.isDestroyed()) {
+        result.push({
+          displayId,
+          type: managed.type,
+          windowTitle: managed.window.getTitle(),
+          audioDeviceId: managed.audioDeviceId
+        });
+      }
+    }
+    return result;
+  }
+
+  /**
    * Capture the first viewer window as a thumbnail
    */
   async captureViewerThumbnail(): Promise<string | null> {
-    // Find first viewer window
-    for (const managed of this.displays.values()) {
-      if (managed.type === 'viewer' && managed.window && !managed.window.isDestroyed()) {
+    // Find first viewer window (skip hidden streaming display)
+    for (const [displayId, managed] of this.displays) {
+      if (this.isStreamingDisplay(displayId)) continue;
+      if (this.isViewerLike(managed.type) && managed.window && !managed.window.isDestroyed()) {
         try {
           const image = await managed.window.webContents.capturePage();
           // Resize to thumbnail size for performance

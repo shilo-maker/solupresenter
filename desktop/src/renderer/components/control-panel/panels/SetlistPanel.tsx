@@ -1,6 +1,7 @@
-import React, { memo } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SetlistItem, Song, Presentation } from './types';
+const ItemBackgroundModal = React.lazy(() => import('../modals/ItemBackgroundModal'));
 
 // Active media state type
 interface ActiveMedia {
@@ -138,12 +139,24 @@ export interface SetlistPanelProps {
   // YouTube actions
   onPlayYoutubeVideo: (videoId: string, title: string, thumbnail?: string) => void;
   onStopYoutubeVideo: () => void;
+
+  // Item background
+  onSetItemBackground: (itemId: string, background: string) => void;
+  onApplyItemBackground: (item: SetlistItem) => void;
+
+  // Setlist background
+  setlistBackground: string;
+  onOpenSetlistBackgroundModal: () => void;
+
+  // MIDI import
+  onImportMidi: () => void;
 }
 
 // Memoized SetlistItem component for better performance
 interface SetlistItemRowProps {
   item: SetlistItem;
   index: number;
+  itemNumber: number; // Pre-computed display number (non-section items only)
   // ... all the props needed for rendering a single item
   isRTL: boolean;
   t: (key: string) => string;
@@ -201,11 +214,13 @@ interface SetlistItemRowProps {
   onRemoveFromSetlist: (id: string) => void;
   onPlayYoutubeVideo: (videoId: string, title: string, thumbnail?: string) => void;
   onStopYoutubeVideo: () => void;
+  onOpenBackgroundModal: (itemId: string) => void;
 }
 
 const SetlistItemRow = memo<SetlistItemRowProps>(({
   item,
   index,
+  itemNumber,
   isRTL,
   t,
   setlist,
@@ -260,7 +275,8 @@ const SetlistItemRow = memo<SetlistItemRowProps>(({
   onStartEditingSong,
   onRemoveFromSetlist,
   onPlayYoutubeVideo,
-  onStopYoutubeVideo
+  onStopYoutubeVideo,
+  onOpenBackgroundModal
 }) => {
   return (
     <React.Fragment>
@@ -376,7 +392,7 @@ const SetlistItemRow = memo<SetlistItemRowProps>(({
         {/* Item number (not for sections) */}
         {item.type !== 'section' && (
           <span style={{ color: 'rgba(255,255,255,0.4)', marginRight: '10px', fontSize: '0.75rem', minWidth: '20px' }}>
-            {setlist.slice(0, index + 1).filter(i => i.type !== 'section').length}
+            {itemNumber}
           </span>
         )}
 
@@ -552,6 +568,23 @@ const SetlistItemRow = memo<SetlistItemRowProps>(({
            item.type === 'audioPlaylist' ? (item.audioPlaylist?.name || item.title || 'Playlist') :
            item.title}
         </span>
+
+        {/* Background override indicator */}
+        {item.background && (
+          <span
+            title="Has background"
+            style={{
+              fontSize: '0.55rem',
+              fontWeight: 600,
+              color: 'rgba(6, 182, 212, 0.6)',
+              marginLeft: '5px',
+              flexShrink: 0,
+              letterSpacing: '0.02em'
+            }}
+          >
+            BG
+          </span>
+        )}
 
         {/* Section item count badge */}
         {item.type === 'section' && sectionItemCount > 0 && (
@@ -1024,9 +1057,24 @@ const SetlistItemRow = memo<SetlistItemRowProps>(({
                     {t('controlPanel.edit')}
                   </button>
                 )}
-                {item.type === 'song' && item.song && (
-                  <div className="setlist-menu-divider" />
+                {(item.type === 'song' || item.type === 'bible') && (
+                  <button
+                    className="setlist-menu-item"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenBackgroundModal(item.id);
+                      onSetlistMenuOpenChange(null);
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                      <circle cx="8.5" cy="8.5" r="1.5"/>
+                      <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    Background
+                  </button>
                 )}
+                <div className="setlist-menu-divider" />
                 <button
                   className="setlist-menu-item danger"
                   onClick={(e) => {
@@ -1233,10 +1281,52 @@ const SetlistPanel = memo<SetlistPanelProps>(({
   onOpenEditPlaylistModal,
   onStartEditingSong,
   onPlayYoutubeVideo,
-  onStopYoutubeVideo
+  onStopYoutubeVideo,
+  onSetItemBackground,
+  onApplyItemBackground,
+  setlistBackground,
+  onOpenSetlistBackgroundModal,
+  onImportMidi
 }) => {
   const { t, i18n } = useTranslation();
   const isRTL = i18n.language === 'he';
+  const [backgroundModalItemId, setBackgroundModalItemId] = useState<string | null>(null);
+
+  // Pre-compute item display numbers in a single O(n) pass
+  const itemNumberMap = useMemo(() => {
+    const map = new Map<number, number>();
+    let count = 0;
+    for (let i = 0; i < setlist.length; i++) {
+      if (setlist[i].type !== 'section') {
+        count++;
+        map.set(i, count);
+      }
+    }
+    return map;
+  }, [setlist]);
+
+  // Stable callback refs for SetlistItemRow to avoid defeating React.memo
+  const handleRowDragStart = useCallback((idx: number) => {
+    onDraggedSetlistIndexChange(idx);
+  }, [onDraggedSetlistIndexChange]);
+
+  const handleRowDragEnd = useCallback(() => {
+    onDraggedSetlistIndexChange(null);
+    onDropTargetIndexChange(null);
+  }, [onDraggedSetlistIndexChange, onDropTargetIndexChange]);
+
+  const handleRowDragOver = useCallback((idx: number) => {
+    onDropTargetIndexChange(idx);
+  }, [onDropTargetIndexChange]);
+
+  const handleRowMouseLeave = useCallback((itemId: string) => {
+    if (setlistMenuOpen === itemId) onSetlistMenuOpenChange(null);
+  }, [setlistMenuOpen, onSetlistMenuOpenChange]);
+
+  const handleRowContextMenu = useCallback((e: React.MouseEvent, itm: SetlistItem) => {
+    e.preventDefault();
+    onSetlistContextMenuChange({ x: e.clientX, y: e.clientY, item: itm });
+  }, [onSetlistContextMenuChange]);
 
   // Handle item click
   const handleItemClick = (item: SetlistItem, index: number) => {
@@ -1282,10 +1372,12 @@ const SetlistPanel = memo<SetlistPanelProps>(({
       onStopAllTools();
       onSetActiveMedia(null);
       onSelectSong(item.song, 'song', false);
+      onApplyItemBackground(item);
     } else if (item.type === 'bible' && item.song) {
       onStopAllTools();
       onSetActiveMedia(null);
       onSelectSong(item.song, 'bible', false);
+      onApplyItemBackground(item);
     } else if (item.type === 'countdown' || item.type === 'announcement' || item.type === 'messages') {
       onBroadcastToolFromSetlist(item);
     } else if (item.type === 'media' && item.mediaPath && item.mediaType) {
@@ -1418,6 +1510,9 @@ const SetlistPanel = memo<SetlistPanelProps>(({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ color: 'white', fontWeight: 600 }}>{currentSetlistId ? currentSetlistName : t('controlPanel.setlist')}</span>
+          {setlistBackground && (
+            <span style={{ color: '#06b6d4', fontSize: '0.6rem', fontWeight: 700, background: 'rgba(6,182,212,0.15)', padding: '1px 4px', borderRadius: '3px', letterSpacing: '0.5px' }}>BG</span>
+          )}
           <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginLeft: '2px' }}>{setlist.length} {t('controlPanel.items')}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1547,6 +1642,25 @@ const SetlistPanel = memo<SetlistPanelProps>(({
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path fillRule="evenodd" d="M2 3.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5zm0 4a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5zm0 4a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/></svg>
                   {t('controlPanel.addSection')}
                 </button>
+                <button
+                  onClick={() => { onOpenSetlistBackgroundModal(); onShowSetlistMenuChange(false); }}
+                  style={{ width: '100%', display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: setlistBackground ? '#06b6d4' : 'white', cursor: 'pointer', fontSize: '0.85rem', textAlign: isRTL ? 'right' : 'left' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/><path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/></svg>
+                  {t('controlPanel.background', 'Background')}
+                </button>
+                <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
+                <button
+                  onClick={() => { onImportMidi(); onShowSetlistMenuChange(false); }}
+                  style={{ width: '100%', display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', borderRadius: '6px', padding: '8px 12px', color: 'white', cursor: 'pointer', fontSize: '0.85rem', textAlign: isRTL ? 'right' : 'left' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8.5 6.5a.5.5 0 0 0-1 0v3.793L6.354 9.146a.5.5 0 1 0-.708.708l2 2a.5.5 0 0 0 .708 0l2-2a.5.5 0 0 0-.708-.708L8.5 10.293V6.5z"/><path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2zM9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5v2z"/></svg>
+                  {t('controlPanel.importMidiArrangement', 'Import MIDI')}
+                </button>
               </div>
             </>
           )}
@@ -1614,6 +1728,7 @@ const SetlistPanel = memo<SetlistPanelProps>(({
                   key={item.id}
                   item={item}
                   index={index}
+                  itemNumber={itemNumberMap.get(index) || 0}
                   isRTL={isRTL}
                   t={t}
                   setlist={setlist}
@@ -1642,21 +1757,11 @@ const SetlistPanel = memo<SetlistPanelProps>(({
                   currentSectionId={currentSectionId}
                   sectionItemCount={sectionItemCount}
                   isCollapsed={isCollapsed}
-                  onDragStart={(idx) => {
-                    onDraggedSetlistIndexChange(idx);
-                  }}
-                  onDragEnd={() => {
-                    onDraggedSetlistIndexChange(null);
-                    onDropTargetIndexChange(null);
-                  }}
-                  onDragOver={(idx) => onDropTargetIndexChange(idx)}
-                  onMouseLeave={(itemId) => {
-                    if (setlistMenuOpen === itemId) onSetlistMenuOpenChange(null);
-                  }}
-                  onContextMenu={(e, itm) => {
-                    e.preventDefault();
-                    onSetlistContextMenuChange({ x: e.clientX, y: e.clientY, item: itm });
-                  }}
+                  onDragStart={handleRowDragStart}
+                  onDragEnd={handleRowDragEnd}
+                  onDragOver={handleRowDragOver}
+                  onMouseLeave={handleRowMouseLeave}
+                  onContextMenu={handleRowContextMenu}
                   onClick={handleItemClick}
                   onDoubleClick={onRemoveFromSetlist}
                   onCollapsedSectionsChange={onCollapsedSectionsChange}
@@ -1680,12 +1785,32 @@ const SetlistPanel = memo<SetlistPanelProps>(({
                   onRemoveFromSetlist={onRemoveFromSetlist}
                   onPlayYoutubeVideo={onPlayYoutubeVideo}
                   onStopYoutubeVideo={onStopYoutubeVideo}
+                  onOpenBackgroundModal={setBackgroundModalItemId}
                 />
               );
             });
           })()
         )}
       </div>
+
+      {/* Item Background Modal */}
+      {backgroundModalItemId && (() => {
+        const modalItem = setlist.find(i => i.id === backgroundModalItemId);
+        if (!modalItem) return null;
+        return (
+          <React.Suspense fallback={null}>
+            <ItemBackgroundModal
+              isOpen={true}
+              currentBackground={modalItem.background || ''}
+              onSelect={(bg) => {
+                onSetItemBackground(backgroundModalItemId, bg);
+                setBackgroundModalItemId(null);
+              }}
+              onClose={() => setBackgroundModalItemId(null)}
+            />
+          </React.Suspense>
+        );
+      })()}
     </div>
   );
 });

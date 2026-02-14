@@ -25,6 +25,7 @@ interface UseThemeStateReturn {
   bibleThemes: Theme[];
   prayerThemes: Theme[];
   obsThemes: Theme[];
+  dualTranslationThemes: Theme[];
 
   // Selected themes (using any for backward compatibility with components)
   selectedTheme: any;
@@ -35,6 +36,7 @@ interface UseThemeStateReturn {
   selectedOBSSongsTheme: any;
   selectedOBSBibleTheme: any;
   selectedOBSPrayerTheme: any;
+  selectedDualTranslationTheme: any;
 
   // Theme editor state
   showThemeEditor: boolean;
@@ -63,6 +65,7 @@ interface UseThemeStateReturn {
   applyBibleTheme: (theme: any) => void;
   applyPrayerTheme: (theme: any) => void;
   applyOBSTheme: (theme: any) => void;
+  applyDualTranslationTheme: (theme: any) => void;
 
   // Getters for memoized live preview theme
   getMemoizedLivePreviewTheme: (contentType: 'song' | 'bible' | 'prayer' | 'presentation') => Theme | null;
@@ -75,6 +78,7 @@ export function useThemeState(): UseThemeStateReturn {
   const [bibleThemes, setBibleThemes] = useState<Theme[]>([]);
   const [prayerThemes, setPrayerThemes] = useState<Theme[]>([]);
   const [obsThemes, setObsThemes] = useState<Theme[]>([]);
+  const [dualTranslationThemes, setDualTranslationThemes] = useState<Theme[]>([]);
 
   // Selected themes (using any for backward compatibility with components)
   const [selectedTheme, setSelectedTheme] = useState<any | null>(null);
@@ -85,6 +89,7 @@ export function useThemeState(): UseThemeStateReturn {
   const [selectedOBSSongsTheme, setSelectedOBSSongsTheme] = useState<any | null>(null);
   const [selectedOBSBibleTheme, setSelectedOBSBibleTheme] = useState<any | null>(null);
   const [selectedOBSPrayerTheme, setSelectedOBSPrayerTheme] = useState<any | null>(null);
+  const [selectedDualTranslationTheme, setSelectedDualTranslationTheme] = useState<any | null>(null);
 
   // Theme editor state
   const [showThemeEditor, setShowThemeEditor] = useState(false);
@@ -130,6 +135,8 @@ export function useThemeState(): UseThemeStateReturn {
   const loadThemes = useCallback(async () => {
     try {
       // Load all theme data in parallel for faster startup
+      // Use Promise.allSettled for dual translation themes to avoid breaking all theme loading
+      // if the dual_translation_themes table doesn't exist yet (e.g., during migration)
       const [
         savedThemeIds,
         themeList,
@@ -145,6 +152,14 @@ export function useThemeState(): UseThemeStateReturn {
         window.electronAPI.getOBSThemes(),
         window.electronAPI.getPrayerThemes()
       ]);
+
+      // Load dual translation themes separately so failure doesn't break other themes
+      let dualTranslationThemeList: any[] = [];
+      try {
+        dualTranslationThemeList = await window.electronAPI.getDualTranslationThemes();
+      } catch (e) {
+        console.warn('Failed to load dual translation themes (table may not exist yet):', e);
+      }
 
       // Process viewer themes
       setThemes(themeList);
@@ -243,6 +258,19 @@ export function useThemeState(): UseThemeStateReturn {
         // NO automatic apply - themes are only applied on explicit user action
       }
 
+      // Process Dual Translation themes
+      setDualTranslationThemes(dualTranslationThemeList || []);
+      if (dualTranslationThemeList && dualTranslationThemeList.length > 0) {
+        let themeToSelect = savedThemeIds.dualTranslationThemeId
+          ? dualTranslationThemeList.find((t: Theme) => t.id === savedThemeIds.dualTranslationThemeId)
+          : null;
+        if (!themeToSelect) {
+          themeToSelect = dualTranslationThemeList.find((t: Theme) => t.isDefault) || dualTranslationThemeList[0];
+        }
+        setSelectedDualTranslationTheme(themeToSelect);
+        // NO automatic apply - themes are only applied on explicit user action
+      }
+
       // Mark as loaded (module-level to persist across navigation)
       hasLoadedThemes = true;
     } catch (error) {
@@ -300,6 +328,16 @@ export function useThemeState(): UseThemeStateReturn {
     }
   }, []);
 
+  // Apply Dual Translation theme (accepts theme object)
+  // This uses the same viewer display channel since dual translation themes are viewer themes with 4 lines
+  const applyDualTranslationTheme = useCallback((theme: any) => {
+    if (theme) {
+      setSelectedDualTranslationTheme(theme);
+      window.electronAPI.applyTheme(theme);
+      window.electronAPI.saveSelectedThemeId('dualTranslation', theme.id);
+    }
+  }, []);
+
   // Get the right theme for live preview based on content type
   const getMemoizedLivePreviewTheme = useCallback((contentType: 'song' | 'bible' | 'prayer' | 'presentation'): Theme | null => {
     if (contentType === 'bible') {
@@ -317,6 +355,7 @@ export function useThemeState(): UseThemeStateReturn {
     bibleThemes,
     prayerThemes,
     obsThemes,
+    dualTranslationThemes,
 
     // Selected themes
     selectedTheme,
@@ -327,6 +366,7 @@ export function useThemeState(): UseThemeStateReturn {
     selectedOBSSongsTheme,
     selectedOBSBibleTheme,
     selectedOBSPrayerTheme,
+    selectedDualTranslationTheme,
 
     // Theme editor state
     showThemeEditor,
@@ -345,6 +385,7 @@ export function useThemeState(): UseThemeStateReturn {
     applyBibleTheme,
     applyPrayerTheme,
     applyOBSTheme,
+    applyDualTranslationTheme,
 
     // Getters
     getMemoizedLivePreviewTheme

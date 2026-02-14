@@ -2,8 +2,8 @@ import { ipcMain, dialog, app, shell, BrowserWindow } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as autoUpdateService from '../services/autoUpdateService';
-import { DisplayManager } from '../windows/displayManager';
-import { getLocalServerPort } from '../index';
+import { DisplayManager, STREAMING_DISPLAY_ID } from '../windows/displayManager';
+import { getLocalServerPort } from '../appLoader';
 
 // ============ Constants ============
 const RATE_LIMIT_WINDOW_MS = 1000; // Rate limit window in milliseconds
@@ -17,6 +17,7 @@ const MAX_YOUTUBE_TITLE_LENGTH = 500; // Maximum YouTube title length
 const MAX_YOUTUBE_SEARCH_RESULTS = 12; // Maximum number of YouTube search results to return
 const MAX_IMPORT_FILE_SIZE_MB = 500; // Maximum file size for media import in MB
 const MAX_IMPORT_FILE_SIZE_BYTES = MAX_IMPORT_FILE_SIZE_MB * 1024 * 1024; // Convert to bytes
+const DEVICE_ID_REGEX = /^[a-zA-Z0-9_\-=.:]+$/; // Valid Chromium device ID characters
 const MAX_TOTAL_IMPORT_SIZE_MB = 2000; // Maximum total size for batch import in MB
 const MAX_TOTAL_IMPORT_SIZE_BYTES = MAX_TOTAL_IMPORT_SIZE_MB * 1024 * 1024;
 
@@ -68,6 +69,7 @@ import { getStageThemes, getStageTheme, createStageTheme, updateStageTheme, dele
 import { getBibleThemes, getBibleTheme, createBibleTheme, updateBibleTheme, deleteBibleTheme, getDefaultBibleTheme } from '../database/bibleThemes';
 import { getOBSThemes, getOBSTheme, createOBSTheme, updateOBSTheme, deleteOBSTheme, getDefaultOBSTheme, OBSThemeType } from '../database/obsThemes';
 import { getPrayerThemes, getPrayerTheme, createPrayerTheme, updatePrayerTheme, deletePrayerTheme, getDefaultPrayerTheme } from '../database/prayerThemes';
+import { getDualTranslationThemes, getDualTranslationTheme, createDualTranslationTheme, updateDualTranslationTheme, deleteDualTranslationTheme, getDefaultDualTranslationTheme } from '../database/dualTranslationThemes';
 import { getPresentations, getPresentation, createPresentation, updatePresentation, deletePresentation } from '../database/presentations';
 import { getAudioPlaylists, getAudioPlaylist, createAudioPlaylist, updateAudioPlaylist, deleteAudioPlaylist } from '../database/audioPlaylists';
 import {
@@ -90,6 +92,7 @@ import { authService } from '../services/authService';
 import { processVideo, processImage, processAudio, deleteProcessedMedia, getMediaLibraryPath } from '../services/mediaProcessor';
 import { obsServer } from '../services/obsServer';
 import { remoteControlServer, RemoteControlState } from '../services/remoteControlServer';
+import { streamingService } from '../services/streamingService';
 import QRCode from 'qrcode';
 
 let mediaManager: MediaManager;
@@ -137,9 +140,32 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     }
   });
 
-  ipcMain.handle('displays:open', (event, displayId: number, type: 'viewer' | 'stage') => {
+  ipcMain.handle('displays:open', (event, displayId: number, type: 'viewer' | 'stage' | 'camera', deviceId?: string, audioDeviceId?: string) => {
     try {
-      return displayManager.openDisplayWindow(displayId, type);
+      // Validate displayId is a finite number
+      if (typeof displayId !== 'number' || !Number.isFinite(displayId)) {
+        console.error('[IPC displays:open] Invalid displayId:', displayId);
+        return false;
+      }
+      // Validate type is one of the allowed values
+      if (type !== 'viewer' && type !== 'stage' && type !== 'camera') {
+        console.error('[IPC displays:open] Invalid type:', type);
+        return false;
+      }
+      // Validate deviceId format if provided (Chromium device IDs are alphanumeric + hyphens, typically 64 hex chars)
+      if (deviceId !== undefined) {
+        if (typeof deviceId !== 'string' || deviceId.length === 0 || deviceId.length > 256 || !DEVICE_ID_REGEX.test(deviceId)) {
+          console.error('[IPC displays:open] Invalid deviceId format');
+          return false;
+        }
+      }
+      if (audioDeviceId !== undefined) {
+        if (typeof audioDeviceId !== 'string' || audioDeviceId.length === 0 || audioDeviceId.length > 256 || !DEVICE_ID_REGEX.test(audioDeviceId)) {
+          console.error('[IPC displays:open] Invalid audioDeviceId format');
+          return false;
+        }
+      }
+      return displayManager.openDisplayWindow(displayId, type, deviceId, audioDeviceId);
     } catch (error) {
       console.error('[IPC displays:open] Error:', error);
       return false;
@@ -341,8 +367,8 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     try {
       displayManager.broadcastBackground(background);
 
-      // Check if this is local media (media:// protocol)
-      const isLocalMedia = background.startsWith('media://');
+      // Check if this is local media (media:// protocol, including video: prefix)
+      const isLocalMedia = background.startsWith('media://') || background.startsWith('video:media://');
 
       if (isLocalMedia) {
         // For local media, don't send the URL to online viewers (they can't access it)
@@ -859,6 +885,11 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     return true;
   });
 
+  ipcMain.handle('video:loop', (event, loop: boolean) => {
+    displayManager.broadcastVideoCommand({ type: 'loop', loop: !!loop });
+    return true;
+  });
+
   ipcMain.handle('video:mute', (event, muted: boolean) => {
     if (typeof muted !== 'boolean') {
       console.error('[IPC] video:mute: invalid muted value', muted);
@@ -905,8 +936,19 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     }
   }, VIDEO_TIME_UPDATE_INTERVAL_MS);
 
+  // Throttle for displayManager and remote control updates (same interval as video status)
+  let lastVideoTimeUpdateProcessed = 0;
+
   ipcMain.on('video:timeUpdate', (event, time: number, duration: number) => {
     throttledVideoTimeUpdate(time, duration);
+
+    // Throttle displayManager and remote control updates to avoid processing every event
+    const now = Date.now();
+    if (now - lastVideoTimeUpdateProcessed < VIDEO_TIME_UPDATE_INTERVAL_MS) {
+      return;
+    }
+    lastVideoTimeUpdateProcessed = now;
+
     // Update displayManager's tracked position to prevent drift
     displayManager.updateVideoPosition(time);
     // Also update remote control server's activeVideo state
@@ -1100,6 +1142,38 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
       return fs.readFileSync(filePath, 'utf-8');
     } catch (error) {
       console.error('IPC fs:readFile error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('fs:writeBinaryFile', async (event, filePath: string, base64Content: string) => {
+    try {
+      if (!filePath || typeof filePath !== 'string') {
+        throw new Error('Invalid file path');
+      }
+      if (!base64Content || typeof base64Content !== 'string') {
+        throw new Error('Invalid content');
+      }
+      const buffer = Buffer.from(base64Content, 'base64');
+      fs.writeFileSync(filePath, buffer);
+      return true;
+    } catch (error) {
+      console.error('IPC fs:writeBinaryFile error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('fs:readBinaryFile', async (event, filePath: string) => {
+    try {
+      if (!filePath || typeof filePath !== 'string') {
+        throw new Error('Invalid file path');
+      }
+      const buffer = fs.readFileSync(filePath);
+      // Return raw Uint8Array — Electron's structured clone transfers it
+      // directly without base64 encode/decode overhead
+      return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    } catch (error) {
+      console.error('IPC fs:readBinaryFile error:', error);
       throw error;
     }
   });
@@ -1569,15 +1643,86 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     return true;
   });
 
+  // ============ Database - Dual Translation Themes ============
+
+  ipcMain.handle('db:dualTranslationThemes:getAll', async () => {
+    try {
+      return await getDualTranslationThemes();
+    } catch (error) {
+      console.error('IPC db:dualTranslationThemes:getAll error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:dualTranslationThemes:get', async (event, id: string) => {
+    try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid dual translation theme ID');
+      }
+      return await getDualTranslationTheme(id);
+    } catch (error) {
+      console.error('IPC db:dualTranslationThemes:get error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:dualTranslationThemes:getDefault', async () => {
+    try {
+      return await getDefaultDualTranslationTheme();
+    } catch (error) {
+      console.error('IPC db:dualTranslationThemes:getDefault error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:dualTranslationThemes:create', async (event, data) => {
+    try {
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid dual translation theme data');
+      }
+      return await createDualTranslationTheme(data);
+    } catch (error) {
+      console.error('IPC db:dualTranslationThemes:create error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:dualTranslationThemes:update', async (event, id: string, data) => {
+    try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid dual translation theme ID');
+      }
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid dual translation theme data');
+      }
+      return await updateDualTranslationTheme(id, data);
+    } catch (error) {
+      console.error('IPC db:dualTranslationThemes:update error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:dualTranslationThemes:delete', async (event, id: string) => {
+    try {
+      if (!id || typeof id !== 'string' || id.length > MAX_NAME_LENGTH) {
+        throw new Error('Invalid dual translation theme ID');
+      }
+      return await deleteDualTranslationTheme(id);
+    } catch (error) {
+      console.error('IPC db:dualTranslationThemes:delete error:', error);
+      throw error;
+    }
+  });
+
   // ============ Theme Selection Persistence ============
 
   ipcMain.handle('settings:getSelectedThemeIds', () => {
     return getSelectedThemeIds();
   });
 
-  ipcMain.handle('settings:saveSelectedThemeId', (event, themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'obsBible' | 'prayer' | 'obsPrayer', themeId: string | null) => {
+  ipcMain.handle('settings:saveSelectedThemeId', (event, themeType: 'viewer' | 'stage' | 'bible' | 'obs' | 'obsBible' | 'prayer' | 'obsPrayer' | 'dualTranslation', themeId: string | null) => {
     // Validate themeType
-    const validTypes = ['viewer', 'stage', 'bible', 'obs', 'obsBible', 'prayer', 'obsPrayer'];
+    const validTypes = ['viewer', 'stage', 'bible', 'obs', 'obsBible', 'prayer', 'obsPrayer', 'dualTranslation'];
     if (!themeType || !validTypes.includes(themeType)) {
       throw new Error('Invalid theme type');
     }
@@ -1609,6 +1754,9 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
           break;
         case 'obsPrayer':
           themeExists = !!queryOne('SELECT id FROM obs_themes WHERE id = ? AND type = ?', [themeId, 'prayer']);
+          break;
+        case 'dualTranslation':
+          themeExists = !!queryOne('SELECT id FROM dual_translation_themes WHERE id = ?', [themeId]);
           break;
       }
       if (!themeExists) {
@@ -1791,6 +1939,11 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
   ipcMain.handle('online:disconnect', () => {
     socketService.disconnect();
     return true;
+  });
+
+  ipcMain.on('midi:setControlEnabled', (_event, enabled: boolean) => {
+    socketService.setMidiControlEnabled(enabled);
+    remoteControlServer.setMidiControlEnabled(enabled);
   });
 
   ipcMain.handle('online:createRoom', async () => {
@@ -2341,20 +2494,23 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
         throw new Error('Invalid theme ID');
       }
 
-      // Validate that the theme actually exists in the database
+      // Validate that the theme actually exists in the database (check both regular and OBS theme tables)
       let themeExists = false;
       switch (themeType) {
         case 'viewer':
-          themeExists = !!queryOne('SELECT id FROM viewer_themes WHERE id = ?', [themeId]);
+          themeExists = !!queryOne('SELECT id FROM viewer_themes WHERE id = ?', [themeId])
+            || !!queryOne('SELECT id FROM obs_themes WHERE id = ? AND type = ?', [themeId, 'songs']);
           break;
         case 'stage':
           themeExists = !!queryOne('SELECT id FROM stage_monitor_themes WHERE id = ?', [themeId]);
           break;
         case 'bible':
-          themeExists = !!queryOne('SELECT id FROM bible_themes WHERE id = ?', [themeId]);
+          themeExists = !!queryOne('SELECT id FROM bible_themes WHERE id = ?', [themeId])
+            || !!queryOne('SELECT id FROM obs_themes WHERE id = ? AND type = ?', [themeId, 'bible']);
           break;
         case 'prayer':
-          themeExists = !!queryOne('SELECT id FROM prayer_themes WHERE id = ?', [themeId]);
+          themeExists = !!queryOne('SELECT id FROM prayer_themes WHERE id = ?', [themeId])
+            || !!queryOne('SELECT id FROM obs_themes WHERE id = ? AND type = ?', [themeId, 'prayer']);
           break;
       }
       if (!themeExists) {
@@ -2363,7 +2519,8 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
       }
 
       const result = setDisplayThemeOverride(displayId, themeType, themeId);
-      // Re-broadcast themes to apply the new override immediately
+      // Invalidate cache and re-broadcast themes to apply the new override immediately
+      displayManager.invalidateThemeOverrideCache();
       displayManager.rebroadcastAllThemes();
       return result;
     } catch (error) {
@@ -2382,7 +2539,8 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
         throw new Error('Invalid theme type');
       }
       const result = removeDisplayThemeOverride(displayId, themeType);
-      // Re-broadcast themes to apply the change immediately
+      // Invalidate cache and re-broadcast themes to apply the change immediately
+      displayManager.invalidateThemeOverrideCache();
       displayManager.rebroadcastAllThemes();
       return result;
     } catch (error) {
@@ -2397,7 +2555,8 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
         throw new Error('Invalid display ID');
       }
       const result = removeAllDisplayThemeOverrides(displayId);
-      // Re-broadcast themes to apply the change immediately
+      // Invalidate cache and re-broadcast themes to apply the change immediately
+      displayManager.invalidateThemeOverrideCache();
       displayManager.rebroadcastAllThemes();
       return result;
     } catch (error) {
@@ -2465,6 +2624,117 @@ export function registerIpcHandlers(displayManager: DisplayManager): void {
     } catch (error) {
       console.error('[IPC autoUpdate:reset] Error:', error);
       return false;
+    }
+  });
+
+  // ============ Streaming (RTMP) ============
+
+  // Resolution map for stream-only mode (no physical display)
+  const STREAMING_RESOLUTIONS: Record<'low' | 'medium' | 'high', { width: number; height: number }> = {
+    low: { width: 1280, height: 720 },
+    medium: { width: 1920, height: 1080 },
+    high: { width: 1920, height: 1080 }
+  };
+
+  ipcMain.handle('streaming:start', async (event, config: {
+    rtmpUrl: string;
+    streamKey: string;
+    displayId: number;
+    audioDeviceName: string;
+    videoDeviceName?: string;
+    qualityPreset: 'low' | 'medium' | 'high';
+  }) => {
+    try {
+      if (!config || typeof config !== 'object') {
+        return { success: false, error: 'Invalid config' };
+      }
+
+      let windowTitle: string | undefined;
+      let captureWindow: import('electron').BrowserWindow | undefined;
+
+      if (config.displayId === STREAMING_DISPLAY_ID) {
+        // Stream-only mode: offscreen window + pipe capture
+        const resolution = STREAMING_RESOLUTIONS[config.qualityPreset];
+        displayManager.openStreamingDisplay(resolution);
+        captureWindow = displayManager.getStreamingDisplayWindow() || undefined;
+      } else {
+        // Normal mode: capture visible display window via gdigrab
+        const streamableDisplays = displayManager.getStreamableDisplays();
+        const display = streamableDisplays.find(d => d.displayId === config.displayId);
+        if (!display) {
+          return { success: false, error: 'Selected display is not open' };
+        }
+        windowTitle = display.windowTitle;
+      }
+
+      const result = await streamingService.start({
+        rtmpUrl: config.rtmpUrl,
+        streamKey: config.streamKey,
+        windowTitle,
+        audioDeviceName: config.audioDeviceName,
+        videoDeviceName: config.videoDeviceName,
+        captureWindow,
+        qualityPreset: config.qualityPreset
+      });
+
+      // If start failed, clean up the streaming display we just created
+      if (!result.success && config.displayId === STREAMING_DISPLAY_ID) {
+        displayManager.closeStreamingDisplay();
+      }
+
+      return result;
+    } catch (error) {
+      console.error('[IPC streaming:start] Error:', error);
+      // Clean up streaming display on unexpected errors
+      if (config.displayId === STREAMING_DISPLAY_ID) {
+        displayManager.closeStreamingDisplay();
+      }
+      return { success: false, error: String(error) };
+    }
+  });
+
+  ipcMain.handle('streaming:stop', async () => {
+    try {
+      await streamingService.stop();
+      return true;
+    } catch (error) {
+      console.error('[IPC streaming:stop] Error:', error);
+      return false;
+    } finally {
+      displayManager.closeStreamingDisplay();
+    }
+  });
+
+  ipcMain.handle('streaming:getStatus', () => {
+    return streamingService.getStatus();
+  });
+
+  ipcMain.handle('streaming:listAudioDevices', async () => {
+    try {
+      return await streamingService.listAudioDevices();
+    } catch (error) {
+      console.error('[IPC streaming:listAudioDevices] Error:', error);
+      return [];
+    }
+  });
+
+  ipcMain.handle('streaming:listVideoDevices', async () => {
+    try {
+      return await streamingService.listVideoDevices();
+    } catch (error) {
+      console.error('[IPC streaming:listVideoDevices] Error:', error);
+      return [];
+    }
+  });
+
+  // Forward streaming status updates to control window
+  streamingService.onStatusChange((status) => {
+    if (controlWindowRef && !controlWindowRef.isDestroyed()) {
+      controlWindowRef.webContents.send('streaming:status', status);
+    }
+    // Clean up streaming display when streaming stops (e.g. FFmpeg dies unexpectedly)
+    if (!status.isStreaming) {
+      displayManager.closeStreamingDisplay();
     }
   });
 }

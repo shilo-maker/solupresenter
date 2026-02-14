@@ -9,15 +9,24 @@ export const toHebrewNumerals = (num: number): string => {
   const tens = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
   const hundreds = ['', 'ק', 'ר', 'ש', 'ת', 'תק', 'תר', 'תש', 'תת', 'תתק'];
 
-  // Special cases for 15 and 16 (avoid יה and יו which are divine names)
-  if (num === 15) return 'ט"ו';
-  if (num === 16) return 'ט"ז';
-
   let result = '';
   if (num >= 100) {
     result += hundreds[Math.floor(num / 100)];
     num %= 100;
   }
+
+  // Special cases for 15 and 16 (avoid יה and יו which are divine names)
+  // Must be checked AFTER handling hundreds (e.g., 115 -> ק + טו, not ק + יה)
+  if (num === 15) {
+    result += 'טו';
+    // Add gershayim before last letter
+    return result.slice(0, -1) + '"' + result.slice(-1);
+  }
+  if (num === 16) {
+    result += 'טז';
+    return result.slice(0, -1) + '"' + result.slice(-1);
+  }
+
   if (num >= 10) {
     result += tens[Math.floor(num / 10)];
     num %= 10;

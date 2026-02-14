@@ -46,19 +46,7 @@ const cursorStyle: React.CSSProperties = {
   animation: 'slideCodeBlink 1s infinite'
 };
 
-// CSS keyframes injected once
-const styleId = 'slide-code-indicator-styles';
-if (typeof document !== 'undefined' && !document.getElementById(styleId)) {
-  const styleSheet = document.createElement('style');
-  styleSheet.id = styleId;
-  styleSheet.textContent = `
-    @keyframes slideCodeBlink {
-      0%, 50% { opacity: 1; }
-      51%, 100% { opacity: 0; }
-    }
-  `;
-  document.head.appendChild(styleSheet);
-}
+// @keyframes slideCodeBlink is defined in index.css
 
 const SlideCodeIndicator = memo<SlideCodeIndicatorProps>(({ currentInput, isTyping }) => {
   if (!isTyping || !currentInput) {

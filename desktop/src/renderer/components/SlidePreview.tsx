@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, memo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, memo } from 'react';
 import SlideRenderer from './SlideRenderer';
 
 /**
@@ -14,6 +14,7 @@ interface SlideData {
   originalText?: string;
   transliteration?: string;
   translation?: string;
+  translationB?: string;
   translationOverflow?: string;  // Overflow text for long translations
   originalLanguage?: string;  // Song's original language - used for single-language song rendering
   reference?: string;  // Bible verse reference or Hebrew reference for prayer
@@ -233,29 +234,17 @@ const SlidePreview: React.FC<SlidePreviewProps> = ({
   }, []);
 
   // Calculate the size that fits within the container while maintaining aspect ratio
-  const calculateFitSize = () => {
+  // Memoized to prevent creating new objects on every render (which would defeat SlideRenderer's memo)
+  const fitSize = useMemo(() => {
     if (containerSize.width === 0 || containerSize.height === 0) {
       return { width: 0, height: 0 };
     }
-
     const containerAspect = containerSize.height / containerSize.width;
-
     if (containerAspect > aspectRatio) {
-      // Container is taller - fit to width
-      return {
-        width: containerSize.width,
-        height: containerSize.width * aspectRatio
-      };
-    } else {
-      // Container is wider - fit to height
-      return {
-        width: containerSize.height / aspectRatio,
-        height: containerSize.height
-      };
+      return { width: containerSize.width, height: containerSize.width * aspectRatio };
     }
-  };
-
-  const fitSize = calculateFitSize();
+    return { width: containerSize.height / aspectRatio, height: containerSize.height };
+  }, [containerSize.width, containerSize.height, aspectRatio]);
 
   // Render tool overlays (countdown, clock, etc.)
   const renderToolOverlays = () => {
@@ -428,7 +417,7 @@ const SlidePreview: React.FC<SlidePreviewProps> = ({
           background: 'linear-gradient(to top, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0.85))',
           padding: 'clamp(8px, 3%, 20px) clamp(12px, 5%, 40px)',
           zIndex: 150,
-          animation: announcementFading ? 'slideDown 0.5s ease-out forwards' : 'slideUp 0.5s ease-out forwards',
+          animation: announcementFading ? 'previewSlideDown 0.5s ease-out forwards' : 'previewSlideUp 0.5s ease-out forwards',
           opacity: announcementFading ? 0 : 1,
           transition: announcementFading ? 'opacity 0.5s ease-out' : 'none',
           borderTop: '2px solid rgba(0, 212, 255, 0.6)',
@@ -436,30 +425,6 @@ const SlidePreview: React.FC<SlidePreviewProps> = ({
           willChange: 'transform, opacity' // GPU acceleration hint for animations
         }}
       >
-        <style>
-          {`
-            @keyframes slideUp {
-              from {
-                transform: translateY(100%);
-                opacity: 0;
-              }
-              to {
-                transform: translateY(0);
-                opacity: 1;
-              }
-            }
-            @keyframes slideDown {
-              from {
-                transform: translateY(0);
-                opacity: 1;
-              }
-              to {
-                transform: translateY(100%);
-                opacity: 0;
-              }
-            }
-          `}
-        </style>
         <div
           style={{
             color: '#ffffff',
@@ -500,20 +465,67 @@ const SlidePreview: React.FC<SlidePreviewProps> = ({
         overflow: 'hidden',
         boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
       }}>
+        {/* Image background layer for media:// URLs */}
+        {backgroundImage && !backgroundImage.startsWith('video:') &&
+         !backgroundImage.startsWith('linear-gradient') && !backgroundImage.startsWith('radial-gradient') &&
+         !backgroundImage.startsWith('#') && !backgroundImage.startsWith('rgb') &&
+         !backgroundImage.startsWith('transparent') && (
+          <img
+            key={backgroundImage}
+            src={backgroundImage}
+            alt=""
+            style={{
+              position: 'absolute',
+              top: 0, left: 0,
+              width: '100%', height: '100%',
+              objectFit: 'cover',
+              zIndex: 0
+            }}
+          />
+        )}
+
+        {/* Video background layer (plays in preview so user can see it's a video) */}
+        {backgroundImage?.startsWith('video:') && (
+          <video
+            key={backgroundImage}
+            src={backgroundImage.slice(6)}
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            onCanPlay={(e) => {
+              const video = e.target as HTMLVideoElement;
+              if (video.duration) {
+                video.currentTime = (Date.now() / 1000) % video.duration;
+              }
+              video.play().catch(() => {});
+            }}
+            style={{
+              position: 'absolute',
+              top: 0, left: 0,
+              width: '100%', height: '100%',
+              objectFit: 'cover',
+              zIndex: 0
+            }}
+          />
+        )}
+
         {/* Main slide content */}
         {!hasFullScreenTool && !activeMedia && (
-          <SlideRenderer
-            slideData={slideData}
-            displayMode={displayMode}
-            theme={theme}
-            backgroundImage={backgroundImage}
-            isBlank={isBlank}
-            containerWidth={fitSize.width}
-            containerHeight={fitSize.height}
-            presentationSlide={presentationSlide}
-            combinedSlides={combinedSlides}
-            onHtmlCapture={onHtmlCapture}
-          />
+          <div style={{ position: 'relative', width: '100%', height: '100%', zIndex: 1 }}>
+            <SlideRenderer
+              slideData={slideData}
+              displayMode={displayMode}
+              theme={theme}
+              backgroundImage={backgroundImage}
+              isBlank={isBlank}
+              containerWidth={fitSize.width}
+              containerHeight={fitSize.height}
+              presentationSlide={presentationSlide}
+              combinedSlides={combinedSlides}
+              onHtmlCapture={onHtmlCapture}
+            />
+          </div>
         )}
 
         {/* Media overlay */}

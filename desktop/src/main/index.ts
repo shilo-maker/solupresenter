@@ -294,9 +294,20 @@ app.on('window-all-closed', () => {
   }
 });
 
+// Kill FFmpeg on app quit to prevent orphan processes on Windows
+app.on('will-quit', () => {
+  try {
+    const { streamingService } = require('./services/streamingService');
+    streamingService.forceStop();
+  } catch {}
+});
+
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0 && controlWindow === null) {
-    controlWindow = createWindowWithSplash();
+    controlWindow = createWindowWithSplash(() => {
+      const { initializeFullApp } = require('./appLoader.js');
+      initializeFullApp(controlWindow, isDev);
+    });
   }
 });
 

@@ -21,6 +21,7 @@ interface SlideData {
   originalText?: string;
   transliteration?: string;
   translation?: string;
+  translationB?: string;
   translationOverflow?: string;
   originalLanguage?: string; // Song's original language - used to determine single-language rendering
   reference?: string;  // Bible verse reference (e.g., "Genesis 1:1") or Hebrew reference for prayer
@@ -260,6 +261,7 @@ const DEFAULT_SAMPLE_TEXT: Record<string, string> = {
   original: 'שִׁירוּ לַיהוָה שִׁיר חָדָשׁ',
   transliteration: 'Shiru lAdonai shir chadash',
   translation: 'Sing to the Lord a new song',
+  translationB: 'Zpívejte Hospodinu novou píseň',
   // Prayer/Sermon sample text
   title: 'נושאי תפילה',
   titleTranslation: 'Prayer Points',
@@ -557,8 +559,15 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
     ...(theme?.referenceTranslationPosition ? { referenceTranslation: theme.referenceTranslationPosition } : {})
   }), [theme?.linePositions, theme?.referencePosition, theme?.referenceEnglishPosition, theme?.referenceTranslationPosition]);
 
+  // Check if any line uses flow positioning or auto-height (skip expensive measurement otherwise)
+  const hasFlowOrAutoHeight = useMemo(() =>
+    Object.values(mergedLinePositions).some(pos => pos.positionMode === 'flow' || pos.autoHeight),
+    [mergedLinePositions]
+  );
+
   // Calculate flow positions based on measured heights
   useLayoutEffect(() => {
+    if (!hasFlowOrAutoHeight) return; // Skip expensive DOM measurement when no flow/auto-height lines
     const positions = mergedLinePositions;
     const newMeasuredHeights: Record<string, number> = {};
     const newFlowPositions: Record<string, number> = {};
@@ -644,7 +653,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
 
     setMeasuredHeights(newMeasuredHeights);
     setFlowPositions(newFlowPositions);
-  }, [mergedLinePositions, lineOrder, refHeight, slideData, sampleText, editorMode, displayMode]);
+  }, [hasFlowOrAutoHeight, mergedLinePositions, lineOrder, refHeight, slideData, sampleText, editorMode, displayMode]);
 
   // Use the merged positions for rendering (already includes defaults and reference positions)
   const effectiveLinePositions = mergedLinePositions;
@@ -719,6 +728,9 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
           return `${slideData.translation || ''}\n${slideData.translationOverflow}`;
         }
         return slideData.translation || null;
+      case 'translationB':
+        if (isSingleLang) return null;
+        return slideData.translationB || null;
       case 'translationOverflow':
         // Don't render separately - it's combined with translation above
         return null;
@@ -764,6 +776,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
           return true;
         case 'transliteration':
         case 'translation':
+        case 'translationB':
         case 'translationOverflow':
         case 'english':
           return false; // Hide these - content is combined into 'original'
@@ -780,6 +793,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
       case 'transliteration':
         return displayMode === 'bilingual';
       case 'translation':
+      case 'translationB':
       case 'translationOverflow':
       case 'english':  // Bible theme compatibility
         return displayMode === 'bilingual' || displayMode === 'translation';
@@ -959,7 +973,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
               fontSize: `${fontSize}px`,
               fontWeight: fontWeight,
               color: fontColor,
-              opacity: style?.backgroundOpacity ?? style?.opacity ?? 1,
+              opacity: style?.opacity ?? 1,
               direction: isRtl ? 'rtl' : 'ltr',
               textAlign: position.alignH,
               lineHeight: hasLineBackground ? 1.0 : 1.35,
@@ -1367,7 +1381,9 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
   const renderPresentationImageBoxes = () => {
     if (!presentationSlide?.imageBoxes) return null;
 
-    return presentationSlide.imageBoxes.map((imageBox) => (
+    return presentationSlide.imageBoxes
+      .filter((imageBox) => imageBox.visible !== false)
+      .map((imageBox) => (
       <div
         key={imageBox.id}
         style={{
@@ -1376,7 +1392,9 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
           top: `${imageBox.y}%`,
           width: `${imageBox.width}%`,
           height: `${imageBox.height}%`,
-          zIndex: imageBox.zIndex ?? 0
+          zIndex: imageBox.zIndex ?? 0,
+          overflow: 'hidden',
+          borderRadius: `${imageBox.borderRadius}px`
         }}
       >
         <img
@@ -1386,8 +1404,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
             width: '100%',
             height: '100%',
             objectFit: imageBox.objectFit,
-            opacity: imageBox.opacity,
-            borderRadius: `${imageBox.borderRadius}px`
+            opacity: imageBox.opacity
           }}
         />
       </div>
@@ -1544,14 +1561,15 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({
     };
 
     if (backgroundImage) {
-      if (backgroundImage.startsWith('linear-gradient') || backgroundImage.startsWith('radial-gradient')) {
+      if (backgroundImage.startsWith('video:') || backgroundImage.startsWith('media://')) {
+        // Video and media:// image backgrounds handled by DisplayViewer element layers, not CSS
+        style.background = 'transparent';
+      } else if (backgroundImage.startsWith('linear-gradient') || backgroundImage.startsWith('radial-gradient')) {
         style.background = backgroundImage;
       } else if (backgroundImage.startsWith('#') || backgroundImage.startsWith('rgb')) {
         style.backgroundColor = backgroundImage;
       } else {
-        style.backgroundImage = `url(${backgroundImage})`;
-        style.backgroundSize = 'cover';
-        style.backgroundPosition = 'center';
+        style.background = 'transparent';
       }
     } else if (theme?.viewerBackground?.type === 'color' && theme.viewerBackground.color) {
       const color = theme.viewerBackground.color;

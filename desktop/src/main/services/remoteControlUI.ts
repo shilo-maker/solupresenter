@@ -1905,8 +1905,8 @@ export function getRemoteControlUI(port: number): string {
       }
 
       displaysListEl.innerHTML = displays.map(d => {
-        const statusLabel = d.isAssigned ? (d.assignedType === 'viewer' ? 'Viewer' : 'Stage') : 'Not assigned';
-        const statusColor = d.isAssigned ? (d.assignedType === 'viewer' ? '#06b6d4' : '#a78bfa') : 'rgba(255,255,255,0.5)';
+        const statusLabel = d.isAssigned ? (d.assignedType === 'viewer' ? 'Viewer' : d.assignedType === 'camera' ? 'Camera' : 'Stage') : 'Not assigned';
+        const statusColor = d.isAssigned ? (d.assignedType === 'viewer' ? '#06b6d4' : d.assignedType === 'camera' ? '#00897b' : '#a78bfa') : 'rgba(255,255,255,0.5)';
         return '<div class="display-item">' +
           '<div class="display-item-header">' +
             '<span class="display-item-name">' + escapeHtml(d.label || ('Display ' + d.id)) + (d.isPrimary ? ' (Primary)' : '') + '</span>' +

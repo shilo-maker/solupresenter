@@ -44,12 +44,15 @@ export interface SetlistItem {
   youtubeVideoId?: string;
   youtubeTitle?: string;
   youtubeThumbnail?: string;
+  // Per-item background override (viewer only)
+  background?: string;
 }
 
 export interface Setlist {
   id: string;
   name: string;
   venue?: string;
+  background?: string;
   items: SetlistItem[];
   createdAt: string;  // ISO timestamp string
   updatedAt: string;  // ISO timestamp string
@@ -58,6 +61,7 @@ export interface Setlist {
 export interface SetlistData {
   name: string;
   venue?: string;
+  background?: string;
   items?: SetlistItem[];
 }
 
@@ -99,7 +103,8 @@ function parseSetlistRow(row: any): Setlist | null {
   return {
     ...row,
     items,
-    createdAt
+    createdAt,
+    background: row.background || undefined
   };
 }
 
@@ -134,12 +139,13 @@ export async function createSetlist(data: SetlistData): Promise<Setlist | null> 
     beginTransaction();
 
     db.run(`
-      INSERT INTO setlists (id, name, venue, items, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO setlists (id, name, venue, background, items, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `, [
       id,
       data.name,
       data.venue || null,
+      data.background || null,
       JSON.stringify(items),
       now,  // Use ISO string for createdAt
       now
@@ -153,6 +159,7 @@ export async function createSetlist(data: SetlistData): Promise<Setlist | null> 
       id,
       name: data.name,
       venue: data.venue,
+      background: data.background,
       items,
       createdAt: now,
       updatedAt: now
@@ -195,6 +202,12 @@ export async function updateSetlist(id: string, data: Partial<SetlistData>): Pro
     updates.push('items = ?');
     values.push(JSON.stringify(data.items));
     updatedSetlist.items = data.items;
+  }
+  if (data.background !== undefined) {
+    updates.push('background = ?');
+    const bgValue = data.background || null;
+    values.push(bgValue);
+    updatedSetlist.background = bgValue ? data.background : undefined;
   }
 
   updates.push('updatedAt = ?');

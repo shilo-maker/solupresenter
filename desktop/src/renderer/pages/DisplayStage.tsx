@@ -5,6 +5,7 @@ interface SlideData {
   originalText?: string;
   transliteration?: string;
   translation?: string;
+  translationB?: string;
   // Prayer/Sermon content fields
   title?: string;
   titleTranslation?: string;
@@ -308,12 +309,21 @@ const DisplayStage: React.FC = () => {
         setIsBlank(true);
       } else {
         setIsBlank(false);
-        if (data.slideData) {
+        if (data.presentationSlide) {
+          // Extract text content from presentation slide textBoxes for stage display
+          const textContent = data.presentationSlide.textBoxes
+            ?.map((tb: any) => tb.text)
+            .filter(Boolean)
+            .join('\n') || '';
+          setCurrentSlide({ originalText: textContent });
+          setNextSlide(null);
+          setSongTitle(data.presentationSlide.title || 'Presentation');
+        } else if (data.slideData) {
           setCurrentSlide(data.slideData);
         }
         if (data.nextSlideData) {
           setNextSlide(data.nextSlideData);
-        } else {
+        } else if (!data.presentationSlide) {
           setNextSlide(null);
         }
         if (data.songTitle) {
@@ -397,11 +407,6 @@ const DisplayStage: React.FC = () => {
       }
     });
 
-    // Update clock
-    const clockInterval = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-
     // Report ready AFTER all listeners are registered to avoid race condition
     // where main process sends initial state before listeners are set up
     window.displayAPI.reportReady();
@@ -411,65 +416,54 @@ const DisplayStage: React.FC = () => {
       stageThemeCleanup();
       toolCleanup();
       stageMessageCleanup();
-      clearInterval(clockInterval);
     };
   }, []);
 
-  // Measure text heights for auto-height flow positioning (current slide)
+  // Clock interval - only runs when clock element is visible
   useEffect(() => {
-    const measureHeights = () => {
-      const viewportHeight = window.innerHeight;
-      const newHeights: Record<string, number> = {};
+    if (!theme.elements.clock?.visible) return;
+    const clockInterval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(clockInterval);
+  }, [theme.elements.clock?.visible]);
 
+  // Measure text heights for auto-height flow positioning (current + next slide in single rAF)
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      const viewportHeight = window.innerHeight;
+
+      // Measure current slide
+      const currentHeights: Record<string, number> = {};
       if (originalRef.current && theme.currentSlideText?.original?.autoHeight) {
-        const heightPx = originalRef.current.getBoundingClientRect().height;
-        newHeights['original'] = (heightPx / viewportHeight) * 100;
+        currentHeights['original'] = (originalRef.current.getBoundingClientRect().height / viewportHeight) * 100;
       }
       if (translitRef.current && theme.currentSlideText?.transliteration?.autoHeight) {
-        const heightPx = translitRef.current.getBoundingClientRect().height;
-        newHeights['transliteration'] = (heightPx / viewportHeight) * 100;
+        currentHeights['transliteration'] = (translitRef.current.getBoundingClientRect().height / viewportHeight) * 100;
       }
       if (translationRef.current && theme.currentSlideText?.translation?.autoHeight) {
-        const heightPx = translationRef.current.getBoundingClientRect().height;
-        newHeights['translation'] = (heightPx / viewportHeight) * 100;
+        currentHeights['translation'] = (translationRef.current.getBoundingClientRect().height / viewportHeight) * 100;
+      }
+      if (Object.keys(currentHeights).length > 0) {
+        setMeasuredHeights(prev => ({ ...prev, ...currentHeights }));
       }
 
-      if (Object.keys(newHeights).length > 0) {
-        setMeasuredHeights(prev => ({ ...prev, ...newHeights }));
-      }
-    };
-
-    // Measure after render
-    requestAnimationFrame(measureHeights);
-  }, [currentSlide, theme.currentSlideText]);
-
-  // Measure text heights for auto-height flow positioning (next slide)
-  useEffect(() => {
-    const measureHeights = () => {
-      const viewportHeight = window.innerHeight;
-      const newHeights: Record<string, number> = {};
-
+      // Measure next slide
+      const nextHeights: Record<string, number> = {};
       if (nextOriginalRef.current && theme.nextSlideText?.original?.autoHeight) {
-        const heightPx = nextOriginalRef.current.getBoundingClientRect().height;
-        newHeights['original'] = (heightPx / viewportHeight) * 100;
+        nextHeights['original'] = (nextOriginalRef.current.getBoundingClientRect().height / viewportHeight) * 100;
       }
       if (nextTranslitRef.current && theme.nextSlideText?.transliteration?.autoHeight) {
-        const heightPx = nextTranslitRef.current.getBoundingClientRect().height;
-        newHeights['transliteration'] = (heightPx / viewportHeight) * 100;
+        nextHeights['transliteration'] = (nextTranslitRef.current.getBoundingClientRect().height / viewportHeight) * 100;
       }
       if (nextTranslationRef.current && theme.nextSlideText?.translation?.autoHeight) {
-        const heightPx = nextTranslationRef.current.getBoundingClientRect().height;
-        newHeights['translation'] = (heightPx / viewportHeight) * 100;
+        nextHeights['translation'] = (nextTranslationRef.current.getBoundingClientRect().height / viewportHeight) * 100;
       }
-
-      if (Object.keys(newHeights).length > 0) {
-        setNextMeasuredHeights(prev => ({ ...prev, ...newHeights }));
+      if (Object.keys(nextHeights).length > 0) {
+        setNextMeasuredHeights(prev => ({ ...prev, ...nextHeights }));
       }
-    };
-
-    // Measure after render
-    requestAnimationFrame(measureHeights);
-  }, [nextSlide, theme.nextSlideText]);
+    });
+  }, [currentSlide, nextSlide, theme.currentSlideText, theme.nextSlideText]);
 
   // Handle announcement visibility and auto-dismiss after 10 seconds
   useEffect(() => {

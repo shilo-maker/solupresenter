@@ -4,7 +4,7 @@
  * This file is loaded AFTER the splash screen is visible.
  * It imports all the heavy modules (database, IPC, services, etc.)
  */
-import { BrowserWindow, protocol, app } from 'electron';
+import { BrowserWindow, protocol, app, session } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
@@ -15,10 +15,43 @@ import { registerIpcHandlers, setSocketControlWindow } from './ipc';
 import { initDatabase, flushDatabase } from './database';
 import { initTranslator } from './services/mlTranslation';
 import { cleanupOrphanedFiles } from './services/mediaProcessor';
+import { checkForUpdates } from './services/autoUpdateService';
+import { streamingService } from './services/streamingService';
 
 // Local server
 let localServer: http.Server | null = null;
 let localServerPort = 0;
+
+// Shared MIME type map (used by local server and media protocol handler)
+const MIME_TYPES: Record<string, string> = {
+  '.html': 'text/html',
+  '.js': 'application/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.bmp': 'image/bmp',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.eot': 'application/vnd.ms-fontobject',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.avi': 'video/x-msvideo',
+  '.mkv': 'video/x-matroska',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.m4a': 'audio/mp4',
+  '.flac': 'audio/flac',
+  '.aac': 'audio/aac'
+};
 
 export function getLocalServerPort(): number {
   return localServerPort;
@@ -59,27 +92,6 @@ async function waitForVite(maxAttempts = 100): Promise<boolean> {
 async function startLocalServer(): Promise<number> {
   return new Promise((resolve, reject) => {
     const rendererPath = path.join(__dirname, '../../renderer');
-
-    const mimeTypes: Record<string, string> = {
-      '.html': 'text/html',
-      '.js': 'application/javascript',
-      '.css': 'text/css',
-      '.json': 'application/json',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.gif': 'image/gif',
-      '.svg': 'image/svg+xml',
-      '.ico': 'image/x-icon',
-      '.woff': 'font/woff',
-      '.woff2': 'font/woff2',
-      '.ttf': 'font/ttf',
-      '.eot': 'application/vnd.ms-fontobject',
-      '.mp4': 'video/mp4',
-      '.webm': 'video/webm',
-      '.mp3': 'audio/mpeg',
-      '.wav': 'audio/wav'
-    };
 
     const allowedMediaExtensions = new Set([
       '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg',
@@ -134,7 +146,7 @@ async function startLocalServer(): Promise<number> {
 
           const stat = await fs.promises.stat(mediaPath);
           const fileSize = stat.size;
-          const contentType = mimeTypes[ext] || 'application/octet-stream';
+          const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
           const rangeHeader = req.headers.range;
 
@@ -214,7 +226,7 @@ async function startLocalServer(): Promise<number> {
         }
 
         const ext = path.extname(fullPath).toLowerCase();
-        const contentType = mimeTypes[ext] || 'application/octet-stream';
+        const contentType = MIME_TYPES[ext] || 'application/octet-stream';
         res.writeHead(200, { 'Content-Type': contentType });
         res.end(data);
       });
@@ -282,26 +294,7 @@ function registerMediaProtocol() {
           return new Response('Not Found', { status: 404 });
         }
 
-        const mimeTypes: Record<string, string> = {
-          '.jpg': 'image/jpeg',
-          '.jpeg': 'image/jpeg',
-          '.png': 'image/png',
-          '.gif': 'image/gif',
-          '.webp': 'image/webp',
-          '.bmp': 'image/bmp',
-          '.mp4': 'video/mp4',
-          '.webm': 'video/webm',
-          '.mov': 'video/quicktime',
-          '.avi': 'video/x-msvideo',
-          '.mkv': 'video/x-matroska',
-          '.mp3': 'audio/mpeg',
-          '.wav': 'audio/wav',
-          '.ogg': 'audio/ogg',
-          '.m4a': 'audio/mp4',
-          '.flac': 'audio/flac',
-          '.aac': 'audio/aac',
-        };
-        const contentType = mimeTypes[ext] || 'application/octet-stream';
+        const contentType = MIME_TYPES[ext] || 'application/octet-stream';
         const stat = await fs.promises.stat(filePath);
         const fileSize = stat.size;
 
@@ -324,14 +317,31 @@ function registerMediaProtocol() {
 
             const contentLength = end - start + 1;
 
+            let fileStream: fs.ReadStream;
             const stream = new ReadableStream({
               start(controller) {
-                const fileStream = fs.createReadStream(filePath, { start, end });
+                let closed = false;
+                fileStream = fs.createReadStream(filePath, { start, end });
                 fileStream.on('data', (chunk: Buffer) => {
-                  controller.enqueue(new Uint8Array(chunk));
+                  if (!closed) {
+                    controller.enqueue(new Uint8Array(chunk));
+                  }
                 });
-                fileStream.on('end', () => controller.close());
-                fileStream.on('error', (err) => controller.error(err));
+                fileStream.on('end', () => {
+                  if (!closed) {
+                    closed = true;
+                    controller.close();
+                  }
+                });
+                fileStream.on('error', (err) => {
+                  if (!closed) {
+                    closed = true;
+                    controller.error(err);
+                  }
+                });
+              },
+              cancel() {
+                fileStream?.destroy();
               }
             });
 
@@ -374,6 +384,17 @@ export async function initializeFullApp(controlWindow: BrowserWindow, isDev: boo
   // Initialize display manager
   displayManager = new DisplayManager();
 
+  // Grant camera permissions for getUserMedia (needed for camera display type)
+  // Only 'media' is allowed; all other permissions (geolocation, notifications, etc.) are denied.
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === 'media');
+  });
+
+  // Handle synchronous permission checks (e.g., enumerateDevices label access)
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
+    return permission === 'media';
+  });
+
   // Register protocol handlers
   registerMediaProtocol();
 
@@ -402,9 +423,19 @@ export async function initializeFullApp(controlWindow: BrowserWindow, isDev: boo
     console.warn('ML Translation initialization error:', err);
   });
 
+  // Auto-check for updates after the UI is fully loaded
+  controlWindow.webContents.on('did-finish-load', () => {
+    setTimeout(() => {
+      console.log('[AppLoader] Auto-checking for updates...');
+      checkForUpdates().catch((err) => {
+        console.warn('[AppLoader] Auto-update check failed:', err);
+      });
+    }, 5000);
+  });
+
   if (isDev) {
-    // DEV MODE: Wait for Vite then load from localhost
-    waitForVite().then((ready) => {
+    // DEV MODE: Wait for both Vite and database before loading
+    Promise.all([waitForVite(), dbPromise]).then(([ready]) => {
       if (ready && controlWindow && !controlWindow.isDestroyed()) {
         controlWindow.loadURL('http://localhost:5173');
         controlWindow.webContents.openDevTools({ mode: 'detach' });
@@ -417,6 +448,7 @@ export async function initializeFullApp(controlWindow: BrowserWindow, isDev: boo
       console.log(`[AppLoader] Local server started on port ${port}`);
     }).catch((err) => {
       console.error('Failed to start local server:', err);
+      throw err; // Re-throw so Promise.all rejects instead of loading from port 0
     });
 
     // Wait for both server and database, then load the app
@@ -448,7 +480,10 @@ export async function initializeFullApp(controlWindow: BrowserWindow, isDev: boo
 
 // Cleanup on quit
 app.on('before-quit', () => {
+  // Stop streaming if active and close the hidden streaming display
+  streamingService.stop().catch(() => {});
   if (displayManager) {
+    displayManager.closeStreamingDisplay();
     displayManager.stopWatching();
   }
   if (localServer) {

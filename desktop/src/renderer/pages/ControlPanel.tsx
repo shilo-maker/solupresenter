@@ -6,7 +6,7 @@ const log = createLogger('ControlPanel');
 
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useSettings } from '../contexts/SettingsContext';
+import { useSettings, CustomDisplayLines } from '../contexts/SettingsContext';
 import { useSetlist, SetlistItem as ContextSetlistItem, SavedSetlist as ContextSavedSetlist } from '../contexts/SetlistContext';
 import logoImage from '../assets/logo.png';
 import AuthModal from '../components/AuthModal';
@@ -36,8 +36,10 @@ const BiblePanel = React.lazy(() => import('../components/control-panel/panels/B
 const PresentationsPanel = React.lazy(() => import('../components/control-panel/panels/PresentationsPanel'));
 const SetlistPanel = React.lazy(() => import('../components/control-panel/panels/SetlistPanel'));
 import { createCombinedSlides, formatTime, getVerseTypeColor } from '../utils/slideUtils';
+import { resolveTranslation } from '../utils/translationUtils';
+import { parseMidiSongPayload, MidiItemPayload } from '../utils/midiWriter';
 import { useRemoteControl } from '../hooks/useRemoteControl';
-import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useKeyboardShortcuts, SECTION_KEY_MAP } from '../hooks/useKeyboardShortcuts';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
 const SettingsPage = React.lazy(() => import('./SettingsPage'));
 import { useQuickSlide } from '../hooks/useQuickSlide';
@@ -60,13 +62,17 @@ const SaveSetlistModal = React.lazy(() => import('../components/control-panel/mo
 const LoadSetlistModal = React.lazy(() => import('../components/control-panel/modals/LoadSetlistModal'));
 const UnsavedChangesModal = React.lazy(() => import('../components/control-panel/modals/UnsavedChangesModal'));
 const SetlistContextMenu = React.lazy(() => import('../components/control-panel/modals/SetlistContextMenu'));
+const ItemBackgroundModal = React.lazy(() => import('../components/control-panel/modals/ItemBackgroundModal'));
+const CustomDisplayModal = React.lazy(() => import('../components/control-panel/modals/CustomDisplayModal'));
 const QuickModeWizard = React.lazy(() => import('../components/control-panel/quick-mode/QuickModeWizard'));
+const UpdateModal = React.lazy(() => import('../components/control-panel/modals/UpdateModal'));
 import { SongItem, PresentationItem, ThemeItem } from '../components/control-panel/list-items';
 import SlideCodeIndicator from '../components/control-panel/SlideCodeIndicator';
 import { useSlideKeyboardNav } from '../hooks/useSlideKeyboardNav';
 import { SlideCodeMap } from '../utils/slideCodeUtils';
 import { useArrangementState } from '../hooks/useArrangementState';
-import { SongArrangement } from '../utils/arrangementUtils';
+import { SongArrangement, getSectionRanges } from '../utils/arrangementUtils';
+import { DisplayAssignedType, isViewerLike } from '../components/control-panel/panels/types';
 import {
   colors,
   buttonStyles,
@@ -85,7 +91,7 @@ interface Display {
   bounds: { x: number; y: number; width: number; height: number };
   isPrimary: boolean;
   isAssigned: boolean;
-  assignedType?: 'viewer' | 'stage';
+  assignedType?: DisplayAssignedType;
 }
 
 interface Song {
@@ -98,6 +104,7 @@ interface Song {
     transliteration?: string;
     translation?: string;
     translationOverflow?: string;
+    translations?: Record<string, string>;
     verseType?: string;
   }>;
   author?: string;
@@ -146,12 +153,15 @@ interface SetlistItem {
   youtubeVideoId?: string;
   youtubeTitle?: string;
   youtubeThumbnail?: string;
+  // Per-item background override (viewer only)
+  background?: string;
 }
 
 interface SavedSetlist {
   id: string;
   name: string;
   venue?: string;
+  background?: string;
   items: SetlistItem[];
   createdAt: string;  // ISO timestamp string
   updatedAt?: string;
@@ -163,6 +173,8 @@ type ResourcePanel = 'songs' | 'media' | 'tools' | 'bible' | 'presentations';
 interface QuickModeMetadata {
   type: 'sermon' | 'prayer' | 'announcements';
   title: string;
+  titleTranslation?: string;
+  generateTranslation?: boolean;
   subtitles: Array<{
     subtitle: string;
     subtitleTranslation?: string;
@@ -212,8 +224,9 @@ interface BibleSlide {
 const ControlPanel: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const isHidden = location.pathname !== '/';
   const { t, i18n } = useTranslation();
-  const { settings } = useSettings();
+  const { settings, updateSetting } = useSettings();
   const isRTL = i18n.language === 'he';
 
   // Setlist context (persists across navigation)
@@ -224,6 +237,8 @@ const ControlPanel: React.FC = () => {
     setCurrentSetlistId,
     currentSetlistName,
     setCurrentSetlistName,
+    setlistBackground,
+    setSetlistBackground,
     hasUnsavedChanges,
     setHasUnsavedChanges,
     lastSavedSetlistRef,
@@ -255,7 +270,46 @@ const ControlPanel: React.FC = () => {
     slideIndex: number;
   }>({ slideData: null, contentType: null, songId: null, slideIndex: 0 });
   // Destructure for easier access (these are derived, not separate state)
-  const { slideData: liveSlideData, contentType: liveContentType, songId: liveSongId, slideIndex: liveSlideIndex } = liveState;
+  const { slideData: rawLiveSlideData, contentType: liveContentType, songId: liveSongId, slideIndex: liveSlideIndex } = liveState;
+  // Custom display mode state (declared before liveSlideData which depends on it)
+  const [customModeActive, setCustomModeActive] = useState(false);
+  const customModeActiveRef = useRef(false);
+  useEffect(() => { customModeActiveRef.current = customModeActive; }, [customModeActive]);
+  const [showCustomDisplayModal, setShowCustomDisplayModal] = useState(false);
+  // Resolve translation in liveSlideData for control panel previews
+  const liveSlideData = useMemo(() => {
+    if (!rawLiveSlideData) return rawLiveSlideData;
+    let data = rawLiveSlideData;
+    if (rawLiveSlideData.translations) {
+      const resolved = resolveTranslation(rawLiveSlideData, settings.translationLanguage);
+      data = { ...rawLiveSlideData, translation: resolved.translation, translationOverflow: resolved.translationOverflow };
+    }
+    // Apply custom display mode remapping for preview
+    if (customModeActive && data) {
+      const config = settings.customDisplayLines;
+      const resolveContent = (source: typeof config.line1): string => {
+        if (source.type === 'original') return data.originalText || '';
+        if (source.type === 'transliteration') return data.transliteration || '';
+        if (source.type === 'translation') {
+          if (source.lang && data.translations) {
+            const r = resolveTranslation(data, source.lang);
+            return r.translation || '';
+          }
+          return data.translation || '';
+        }
+        return '';
+      };
+      data = {
+        ...data,
+        originalText: resolveContent(config.line1),
+        transliteration: resolveContent(config.line2),
+        translation: resolveContent(config.line3),
+        translationB: config.line4.type !== 'none' ? resolveContent(config.line4) : '',
+        translationOverflow: ''
+      };
+    }
+    return data;
+  }, [rawLiveSlideData, settings.translationLanguage, customModeActive, settings.customDisplayLines]);
   // Auto-play state for presentations
   const [autoPlayActive, setAutoPlayActive] = useState(false);
   const [autoPlayInterval, setAutoPlayInterval] = useState(5); // seconds
@@ -270,6 +324,13 @@ const ControlPanel: React.FC = () => {
   const [onlineConnected, setOnlineConnected] = useState(false);
   const [roomPin, setRoomPin] = useState<string | null>(null);
   const [viewerCount, setViewerCount] = useState(0);
+
+  // MIDI bridge state
+  const [midiBridgeConnected, setMidiBridgeConnected] = useState(false);
+  const [midiControlEnabled, setMidiControlEnabled] = useState(true);
+
+  // Streaming state
+  const [isStreaming, setIsStreaming] = useState(false);
 
   // Auth state
   const [authState, setAuthState] = useState<{
@@ -302,8 +363,7 @@ const ControlPanel: React.FC = () => {
   const importStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showDisplayPanel, setShowDisplayPanel] = useState(false);
   const [showThemePanel, setShowThemePanel] = useState(false);
-  const [obsServerRunning, setObsServerRunning] = useState(false);
-  const [obsServerUrl, setObsServerUrl] = useState<string | null>(null);
+
 
   // Virtual displays state
   const [virtualDisplays, setVirtualDisplays] = useState<VirtualDisplay[]>(() => {
@@ -333,11 +393,13 @@ const ControlPanel: React.FC = () => {
     stageMonitorThemes,
     bibleThemes,
     prayerThemes,
+    dualTranslationThemes,
     obsThemes,
     selectedTheme,
     selectedStageTheme,
     selectedBibleTheme,
     selectedPrayerTheme,
+    selectedDualTranslationTheme,
     selectedOBSTheme,
     selectedOBSSongsTheme,
     selectedOBSBibleTheme,
@@ -354,6 +416,7 @@ const ControlPanel: React.FC = () => {
     applyBibleTheme: applyBibleThemeCallback,
     applyPrayerTheme: applyPrayerThemeCallback,
     applyOBSTheme: applyOBSThemeCallback,
+    applyDualTranslationTheme,
     getMemoizedLivePreviewTheme
   } = useThemeState();
   const [currentContentType, setCurrentContentType] = useState<'song' | 'bible' | 'prayer' | 'presentation'>('song');
@@ -366,7 +429,7 @@ const ControlPanel: React.FC = () => {
     author: string;
     originalLanguage: string;
     tags: string[];
-    slides: Array<{ originalText: string; transliteration: string; translation: string; translationOverflow: string; verseType: string }>;
+    slides: Array<{ originalText: string; transliteration: string; translation: string; translationOverflow: string; verseType: string; translations?: Record<string, string> }>;
   } | null>(null);
 
   // Prayer/Sermon express editor state
@@ -449,6 +512,14 @@ const ControlPanel: React.FC = () => {
   // Background state
   const [selectedBackground, setSelectedBackground] = useState<string>('');
   const [showBackgroundDropdown, setShowBackgroundDropdown] = useState(false);
+  const [activeItemBackground, setActiveItemBackground] = useState<string>('');
+  const [itemBackgroundMuted, setItemBackgroundMuted] = useState(false);
+  const itemBackgroundMutedRef = useRef(false);
+  const pendingItemBackgroundRef = useRef<string>('');
+  const selectedBackgroundRef = useRef<string>('');
+  selectedBackgroundRef.current = selectedBackground;
+  const setlistBackgroundRef = useRef<string>('');
+  setlistBackgroundRef.current = setlistBackground;
   const quickSlideTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Fullscreen media state (takes over from slides when active)
@@ -458,10 +529,13 @@ const ControlPanel: React.FC = () => {
   const [hoveredSetlistItemId, setHoveredSetlistItemId] = useState<string | null>(null);
   const [setlistMenuOpen, setSetlistMenuOpen] = useState<string | null>(null);
   const [setlistContextMenu, setSetlistContextMenu] = useState<{ x: number; y: number; item: SetlistItem } | null>(null);
+  const [contextMenuBackgroundItemId, setContextMenuBackgroundItemId] = useState<string | null>(null);
   const [selectedYoutubeItemId, setSelectedYoutubeItemId] = useState<string | null>(null);
   const [visibleSongsCount, setVisibleSongsCount] = useState(50); // Limit initial render for performance
 
   // Video playback control state
+  const [videoLoop, setVideoLoop] = useState(false);
+  const videoLoopRef = useRef(false);
   const [videoStatus, setVideoStatus] = useState<{ currentTime: number; duration: number; isPlaying: boolean }>({
     currentTime: 0,
     duration: 0,
@@ -599,6 +673,7 @@ const ControlPanel: React.FC = () => {
   const [showLoadModal, setShowLoadModal] = useState(false);
   const [showSetlistMenu, setShowSetlistMenu] = useState(false);
   const [setlistMenuHover, setSetlistMenuHover] = useState(false);
+  const [showSetlistBackgroundModal, setShowSetlistBackgroundModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
 
@@ -701,16 +776,37 @@ const ControlPanel: React.FC = () => {
     const onlineCleanup = window.electronAPI.onOnlineStatusChanged((status) => {
       setOnlineConnected(status.connected);
       setRoomPin(status.roomPin || null);
+      if (!status.connected) {
+        setMidiBridgeConnected(false);
+      }
     });
 
     const viewerCleanup = window.electronAPI.onViewerCountChanged((count) => {
       setViewerCount(count);
     });
 
+    const midiCleanup = window.electronAPI.onMidiBridgeStatus((connected) => {
+      setMidiBridgeConnected(connected);
+      if (connected) {
+        setMidiControlEnabled(true);
+        window.electronAPI.setMidiControlEnabled(true);
+      }
+    });
+
+    // Check streaming status on mount and listen for changes
+    window.electronAPI.streaming?.getStatus().then((status) => {
+      setIsStreaming(status?.isStreaming ?? false);
+    }).catch(() => {});
+    const streamingCleanup = window.electronAPI.streaming?.onStatus((status) => {
+      setIsStreaming(prev => prev === status.isStreaming ? prev : status.isStreaming);
+    });
+
     return () => {
       cleanup();
       onlineCleanup();
       viewerCleanup();
+      midiCleanup();
+      streamingCleanup?.();
       // Centralized interval cleanup - clear ALL interval refs
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
@@ -741,14 +837,31 @@ const ControlPanel: React.FC = () => {
     };
   }, []);
 
+  // Reload themes when returning from a theme editor page
+  // ControlPanel stays mounted (hidden via CSS) when editor pages are open,
+  // so we detect the transition from hidden->visible to refresh theme lists
+  const wasHiddenRef = useRef(false);
+  useEffect(() => {
+    if (isHidden) {
+      wasHiddenRef.current = true;
+    } else if (wasHiddenRef.current) {
+      wasHiddenRef.current = false;
+      loadThemes();
+    }
+  }, [isHidden, loadThemes]);
+
   // Video status listener
   useEffect(() => {
     const statusCleanup = window.electronAPI.onVideoStatus((status) => {
-      setVideoStatus(prev => ({
-        ...prev,
-        currentTime: status.currentTime,
-        duration: status.duration
-      }));
+      const now = Date.now();
+      if (now - lastVideoTimeUpdateRef.current >= TIME_UPDATE_THROTTLE_MS) {
+        lastVideoTimeUpdateRef.current = now;
+        setVideoStatus(prev => ({
+          ...prev,
+          currentTime: status.currentTime,
+          duration: status.duration
+        }));
+      }
     });
 
     const playingCleanup = window.electronAPI.onVideoPlaying((playing) => {
@@ -756,12 +869,16 @@ const ControlPanel: React.FC = () => {
     });
 
     const endedCleanup = window.electronAPI.onVideoEnded(() => {
-      setVideoStatus(prev => ({ ...prev, isPlaying: false, currentTime: 0 }));
+      // Loop logic is handled by the preview video's onEnded event
+      // This only handles the non-loop case for display status sync
+      if (!videoLoopRef.current) {
+        setVideoStatus(prev => ({ ...prev, isPlaying: false, currentTime: 0 }));
+      }
     });
 
     // Listen for synchronized video start (when display is ready)
     const syncStartCleanup = window.electronAPI.onVideoSyncStart(() => {
-      console.log('[ControlPanel] Video sync start received');
+      log('[ControlPanel] Video sync start received');
       const video = previewVideoRef.current;
 
       // Use the same sync pattern as seek: pause, seek to 0, then play together
@@ -840,7 +957,8 @@ const ControlPanel: React.FC = () => {
             displayMode: 'bilingual',
             isBlank: false,
             songTitle: autoPlayPresentation.title,
-            presentationSlide: slide
+            presentationSlide: slide,
+            backgroundImage: (!itemBackgroundMutedRef.current && pendingItemBackgroundRef.current) || (!itemBackgroundMutedRef.current && setlistBackgroundRef.current) || selectedBackgroundRef.current || ''
           });
 
           return nextIndex;
@@ -899,13 +1017,6 @@ const ControlPanel: React.FC = () => {
     // Get current control window display
     const currentControlDisplay = await window.electronAPI.getControlWindowDisplay();
     setControlDisplayId(currentControlDisplay);
-    // Check OBS server state
-    const isRunning = await window.electronAPI.isOBSServerRunning();
-    setObsServerRunning(isRunning);
-    if (isRunning) {
-      const url = await window.electronAPI.getOBSServerUrl();
-      setObsServerUrl(url);
-    }
   };
 
   const loadSongs = useCallback(async () => {
@@ -1054,7 +1165,8 @@ const ControlPanel: React.FC = () => {
           transliteration: s.transliteration || '',
           translation: s.translation || '',
           translationOverflow: s.translationOverflow || '',
-          verseType: s.verseType || 'Verse'
+          verseType: s.verseType || 'Verse',
+          translations: s.translations || {}
         }))
       });
     } else {
@@ -1068,7 +1180,8 @@ const ControlPanel: React.FC = () => {
           transliteration: '',
           translation: '',
           translationOverflow: '',
-          verseType: 'Verse'
+          verseType: 'Verse',
+          translations: {}
         }]
       });
     }
@@ -1105,7 +1218,7 @@ const ControlPanel: React.FC = () => {
   }, [selectedSong]);
 
   // Save all slides from inline editor
-  const handleSaveSongSlides = useCallback(async (updatedSlides: Array<{ originalText: string; transliteration: string; translation: string; translationOverflow: string; verseType: string }>) => {
+  const handleSaveSongSlides = useCallback(async (updatedSlides: Array<{ originalText: string; transliteration: string; translation: string; translationOverflow: string; verseType: string; translations?: Record<string, string> }>) => {
     if (!selectedSong) return;
 
     try {
@@ -1130,15 +1243,49 @@ const ControlPanel: React.FC = () => {
       // Re-broadcast if the current slide is live
       if (liveSongId === selectedSong.id && liveSlideIndex < updatedSlides.length) {
         const slide = updatedSlides[liveSlideIndex];
+        const resolved = resolveTranslation(slide, settings.translationLanguage);
+        const isCustom = customModeActiveRef.current;
+        const customConfig = settings.customDisplayLines;
+        const resolveCustom = (source: typeof customConfig.line1): string => {
+          if (source.type === 'original') return slide.originalText || '';
+          if (source.type === 'transliteration') return slide.transliteration || '';
+          if (source.type === 'translation') {
+            if (source.lang && slide.translations) return resolveTranslation(slide, source.lang).translation || '';
+            return resolved.translation || '';
+          }
+          return '';
+        };
         window.electronAPI.sendSlide({
           songId: selectedSong.id,
           slideIndex: liveSlideIndex,
-          displayMode: displayMode,
+          displayMode: isCustom ? 'bilingual' : displayMode,
           isBlank: false,
           songTitle: selectedSong.title,
           contentType: 'song',
-          backgroundImage: selectedBackground || undefined,
-          slide: slide
+          backgroundImage: (!itemBackgroundMutedRef.current && pendingItemBackgroundRef.current) || (!itemBackgroundMutedRef.current && setlistBackgroundRef.current) || selectedBackgroundRef.current || '',
+          slideData: isCustom ? {
+            originalText: resolveCustom(customConfig.line1),
+            transliteration: resolveCustom(customConfig.line2),
+            translation: resolveCustom(customConfig.line3),
+            translationB: customConfig.line4.type !== 'none' ? resolveCustom(customConfig.line4) : '',
+            translationOverflow: '',
+            verseType: slide.verseType,
+            originalLanguage: selectedSong.originalLanguage || 'he'
+          } : {
+            originalText: slide.originalText,
+            transliteration: slide.transliteration,
+            translation: resolved.translation,
+            translationOverflow: resolved.translationOverflow,
+            verseType: slide.verseType,
+            originalLanguage: selectedSong.originalLanguage || 'he'
+          }
+        });
+        // Update live preview state
+        setLiveState({
+          slideData: { ...slide, originalLanguage: selectedSong.originalLanguage || 'he' },
+          contentType: 'song',
+          songId: selectedSong.id,
+          slideIndex: liveSlideIndex
         });
       }
 
@@ -1148,7 +1295,7 @@ const ControlPanel: React.FC = () => {
       console.error('Failed to save song slides:', error);
       alert('Failed to save slides. Please try again.');
     }
-  }, [selectedSong, loadSongs, setSetlist, liveSongId, liveSlideIndex, displayMode, selectedBackground]);
+  }, [selectedSong, loadSongs, setSetlist, liveSongId, liveSlideIndex, displayMode, settings.translationLanguage]);
 
   // Cancel inline song slide editing
   const handleCancelEditSongSlides = useCallback(() => {
@@ -1163,10 +1310,22 @@ const ControlPanel: React.FC = () => {
 
     if (isAddingNewSlide) {
       // Adding a new slide at the end
-      newSlides.push(updatedSlide);
+      newSlides.push({ ...updatedSlide, translations: {} });
     } else {
-      // Editing an existing slide
-      newSlides[slideIndex] = { ...newSlides[slideIndex], ...updatedSlide };
+      // Editing an existing slide — also update translations map to stay in sync
+      const merged = { ...newSlides[slideIndex], ...updatedSlide };
+      if (updatedSlide.translation !== undefined || updatedSlide.translationOverflow !== undefined) {
+        const translations = { ...(merged.translations || {}) };
+        const lang = settings.translationLanguage || 'en';
+        const parts = [merged.translation || '', merged.translationOverflow || ''].filter(Boolean);
+        if (parts.length > 0) {
+          translations[lang] = parts.join('\n');
+        } else {
+          delete translations[lang];
+        }
+        merged.translations = translations;
+      }
+      newSlides[slideIndex] = merged;
     }
 
     try {
@@ -1191,22 +1350,49 @@ const ControlPanel: React.FC = () => {
       // If this slide is currently live (only for edits, not new slides), re-broadcast
       if (!isAddingNewSlide && liveSongId === selectedSong.id && liveSlideIndex === slideIndex) {
         const slide = newSlides[slideIndex];
+        const resolved = resolveTranslation(slide, settings.translationLanguage);
+        const isCustom = customModeActiveRef.current;
+        const customConfig = settings.customDisplayLines;
+        const resolveCustom = (source: typeof customConfig.line1): string => {
+          if (source.type === 'original') return slide.originalText || '';
+          if (source.type === 'transliteration') return slide.transliteration || '';
+          if (source.type === 'translation') {
+            if (source.lang && slide.translations) return resolveTranslation(slide, source.lang).translation || '';
+            return resolved.translation || '';
+          }
+          return '';
+        };
         window.electronAPI.sendSlide({
           songId: selectedSong.id,
           slideIndex: slideIndex,
-          displayMode: displayMode,
+          displayMode: isCustom ? 'bilingual' : displayMode,
           isBlank: false,
           songTitle: selectedSong.title,
           contentType: 'song',
-          backgroundImage: selectedBackground || undefined,
-          slideData: {
+          backgroundImage: (!itemBackgroundMutedRef.current && pendingItemBackgroundRef.current) || (!itemBackgroundMutedRef.current && setlistBackgroundRef.current) || selectedBackgroundRef.current || '',
+          slideData: isCustom ? {
+            originalText: resolveCustom(customConfig.line1),
+            transliteration: resolveCustom(customConfig.line2),
+            translation: resolveCustom(customConfig.line3),
+            translationB: customConfig.line4.type !== 'none' ? resolveCustom(customConfig.line4) : '',
+            translationOverflow: '',
+            verseType: slide.verseType,
+            originalLanguage: selectedSong.originalLanguage || 'he'
+          } : {
             originalText: slide.originalText,
             transliteration: slide.transliteration,
-            translation: slide.translation,
-            translationOverflow: slide.translationOverflow,
+            translation: resolved.translation,
+            translationOverflow: resolved.translationOverflow,
             verseType: slide.verseType,
             originalLanguage: selectedSong.originalLanguage || 'he'
           }
+        });
+        // Update live preview state
+        setLiveState({
+          slideData: { ...slide, originalLanguage: selectedSong.originalLanguage || 'he' },
+          contentType: 'song',
+          songId: selectedSong.id,
+          slideIndex: slideIndex
         });
       }
 
@@ -1217,7 +1403,7 @@ const ControlPanel: React.FC = () => {
     } catch (error) {
       console.error('Failed to save slide:', error);
     }
-  }, [selectedSong, liveSongId, liveSlideIndex, displayMode, setSetlist, isAddingNewSlide, loadSongs, selectedBackground]);
+  }, [selectedSong, liveSongId, liveSlideIndex, displayMode, setSetlist, isAddingNewSlide, loadSongs, settings.translationLanguage]);
 
   const handleDeleteSlide = useCallback(async (slideIndex: number) => {
     if (!selectedSong || selectedSong.slides.length <= 1) {
@@ -1368,16 +1554,29 @@ const ControlPanel: React.FC = () => {
 
   // Wrapper for handlePlayAudio that stops other media first
   const handlePlayAudioWithMediaStop = useCallback((path: string, name: string) => {
-    // Stop other media types first
+    // Stop YouTube
     setYoutubeOnDisplay(false);
     setActiveYoutubeVideo(null);
     window.electronAPI.youtubeStop();
-    setActiveMedia(null);
-    window.electronAPI.clearMedia();
+
+    // If a video is playing on display, mute it instead of clearing it
+    if (activeMedia?.type === 'video') {
+      window.electronAPI.muteVideo(true);
+      window.electronAPI.setVideoVolume(0);
+      // Also mute the preview video in control panel
+      if (previewVideoRef.current) {
+        previewVideoRef.current.muted = true;
+        previewVideoRef.current.volume = 0;
+      }
+    } else {
+      setActiveMedia(null);
+      window.electronAPI.clearMedia();
+    }
 
     // Now play audio
     handlePlayAudio(path, name);
-  }, [handlePlayAudio]);
+  }, [handlePlayAudio, activeMedia]);
+
 
   const sendCurrentSlide = useCallback((song: Song | null, slideIndex: number, mode: DisplayMode, combinedIndices?: number[], contentType: 'song' | 'bible' | 'prayer' | 'presentation' = 'song') => {
     if (!song || !song.slides[slideIndex]) {
@@ -1385,8 +1584,18 @@ const ControlPanel: React.FC = () => {
       return;
     }
 
+    // Apply pending item background to state now that a slide is actually being sent
+    const isMuted = itemBackgroundMutedRef.current;
+    const itemBg = isMuted ? '' : pendingItemBackgroundRef.current;
+    setActiveItemBackground(itemBg);
+
     const slide = song.slides[slideIndex];
     const nextSlide = song.slides[slideIndex + 1] || null;
+
+    // Resolve translations from the multi-translation map
+    const lang = settings.translationLanguage;
+    const resolvedSlide = resolveTranslation(slide, lang);
+    const resolvedNext = nextSlide ? resolveTranslation(nextSlide, lang) : null;
 
     // If in original mode with combined slides, include both slides' data
     // Check length AFTER filtering to ensure we actually have multiple valid slides
@@ -1395,29 +1604,44 @@ const ControlPanel: React.FC = () => {
       : null;
     const combinedSlides = combinedSlidesRaw && combinedSlidesRaw.length > 1 ? combinedSlidesRaw : null;
 
+    // Custom mode remapping helper: resolve content for a custom line source
+    const isCustom = customModeActiveRef.current;
+    const customConfig = settings.customDisplayLines;
+    const resolveCustomContent = (source: typeof customConfig.line1, slideObj: any, resolvedObj: { translation: string; translationOverflow: string }): string => {
+      if (source.type === 'original') return slideObj.originalText || '';
+      if (source.type === 'transliteration') return slideObj.transliteration || '';
+      if (source.type === 'translation') {
+        if (source.lang && slideObj.translations) {
+          return resolveTranslation(slideObj, source.lang).translation || '';
+        }
+        return resolvedObj.translation || '';
+      }
+      return '';
+    };
+
     window.electronAPI.sendSlide({
       songId: song.id,
       slideIndex,
-      displayMode: mode,
+      displayMode: isCustom ? 'bilingual' : mode,
       isBlank: false,
       songTitle: song.title,
       contentType, // 'song', 'bible', or 'prayer' - determines which theme to apply
-      backgroundImage: selectedBackground || undefined, // Include current background (omit if empty to preserve viewer state)
+      backgroundImage: itemBg || (!isMuted && setlistBackgroundRef.current) || selectedBackgroundRef.current || '', // Per-item > setlist > global (mute suppresses both)
       slideData: (() => {
         const refHebrew = contentType === 'bible' ? (slide as any).hebrewReference : (slide as any).reference;
         const refEnglish = contentType === 'bible' ? (slide as any).reference : undefined;
-        return {
+        const base = {
           originalText: slide.originalText,
           transliteration: slide.transliteration,
-          translation: slide.translation,
-          translationOverflow: slide.translationOverflow,
+          translation: resolvedSlide.translation,
+          translationOverflow: resolvedSlide.translationOverflow,
           verseType: slide.verseType,
           originalLanguage: song.originalLanguage || 'he', // Pass language for single-language song handling
           // Prayer/Sermon theme fields (mapped from slide structure when available)
           title: (slide as any).title,
           titleTranslation: (slide as any).titleTranslation,
           subtitle: (slide as any).subtitle || slide.originalText,
-          subtitleTranslation: (slide as any).subtitleTranslation || slide.translation,
+          subtitleTranslation: (slide as any).subtitleTranslation || resolvedSlide.translation,
           description: (slide as any).description,
           descriptionTranslation: (slide as any).descriptionTranslation,
           // Reference fields - for Bible content: hebrewReference goes to 'reference', English to 'referenceEnglish'
@@ -1425,51 +1649,69 @@ const ControlPanel: React.FC = () => {
           referenceTranslation: (slide as any).referenceTranslation,
           referenceEnglish: refEnglish
         };
+        if (isCustom) {
+          return {
+            ...base,
+            originalText: resolveCustomContent(customConfig.line1, slide, resolvedSlide),
+            transliteration: resolveCustomContent(customConfig.line2, slide, resolvedSlide),
+            translation: resolveCustomContent(customConfig.line3, slide, resolvedSlide),
+            translationB: customConfig.line4.type !== 'none' ? resolveCustomContent(customConfig.line4, slide, resolvedSlide) : '',
+            translationOverflow: ''
+          };
+        }
+        return base;
       })(),
-      nextSlideData: nextSlide ? {
-        originalText: nextSlide.originalText,
-        transliteration: nextSlide.transliteration,
-        translation: nextSlide.translation,
-        translationOverflow: nextSlide.translationOverflow,
-        verseType: nextSlide.verseType,
-        // Prayer/Sermon content fields
-        title: (nextSlide as any).title,
-        titleTranslation: (nextSlide as any).titleTranslation,
-        subtitle: (nextSlide as any).subtitle,
-        subtitleTranslation: (nextSlide as any).subtitleTranslation,
-        description: (nextSlide as any).description,
-        descriptionTranslation: (nextSlide as any).descriptionTranslation,
-        reference: (nextSlide as any).reference,
-        referenceTranslation: (nextSlide as any).referenceTranslation
-      } : null,
-      combinedSlides: combinedSlides?.map(s => ({
-        originalText: s.originalText,
-        transliteration: s.transliteration,
-        translation: s.translation,
-        translationOverflow: s.translationOverflow,
-        verseType: s.verseType,
-        // Prayer/Sermon content fields
-        title: (s as any).title,
-        titleTranslation: (s as any).titleTranslation,
-        subtitle: (s as any).subtitle,
-        subtitleTranslation: (s as any).subtitleTranslation,
-        description: (s as any).description,
-        descriptionTranslation: (s as any).descriptionTranslation,
-        reference: (s as any).reference,
-        referenceTranslation: (s as any).referenceTranslation
-      })) || null
+      nextSlideData: nextSlide ? (() => {
+        const nextBase = {
+          originalText: nextSlide.originalText,
+          transliteration: nextSlide.transliteration,
+          translation: resolvedNext!.translation,
+          translationOverflow: resolvedNext!.translationOverflow,
+          verseType: nextSlide.verseType,
+          // Prayer/Sermon content fields
+          title: (nextSlide as any).title,
+          titleTranslation: (nextSlide as any).titleTranslation,
+          subtitle: (nextSlide as any).subtitle,
+          subtitleTranslation: (nextSlide as any).subtitleTranslation,
+          description: (nextSlide as any).description,
+          descriptionTranslation: (nextSlide as any).descriptionTranslation,
+          reference: (nextSlide as any).reference,
+          referenceTranslation: (nextSlide as any).referenceTranslation
+        };
+        if (isCustom) {
+          return {
+            ...nextBase,
+            originalText: resolveCustomContent(customConfig.line1, nextSlide, resolvedNext!),
+            transliteration: resolveCustomContent(customConfig.line2, nextSlide, resolvedNext!),
+            translation: resolveCustomContent(customConfig.line3, nextSlide, resolvedNext!),
+            translationB: customConfig.line4.type !== 'none' ? resolveCustomContent(customConfig.line4, nextSlide, resolvedNext!) : '',
+            translationOverflow: ''
+          };
+        }
+        return nextBase;
+      })() : null,
+      combinedSlides: combinedSlides?.map(s => {
+        const resolvedS = resolveTranslation(s, lang);
+        return {
+          originalText: s.originalText,
+          transliteration: s.transliteration,
+          translation: resolvedS.translation,
+          translationOverflow: resolvedS.translationOverflow,
+          verseType: s.verseType,
+          // Prayer/Sermon content fields
+          title: (s as any).title,
+          titleTranslation: (s as any).titleTranslation,
+          subtitle: (s as any).subtitle,
+          subtitleTranslation: (s as any).subtitleTranslation,
+          description: (s as any).description,
+          descriptionTranslation: (s as any).descriptionTranslation,
+          reference: (s as any).reference,
+          referenceTranslation: (s as any).referenceTranslation
+        };
+      }) || null
     });
-  }, [selectedBackground, selectedBibleTheme, selectedPrayerTheme]);
+  }, [selectedBibleTheme, selectedPrayerTheme, settings.translationLanguage, settings.customDisplayLines]);
 
-  // Auto-broadcast first Bible verse when chapter is loaded (enables arrow key navigation)
-  const prevBiblePassageIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (biblePassage && biblePassage.id !== prevBiblePassageIdRef.current) {
-      prevBiblePassageIdRef.current = biblePassage.id;
-      // Broadcast the first verse so it's "live" and arrow keys work
-      sendCurrentSlide(biblePassage, 0, displayMode, undefined, 'bible');
-    }
-  }, [biblePassage, displayMode, sendCurrentSlide]);
 
   // Send prayer/sermon presentation slide using prayer theme instead of textbox rendering
   const sendPrayerPresentationSlide = useCallback((
@@ -1490,7 +1732,7 @@ const ControlPanel: React.FC = () => {
 
     const slideData = {
       title: qmd.title,
-      titleTranslation: (qmd as any).titleTranslation,
+      titleTranslation: qmd.titleTranslation,
       subtitle: subtitle.subtitle,
       subtitleTranslation: subtitle.subtitleTranslation,
       description: subtitle.description,
@@ -1502,6 +1744,11 @@ const ControlPanel: React.FC = () => {
     // Update live preview state FIRST for immediate UI response (atomic update)
     setLiveState({ slideData, contentType: 'prayer', songId: presentation.id, slideIndex });
 
+    // Apply the appropriate OBS prayer theme
+    if (selectedOBSPrayerTheme) {
+      window.electronAPI.applyOBSTheme(selectedOBSPrayerTheme);
+    }
+
     // Send to display (fire and forget)
     window.electronAPI.sendSlide({
       songId: presentation.id,
@@ -1510,11 +1757,11 @@ const ControlPanel: React.FC = () => {
       isBlank: false,
       songTitle: presentation.title,
       contentType: 'prayer',
-      backgroundImage: selectedBackground || undefined,
+      backgroundImage: (!itemBackgroundMutedRef.current && pendingItemBackgroundRef.current) || (!itemBackgroundMutedRef.current && setlistBackgroundRef.current) || selectedBackgroundRef.current || '',
       activeTheme: selectedPrayerTheme,
       slideData
     });
-  }, [selectedBackground, selectedPrayerTheme]);
+  }, [selectedPrayerTheme, selectedOBSPrayerTheme]);
 
   // Combined slides for original-only mode (pairs consecutive same-verseType slides)
   // NOTE: This must be defined before handleClearMedia which depends on it
@@ -1651,6 +1898,8 @@ const ControlPanel: React.FC = () => {
       setOnlineConnected(false);
       setRoomPin(null);
       setViewerCount(0);
+      setMidiBridgeConnected(false);
+      setMidiControlEnabled(true);
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -1694,8 +1943,16 @@ const ControlPanel: React.FC = () => {
     }
   }, [combinedSlidesData, selectedSong, isBlank, currentSlideIndex, displayMode, currentContentType, sendCurrentSlide]);
 
-  const openDisplay = async (displayId: number, type: 'viewer' | 'stage') => {
-    await window.electronAPI.openDisplayWindow(displayId, type);
+  const openDisplay = async (displayId: number, type: DisplayAssignedType, deviceId?: string, audioDeviceId?: string) => {
+    // Apply selected themes before opening so DisplayManager has them for sendInitialState
+    if (isViewerLike(type)) {
+      if (selectedTheme) applyViewerTheme(selectedTheme);
+      if (selectedBibleTheme) applyBibleThemeCallback(selectedBibleTheme);
+      if (selectedPrayerTheme) applyPrayerThemeCallback(selectedPrayerTheme);
+    } else if (type === 'stage') {
+      if (selectedStageTheme) applyStageTheme(selectedStageTheme);
+    }
+    await window.electronAPI.openDisplayWindow(displayId, type, deviceId, audioDeviceId);
     loadDisplays();
   };
 
@@ -1871,8 +2128,48 @@ const ControlPanel: React.FC = () => {
     sendCurrentSlide(song, firstOriginalIndex, displayMode, originalIndices, currentContentType);
   }, [combinedSlidesData, sendCurrentSlide, displayMode, currentContentType]);
 
+  // Helper to navigate presentation slides by arrow keys
+  const goToPresentationSlide = useCallback((idx: number, presOverride?: Presentation) => {
+    const pres = presOverride || selectedPresentation;
+    if (!pres || idx < 0 || idx >= pres.slides.length) return;
+    const slide = pres.slides[idx];
+    // Stop auto-play cycling when user/MIDI manually navigates to a specific slide
+    if (autoPlayActiveRef.current) {
+      autoPlayActiveRef.current = false;
+      setAutoPlayActive(false);
+      setAutoPlayPresentation(null);
+    }
+    setIsBlank(false);
+    setCurrentPresentationSlideIndex(idx);
+
+    // Prayer/sermon presentations use the prayer theme renderer
+    if (pres.quickModeData) {
+      sendPrayerPresentationSlide(pres, idx, displayMode);
+      return;
+    }
+
+    setLiveState({ slideData: slide, contentType: 'presentation', songId: pres.id, slideIndex: idx });
+    window.electronAPI.sendSlide({
+      songId: pres.id,
+      slideIndex: idx,
+      displayMode: 'bilingual',
+      isBlank: false,
+      songTitle: pres.title,
+      presentationSlide: slide,
+      backgroundImage: (!itemBackgroundMutedRef.current && pendingItemBackgroundRef.current) || (!itemBackgroundMutedRef.current && setlistBackgroundRef.current) || selectedBackgroundRef.current || ''
+    });
+  }, [selectedPresentation, displayMode, sendPrayerPresentationSlide]);
+
   // Memoized nextSlide - uses selectedSongRef to avoid dependency on selectedSong
   const nextSlide = useCallback(() => {
+    // Handle presentation navigation (including prayer/sermon quickMode)
+    if ((currentContentType === 'presentation' || currentContentType === 'prayer') && selectedPresentation) {
+      if (currentPresentationSlideIndex < selectedPresentation.slides.length - 1) {
+        goToPresentationSlide(currentPresentationSlideIndex + 1);
+      }
+      return;
+    }
+
     const song = selectedSongRef.current;
     if (!song) return;
 
@@ -1891,10 +2188,18 @@ const ControlPanel: React.FC = () => {
     } else if (currentSlideIndex < song.slides.length - 1) {
       goToSlide(currentSlideIndex + 1);
     }
-  }, [displayMode, combinedSlidesData, selectedCombinedIndex, selectCombinedSlide, currentSlideIndex, goToSlide, arrangementState]);
+  }, [currentContentType, selectedPresentation, currentPresentationSlideIndex, goToPresentationSlide, displayMode, combinedSlidesData, selectedCombinedIndex, selectCombinedSlide, currentSlideIndex, goToSlide, arrangementState]);
 
   // Memoized prevSlide - uses selectedSongRef to avoid dependency on selectedSong
   const prevSlide = useCallback(() => {
+    // Handle presentation navigation (including prayer/sermon quickMode)
+    if ((currentContentType === 'presentation' || currentContentType === 'prayer') && selectedPresentation) {
+      if (currentPresentationSlideIndex > 0) {
+        goToPresentationSlide(currentPresentationSlideIndex - 1);
+      }
+      return;
+    }
+
     if (!selectedSongRef.current) return;
 
     // If arrangement is active (not in edit mode, but arrangement selected), use arrangement navigation
@@ -1912,7 +2217,7 @@ const ControlPanel: React.FC = () => {
     } else if (currentSlideIndex > 0) {
       goToSlide(currentSlideIndex - 1);
     }
-  }, [displayMode, combinedSlidesData, selectedCombinedIndex, selectCombinedSlide, currentSlideIndex, goToSlide, arrangementState]);
+  }, [currentContentType, selectedPresentation, currentPresentationSlideIndex, goToPresentationSlide, displayMode, combinedSlidesData, selectedCombinedIndex, selectCombinedSlide, currentSlideIndex, goToSlide, arrangementState]);
 
   // Memoized selectSlide - uses selectedSongRef to avoid dependency on selectedSong
   const selectSlide = useCallback((index: number) => {
@@ -1938,7 +2243,7 @@ const ControlPanel: React.FC = () => {
       if (newBlankState) {
         window.electronAPI.sendBlank();
         setLiveState({ slideData: null, contentType: null, songId: null, slideIndex: 0 });
-      } else if (song) {
+      } else if (song && currentSlideIndex < song.slides.length) {
         // Update live preview data (atomic update)
         const slide = song.slides[currentSlideIndex];
         const slideData = currentContentType === 'bible' ? {
@@ -1954,7 +2259,29 @@ const ControlPanel: React.FC = () => {
     });
   }, [currentSlideIndex, displayMode, currentContentType, sendCurrentSlide]);
 
+  // Jump to a song section by keyboard shortcut key
+  const handleJumpToSection = useCallback((key: string) => {
+    const song = selectedSongRef.current;
+    if (!song?.slides?.length) return;
+    const candidates = SECTION_KEY_MAP[key];
+    if (!candidates) return;
+    const ranges = getSectionRanges(song.slides);
+    for (const candidate of candidates) {
+      const range = ranges.get(candidate);
+      if (range) {
+        goToSlide(range.start);
+        return;
+      }
+    }
+  }, [goToSlide]);
+
   // Keyboard shortcuts hook
+  // Keyboard shortcut display mode setter also resets custom mode
+  const setDisplayModeFromKeyboard = useCallback((mode: DisplayMode) => {
+    setDisplayMode(mode);
+    setCustomModeActive(false);
+  }, []);
+
   useKeyboardShortcuts(
     {
       nextSlide,
@@ -1962,12 +2289,20 @@ const ControlPanel: React.FC = () => {
       toggleBlank,
       setShowKeyboardHelp,
       setShowQuickSlideModal,
-      setDisplayMode,
+      setDisplayMode: setDisplayModeFromKeyboard,
       setIsBlank,
-      setLiveState
+      setLiveState,
+      onJumpToSection: handleJumpToSection
     },
-    { displayMode, isRTL, disabled: showSettings || showPrayerEditor || showSongEditor || showSlideEditor || showQuickSlideModal }
+    { displayMode, isRTL, disabled: isHidden || showSettings || showPrayerEditor || showSongEditor || showSlideEditor || showQuickSlideModal, hasSong: !!selectedSong }
   );
+
+  // Immediate auto-play stop: sets ref + state + clears presentation in one call
+  const stopAutoPlay = useCallback(() => {
+    autoPlayActiveRef.current = false;
+    setAutoPlayActive(false);
+    setAutoPlayPresentation(null);
+  }, []);
 
   // Remote Control hook - handles state sync and command processing
   useRemoteControl(
@@ -1994,12 +2329,14 @@ const ControlPanel: React.FC = () => {
       youtubePlaying,
       youtubeCurrentTime,
       youtubeDuration,
-      songs
+      songs,
+      translationLanguage: settings.translationLanguage
     },
     {
       nextSlide,
       prevSlide,
       goToSlide,
+      goToPresentationSlide,
       toggleBlank,
       selectCombinedSlide,
       sendCurrentSlide,
@@ -2024,7 +2361,15 @@ const ControlPanel: React.FC = () => {
       setYoutubeOnDisplay,
       setActiveYoutubeVideo,
       setYoutubeCurrentTime,
-      setYoutubeDuration
+      setYoutubeDuration,
+      setAutoPlayActive,
+      setAutoPlayPresentation,
+      stopAutoPlay,
+      setVideoLoop,
+      videoLoopRef,
+      setActivePlaylistId,
+      setActivePlaylistIndex,
+      setActivePlaylistOrder
     },
     {
       audioRef,
@@ -2044,7 +2389,7 @@ const ControlPanel: React.FC = () => {
 
   // Add presentation to setlist
   const addPresentationToSetlist = useCallback((presentation: Presentation) => {
-    setSetlist(prev => [...prev, { id: crypto.randomUUID(), type: 'presentation', presentation }]);
+    setSetlist(prev => [...prev, { id: crypto.randomUUID(), type: 'presentation', presentation, title: presentation.title }]);
   }, []);
 
   // Presentation item callbacks for memoized PresentationItem component
@@ -2189,7 +2534,7 @@ const ControlPanel: React.FC = () => {
         return;
       }
 
-      const url = type === 'viewer'
+      const url = isViewerLike(type)
         ? `https://solucast.app/viewer?room=${publicRoom.slug}`
         : `https://solucast.app/stage-monitor?room=${publicRoom.slug}`;
 
@@ -2291,6 +2636,7 @@ const ControlPanel: React.FC = () => {
         savedSetlist = await window.electronAPI.updateSetlist(currentSetlistId, {
           name,
           venue: venue || undefined,
+          background: setlistBackground || undefined,
           items: setlist
         });
       } else {
@@ -2298,6 +2644,7 @@ const ControlPanel: React.FC = () => {
         savedSetlist = await window.electronAPI.createSetlist({
           name,
           venue: venue || undefined,
+          background: setlistBackground || undefined,
           items: setlist
         });
       }
@@ -2309,7 +2656,7 @@ const ControlPanel: React.FC = () => {
         await loadSavedSetlists();
       }
 
-      updateSavedSnapshot(setlist);
+      updateSavedSnapshot(setlist, setlistBackground);
       setShowSaveModal(false);
 
       // If there was a pending action (load/clear), proceed with it now that we've saved
@@ -2334,6 +2681,7 @@ const ControlPanel: React.FC = () => {
     try {
       const savedSetlist = await window.electronAPI.updateSetlist(currentSetlistId, {
         name: currentSetlistName,
+        background: setlistBackground || undefined,
         items: setlist
       });
 
@@ -2341,7 +2689,7 @@ const ControlPanel: React.FC = () => {
         await loadSavedSetlists();
       }
 
-      updateSavedSnapshot(setlist);
+      updateSavedSnapshot(setlist, setlistBackground);
     } catch (error) {
       console.error('Failed to quick save setlist:', error);
     }
@@ -2359,6 +2707,10 @@ const ControlPanel: React.FC = () => {
   // clearSetlistDirect must be defined first as other functions depend on it
   const clearSetlistDirect = useCallback(() => {
     clearSetlistFromContext();
+    itemBackgroundMutedRef.current = false;
+    setItemBackgroundMuted(false);
+    pendingItemBackgroundRef.current = '';
+    setActiveItemBackground('');
     setShowUnsavedWarning(false);
     setPendingAction(null);
   }, [clearSetlistFromContext]);
@@ -2392,7 +2744,12 @@ const ControlPanel: React.FC = () => {
     setSetlist(validatedItems);
     setCurrentSetlistName(saved.name);
     setCurrentSetlistId(saved.id);
-    updateSavedSnapshot(validatedItems);
+    setSetlistBackground(saved.background || '');
+    itemBackgroundMutedRef.current = false;
+    setItemBackgroundMuted(false);
+    pendingItemBackgroundRef.current = '';
+    setActiveItemBackground('');
+    updateSavedSnapshot(validatedItems, saved.background);
     setShowLoadModal(false);
     setShowUnsavedWarning(false);
     setPendingAction(null);
@@ -2420,6 +2777,147 @@ const ControlPanel: React.FC = () => {
       clearSetlistDirect();
     }
   }, [hasUnsavedChanges, setlist.length, clearSetlistDirect]);
+
+  const importMidi = useCallback(async () => {
+    try {
+      const result = await window.electronAPI.showOpenDialog({
+        filters: [{ name: 'MIDI Files', extensions: ['mid', 'midi'] }]
+      });
+      if (result.canceled || !result.filePaths.length) return;
+
+      const bytes = await window.electronAPI.readBinaryFile(result.filePaths[0]);
+      const payload = parseMidiSongPayload(bytes) as MidiItemPayload | null;
+      if (!payload) {
+        alert('No data found in this MIDI file.\nOnly MIDI files exported from SoluCast contain embedded data.');
+        return;
+      }
+
+      const itemType = payload.itemType || 'song';
+
+      if (itemType === 'song' || itemType === 'bible') {
+        // Song/Bible import — existing logic
+        const existingSong = await window.electronAPI.getSongByTitle(payload.title);
+        let song: any;
+
+        const songData = {
+          title: payload.title,
+          slides: payload.slides,
+          ...(payload.author && { author: payload.author }),
+          ...(payload.originalLanguage && { originalLanguage: payload.originalLanguage }),
+          ...(payload.tags?.length && { tags: payload.tags }),
+        };
+
+        if (existingSong) {
+          song = await window.electronAPI.updateSong(existingSong.id, songData);
+        } else {
+          song = await window.electronAPI.createSong(songData);
+        }
+
+        await loadSongs();
+
+        const setlistType = itemType === 'bible' ? 'bible' : 'song';
+        setSetlist(prev => {
+          const existingIndex = prev.findIndex(
+            item => item.type === setlistType && item.song?.id === song.id
+          );
+          if (existingIndex >= 0) {
+            return prev.map((item, i) =>
+              i === existingIndex && item.type === setlistType
+                ? { ...item, song, ...(payload.background && { background: payload.background }) }
+                : item
+            );
+          } else {
+            return [...prev, {
+              id: crypto.randomUUID(),
+              type: setlistType,
+              song,
+              ...(itemType === 'bible' && { title: payload.title }),
+              ...(payload.background && { background: payload.background }),
+            }];
+          }
+        });
+
+        alert(`${itemType === 'bible' ? 'Bible passage' : 'Song'} "${payload.title}" ${existingSong ? 'updated' : 'imported'} successfully!`);
+      } else if (itemType === 'presentation') {
+        // Presentation import
+        const presData = {
+          title: payload.title,
+          slides: payload.presentationSlides || [],
+          ...(payload.quickModeData && { quickModeData: payload.quickModeData }),
+        };
+
+        // Check if presentation exists by title
+        const allPres = await window.electronAPI.getPresentations();
+        const existingPres = allPres.find((p: any) => p.title === payload.title);
+        let pres: any;
+
+        if (existingPres) {
+          pres = await window.electronAPI.updatePresentation(existingPres.id, presData);
+        } else {
+          pres = await window.electronAPI.createPresentation(presData);
+        }
+
+        setSetlist(prev => {
+          const existingIndex = prev.findIndex(
+            item => item.type === 'presentation' && item.presentation?.id === pres.id
+          );
+          if (existingIndex >= 0) {
+            return prev.map((item, i) =>
+              i === existingIndex
+                ? { ...item, presentation: pres, ...(payload.background && { background: payload.background }) }
+                : item
+            );
+          } else {
+            return [...prev, {
+              id: crypto.randomUUID(),
+              type: 'presentation',
+              presentation: pres,
+              title: pres.title,
+              ...(payload.background && { background: payload.background }),
+            }];
+          }
+        });
+
+        loadPresentations();
+        alert(`Presentation "${payload.title}" ${existingPres ? 'updated' : 'imported'} successfully!`);
+      } else {
+        // Other item types (media, countdown, youtube, etc.)
+        // Build a setlist item from payload data
+        const newItem: any = {
+          id: crypto.randomUUID(),
+          type: itemType,
+          title: payload.title,
+          ...(payload.background && { background: payload.background }),
+        };
+
+        if (itemType === 'media') {
+          newItem.mediaType = payload.mediaType;
+          newItem.mediaPath = payload.mediaPath;
+          newItem.mediaDuration = payload.mediaDuration;
+          newItem.mediaName = payload.mediaName;
+        } else if (itemType === 'countdown') {
+          newItem.countdownTime = payload.countdownTime;
+          newItem.countdownMessage = payload.countdownMessage;
+        } else if (itemType === 'youtube') {
+          newItem.videoId = payload.youtubeVideoId;
+          newItem.youtubeTitle = payload.youtubeTitle;
+        } else if (itemType === 'announcement') {
+          newItem.text = payload.announcementText;
+        } else if (itemType === 'messages') {
+          newItem.messages = payload.messages;
+          newItem.interval = payload.messagesInterval;
+        } else if (itemType === 'audioPlaylist') {
+          newItem.audioPlaylist = payload.audioPlaylist;
+        }
+
+        setSetlist(prev => [...prev, newItem]);
+        alert(`${itemType} "${payload.title}" imported to setlist!`);
+      }
+    } catch (error) {
+      console.error('Failed to import MIDI:', error);
+      alert(`Failed to import MIDI file: ${error}`);
+    }
+  }, [loadSongs, loadPresentations]);
 
   const confirmUnsavedAction = useCallback(() => {
     if (!pendingAction) return;
@@ -2465,7 +2963,7 @@ const ControlPanel: React.FC = () => {
         goToSlide(slideIndex);
       }
     }, [goToSlide]),
-    enabled: !!selectedSong && !showQuickSlideModal && !showSongEditor && !showPrayerEditor && !showSlideEditor
+    enabled: !isHidden && !!selectedSong && !showQuickSlideModal && !showSongEditor && !showPrayerEditor && !showSlideEditor
   });
 
   // Load Bible books when switching to Bible panel
@@ -2521,7 +3019,7 @@ const ControlPanel: React.FC = () => {
   // --- Hoisted callbacks for always-visible components (prevents memo-busting inline arrows) ---
 
   // HeaderBar callbacks
-  const handleCreateTheme = useCallback((themeType: 'songs' | 'bible' | 'prayer' | 'stage' | 'obs-songs' | 'obs-bible' | 'obs-prayer') => {
+  const handleCreateTheme = useCallback((themeType: 'songs' | 'bible' | 'prayer' | 'stage' | 'obs-songs' | 'obs-bible' | 'obs-prayer' | 'dual-translation') => {
     setShowThemePanel(false);
     const routes: Record<string, string> = {
       'songs': '/theme-editor?new=true',
@@ -2531,11 +3029,12 @@ const ControlPanel: React.FC = () => {
       'obs-songs': '/obs-songs-theme-editor?new=true',
       'obs-bible': '/obs-bible-theme-editor?new=true',
       'obs-prayer': '/obs-prayer-theme-editor?new=true',
+      'dual-translation': '/dual-translation-theme-editor?new=true',
     };
     if (routes[themeType]) navigate(routes[themeType]);
   }, [navigate]);
 
-  const handleEditTheme = useCallback((themeType: 'songs' | 'bible' | 'prayer' | 'stage' | 'obs-songs' | 'obs-bible' | 'obs-prayer', themeId: string) => {
+  const handleEditTheme = useCallback((themeType: 'songs' | 'bible' | 'prayer' | 'stage' | 'obs-songs' | 'obs-bible' | 'obs-prayer' | 'dual-translation', themeId: string) => {
     setShowThemePanel(false);
     const routes: Record<string, string> = {
       'songs': `/theme-editor?id=${themeId}`,
@@ -2545,11 +3044,19 @@ const ControlPanel: React.FC = () => {
       'obs-songs': `/obs-songs-theme-editor?id=${themeId}`,
       'obs-bible': `/obs-bible-theme-editor?id=${themeId}`,
       'obs-prayer': `/obs-prayer-theme-editor?id=${themeId}`,
+      'dual-translation': `/dual-translation-theme-editor?id=${themeId}`,
     };
     if (routes[themeType]) navigate(routes[themeType]);
   }, [navigate]);
 
   const handleShowAuthModal = useCallback(() => setShowAuthModal(true), []);
+  const handleToggleMidiControl = useCallback(() => {
+    setMidiControlEnabled(prev => {
+      const next = !prev;
+      window.electronAPI.setMidiControlEnabled(next);
+      return next;
+    });
+  }, []);
   const handleNavigateToSettings = useCallback(() => setShowSettings(true), []);
   const handleCloseSettings = useCallback(() => setShowSettings(false), []);
   const handleControlDisplayChange = useCallback(async (displayId: number) => {
@@ -2557,26 +3064,14 @@ const ControlPanel: React.FC = () => {
     if (success) setControlDisplayId(displayId);
   }, []);
   const handleIdentifyDisplay = useCallback((displayId: number) => window.electronAPI.identifyDisplays(displayId), []);
-  const handleToggleOBSServer = useCallback(async () => {
-    try {
-      if (obsServerRunning) {
-        await window.electronAPI.stopOBSServer();
-        setObsServerRunning(false);
-        setObsServerUrl(null);
-      } else {
-        const result = await window.electronAPI.startOBSServer();
-        if (result.success) {
-          setObsServerRunning(true);
-          setObsServerUrl(result.url ?? null);
-        }
-      }
-    } catch (err) {
-      console.error('[OBS Server] Error:', err);
-    }
-  }, [obsServerRunning]);
-
   // SongsPanel callback
-  const handleSelectSongForPanel = useCallback((s: any) => selectSong(s, 'song', false), [selectSong]);
+  const handleSelectSongForPanel = useCallback((s: any) => {
+    pendingItemBackgroundRef.current = '';
+    itemBackgroundMutedRef.current = false;
+    setItemBackgroundMuted(false);
+    setActiveItemBackground('');
+    selectSong(s, 'song', false);
+  }, [selectSong]);
 
   // PresentationsPanel callback
   const handleNewPresentation = useCallback(() => setShowTemplateModal(true), []);
@@ -2613,9 +3108,52 @@ const ControlPanel: React.FC = () => {
     window.electronAPI.youtubeStop();
   }, []);
 
+  // Item background handlers
+  const handleSetItemBackground = useCallback((itemId: string, background: string) => {
+    setSetlist(prev => prev.map(item =>
+      item.id === itemId ? { ...item, background: background || undefined } : item
+    ));
+    // If setting background for the currently selected song, update the pending ref
+    // so the next sendSlide uses it without needing to re-click the song
+    const currentSong = selectedSongRef.current;
+    const matchingItem = setlist.find(i =>
+      (i.type === 'song' || i.type === 'bible') && i.song?.id === currentSong?.id && i.id === itemId
+    );
+    if (matchingItem) {
+      pendingItemBackgroundRef.current = background || '';
+      if (background) {
+        itemBackgroundMutedRef.current = false;
+        setItemBackgroundMuted(false);
+      }
+    }
+  }, [setlist]);
+
+  const handleApplyItemBackground = useCallback((item: ContextSetlistItem) => {
+    // Store in ref only — don't update state yet so live preview doesn't change.
+    // The state (and live preview) will update when a slide is actually sent to display.
+    pendingItemBackgroundRef.current = item.background || '';
+    // Preserve the mute state across item switches — the user must explicitly
+    // click the toggle to unmute. This way muting on Song1 stays muted on Song3.
+  }, []);
+
+  const handleToggleItemBackground = useCallback(() => {
+    const newMuted = !itemBackgroundMutedRef.current;
+    itemBackgroundMutedRef.current = newMuted;
+    setItemBackgroundMuted(newMuted);
+    // Immediately update the viewer display
+    // Muting suppresses both per-item AND setlist backgrounds, falling back to global only
+    const bg = newMuted ? selectedBackgroundRef.current : (pendingItemBackgroundRef.current || setlistBackgroundRef.current || selectedBackgroundRef.current);
+    setActiveItemBackground(newMuted ? '' : pendingItemBackgroundRef.current);
+    window.electronAPI.setBackground(bg);
+  }, []);
+
   // LivePreviewPanel callbacks
   const handleVideoTimeUpdate = useCallback((currentTime: number, duration: number) => {
-    setVideoStatus(prev => ({ ...prev, currentTime, duration }));
+    const now = Date.now();
+    if (now - lastVideoTimeUpdateRef.current >= TIME_UPDATE_THROTTLE_MS) {
+      lastVideoTimeUpdateRef.current = now;
+      setVideoStatus(prev => ({ ...prev, currentTime, duration }));
+    }
   }, []);
   const handleVideoPlay = useCallback(() => {
     setVideoStatus(prev => ({ ...prev, isPlaying: true }));
@@ -2628,17 +3166,52 @@ const ControlPanel: React.FC = () => {
   const handleVideoSeeked = useCallback((currentTime: number) => {
     window.electronAPI.seekVideo(currentTime);
   }, []);
+  const handlePreviewVideoEnded = useCallback(() => {
+    if (videoLoopRef.current) {
+      const video = previewVideoRef.current;
+      if (video) {
+        video.currentTime = 0;
+        video.play().catch(console.error);
+      }
+      window.electronAPI.seekVideo(0);
+      window.electronAPI.resumeVideo();
+      setVideoStatus(prev => ({ ...prev, currentTime: 0, isPlaying: true }));
+    } else {
+      setVideoStatus(prev => ({ ...prev, isPlaying: false, currentTime: 0 }));
+    }
+  }, []);
+
+  const handleToggleVideoLoop = useCallback(() => {
+    setVideoLoop(prev => {
+      const newLoop = !prev;
+      videoLoopRef.current = newLoop;
+      window.electronAPI.setVideoLoop(newLoop);
+      return newLoop;
+    });
+  }, []);
 
   // SlideControlButtons callbacks (for LivePreviewPanel)
-  const handleToggleDisplayMode = useCallback(() => {
-    const newMode = displayMode === 'bilingual' ? 'original' : 'bilingual';
+  const handleSetDisplayMode = useCallback((mode: 'bilingual' | 'original' | 'custom') => {
+    let newMode: DisplayMode;
+    let newCustom: boolean;
+    if (mode === 'custom') {
+      newMode = 'bilingual';
+      newCustom = true;
+    } else {
+      newMode = mode;
+      newCustom = false;
+    }
     setDisplayMode(newMode);
+    setCustomModeActive(newCustom);
 
     // Re-send current slide with new display mode after a brief delay to ensure state is updated
     const song = selectedSongRef.current;
-    if (song && !isBlank && currentSlideIndex !== null) {
+    if (song && !isBlank && currentSlideIndex !== null && currentSlideIndex < song.slides.length) {
       // Use setTimeout to ensure displayMode state has been updated before re-sending
       setTimeout(() => {
+        // Re-check bounds inside setTimeout since state may have changed
+        if (currentSlideIndex >= song.slides.length) return;
+
         let combinedIndices: number[] | undefined;
         if (newMode === 'original' && combinedSlidesData) {
           const combinedIdx = combinedSlidesData.originalToCombined.get(currentSlideIndex);
@@ -2660,7 +3233,56 @@ const ControlPanel: React.FC = () => {
         sendCurrentSlide(song, currentSlideIndex, newMode, combinedIndices, currentContentType);
       }, 0);
     }
-  }, [displayMode, isBlank, currentSlideIndex, combinedSlidesData, currentContentType, sendCurrentSlide]);
+  }, [isBlank, currentSlideIndex, combinedSlidesData, currentContentType, sendCurrentSlide]);
+
+  const handleOpenCustomConfig = useCallback(() => {
+    setShowCustomDisplayModal(true);
+  }, []);
+
+  // Re-send current slide when translation language changes
+  const translationLanguageRef = useRef(settings.translationLanguage);
+  useEffect(() => {
+    if (translationLanguageRef.current === settings.translationLanguage) return;
+    translationLanguageRef.current = settings.translationLanguage;
+    const song = selectedSongRef.current;
+    if (song && !isBlank && currentSlideIndex < song.slides.length) {
+      let combinedIndices: number[] | undefined;
+      if (displayMode === 'original' && combinedSlidesData) {
+        const combinedIdx = combinedSlidesData.originalToCombined.get(currentSlideIndex);
+        if (combinedIdx !== undefined) {
+          combinedIndices = combinedSlidesData.combinedToOriginal.get(combinedIdx);
+        }
+      }
+      sendCurrentSlide(song, currentSlideIndex, displayMode, combinedIndices, currentContentType);
+    }
+  }, [settings.translationLanguage, isBlank, currentSlideIndex, displayMode, currentContentType, combinedSlidesData, sendCurrentSlide]);
+
+  // Re-send current slide when custom display config changes (while custom mode is active)
+  const customDisplayLinesRef = useRef(settings.customDisplayLines);
+  useEffect(() => {
+    if (customDisplayLinesRef.current === settings.customDisplayLines) return;
+    customDisplayLinesRef.current = settings.customDisplayLines;
+    if (!customModeActive) return;
+    const song = selectedSongRef.current;
+    if (song && !isBlank && currentSlideIndex < song.slides.length) {
+      let combinedIndices: number[] | undefined;
+      if (displayMode === 'original' && combinedSlidesData) {
+        const combinedIdx = combinedSlidesData.originalToCombined.get(currentSlideIndex);
+        if (combinedIdx !== undefined) {
+          combinedIndices = combinedSlidesData.combinedToOriginal.get(combinedIdx);
+        }
+      }
+      sendCurrentSlide(song, currentSlideIndex, displayMode, combinedIndices, currentContentType);
+    }
+  }, [settings.customDisplayLines, customModeActive, isBlank, currentSlideIndex, displayMode, currentContentType, combinedSlidesData, sendCurrentSlide]);
+
+  const handleSetSetlistBackground = useCallback((background: string) => {
+    setSetlistBackground(background || '');
+    // Immediately push to display if no per-item bg is taking priority
+    if (!itemBackgroundMutedRef.current && !pendingItemBackgroundRef.current) {
+      window.electronAPI.setBackground(background || selectedBackgroundRef.current);
+    }
+  }, [setSetlistBackground]);
 
   const handleToggleBackgroundDropdown = useCallback(() => {
     setShowBackgroundDropdown(prev => !prev);
@@ -2668,12 +3290,20 @@ const ControlPanel: React.FC = () => {
 
   const handleSelectBackground = useCallback((value: string) => {
     setSelectedBackground(value);
+    pendingItemBackgroundRef.current = '';
+    itemBackgroundMutedRef.current = false;
+    setItemBackgroundMuted(false);
+    setActiveItemBackground('');
     handleSetBackground(value);
     setShowBackgroundDropdown(false);
   }, [handleSetBackground]);
 
   const handleClearBackground = useCallback(() => {
     setSelectedBackground('');
+    pendingItemBackgroundRef.current = '';
+    itemBackgroundMutedRef.current = false;
+    setItemBackgroundMuted(false);
+    setActiveItemBackground('');
     handleSetBackground('');
   }, [handleSetBackground]);
 
@@ -2723,7 +3353,8 @@ const ControlPanel: React.FC = () => {
           displayMode: 'bilingual',
           isBlank: false,
           songTitle: presentation.title,
-          presentationSlide: firstSlide
+          presentationSlide: firstSlide,
+          backgroundImage: (!itemBackgroundMutedRef.current && pendingItemBackgroundRef.current) || (!itemBackgroundMutedRef.current && setlistBackgroundRef.current) || selectedBackgroundRef.current || ''
         });
       }
     } else if (!active) {
@@ -2757,41 +3388,40 @@ const ControlPanel: React.FC = () => {
     return selectedPresentation?.slides[currentPresentationSlideIndex] || null;
   }, [selectedPresentation?.slides, currentPresentationSlideIndex]);
 
-  // Compute prayer slide data for live preview
-  const currentPrayerSlideData = useMemo(() => {
-    if (!selectedPresentation?.quickModeData) return null;
-    const qmd = selectedPresentation.quickModeData;
-    if (qmd.type !== 'prayer' && qmd.type !== 'sermon') return null;
-    const subtitle = qmd.subtitles?.[currentPresentationSlideIndex];
-    if (!subtitle) return null;
-    return {
-      title: qmd.title,
-      titleTranslation: (qmd as any).titleTranslation,
-      subtitle: subtitle.subtitle,
-      subtitleTranslation: subtitle.subtitleTranslation,
-      description: subtitle.description,
-      descriptionTranslation: subtitle.descriptionTranslation,
-      reference: subtitle.bibleRef?.hebrewReference || subtitle.bibleRef?.reference,
-      referenceTranslation: subtitle.bibleRef?.reference
-    };
-  }, [selectedPresentation, currentPresentationSlideIndex]);
+  // Whether line4 is active in custom display mode
+  const customLine4Active = customModeActive && settings.customDisplayLines.line4.type !== 'none';
+  const wasFourLinePatchedRef = useRef(false);
+  // Refs for theme values so the effect doesn't depend on theme objects
+  // (applyViewerTheme updates selectedTheme, which would cause an infinite loop)
+  const selectedThemeRef = useRef(selectedTheme);
+  selectedThemeRef.current = selectedTheme;
+  const selectedBibleThemeRef = useRef(selectedBibleTheme);
+  selectedBibleThemeRef.current = selectedBibleTheme;
+  const selectedPrayerThemeRef = useRef(selectedPrayerTheme);
+  selectedPrayerThemeRef.current = selectedPrayerTheme;
+  const selectedDualTranslationThemeRef = useRef(selectedDualTranslationTheme);
+  selectedDualTranslationThemeRef.current = selectedDualTranslationTheme;
 
-  // Memoize slideData for SlidePreview to prevent unnecessary re-renders
-  const memoizedSlideData = useMemo(() => {
-    if (currentContentType === 'prayer') {
-      return currentPrayerSlideData;
+  // Apply dual translation theme to viewer displays when line4 becomes active/inactive
+  useEffect(() => {
+    if (customLine4Active) {
+      // Use the dedicated dual translation theme when 4-line mode is active
+      // Important: use applyDualTranslationTheme (not applyViewerTheme) to avoid
+      // clobbering selectedTheme state and corrupting the persisted viewer theme ID
+      const dualTheme = selectedDualTranslationThemeRef.current;
+      if (dualTheme) {
+        applyDualTranslationTheme(dualTheme);
+      }
+      wasFourLinePatchedRef.current = true;
+    } else if (wasFourLinePatchedRef.current) {
+      // Restore original theme only when transitioning away from 4-line mode
+      wasFourLinePatchedRef.current = false;
+      let baseTheme = selectedThemeRef.current;
+      if (liveContentType === 'bible' && selectedBibleThemeRef.current) baseTheme = selectedBibleThemeRef.current;
+      else if (liveContentType === 'prayer' && selectedPrayerThemeRef.current) baseTheme = selectedPrayerThemeRef.current;
+      if (baseTheme) applyViewerTheme(baseTheme);
     }
-    if (!currentSlide) return null;
-    if (currentContentType === 'bible') {
-      // For Bible content: reference = Hebrew reference, referenceEnglish = English reference
-      return {
-        ...currentSlide,
-        reference: (currentSlide as any).hebrewReference || selectedSong?.title,
-        referenceEnglish: (currentSlide as any).reference
-      };
-    }
-    return currentSlide;
-  }, [currentContentType, currentPrayerSlideData, currentSlide, selectedSong?.title]);
+  }, [customLine4Active, liveContentType, applyViewerTheme, applyDualTranslationTheme]);
 
   // Memoize theme for SlidePreview based on content type (for staged/selected content)
   const memoizedPreviewTheme = useMemo(() => {
@@ -2802,10 +3432,14 @@ const ControlPanel: React.FC = () => {
 
   // Memoize theme for live preview based on what's actually on air
   const memoizedLivePreviewTheme = useMemo(() => {
-    if (liveContentType === 'bible') return selectedBibleTheme;
-    if (liveContentType === 'prayer') return selectedPrayerTheme;
-    return selectedTheme;
-  }, [liveContentType, selectedBibleTheme, selectedPrayerTheme, selectedTheme]);
+    // When 4-line mode is active, use the dedicated dual translation theme
+    if (customLine4Active && selectedDualTranslationTheme) return selectedDualTranslationTheme;
+    let theme;
+    if (liveContentType === 'bible') theme = selectedBibleTheme;
+    else if (liveContentType === 'prayer') theme = selectedPrayerTheme;
+    else theme = selectedTheme;
+    return theme;
+  }, [liveContentType, selectedBibleTheme, selectedPrayerTheme, selectedTheme, customLine4Active, selectedDualTranslationTheme]);
 
   // Memoize presentationSlide for SlidePreview
   // For the live preview, use liveSlideData when content type is 'presentation'
@@ -2831,6 +3465,201 @@ const ControlPanel: React.FC = () => {
   // State for showing about modal from sidebar
   const [showAboutModal, setShowAboutModal] = useState(false);
 
+  // Auto-update state
+  const [updateStatus, setUpdateStatus] = useState<{ status: string; version?: string; releaseNotes?: string; progress?: number; error?: string }>({ status: 'idle' });
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const updateAvailable = updateStatus.status === 'available' || updateStatus.status === 'downloaded' || updateStatus.status === 'downloading';
+
+  useEffect(() => {
+    // Fetch initial update status
+    window.electronAPI.autoUpdate.getStatus().then(setUpdateStatus).catch(() => {});
+    // Subscribe to live status updates
+    const unsubscribe = window.electronAPI.autoUpdate.onStatus((status: any) => {
+      setUpdateStatus(status);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Memoize major child panels to avoid re-renders from unrelated state changes
+  const memoizedSetlistPanel = useMemo(() => (
+    <SetlistPanel
+      setlist={setlist}
+      currentSetlistId={currentSetlistId}
+      currentSetlistName={currentSetlistName}
+      hasUnsavedChanges={hasUnsavedChanges}
+      showSetlistMenu={showSetlistMenu}
+      setlistMenuHover={setlistMenuHover}
+      draggedSong={draggedSong}
+      isDraggingMedia={isDraggingMedia}
+      dropTargetIndex={dropTargetIndex}
+      draggedSetlistIndex={draggedSetlistIndex}
+      collapsedSections={collapsedSections}
+      expandedPlaylistIds={expandedPlaylistIds}
+      setlistMenuOpen={setlistMenuOpen}
+      hoveredMediaStopId={hoveredMediaStopId}
+      selectedSetlistMediaId={selectedSetlistMediaId}
+      selectedYoutubeItemId={selectedYoutubeItemId}
+      selectedSong={selectedSong}
+      selectedPresentation={selectedPresentation}
+      activeMedia={activeMedia}
+      activeAudio={activeAudio}
+      audioStatus={audioStatus}
+      activeToolId={activeToolId}
+      youtubeOnDisplay={youtubeOnDisplay}
+      activeYoutubeVideo={activeYoutubeVideo}
+      activePlaylistId={activePlaylistId}
+      activePlaylistIndex={activePlaylistIndex}
+      activePlaylistOrder={activePlaylistOrder}
+      autoPlayActive={autoPlayActive}
+      autoPlayInterval={autoPlayInterval}
+      currentPresentationSlideIndex={currentPresentationSlideIndex}
+      onShowSetlistMenuChange={setShowSetlistMenu}
+      onSetlistMenuHoverChange={setSetlistMenuHover}
+      onDraggedSongChange={setDraggedSong}
+      onIsDraggingMediaChange={setIsDraggingMedia}
+      onDropTargetIndexChange={setDropTargetIndex}
+      onDraggedSetlistIndexChange={setDraggedSetlistIndex}
+      onCollapsedSectionsChange={setCollapsedSections}
+      onExpandedPlaylistIdsChange={setExpandedPlaylistIds}
+      onSetlistMenuOpenChange={setSetlistMenuOpen}
+      onHoveredMediaStopIdChange={setHoveredMediaStopId}
+      onSelectedSetlistMediaIdChange={setSelectedSetlistMediaId}
+      onSelectedYoutubeItemIdChange={setSelectedYoutubeItemId}
+      onSetlistContextMenuChange={setSetlistContextMenu}
+      onSetlistChange={setSetlist}
+      onAddToSetlist={addToSetlist}
+      onRemoveFromSetlist={removeFromSetlist}
+      onTryClearSetlist={tryClearSetlist}
+      onAddSectionHeader={addSectionHeader}
+      onShowLoadModal={handleShowLoadModal}
+      onShowSaveModal={handleShowSaveModal}
+      onQuickSave={quickSaveSetlist}
+      onSelectSong={selectSong}
+      onSelectPresentation={handleSelectPresentationFromSetlist}
+      onSetSelectedSong={setSelectedSong}
+      onSetSelectedPresentation={setSelectedPresentation}
+      onSetCurrentPresentationSlideIndex={setCurrentPresentationSlideIndex}
+      onSetCurrentContentType={handleSetCurrentContentType}
+      onSetIsBlank={setIsBlank}
+      onSetLiveState={setLiveState}
+      onSendBlank={handleSendBlank}
+      onStopAllTools={stopAllTools}
+      onBroadcastToolFromSetlist={broadcastToolFromSetlist}
+      onSetActiveMedia={setActiveMedia}
+      onSetActiveAudio={setActiveAudio}
+      onSetActiveAudioSetlistId={setActiveAudioSetlistId}
+      onHandlePlayAudio={handlePlayAudioWithMediaStop}
+      onHandleDisplayMedia={handleDisplayMedia}
+      onClearMedia={handleClearMediaSetlist}
+      onStartPlaylist={startPlaylist}
+      onSetActivePlaylistId={setActivePlaylistId}
+      onSetActivePlaylistIndex={setActivePlaylistIndex}
+      onSetActivePlaylistOrder={setActivePlaylistOrder}
+      onOpenEditPlaylistModal={openEditPlaylistModal}
+      onStartEditingSong={handleStartEditingSongFromSetlist}
+      onPlayYoutubeVideo={handlePlayYoutubeVideo}
+      onStopYoutubeVideo={handleStopYoutubeVideo}
+      onSetItemBackground={handleSetItemBackground}
+      onApplyItemBackground={handleApplyItemBackground}
+      setlistBackground={setlistBackground}
+      onOpenSetlistBackgroundModal={() => setShowSetlistBackgroundModal(true)}
+      onImportMidi={importMidi}
+    />
+  ), [setlist, currentSetlistId, currentSetlistName, hasUnsavedChanges, showSetlistMenu, setlistMenuHover, draggedSong, isDraggingMedia, dropTargetIndex, draggedSetlistIndex, collapsedSections, expandedPlaylistIds, setlistMenuOpen, hoveredMediaStopId, selectedSetlistMediaId, selectedYoutubeItemId, selectedSong, selectedPresentation, activeMedia, activeAudio, audioStatus, activeToolId, youtubeOnDisplay, activeYoutubeVideo, activePlaylistId, activePlaylistIndex, activePlaylistOrder, autoPlayActive, autoPlayInterval, currentPresentationSlideIndex, setlistBackground, addToSetlist, removeFromSetlist, tryClearSetlist, addSectionHeader, handleShowLoadModal, handleShowSaveModal, quickSaveSetlist, selectSong, handleSelectPresentationFromSetlist, handleSetCurrentContentType, handleSendBlank, stopAllTools, broadcastToolFromSetlist, handlePlayAudioWithMediaStop, handleDisplayMedia, handleClearMediaSetlist, startPlaylist, openEditPlaylistModal, handleStartEditingSongFromSetlist, handlePlayYoutubeVideo, handleStopYoutubeVideo, handleSetItemBackground, handleApplyItemBackground, importMidi]);
+
+  const memoizedSongsPanel = useMemo(() => (
+    <SongsPanel
+      songs={songs}
+      selectedSong={selectedSong}
+      draggedSong={draggedSong}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
+      onSelectSong={handleSelectSongForPanel}
+      onAddToSetlist={addToSetlist}
+      onEditSong={startEditingSong}
+      onDeleteSong={deleteSongById}
+      onDragStart={handleSongDragStart}
+      onDragEnd={handleSongDragEnd}
+    />
+  ), [songs, selectedSong, draggedSong, searchQuery, handleSelectSongForPanel, addToSetlist, startEditingSong, deleteSongById, handleSongDragStart, handleSongDragEnd]);
+
+  const memoizedBiblePanel = useMemo(() => (
+    <BiblePanel
+      bibleBooks={bibleBooks}
+      selectedBibleBook={selectedBibleBook}
+      selectedBibleChapter={selectedBibleChapter}
+      bibleSlides={bibleSlides}
+      bibleLoading={bibleLoading}
+      biblePassage={biblePassage}
+      bibleSearchQuery={bibleSearchQuery}
+      onBibleBookChange={setSelectedBibleBook}
+      onBibleChapterChange={setSelectedBibleChapter}
+      onBibleSearch={handleBibleSearch}
+      onAddBibleToSetlist={addBibleToSetlist}
+    />
+  ), [bibleBooks, selectedBibleBook, selectedBibleChapter, bibleSlides, bibleLoading, biblePassage, bibleSearchQuery, handleBibleSearch, addBibleToSetlist]);
+
+  const memoizedPresentationsPanel = useMemo(() => (
+    <PresentationsPanel
+      presentations={presentations}
+      selectedPresentation={selectedPresentation}
+      presentationSearchQuery={presentationSearchQuery}
+      onSearchChange={setPresentationSearchQuery}
+      onSelectPresentation={handlePresentationSelect}
+      onAddToSetlist={addPresentationToSetlist}
+      onEditPresentation={handlePresentationEdit}
+      onDeletePresentation={handlePresentationDelete}
+      onDragStart={handlePresentationDragStart}
+      onNewPresentation={handleNewPresentation}
+    />
+  ), [presentations, selectedPresentation, presentationSearchQuery, handlePresentationSelect, addPresentationToSetlist, handlePresentationEdit, handlePresentationDelete, handlePresentationDragStart, handleNewPresentation]);
+
+  const memoizedBottomRowPanel = useMemo(() => (
+    <BottomRowPanel
+      selectedSong={selectedSong}
+      selectedPresentation={selectedPresentation}
+      displayMode={displayMode}
+      currentSlideIndex={currentSlideIndex}
+      liveSongId={liveSongId}
+      liveSlideIndex={liveSlideIndex}
+      isBlank={isBlank}
+      isRTL={isRTL}
+      contentType={currentContentType}
+      isQuickModeActive={selectedSong?.id === 'quick-slide'}
+      onQuickModeClick={handleQuickModeClick}
+      quickSlideCount={quickSlideCount}
+      quickSlideBroadcastIndex={quickSlideBroadcastIndex}
+      isAutoGenerating={isAutoGenerating}
+      onQuickSlideTextChange={handleQuickSlideTextChange}
+      onAutoGenerateQuickSlide={autoGenerateQuickSlide}
+      onBroadcastQuickSlide={parseAndBroadcastQuickSlide}
+      autoPlayActive={autoPlayActive}
+      autoPlayInterval={autoPlayInterval}
+      currentPresentationSlideIndex={currentPresentationSlideIndex}
+      combinedSlidesData={combinedSlidesData}
+      selectedCombinedIndex={selectedCombinedIndex}
+      quickSlideText={quickSlideText}
+      getVerseTypeColor={getVerseTypeColor}
+      selectSlide={selectSlide}
+      goToSlide={goToSlide}
+      selectCombinedSlide={selectCombinedSlide}
+      sendPrayerPresentationSlide={sendPrayerPresentationSlide}
+      updateQuickSlideCount={updateQuickSlideCount}
+      onSetIsBlank={setIsBlank}
+      onSetLiveState={setLiveState}
+      onSetAutoPlayActive={handleSetAutoPlayActive}
+      onSetAutoPlayInterval={setAutoPlayInterval}
+      onSetCurrentPresentationSlideIndex={setCurrentPresentationSlideIndex}
+      onSlideCodeMapChange={setSlideCodeMap}
+      onEditSlide={handleEditSlide}
+      onAddSlide={handleAddSlide}
+      arrangementState={arrangementState}
+      editingSongSlideIndex={editingSongSlideIndex}
+      onSaveSongSlides={handleSaveSongSlides}
+      onCancelEditSongSlides={handleCancelEditSongSlides}
+    />
+  ), [selectedSong, selectedPresentation, displayMode, currentSlideIndex, liveSongId, liveSlideIndex, isBlank, isRTL, currentContentType, quickSlideCount, quickSlideBroadcastIndex, isAutoGenerating, autoPlayActive, autoPlayInterval, currentPresentationSlideIndex, combinedSlidesData, selectedCombinedIndex, quickSlideText, selectSlide, goToSlide, selectCombinedSlide, sendPrayerPresentationSlide, updateQuickSlideCount, handleSetAutoPlayActive, handleEditSlide, handleAddSlide, arrangementState, editingSongSlideIndex, handleSaveSongSlides, handleCancelEditSongSlides, handleQuickModeClick, handleQuickSlideTextChange, autoGenerateQuickSlide, parseAndBroadcastQuickSlide]);
+
   return (
     <div className="control-panel" style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: colors.background.base }}>
       {/* Header in headless mode - only renders dropdown panels */}
@@ -2849,6 +3678,7 @@ const ControlPanel: React.FC = () => {
         stageMonitorThemes={stageMonitorThemes}
         bibleThemes={bibleThemes}
         prayerThemes={prayerThemes}
+        dualTranslationThemes={dualTranslationThemes}
         obsThemes={obsThemes}
         selectedOBSSongsTheme={selectedOBSSongsTheme}
         selectedOBSBibleTheme={selectedOBSBibleTheme}
@@ -2859,15 +3689,15 @@ const ControlPanel: React.FC = () => {
         selectedBibleTheme={selectedBibleTheme}
         selectedPrayerTheme={selectedPrayerTheme}
         selectedStageTheme={selectedStageTheme}
+        selectedDualTranslationTheme={selectedDualTranslationTheme}
         onShowThemePanelChange={setShowThemePanel}
         onApplyViewerTheme={applyViewerTheme}
         onApplyBibleTheme={applyBibleThemeCallback}
         onApplyPrayerTheme={applyPrayerThemeCallback}
         onApplyStageTheme={applyStageTheme}
+        onApplyDualTranslationTheme={applyDualTranslationTheme}
         onCreateTheme={handleCreateTheme}
         onEditTheme={handleEditTheme}
-        obsServerRunning={obsServerRunning}
-        obsServerUrl={obsServerUrl}
         onShowDisplayPanelChange={setShowDisplayPanel}
         onShowUserMenuChange={setShowUserMenu}
         onShowAuthModal={handleShowAuthModal}
@@ -2878,7 +3708,6 @@ const ControlPanel: React.FC = () => {
         onCloseDisplay={closeDisplay}
         onIdentifyDisplay={handleIdentifyDisplay}
         onCloseDisplayPanel={handleCloseDisplayPanel}
-        onToggleOBSServer={handleToggleOBSServer}
         onConnectOnline={connectOnline}
         onLogout={handleLogout}
         virtualDisplays={virtualDisplays}
@@ -2888,6 +3717,7 @@ const ControlPanel: React.FC = () => {
         activePublicRoom={activePublicRoom}
         onCreatePublicRoom={handleCreatePublicRoom}
         onUnlinkPublicRoom={handleUnlinkPublicRoom}
+        isStreaming={isStreaming}
       />
 
       {/* Main Content - Two Row Layout */}
@@ -2903,9 +3733,15 @@ const ControlPanel: React.FC = () => {
             authState={authState}
             themes={themes}
             selectedTheme={selectedTheme}
+            updateAvailable={updateAvailable}
+            midiBridgeConnected={midiBridgeConnected}
+            midiControlEnabled={midiControlEnabled}
+            onShowUpdateModal={() => setShowUpdateModal(true)}
             onShowDisplayPanel={() => setShowDisplayPanel(!showDisplayPanel)}
             onShowThemePanel={() => setShowThemePanel(!showThemePanel)}
             onShowAuthModal={handleShowAuthModal}
+            onShowUserMenu={() => setShowUserMenu(prev => !prev)}
+            onToggleMidiControl={handleToggleMidiControl}
             onNavigateToSettings={handleNavigateToSettings}
             onShowAboutModal={() => setShowAboutModal(true)}
           />
@@ -2925,7 +3761,7 @@ const ControlPanel: React.FC = () => {
               currentContentType={currentContentType}
               onlineConnected={onlineConnected}
               displayMode={displayMode}
-              selectedBackground={selectedBackground}
+              selectedBackground={activeItemBackground || (!itemBackgroundMuted && setlistBackground) || selectedBackground}
               liveSlideData={liveSlideData}
               memoizedLivePreviewTheme={memoizedLivePreviewTheme}
               memoizedTools={memoizedTools}
@@ -2937,17 +3773,34 @@ const ControlPanel: React.FC = () => {
               getVerseTypeColor={getVerseTypeColor}
               onYoutubeStop={handleYoutubeStop}
               onClearMedia={handleClearMedia}
+              videoLoop={videoLoop}
+              onToggleVideoLoop={handleToggleVideoLoop}
               onVideoTimeUpdate={handleVideoTimeUpdate}
               onVideoPlay={handleVideoPlay}
               onVideoPause={handleVideoPause}
               onVideoSeeked={handleVideoSeeked}
+              onVideoEnded={handlePreviewVideoEnded}
               showBackgroundDropdown={showBackgroundDropdown}
               isRTL={isRTL}
+              customModeActive={customModeActive}
               onToggleBlank={toggleBlank}
-              onToggleDisplayMode={handleToggleDisplayMode}
+              onSetDisplayMode={handleSetDisplayMode}
+              onOpenCustomConfig={handleOpenCustomConfig}
               onToggleBackgroundDropdown={handleToggleBackgroundDropdown}
               onSelectBackground={handleSelectBackground}
               onClearBackground={handleClearBackground}
+              hasItemBackground={!!activeItemBackground || !!setlistBackground || itemBackgroundMuted}
+              itemBackgroundMuted={itemBackgroundMuted}
+              onToggleItemBackground={handleToggleItemBackground}
+              assignedDisplays={assignedDisplays}
+              isStreaming={isStreaming}
+              themes={themes}
+              bibleThemes={bibleThemes}
+              prayerThemes={prayerThemes}
+              stageMonitorThemes={stageMonitorThemes}
+              liveContentType={liveContentType}
+              selectedStageTheme={selectedStageTheme}
+              obsThemes={obsThemes}
             />
           </div>
 
@@ -2961,84 +3814,7 @@ const ControlPanel: React.FC = () => {
           {/* Middle - Setlist */}
           <div style={{ width: `${setlistPanelWidth}%`, flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', overflow: 'hidden', minWidth: 0 }}>
             <React.Suspense fallback={null}>
-            <SetlistPanel
-              setlist={setlist}
-              currentSetlistId={currentSetlistId}
-              currentSetlistName={currentSetlistName}
-              hasUnsavedChanges={hasUnsavedChanges}
-              showSetlistMenu={showSetlistMenu}
-              setlistMenuHover={setlistMenuHover}
-              draggedSong={draggedSong}
-              isDraggingMedia={isDraggingMedia}
-              dropTargetIndex={dropTargetIndex}
-              draggedSetlistIndex={draggedSetlistIndex}
-              collapsedSections={collapsedSections}
-              expandedPlaylistIds={expandedPlaylistIds}
-              setlistMenuOpen={setlistMenuOpen}
-              hoveredMediaStopId={hoveredMediaStopId}
-              selectedSetlistMediaId={selectedSetlistMediaId}
-              selectedYoutubeItemId={selectedYoutubeItemId}
-              selectedSong={selectedSong}
-              selectedPresentation={selectedPresentation}
-              activeMedia={activeMedia}
-              activeAudio={activeAudio}
-              audioStatus={audioStatus}
-              activeToolId={activeToolId}
-              youtubeOnDisplay={youtubeOnDisplay}
-              activeYoutubeVideo={activeYoutubeVideo}
-              activePlaylistId={activePlaylistId}
-              activePlaylistIndex={activePlaylistIndex}
-              activePlaylistOrder={activePlaylistOrder}
-              autoPlayActive={autoPlayActive}
-              autoPlayInterval={autoPlayInterval}
-              currentPresentationSlideIndex={currentPresentationSlideIndex}
-              onShowSetlistMenuChange={setShowSetlistMenu}
-              onSetlistMenuHoverChange={setSetlistMenuHover}
-              onDraggedSongChange={setDraggedSong}
-              onIsDraggingMediaChange={setIsDraggingMedia}
-              onDropTargetIndexChange={setDropTargetIndex}
-              onDraggedSetlistIndexChange={setDraggedSetlistIndex}
-              onCollapsedSectionsChange={setCollapsedSections}
-              onExpandedPlaylistIdsChange={setExpandedPlaylistIds}
-              onSetlistMenuOpenChange={setSetlistMenuOpen}
-              onHoveredMediaStopIdChange={setHoveredMediaStopId}
-              onSelectedSetlistMediaIdChange={setSelectedSetlistMediaId}
-              onSelectedYoutubeItemIdChange={setSelectedYoutubeItemId}
-              onSetlistContextMenuChange={setSetlistContextMenu}
-              onSetlistChange={setSetlist}
-              onAddToSetlist={addToSetlist}
-              onRemoveFromSetlist={removeFromSetlist}
-              onTryClearSetlist={tryClearSetlist}
-              onAddSectionHeader={addSectionHeader}
-              onShowLoadModal={handleShowLoadModal}
-              onShowSaveModal={handleShowSaveModal}
-              onQuickSave={quickSaveSetlist}
-              onSelectSong={selectSong}
-              onSelectPresentation={handleSelectPresentationFromSetlist}
-              onSetSelectedSong={setSelectedSong}
-              onSetSelectedPresentation={setSelectedPresentation}
-              onSetCurrentPresentationSlideIndex={setCurrentPresentationSlideIndex}
-              onSetCurrentContentType={handleSetCurrentContentType}
-              onSetIsBlank={setIsBlank}
-              onSetLiveState={setLiveState}
-              onSendBlank={handleSendBlank}
-              onStopAllTools={stopAllTools}
-              onBroadcastToolFromSetlist={broadcastToolFromSetlist}
-              onSetActiveMedia={setActiveMedia}
-              onSetActiveAudio={setActiveAudio}
-              onSetActiveAudioSetlistId={setActiveAudioSetlistId}
-              onHandlePlayAudio={handlePlayAudioWithMediaStop}
-              onHandleDisplayMedia={handleDisplayMedia}
-              onClearMedia={handleClearMediaSetlist}
-              onStartPlaylist={startPlaylist}
-              onSetActivePlaylistId={setActivePlaylistId}
-              onSetActivePlaylistIndex={setActivePlaylistIndex}
-              onSetActivePlaylistOrder={setActivePlaylistOrder}
-              onOpenEditPlaylistModal={openEditPlaylistModal}
-              onStartEditingSong={handleStartEditingSongFromSetlist}
-              onPlayYoutubeVideo={handlePlayYoutubeVideo}
-              onStopYoutubeVideo={handleStopYoutubeVideo}
-            />
+            {memoizedSetlistPanel}
             </React.Suspense>
           </div>
 
@@ -3079,19 +3855,7 @@ const ControlPanel: React.FC = () => {
               {/* Songs Panel */}
               {activeResourcePanel === 'songs' && (
                 <React.Suspense fallback={<div style={{ padding: '20px', color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>Loading...</div>}>
-                  <SongsPanel
-                    songs={songs}
-                    selectedSong={selectedSong}
-                    draggedSong={draggedSong}
-                    searchQuery={searchQuery}
-                    onSearchChange={setSearchQuery}
-                    onSelectSong={handleSelectSongForPanel}
-                    onAddToSetlist={addToSetlist}
-                    onEditSong={startEditingSong}
-                    onDeleteSong={deleteSongById}
-                    onDragStart={handleSongDragStart}
-                    onDragEnd={handleSongDragEnd}
-                  />
+                  {memoizedSongsPanel}
                 </React.Suspense>
               )}
 
@@ -3160,37 +3924,14 @@ const ControlPanel: React.FC = () => {
               {/* Bible Panel */}
               {activeResourcePanel === 'bible' && (
                 <React.Suspense fallback={<div style={{ padding: '20px', color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>Loading...</div>}>
-                <BiblePanel
-                  bibleBooks={bibleBooks}
-                  selectedBibleBook={selectedBibleBook}
-                  selectedBibleChapter={selectedBibleChapter}
-                  bibleSlides={bibleSlides}
-                  bibleLoading={bibleLoading}
-                  biblePassage={biblePassage}
-                  bibleSearchQuery={bibleSearchQuery}
-                  onBibleBookChange={setSelectedBibleBook}
-                  onBibleChapterChange={setSelectedBibleChapter}
-                  onBibleSearch={handleBibleSearch}
-                  onAddBibleToSetlist={addBibleToSetlist}
-                />
+                {memoizedBiblePanel}
                 </React.Suspense>
               )}
 
               {/* Presentations Panel */}
               {activeResourcePanel === 'presentations' && (
                 <React.Suspense fallback={<div style={{ padding: '20px', color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>Loading...</div>}>
-                <PresentationsPanel
-                  presentations={presentations}
-                  selectedPresentation={selectedPresentation}
-                  presentationSearchQuery={presentationSearchQuery}
-                  onSearchChange={setPresentationSearchQuery}
-                  onSelectPresentation={handlePresentationSelect}
-                  onAddToSetlist={addPresentationToSetlist}
-                  onEditPresentation={handlePresentationEdit}
-                  onDeletePresentation={handlePresentationDelete}
-                  onDragStart={handlePresentationDragStart}
-                  onNewPresentation={handleNewPresentation}
-                />
+                {memoizedPresentationsPanel}
                 </React.Suspense>
               )}
             </div>
@@ -3206,49 +3947,7 @@ const ControlPanel: React.FC = () => {
 
         {/* Bottom Row - Slides Preview */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
-          <BottomRowPanel
-            selectedSong={selectedSong}
-            selectedPresentation={selectedPresentation}
-            displayMode={displayMode}
-            currentSlideIndex={currentSlideIndex}
-            liveSongId={liveSongId}
-            liveSlideIndex={liveSlideIndex}
-            isBlank={isBlank}
-            isRTL={isRTL}
-            contentType={currentContentType}
-            isQuickModeActive={selectedSong?.id === 'quick-slide'}
-            onQuickModeClick={handleQuickModeClick}
-            quickSlideCount={quickSlideCount}
-            quickSlideBroadcastIndex={quickSlideBroadcastIndex}
-            isAutoGenerating={isAutoGenerating}
-            onQuickSlideTextChange={handleQuickSlideTextChange}
-            onAutoGenerateQuickSlide={autoGenerateQuickSlide}
-            onBroadcastQuickSlide={parseAndBroadcastQuickSlide}
-            autoPlayActive={autoPlayActive}
-            autoPlayInterval={autoPlayInterval}
-            currentPresentationSlideIndex={currentPresentationSlideIndex}
-            combinedSlidesData={combinedSlidesData}
-            selectedCombinedIndex={selectedCombinedIndex}
-            quickSlideText={quickSlideText}
-            getVerseTypeColor={getVerseTypeColor}
-            selectSlide={selectSlide}
-            goToSlide={goToSlide}
-            selectCombinedSlide={selectCombinedSlide}
-            sendPrayerPresentationSlide={sendPrayerPresentationSlide}
-            updateQuickSlideCount={updateQuickSlideCount}
-            onSetIsBlank={setIsBlank}
-            onSetLiveState={setLiveState}
-            onSetAutoPlayActive={handleSetAutoPlayActive}
-            onSetAutoPlayInterval={setAutoPlayInterval}
-            onSetCurrentPresentationSlideIndex={setCurrentPresentationSlideIndex}
-            onSlideCodeMapChange={setSlideCodeMap}
-            onEditSlide={handleEditSlide}
-            onAddSlide={handleAddSlide}
-            arrangementState={arrangementState}
-            editingSongSlideIndex={editingSongSlideIndex}
-            onSaveSongSlides={handleSaveSongSlides}
-            onCancelEditSongSlides={handleCancelEditSongSlides}
-          />
+          {memoizedBottomRowPanel}
         </div>
       </main>
 
@@ -3317,21 +4016,6 @@ const ControlPanel: React.FC = () => {
         <NewThemeTypeModal onClose={() => setShowNewThemeModal(false)} />
         </React.Suspense>
       )}
-
-      {/* CSS for animations */}
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-        @keyframes quickModePulse {
-          0%, 100% { box-shadow: 0 0 10px #6f42c1, 0 0 20px rgba(111, 66, 193, 0.5); }
-          50% { box-shadow: 0 0 15px #6f42c1, 0 0 30px rgba(111, 66, 193, 0.7); }
-        }
-      `}</style>
 
       {/* Template Selection Modal */}
       {showTemplateModal && (
@@ -3502,16 +4186,18 @@ const ControlPanel: React.FC = () => {
       )}
 
       {/* Virtual Display Modal */}
-      <React.Suspense fallback={null}>
-      <VirtualDisplayModal
-        isOpen={showVirtualDisplayModal}
-        onClose={() => { setShowVirtualDisplayModal(false); setVirtualDisplayError(null); }}
-        onAdd={handleAddVirtualDisplay}
-        isLoading={virtualDisplayLoading}
-        error={virtualDisplayError}
-        userPrefix={authState.user?.email?.split('@')[0]?.toLowerCase().replace(/[^\w-]/g, '') || 'user'}
-      />
-      </React.Suspense>
+      {showVirtualDisplayModal && (
+        <React.Suspense fallback={null}>
+        <VirtualDisplayModal
+          isOpen={showVirtualDisplayModal}
+          onClose={() => { setShowVirtualDisplayModal(false); setVirtualDisplayError(null); }}
+          onAdd={handleAddVirtualDisplay}
+          isLoading={virtualDisplayLoading}
+          error={virtualDisplayError}
+          userPrefix={authState.user?.email?.split('@')[0]?.toLowerCase().replace(/[^\w-]/g, '') || 'user'}
+        />
+        </React.Suspense>
+      )}
 
       {/* Auth Modal */}
       {showAuthModal && (
@@ -3541,6 +4227,16 @@ const ControlPanel: React.FC = () => {
       {/* About Modal */}
       {showAboutModal && (
         <AboutModal onClose={() => setShowAboutModal(false)} />
+      )}
+
+      {/* Update Modal */}
+      {showUpdateModal && (
+        <React.Suspense fallback={null}>
+          <UpdateModal
+            onClose={() => setShowUpdateModal(false)}
+            updateStatus={updateStatus}
+          />
+        </React.Suspense>
       )}
 
       {/* Hidden audio element for background music */}
@@ -3700,7 +4396,69 @@ const ControlPanel: React.FC = () => {
             ));
           }}
           onRemoveFromSetlist={removeFromSetlist}
+          onSetBackground={(item) => setContextMenuBackgroundItemId(item.id)}
         />
+        </React.Suspense>
+      )}
+
+      {/* Context menu background modal */}
+      {contextMenuBackgroundItemId && (() => {
+        const modalItem = setlist.find(i => i.id === contextMenuBackgroundItemId);
+        if (!modalItem) return null;
+        return (
+          <React.Suspense fallback={null}>
+            <ItemBackgroundModal
+              isOpen={true}
+              currentBackground={modalItem.background || ''}
+              onSelect={(bg) => {
+                handleSetItemBackground(contextMenuBackgroundItemId, bg);
+                setContextMenuBackgroundItemId(null);
+              }}
+              onClose={() => setContextMenuBackgroundItemId(null)}
+            />
+          </React.Suspense>
+        );
+      })()}
+
+      {/* Setlist background modal */}
+      {showSetlistBackgroundModal && (
+        <React.Suspense fallback={null}>
+          <ItemBackgroundModal
+            isOpen={true}
+            currentBackground={setlistBackground}
+            onSelect={(bg) => {
+              handleSetSetlistBackground(bg);
+              setShowSetlistBackgroundModal(false);
+            }}
+            onClose={() => setShowSetlistBackgroundModal(false)}
+          />
+        </React.Suspense>
+      )}
+
+      {/* Custom Display Config Modal */}
+      {showCustomDisplayModal && (
+        <React.Suspense fallback={null}>
+          <CustomDisplayModal
+            currentConfig={settings.customDisplayLines}
+            availableTranslationLangs={(() => {
+              const langs = new Set<string>();
+              // Scan loaded songs for available translation languages
+              for (const song of songs) {
+                if (song.slides) {
+                  for (const slide of song.slides) {
+                    if (slide.translations && typeof slide.translations === 'object') {
+                      Object.keys(slide.translations).forEach(l => langs.add(l));
+                    }
+                  }
+                }
+                // Stop once we've found enough distinct languages (unlikely to find more)
+                if (langs.size >= 6) break;
+              }
+              return Array.from(langs);
+            })()}
+            onSave={(config) => updateSetting('customDisplayLines', config)}
+            onClose={() => setShowCustomDisplayModal(false)}
+          />
         </React.Suspense>
       )}
 

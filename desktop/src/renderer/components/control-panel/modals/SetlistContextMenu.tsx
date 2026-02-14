@@ -47,6 +47,7 @@ interface SetlistContextMenuProps {
   onEditPlaylist: (item: SetlistItem) => void;
   onRenameSection: (itemId: string, newName: string) => void;
   onRemoveFromSetlist: (itemId: string) => void;
+  onSetBackground?: (item: SetlistItem) => void;
 }
 
 const menuButtonStyle: React.CSSProperties = {
@@ -86,7 +87,8 @@ const SetlistContextMenu: React.FC<SetlistContextMenuProps> = ({
   onNavigateToPresentation,
   onEditPlaylist,
   onRenameSection,
-  onRemoveFromSetlist
+  onRemoveFromSetlist,
+  onSetBackground
 }) => {
   const { item, x, y } = contextMenu;
 
@@ -204,6 +206,26 @@ const SetlistContextMenu: React.FC<SetlistContextMenuProps> = ({
           >
             <EditIcon />
             Rename Section
+          </button>
+        )}
+
+        {/* Background override */}
+        {(item.type === 'song' || item.type === 'bible') && onSetBackground && (
+          <button
+            onClick={() => {
+              onSetBackground(item);
+              onClose();
+            }}
+            style={menuButtonStyle}
+            onMouseEnter={(e) => handleMouseEnter(e)}
+            onMouseLeave={handleMouseLeave}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            Background
           </button>
         )}
 

@@ -127,6 +127,8 @@ interface Slide {
 interface QuickModeMetadata {
   type: 'sermon' | 'prayer' | 'announcements';
   title: string;
+  titleTranslation?: string;
+  generateTranslation?: boolean;
   subtitles: Array<{
     subtitle: string;
     subtitleTranslation?: string;
@@ -1409,6 +1411,29 @@ const PresentationEditorPage: React.FC = () => {
     setHasChanges(true);
   }, [presentation.slides.length, currentSlideIndex]);
 
+  // Drag-and-drop slide reordering
+  const [dragSlideIndex, setDragSlideIndex] = useState<number | null>(null);
+  const [dragOverSlideIndex, setDragOverSlideIndex] = useState<number | null>(null);
+
+  const moveSlide = useCallback((fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    setPresentation(prev => {
+      const slides = [...prev.slides];
+      const [moved] = slides.splice(fromIndex, 1);
+      slides.splice(toIndex, 0, moved);
+      return { ...prev, slides };
+    });
+    // Update current slide index to follow the moved slide
+    if (currentSlideIndex === fromIndex) {
+      setCurrentSlideIndex(toIndex);
+    } else if (fromIndex < currentSlideIndex && toIndex >= currentSlideIndex) {
+      setCurrentSlideIndex(currentSlideIndex - 1);
+    } else if (fromIndex > currentSlideIndex && toIndex <= currentSlideIndex) {
+      setCurrentSlideIndex(currentSlideIndex + 1);
+    }
+    setHasChanges(true);
+  }, [currentSlideIndex]);
+
   // Duplicate slide
   const duplicateSlide = useCallback((index: number) => {
     const slideToDuplicate = presentation.slides[index];
@@ -1417,7 +1442,8 @@ const PresentationEditorPage: React.FC = () => {
       id: generateId(),
       order: presentation.slides.length,
       textBoxes: slideToDuplicate.textBoxes.map(tb => ({ ...tb, id: generateId() })),
-      imageBoxes: slideToDuplicate.imageBoxes?.map(ib => ({ ...ib, id: generateId() })) || []
+      imageBoxes: slideToDuplicate.imageBoxes?.map(ib => ({ ...ib, id: generateId() })) || [],
+      backgroundBoxes: slideToDuplicate.backgroundBoxes?.map(bb => ({ ...bb, id: generateId() })) || []
     };
     setPresentation(prev => ({
       ...prev,
@@ -1886,6 +1912,31 @@ const PresentationEditorPage: React.FC = () => {
           {presentation.slides.map((slide, index) => (
             <div
               key={slide.id}
+              draggable
+              onDragStart={(e) => {
+                setDragSlideIndex(index);
+                e.dataTransfer.effectAllowed = 'move';
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                setDragOverSlideIndex(index);
+              }}
+              onDragLeave={() => {
+                setDragOverSlideIndex(prev => prev === index ? null : prev);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragSlideIndex !== null && dragSlideIndex !== index) {
+                  moveSlide(dragSlideIndex, index);
+                }
+                setDragSlideIndex(null);
+                setDragOverSlideIndex(null);
+              }}
+              onDragEnd={() => {
+                setDragSlideIndex(null);
+                setDragOverSlideIndex(null);
+              }}
               onClick={() => {
                 setCurrentSlideIndex(index);
                 setSelectedTextBoxId(null);
@@ -1896,10 +1947,14 @@ const PresentationEditorPage: React.FC = () => {
                 position: 'relative',
                 aspectRatio: '16/9',
                 borderRadius: '6px',
-                border: currentSlideIndex === index ? '2px solid #00d4ff' : '1px solid rgba(255,255,255,0.2)',
+                border: dragOverSlideIndex === index && dragSlideIndex !== index
+                  ? '2px solid #ffc107'
+                  : currentSlideIndex === index ? '2px solid #00d4ff' : '1px solid rgba(255,255,255,0.2)',
                 background: getSlideBackgroundStyle(slide),
-                cursor: 'pointer',
-                overflow: 'hidden'
+                cursor: 'grab',
+                overflow: 'hidden',
+                opacity: dragSlideIndex === index ? 0.4 : 1,
+                transition: 'opacity 0.15s, border-color 0.15s'
               }}
             >
               {/* Slide number */}
@@ -2017,7 +2072,8 @@ const PresentationEditorPage: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  opacity: 0.7
+                  opacity: 0.7,
+                  zIndex: 101
                 }}
               >
                 ⧉
@@ -2046,7 +2102,8 @@ const PresentationEditorPage: React.FC = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    opacity: 0.7
+                    opacity: 0.7,
+                    zIndex: 101
                   }}
                 >
                   ×

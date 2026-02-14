@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 
 interface AudioPlaylistTrack {
   path: string;
@@ -28,29 +28,37 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
   const [shuffle, setShuffle] = useState(initialShuffle);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
+  const draggedIndexRef = useRef<number | null>(null);
+  const dropTargetIndexRef = useRef<number | null>(null);
 
   const handleDragStart = useCallback((index: number) => {
     setDraggedIndex(index);
+    draggedIndexRef.current = index;
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
     e.preventDefault();
     setDropTargetIndex(index);
+    dropTargetIndexRef.current = index;
   }, []);
 
   const handleDragEnd = useCallback(() => {
-    if (draggedIndex !== null && dropTargetIndex !== null && draggedIndex !== dropTargetIndex) {
+    const dragged = draggedIndexRef.current;
+    const dropTarget = dropTargetIndexRef.current;
+    if (dragged !== null && dropTarget !== null && dragged !== dropTarget) {
       setTracks(prev => {
         const newTracks = [...prev];
-        const [removed] = newTracks.splice(draggedIndex, 1);
-        const insertIndex = dropTargetIndex > draggedIndex ? dropTargetIndex - 1 : dropTargetIndex;
+        const [removed] = newTracks.splice(dragged, 1);
+        const insertIndex = dropTarget > dragged ? dropTarget - 1 : dropTarget;
         newTracks.splice(insertIndex, 0, removed);
         return newTracks;
       });
     }
     setDraggedIndex(null);
     setDropTargetIndex(null);
-  }, [draggedIndex, dropTargetIndex]);
+    draggedIndexRef.current = null;
+    dropTargetIndexRef.current = null;
+  }, []);
 
   const removeTrack = useCallback((index: number) => {
     setTracks(prev => prev.filter((_, i) => i !== index));

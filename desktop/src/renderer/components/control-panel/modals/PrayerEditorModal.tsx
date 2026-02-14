@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
-import { hebrewBookNames, numberToHebrew } from '../../../utils/bibleUtils';
+import { numberToHebrew, getHebrewBookName } from '../../../utils/bibleUtils';
 
 // Slide colors defined outside component to avoid recreation on each render
 const SLIDE_COLORS = [
@@ -66,8 +66,6 @@ interface PrayerEditorModalProps {
   onSave: (presentationId: string, subtitles: QuickModeSubtitle[], title?: string, titleTranslation?: string) => Promise<void>;
 }
 
-const containsHebrew = (text: string): boolean => /[\u0590-\u05FF]/.test(text);
-
 const PrayerEditorModal: React.FC<PrayerEditorModalProps> = ({
   presentation,
   bibleBooks = [],
@@ -83,28 +81,18 @@ const PrayerEditorModal: React.FC<PrayerEditorModalProps> = ({
   const [subtitles, setSubtitles] = useState<QuickModeSubtitle[]>(
     qmd?.subtitles?.length ? qmd.subtitles.map(s => ({ ...s })) : [{ subtitle: '', description: '' }]
   );
-  // TEST: Simple string state for first subtitle (like title)
-  const [firstSubtitle, setFirstSubtitle] = useState(qmd?.subtitles?.[0]?.subtitle || '');
-  // TEST2: Completely unrelated state
-  const [testInput, setTestInput] = useState('test value');
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState(1); // 1 = Hebrew, 2 = English translations
 
   // Bible picker state
   const [biblePickerIndex, setBiblePickerIndex] = useState<number | null>(null);
-  const [bibleSearch, setBibleSearch] = useState('');
   const [bibleVerses, setBibleVerses] = useState<BibleVerse[]>([]);
   const [bibleBook, setBibleBook] = useState('');
   const [bibleChapter, setBibleChapter] = useState<number | null>(null);
   const [verseStart, setVerseStart] = useState<number | null>(null);
   const [verseEnd, setVerseEnd] = useState<number | null>(null);
   const [bibleLoading, setBibleLoading] = useState(false);
-  const [bibleNoMatch, setBibleNoMatch] = useState(false);
-  const [bibleIsHebrew, setBibleIsHebrew] = useState(false);
-  const [showBibleSuggestions, setShowBibleSuggestions] = useState(false);
-  const [selectedBibleSuggestionIndex, setSelectedBibleSuggestionIndex] = useState(-1);
 
-  const bibleSearchRef = useRef<string>('');
   const modalRef = useRef<HTMLDivElement>(null);
 
   // Block ALL keyboard events at the document level when this modal is open
@@ -155,200 +143,33 @@ const PrayerEditorModal: React.FC<PrayerEditorModalProps> = ({
     onClose();
   }, [hasUnsavedChanges, onClose]);
 
-  // Generate Bible autocomplete suggestions
-  const bibleSuggestions = useMemo(() => {
-    const input = bibleSearch.trim().toLowerCase();
-    if (!input || input.length < 1 || !bibleBooks || bibleBooks.length === 0) return [];
+  // Handle book selection from dropdown
+  const handleBookSelect = useCallback((bookName: string) => {
+    setBibleBook(bookName);
+    setBibleChapter(null);
+    setBibleVerses([]);
+    setVerseStart(null);
+    setVerseEnd(null);
+  }, []);
 
-    const results: Array<{ display: string; value: string; bookName: string; chapter: number }> = [];
-    const maxSuggestions = 8;
-
-    const arabicMatch = input.match(/^(.+?)\s+(\d+)$/);
-    const hebrewMatch = input.match(/^(.+?)\s+([א-ת]+)$/);
-
-    let bookPart = input;
-    let chapterPart: number | null = null;
-
-    if (arabicMatch) {
-      bookPart = arabicMatch[1].trim();
-      chapterPart = parseInt(arabicMatch[2]);
-    } else if (hebrewMatch) {
-      bookPart = hebrewMatch[1].trim();
-      const hebrewNum = hebrewMatch[2];
-      const hebrewValues: Record<string, number> = {
-        'א': 1, 'ב': 2, 'ג': 3, 'ד': 4, 'ה': 5, 'ו': 6, 'ז': 7, 'ח': 8, 'ט': 9,
-        'י': 10, 'כ': 20, 'ל': 30, 'מ': 40, 'נ': 50
-      };
-      let total = 0;
-      for (const char of hebrewNum) {
-        if (hebrewValues[char]) total += hebrewValues[char];
-      }
-      if (total > 0) chapterPart = total;
-    }
-
-    for (const book of bibleBooks) {
-      if (results.length >= maxSuggestions) break;
-
-      const englishLower = book.name.toLowerCase();
-      const hebrewName = book.hebrewName || '';
-
-      const matchesEnglish = englishLower.startsWith(bookPart) || englishLower.includes(bookPart);
-      const matchesHebrew = hebrewName && (hebrewName.startsWith(bookPart) || hebrewName.includes(bookPart));
-
-      let matchesHebrewMapping = false;
-      for (const [hebrew, english] of Object.entries(hebrewBookNames)) {
-        if (english.toLowerCase() === englishLower && hebrew.startsWith(bookPart)) {
-          matchesHebrewMapping = true;
-          break;
-        }
-      }
-
-      if (matchesEnglish || matchesHebrew || matchesHebrewMapping) {
-        if (chapterPart !== null && chapterPart >= 1 && chapterPart <= book.chapters) {
-          results.push({
-            display: `${book.hebrewName || book.name} ${numberToHebrew(chapterPart)} (${book.name} ${chapterPart})`,
-            value: `${book.name} ${chapterPart}`,
-            bookName: book.name,
-            chapter: chapterPart
-          });
-        } else if (chapterPart === null) {
-          const chaptersToShow = Math.min(3, book.chapters);
-          for (let ch = 1; ch <= chaptersToShow && results.length < maxSuggestions; ch++) {
-            results.push({
-              display: `${book.hebrewName || book.name} ${numberToHebrew(ch)} (${book.name} ${ch})`,
-              value: `${book.name} ${ch}`,
-              bookName: book.name,
-              chapter: ch
-            });
-          }
-        }
-      }
-    }
-
-    return results;
-  }, [bibleSearch, bibleBooks]);
-
-  // Hebrew to number conversion
-  const hebrewToNumber = (hebrewStr: string): number | null => {
-    const cleaned = hebrewStr.replace(/[""״׳']/g, '');
-    const hebrewValues: Record<string, number> = {
-      'א': 1, 'ב': 2, 'ג': 3, 'ד': 4, 'ה': 5, 'ו': 6, 'ז': 7, 'ח': 8, 'ט': 9,
-      'י': 10, 'כ': 20, 'ך': 20, 'ל': 30, 'מ': 40, 'ם': 40, 'נ': 50, 'ן': 50,
-      'ס': 60, 'ע': 70, 'פ': 80, 'ף': 80, 'צ': 90, 'ץ': 90,
-      'ק': 100, 'ר': 200, 'ש': 300, 'ת': 400
-    };
-    let total = 0;
-    for (const char of cleaned) {
-      if (hebrewValues[char]) total += hebrewValues[char];
-    }
-    return total > 0 ? total : null;
-  };
-
-  // Bible search handler
-  const handleBibleSearch = useCallback(async (query: string, fromSuggestion = false) => {
-    setBibleSearch(query);
-    if (!fromSuggestion) {
-      setShowBibleSuggestions(query.trim().length > 0);
-      setSelectedBibleSuggestionIndex(-1);
-    }
-    bibleSearchRef.current = query;
-    const trimmed = query.trim();
-
-    if (trimmed === '') {
+  // Handle chapter selection from dropdown
+  const handleChapterSelect = useCallback(async (chapterNum: number) => {
+    if (!bibleBook) return;
+    setBibleChapter(chapterNum);
+    setBibleVerses([]);
+    setVerseStart(null);
+    setVerseEnd(null);
+    setBibleLoading(true);
+    try {
+      const response = await window.electronAPI.getBibleVerses(bibleBook, chapterNum);
+      setBibleVerses(response?.verses || []);
+    } catch (error) {
+      console.error('Error fetching Bible verses:', error);
       setBibleVerses([]);
-      setBibleBook('');
-      setBibleChapter(null);
-      setVerseStart(null);
-      setVerseEnd(null);
-      setBibleNoMatch(false);
-      setBibleLoading(false);
-      setBibleIsHebrew(false);
-      return;
-    }
-
-    const hasHebrewChars = (str: string) => /[\u0590-\u05FF]/.test(str);
-
-    let bookNameRaw: string;
-    let chapterNum: number;
-    let isHebrewSearch = false;
-
-    const matchArabic = trimmed.match(/^(.+?)\s+(\d+)(?::(\d+)(?:-(\d+))?)?$/);
-    const matchHebrewFull = trimmed.match(/^(.+?)\s+([א-ת]+["״׳']?)(?:[\s:](.+))?$/);
-
-    if (matchArabic && !hasHebrewChars(matchArabic[1])) {
-      bookNameRaw = matchArabic[1].trim().toLowerCase();
-      chapterNum = parseInt(matchArabic[2]);
-      isHebrewSearch = false;
-    } else if (matchHebrewFull) {
-      bookNameRaw = matchHebrewFull[1].trim();
-      const hebrewChapter = matchHebrewFull[2].replace(/["״׳']/g, '');
-      const hebrewNum = hebrewToNumber(hebrewChapter);
-      if (!hebrewNum) {
-        setBibleNoMatch(trimmed.length > 2);
-        setBibleLoading(false);
-        return;
-      }
-      chapterNum = hebrewNum;
-      isHebrewSearch = true;
-    } else {
-      setBibleNoMatch(trimmed.length > 2);
-      setBibleLoading(false);
-      return;
-    }
-
-    let searchName = bookNameRaw.toLowerCase();
-    const hebrewBookMatch = Object.keys(hebrewBookNames).find(heb =>
-      heb === bookNameRaw || heb.startsWith(bookNameRaw) || bookNameRaw.startsWith(heb)
-    );
-    if (hebrewBookMatch) {
-      searchName = hebrewBookNames[hebrewBookMatch].toLowerCase();
-      isHebrewSearch = true;
-    }
-
-    setBibleIsHebrew(isHebrewSearch);
-
-    let matchedBook = bibleBooks.find(b => b.name.toLowerCase() === searchName);
-    if (!matchedBook) {
-      matchedBook = bibleBooks.find(b => b.name.toLowerCase().startsWith(searchName));
-    }
-    if (!matchedBook) {
-      matchedBook = bibleBooks.find(b => b.name.toLowerCase().includes(searchName));
-    }
-
-    if (matchedBook && chapterNum >= 1 && chapterNum <= matchedBook.chapters) {
-      setBibleNoMatch(false);
-      setBibleBook(matchedBook.name);
-      setBibleChapter(chapterNum);
-      setBibleVerses([]);
-      setVerseStart(null);
-      setVerseEnd(null);
-
-      setBibleLoading(true);
-      try {
-        const response = await window.electronAPI.getBibleVerses(matchedBook.name, chapterNum);
-        const verses = response?.verses || [];
-
-        if (bibleSearchRef.current !== query) return;
-        setBibleVerses(verses);
-      } catch (error) {
-        console.error('Error fetching Bible verses:', error);
-        if (bibleSearchRef.current === query) {
-          setBibleVerses([]);
-          setBibleLoading(false);
-        }
-        return;
-      }
-      if (bibleSearchRef.current === query) {
-        setBibleLoading(false);
-      }
-    } else {
-      setBibleNoMatch(true);
-      setBibleBook('');
-      setBibleChapter(null);
-      setBibleVerses([]);
+    } finally {
       setBibleLoading(false);
     }
-  }, [bibleBooks]);
+  }, [bibleBook]);
 
   // Add Bible reference to subtitle
   const addBibleRefToSubtitle = useCallback((index: number) => {
@@ -359,10 +180,9 @@ const PrayerEditorModal: React.FC<PrayerEditorModalProps> = ({
 
     let hebrewText = '';
     let englishText = '';
+    const hebrewBookName = getHebrewBookName(bibleBook);
     let reference = `${bibleBook} ${bibleChapter}:${verseStart}`;
-    let hebrewReference = '';
-
-    const baseHebrewRef = startVerse.hebrewReference?.replace(/:.*$/, '') || '';
+    let hebrewReference = `${hebrewBookName} ${numberToHebrew(bibleChapter)}:${numberToHebrew(verseStart)}`;
 
     if (verseEnd && verseEnd > verseStart) {
       const versesInRange = bibleVerses.filter(
@@ -371,11 +191,10 @@ const PrayerEditorModal: React.FC<PrayerEditorModalProps> = ({
       hebrewText = versesInRange.map(v => v.hebrew || '').filter(Boolean).join(' ');
       englishText = versesInRange.map(v => v.english || '').filter(Boolean).join(' ');
       reference = `${bibleBook} ${bibleChapter}:${verseStart}-${verseEnd}`;
-      hebrewReference = `${baseHebrewRef}:${verseStart}-${verseEnd}`;
+      hebrewReference = `${hebrewBookName} ${numberToHebrew(bibleChapter)}:${numberToHebrew(verseStart)}-${numberToHebrew(verseEnd)}`;
     } else {
       hebrewText = startVerse.hebrew || '';
       englishText = startVerse.english || '';
-      hebrewReference = startVerse.hebrewReference || '';
     }
 
     setSubtitles(prev => prev.map((s, i) =>
@@ -390,24 +209,20 @@ const PrayerEditorModal: React.FC<PrayerEditorModalProps> = ({
           englishText,
           reference,
           hebrewReference,
-          useHebrew: bibleIsHebrew
+          useHebrew: true
         }
       } : s
     ));
 
     // Reset picker state
     setBiblePickerIndex(null);
-    setBibleSearch('');
-    bibleSearchRef.current = '';
     setBibleVerses([]);
     setBibleBook('');
     setBibleChapter(null);
     setVerseStart(null);
     setVerseEnd(null);
-    setBibleNoMatch(false);
     setBibleLoading(false);
-    setBibleIsHebrew(false);
-  }, [bibleBook, bibleChapter, verseStart, verseEnd, bibleVerses, bibleIsHebrew]);
+  }, [bibleBook, bibleChapter, verseStart, verseEnd, bibleVerses]);
 
   // Remove Bible reference
   const removeBibleRef = useCallback((index: number) => {
@@ -425,16 +240,12 @@ const PrayerEditorModal: React.FC<PrayerEditorModalProps> = ({
   const removePoint = useCallback((index: number) => {
     if (biblePickerIndex === index) {
       setBiblePickerIndex(null);
-      setBibleSearch('');
-      bibleSearchRef.current = '';
       setBibleVerses([]);
       setBibleBook('');
       setBibleChapter(null);
       setVerseStart(null);
       setVerseEnd(null);
-      setBibleNoMatch(false);
       setBibleLoading(false);
-      setBibleIsHebrew(false);
     } else if (biblePickerIndex !== null && biblePickerIndex > index) {
       setBiblePickerIndex(biblePickerIndex - 1);
     }
@@ -631,43 +442,17 @@ const PrayerEditorModal: React.FC<PrayerEditorModalProps> = ({
               {/* Step 1: Hebrew Content */}
               {step === 1 && (
                 <div>
-                {/* TEST INPUT - uses completely unrelated state */}
-                {index === 0 && (
-                  <input
-                    id="test-unrelated-input"
-                    type="text"
-                    value={testInput}
-                    onChange={(e) => setTestInput(e.target.value)}
-                    onKeyDown={(e) => e.stopPropagation()}
-                    placeholder="TEST INPUT - type here"
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      background: 'rgba(255,0,0,0.3)',
-                      border: '2px solid red',
-                      borderRadius: '6px',
-                      color: 'white',
-                      fontSize: '0.9rem',
-                      marginBottom: '8px'
-                    }}
-                  />
-                )}
-                {/* Subtitle (Hebrew) - TEST: Using simple state for index 0 */}
                 <input
                   id={`subtitle-hebrew-input-${index}`}
                   type="text"
-                  value={index === 0 ? firstSubtitle : item.subtitle}
+                  value={item.subtitle}
                   onChange={(e) => {
-                    if (index === 0) {
-                      setFirstSubtitle(e.target.value);
-                    } else {
-                      const val = e.target.value;
-                      setSubtitles(prev => {
-                        const copy = [...prev];
-                        copy[index] = { ...copy[index], subtitle: val };
-                        return copy;
-                      });
-                    }
+                    const val = e.target.value;
+                    setSubtitles(prev => {
+                      const copy = [...prev];
+                      copy[index] = { ...copy[index], subtitle: val };
+                      return copy;
+                    });
                   }}
                   onKeyDown={(e) => e.stopPropagation()}
                   autoComplete="off"
@@ -823,97 +608,70 @@ const PrayerEditorModal: React.FC<PrayerEditorModalProps> = ({
                   border: '1px solid rgba(0,212,255,0.3)',
                   borderRadius: '6px'
                 }}>
-                  <div style={{ marginBottom: '8px', position: 'relative' }}>
-                    <input
-                      type="text"
-                      value={bibleSearch}
-                      onChange={(e) => handleBibleSearch(e.target.value)}
-                      onKeyDown={(e) => {
-                        e.stopPropagation();
-                        if (!showBibleSuggestions || bibleSuggestions.length === 0) return;
-                        if (e.key === 'ArrowDown') {
-                          e.preventDefault();
-                          setSelectedBibleSuggestionIndex(prev => prev < bibleSuggestions.length - 1 ? prev + 1 : 0);
-                        } else if (e.key === 'ArrowUp') {
-                          e.preventDefault();
-                          setSelectedBibleSuggestionIndex(prev => prev > 0 ? prev - 1 : bibleSuggestions.length - 1);
-                        } else if (e.key === 'Enter' && selectedBibleSuggestionIndex >= 0) {
-                          e.preventDefault();
-                          const suggestion = bibleSuggestions[selectedBibleSuggestionIndex];
-                          setShowBibleSuggestions(false);
-                          setSelectedBibleSuggestionIndex(-1);
-                          handleBibleSearch(suggestion.value, true);
-                        } else if (e.key === 'Escape') {
-                          setShowBibleSuggestions(false);
-                        }
-                      }}
-                      onFocus={() => bibleSearch.trim() && setShowBibleSuggestions(true)}
-                      onBlur={() => setTimeout(() => setShowBibleSuggestions(false), 200)}
-                      placeholder="e.g., John 3:16 or Psalms 23:1-6"
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        background: 'rgba(0,0,0,0.3)',
-                        border: '1px solid rgba(255,255,255,0.2)',
-                        borderRadius: showBibleSuggestions && bibleSuggestions.length > 0 ? '4px 4px 0 0' : '4px',
-                        color: 'white',
-                        fontSize: '0.85rem'
-                      }}
-                    />
-                    {/* Autocomplete Dropdown */}
-                    {showBibleSuggestions && bibleSuggestions.length > 0 && (
-                      <div style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        right: 0,
-                        background: '#2a2a4a',
-                        border: '1px solid rgba(255,255,255,0.2)',
-                        borderTop: 'none',
-                        borderRadius: '0 0 4px 4px',
-                        maxHeight: '150px',
-                        overflowY: 'auto',
-                        zIndex: 1000
-                      }}>
-                        {bibleSuggestions.map((suggestion, idx) => (
-                          <div
-                            key={`${suggestion.bookName}-${suggestion.chapter}`}
-                            onClick={() => { setShowBibleSuggestions(false); setSelectedBibleSuggestionIndex(-1); handleBibleSearch(suggestion.value, true); }}
-                            style={{
-                              padding: '8px 10px',
-                              cursor: 'pointer',
-                              background: idx === selectedBibleSuggestionIndex ? 'rgba(0,212,255,0.15)' : 'transparent',
-                              borderBottom: idx < bibleSuggestions.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none'
-                            }}
-                            onMouseEnter={() => setSelectedBibleSuggestionIndex(idx)}
-                          >
-                            <span style={{ color: 'white', fontSize: '0.8rem' }}>{suggestion.display}</span>
-                          </div>
+                  {/* Book and Chapter Selectors */}
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap', direction: 'rtl' }}>
+                    <div style={{ flex: 1, minWidth: '140px' }}>
+                      <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', marginBottom: '4px' }}>ספר:</div>
+                      <select
+                        value={bibleBook}
+                        onChange={(e) => handleBookSelect(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          background: 'rgba(0,0,0,0.4)',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          borderRadius: '4px',
+                          color: 'white',
+                          fontSize: '0.85rem',
+                          direction: 'rtl'
+                        }}
+                      >
+                        <option value="">בחר ספר...</option>
+                        {bibleBooks.map(book => (
+                          <option key={book.name} value={book.name}>{getHebrewBookName(book.name)}</option>
                         ))}
-                      </div>
-                    )}
+                      </select>
+                    </div>
+                    <div style={{ minWidth: '80px' }}>
+                      <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', marginBottom: '4px' }}>פרק:</div>
+                      <select
+                        value={bibleChapter || ''}
+                        onChange={(e) => e.target.value && handleChapterSelect(parseInt(e.target.value))}
+                        disabled={!bibleBook}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          background: 'rgba(0,0,0,0.4)',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          borderRadius: '4px',
+                          color: bibleBook ? 'white' : 'rgba(255,255,255,0.4)',
+                          fontSize: '0.85rem',
+                          cursor: bibleBook ? 'pointer' : 'not-allowed',
+                          direction: 'rtl'
+                        }}
+                      >
+                        <option value="">בחר...</option>
+                        {bibleBook && bibleBooks.find(b => b.name === bibleBook) &&
+                          Array.from({ length: bibleBooks.find(b => b.name === bibleBook)!.chapters }, (_, i) => i + 1).map(ch => (
+                            <option key={ch} value={ch}>{numberToHebrew(ch)}</option>
+                          ))
+                        }
+                      </select>
+                    </div>
                   </div>
 
                   {bibleLoading && (
-                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', textAlign: 'center' }}>
-                      Loading verses...
+                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', textAlign: 'center', padding: '6px', direction: 'rtl' }}>
+                      טוען פסוקים...
                     </div>
                   )}
 
-                  {bibleNoMatch && !bibleLoading && (
-                    <div style={{ color: 'rgba(255,200,100,0.8)', fontSize: '0.8rem', textAlign: 'center', padding: '6px' }}>
-                      No match found. Try: "John 3:16" or "Genesis 1:1-5"
-                    </div>
-                  )}
-
-                  {bibleBook && bibleChapter && bibleVerses.length > 0 && (
+                  {/* Verse Selectors */}
+                  {bibleBook && bibleChapter && !bibleLoading && bibleVerses.length > 0 && (
                     <div>
-                      <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', marginBottom: '6px' }}>
-                        {bibleBook} {bibleChapter} ({bibleVerses.length} verses)
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem' }}>From:</span>
+                      <div style={{ display: 'flex', gap: '12px', marginBottom: '8px', flexWrap: 'wrap', direction: 'rtl' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem' }}>מפסוק:</span>
                           <select
                             value={verseStart || ''}
                             onChange={(e) => {
@@ -924,46 +682,48 @@ const PrayerEditorModal: React.FC<PrayerEditorModalProps> = ({
                               }
                             }}
                             style={{
-                              padding: '4px 8px',
+                              padding: '6px 10px',
                               background: 'rgba(0,0,0,0.4)',
                               border: '1px solid rgba(255,255,255,0.2)',
                               borderRadius: '4px',
                               color: 'white',
-                              fontSize: '0.8rem'
+                              fontSize: '0.85rem',
+                              direction: 'rtl'
                             }}
                           >
-                            <option value="">Select verse</option>
+                            <option value="">בחר...</option>
                             {bibleVerses.map(v => (
-                              <option key={v.verseNumber} value={v.verseNumber}>{v.verseNumber}</option>
+                              <option key={v.verseNumber} value={v.verseNumber}>{numberToHebrew(v.verseNumber)}</option>
                             ))}
                           </select>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem' }}>To (optional):</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem' }}>עד פסוק:</span>
                           <select
                             value={verseEnd || ''}
                             onChange={(e) => setVerseEnd(e.target.value ? parseInt(e.target.value) : null)}
                             style={{
-                              padding: '4px 8px',
+                              padding: '6px 10px',
                               background: 'rgba(0,0,0,0.4)',
                               border: '1px solid rgba(255,255,255,0.2)',
                               borderRadius: '4px',
                               color: 'white',
-                              fontSize: '0.8rem'
+                              fontSize: '0.85rem',
+                              direction: 'rtl'
                             }}
                           >
-                            <option value="">Single verse</option>
+                            <option value="">פסוק בודד</option>
                             {bibleVerses
                               .filter(v => !verseStart || v.verseNumber > verseStart)
                               .map(v => (
-                                <option key={v.verseNumber} value={v.verseNumber}>{v.verseNumber}</option>
+                                <option key={v.verseNumber} value={v.verseNumber}>{numberToHebrew(v.verseNumber)}</option>
                               ))}
                           </select>
                         </div>
                       </div>
                       {verseStart && (
                         <div style={{
-                          padding: '6px',
+                          padding: '8px',
                           background: 'rgba(0,0,0,0.2)',
                           borderRadius: '4px',
                           marginBottom: '8px',
@@ -971,82 +731,75 @@ const PrayerEditorModal: React.FC<PrayerEditorModalProps> = ({
                           overflowY: 'auto'
                         }}>
                           <div style={{
-                            fontSize: '0.75rem',
+                            fontSize: '0.8rem',
                             color: 'rgba(255,255,255,0.8)',
-                            direction: bibleIsHebrew ? 'rtl' : 'ltr',
-                            textAlign: bibleIsHebrew ? 'right' : 'left'
+                            direction: 'rtl',
+                            textAlign: 'right',
+                            lineHeight: 1.5
                           }}>
                             {bibleVerses
                               .filter(v => v.verseNumber >= verseStart! && v.verseNumber <= (verseEnd || verseStart!))
-                              .map(v => bibleIsHebrew ? (v.hebrew || v.english || '') : (v.english || v.hebrew || ''))
+                              .map(v => v.hebrew || v.english || '')
                               .filter(Boolean)
-                              .join(' ') || 'No text available'}
+                              .join(' ') || 'אין טקסט זמין'}
                           </div>
                         </div>
                       )}
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      onClick={() => {
-                        setBiblePickerIndex(null);
-                        setBibleSearch('');
-                        bibleSearchRef.current = '';
-                        setBibleVerses([]);
-                        setBibleBook('');
-                        setBibleChapter(null);
-                        setVerseStart(null);
-                        setVerseEnd(null);
-                        setBibleNoMatch(false);
-                        setBibleLoading(false);
-                        setBibleIsHebrew(false);
-                      }}
-                      style={{
-                        flex: 1,
-                        padding: '6px',
-                        background: 'transparent',
-                        border: '1px solid rgba(255,255,255,0.2)',
-                        borderRadius: '4px',
-                        color: 'rgba(255,255,255,0.7)',
-                        cursor: 'pointer',
-                        fontSize: '0.8rem'
-                      }}
-                    >
-                      Cancel
-                    </button>
+                  <div style={{ display: 'flex', gap: '8px', direction: 'rtl' }}>
                     <button
                       onClick={() => addBibleRefToSubtitle(index)}
                       disabled={!verseStart}
                       style={{
                         flex: 1,
-                        padding: '6px',
+                        padding: '8px',
                         background: verseStart ? '#00d4ff' : 'rgba(0,212,255,0.3)',
                         border: 'none',
                         borderRadius: '4px',
                         color: verseStart ? 'black' : 'rgba(0,0,0,0.5)',
                         cursor: verseStart ? 'pointer' : 'not-allowed',
-                        fontSize: '0.8rem',
+                        fontSize: '0.85rem',
                         fontWeight: 600
                       }}
                     >
-                      Add Verse
+                      הוסף פסוק
+                    </button>
+                    <button
+                      onClick={() => {
+                        setBiblePickerIndex(null);
+                        setBibleVerses([]);
+                        setBibleBook('');
+                        setBibleChapter(null);
+                        setVerseStart(null);
+                        setVerseEnd(null);
+                        setBibleLoading(false);
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '8px',
+                        background: 'transparent',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        borderRadius: '4px',
+                        color: 'rgba(255,255,255,0.7)',
+                        cursor: 'pointer',
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      ביטול
                     </button>
                   </div>
                 </div>
               ) : step === 1 ? (
                 <button
                   onClick={() => {
-                    setBibleSearch('');
-                    bibleSearchRef.current = '';
                     setBibleVerses([]);
                     setBibleBook('');
                     setBibleChapter(null);
                     setVerseStart(null);
                     setVerseEnd(null);
-                    setBibleNoMatch(false);
                     setBibleLoading(false);
-                    setBibleIsHebrew(false);
                     setBiblePickerIndex(index);
                   }}
                   style={{

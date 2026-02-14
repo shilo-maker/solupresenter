@@ -5,6 +5,7 @@ interface SlideData {
   originalText?: string;
   transliteration?: string;
   translation?: string;
+  translationB?: string;
   translationOverflow?: string;
   reference?: string;
   referenceTranslation?: string;

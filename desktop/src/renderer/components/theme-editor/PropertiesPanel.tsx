@@ -16,6 +16,7 @@ const LINE_LABELS: Record<string, string> = {
   original: 'Original (Hebrew)',
   transliteration: 'Transliteration',
   translation: 'Translation',
+  translationB: 'Translation B',
   // Bible lines
   hebrew: 'Hebrew',
   english: 'English',
@@ -36,6 +37,7 @@ const LINE_COLORS: Record<string, string> = {
   original: '#06b6d4',
   transliteration: '#06b6d4',
   translation: '#28a745',
+  translationB: '#a0c8e0',
   // Bible lines
   hebrew: '#06b6d4',
   english: '#28a745',

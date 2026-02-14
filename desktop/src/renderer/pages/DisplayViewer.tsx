@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, memo, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import SlideRenderer from '../components/SlideRenderer';
 import { useSettings } from '../contexts/SettingsContext';
 import { createLogger } from '../utils/debug';
@@ -41,6 +42,7 @@ interface SlideData {
   originalText?: string;
   transliteration?: string;
   translation?: string;
+  translationB?: string;
   translationOverflow?: string;
   originalLanguage?: string; // Song's original language - used for single-language song rendering
   reference?: string;
@@ -184,19 +186,190 @@ const DisplayViewer: React.FC = () => {
   const { settings } = useSettings();
   const [slideData, setSlideData] = useState<SlideData | null>(null);
 
-  // Check if this display window is on the same screen as the control window
-  const isSameScreenAsControl = useMemo(() => {
-    // Check URL parameter - passed when opening the display window
-    // With hash-based routing, query params are in the hash (e.g., #/display/viewer?sameScreen=true)
-    const hash = window.location.hash;
-    const queryIndex = hash.indexOf('?');
-    if (queryIndex !== -1) {
-      const queryString = hash.substring(queryIndex);
-      const urlParams = new URLSearchParams(queryString);
-      return urlParams.get('sameScreen') === 'true';
-    }
-    return false;
-  }, []);
+  // Parse URL parameters via React Router (HashRouter normalizes window.location.hash,
+  // so we must use useLocation().search to reliably access query params)
+  const location = useLocation();
+  const { isSameScreenAsControl, cameraDeviceId, audioDeviceId, isTransparentDisplay } = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return {
+      isSameScreenAsControl: params.get('sameScreen') === 'true',
+      cameraDeviceId: params.get('cameraDeviceId') || null,
+      audioDeviceId: params.get('audioDeviceId') || null,
+      isTransparentDisplay: params.get('transparent') === 'true'
+    };
+  }, [location.search]);
+
+  // For streaming displays: make page-level backgrounds transparent so the offscreen
+  // renderer produces BGRA frames with a real alpha channel. This lets FFmpeg composite
+  // the camera feed behind the slide content via overlay with alpha blending.
+  useEffect(() => {
+    if (!isTransparentDisplay) return;
+    document.documentElement.style.background = 'transparent';
+    document.body.style.background = 'transparent';
+    // Hide the body::before gradient overlay (can't style pseudo-elements from JS)
+    const style = document.createElement('style');
+    style.textContent = 'body::before { display: none !important; }';
+    document.head.appendChild(style);
+    return () => {
+      document.documentElement.style.background = '';
+      document.body.style.background = '';
+      style.remove();
+    };
+  }, [isTransparentDisplay]);
+
+  // Camera stream state
+  const cameraVideoRef = useRef<HTMLVideoElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  // Audio stream state (separate from camera for independent device selection)
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+
+  // Set up camera stream when cameraDeviceId is present
+  useEffect(() => {
+    if (!cameraDeviceId) return;
+
+    let cancelled = false;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const stopStream = () => {
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach(t => t.stop());
+        cameraStreamRef.current = null;
+      }
+      // Release the video decoder pipeline by clearing srcObject
+      if (cameraVideoRef.current) {
+        cameraVideoRef.current.srcObject = null;
+      }
+    };
+
+    const startCamera = async () => {
+      // Stop any existing stream before starting a new one
+      stopStream();
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            deviceId: { exact: cameraDeviceId },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30 }
+          },
+          audio: false
+        });
+        if (cancelled) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
+        cameraStreamRef.current = stream;
+        if (cameraVideoRef.current) {
+          cameraVideoRef.current.srcObject = stream;
+        }
+
+        // Monitor track for unexpected end (camera disconnect / OS revocation)
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.onended = () => {
+            if (cancelled) return;
+            log.warn('Camera track ended unexpectedly, attempting reconnect...');
+            reconnectTimeout = setTimeout(() => {
+              if (!cancelled) startCamera();
+            }, 2000);
+          };
+        }
+      } catch (err) {
+        if (cancelled) return;
+        log.error('Failed to start camera:', err);
+        // Retry on transient errors (device busy, permissions pending)
+        reconnectTimeout = setTimeout(() => {
+          if (!cancelled) startCamera();
+        }, 3000);
+      }
+    };
+
+    startCamera();
+
+    return () => {
+      cancelled = true;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      stopStream();
+    };
+  }, [cameraDeviceId]);
+
+  // Set up audio stream when audioDeviceId is present (independent from camera)
+  useEffect(() => {
+    if (!audioDeviceId) return;
+
+    let cancelled = false;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const stopAudio = () => {
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach(t => t.stop());
+        audioStreamRef.current = null;
+      }
+      if (audioRef.current) {
+        audioRef.current.srcObject = null;
+      }
+    };
+
+    const startAudio = async () => {
+      stopAudio();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: false,
+          audio: {
+            deviceId: { exact: audioDeviceId },
+            // Disable WebRTC audio processing — these are designed for voice calls
+            // and actively degrade music/speech quality in a passthrough scenario
+            // (e.g., sound card → nursery room speaker)
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+            // Request minimum buffer size for lowest possible latency
+            latency: 0,
+            // Preserve full audio fidelity from the source device
+            channelCount: { ideal: 2 },
+            sampleRate: { ideal: 48000 }
+          }
+        });
+        if (cancelled) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
+        audioStreamRef.current = stream;
+        if (audioRef.current) {
+          audioRef.current.srcObject = stream;
+          audioRef.current.play().catch(err => log.error('Audio play failed:', err));
+        }
+
+        const audioTrack = stream.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.onended = () => {
+            if (cancelled) return;
+            log.warn('Audio track ended unexpectedly, attempting reconnect...');
+            reconnectTimeout = setTimeout(() => {
+              if (!cancelled) startAudio();
+            }, 2000);
+          };
+        }
+      } catch (err) {
+        if (cancelled) return;
+        log.error('Failed to start audio:', err);
+        reconnectTimeout = setTimeout(() => {
+          if (!cancelled) startAudio();
+        }, 3000);
+      }
+    };
+
+    startAudio();
+
+    return () => {
+      cancelled = true;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      stopAudio();
+    };
+  }, [audioDeviceId]);
+
   const [combinedSlides, setCombinedSlides] = useState<SlideData[] | null>(null);
   const [displayMode, setDisplayMode] = useState<string>('bilingual');
   const [isBlank, setIsBlank] = useState(false);
@@ -377,7 +550,6 @@ const DisplayViewer: React.FC = () => {
 
       // Use media:// URL directly - the custom protocol should work in display windows
       // since they're Electron windows with the same protocol handler
-      console.log('[DisplayViewer] Received media path:', data.path);
       setMediaPath(data.path);
       setMediaLoadError(null);
       setMediaLoading(true);
@@ -434,6 +606,11 @@ const DisplayViewer: React.FC = () => {
             if (command.volume > 0) {
               video.muted = false;
             }
+          }
+          break;
+        case 'loop':
+          if (video) {
+            video.loop = !!command.loop;
           }
           break;
       }
@@ -1127,34 +1304,40 @@ const DisplayViewer: React.FC = () => {
   // Check if we should use absolute positioning
   const useAbsolutePositioning = theme?.linePositions !== null && theme?.linePositions !== undefined;
 
-  // Background style
-  const backgroundStyle: React.CSSProperties = {
-    width: '100vw',
-    height: '100vh',
-    background: '#000',
-    position: 'relative',
-    overflow: 'hidden'
-  };
+  // Determine if backgroundImage is a media:// image URL (rendered as <img>, not CSS url())
+  const isImageBackground = useMemo(() =>
+    !!(backgroundImage && !backgroundImage.startsWith('video:') &&
+      !backgroundImage.startsWith('linear-gradient') && !backgroundImage.startsWith('radial-gradient') &&
+      !backgroundImage.startsWith('#') && !backgroundImage.startsWith('rgb') &&
+      !backgroundImage.startsWith('transparent')),
+    [backgroundImage]
+  );
 
-  // Priority: explicit backgroundImage > theme viewerBackground > default black
-  // Only use theme background if no explicit background is set
-  if (backgroundImage) {
-    // Check if it's a gradient (starts with 'linear-gradient' or 'radial-gradient')
-    if (backgroundImage.startsWith('linear-gradient') || backgroundImage.startsWith('radial-gradient')) {
-      backgroundStyle.background = backgroundImage;
-    } else if (backgroundImage.startsWith('#') || backgroundImage.startsWith('rgb')) {
-      // Solid color
-      backgroundStyle.background = backgroundImage;
-    } else {
-      // Image URL
-      backgroundStyle.backgroundImage = `url(${backgroundImage})`;
-      backgroundStyle.backgroundSize = 'cover';
-      backgroundStyle.backgroundPosition = 'center';
+  // Background style (memoized to prevent object recreation on every render)
+  const backgroundStyle = useMemo((): React.CSSProperties => {
+    const useTransparent = !!cameraDeviceId || isTransparentDisplay;
+    const style: React.CSSProperties = {
+      width: '100vw',
+      height: '100vh',
+      background: useTransparent ? 'transparent' : '#000',
+      position: 'relative',
+      overflow: 'hidden'
+    };
+    if (!useTransparent) {
+      if (backgroundImage) {
+        if (backgroundImage.startsWith('video:') || isImageBackground) {
+          style.background = '#000';
+        } else if (backgroundImage.startsWith('linear-gradient') || backgroundImage.startsWith('radial-gradient')) {
+          style.background = backgroundImage;
+        } else if (backgroundImage.startsWith('#') || backgroundImage.startsWith('rgb')) {
+          style.background = backgroundImage;
+        }
+      } else if (theme?.viewerBackground?.type === 'color' && theme.viewerBackground.color) {
+        style.background = theme.viewerBackground.color;
+      }
     }
-  } else if (theme?.viewerBackground?.type === 'color' && theme.viewerBackground.color) {
-    // Only use theme background when no explicit background is set
-    backgroundStyle.background = theme.viewerBackground.color;
-  }
+    return style;
+  }, [backgroundImage, isImageBackground, cameraDeviceId, isTransparentDisplay, theme?.viewerBackground?.type, theme?.viewerBackground?.color]);
 
   // Render countdown overlay
   const renderCountdown = () => {
@@ -1224,7 +1407,7 @@ const DisplayViewer: React.FC = () => {
         borderRadius: '1vw',
         boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)',
         zIndex: 90,
-        animation: announcementFading ? 'slideDown 0.5s ease-out forwards' : 'slideUp 0.5s ease-out forwards'
+        animation: announcementFading ? 'viewerSlideDown 0.5s ease-out forwards' : 'viewerSlideUp 0.5s ease-out forwards'
       }}>
         <div style={{
           fontSize: '3vw',
@@ -1235,28 +1418,6 @@ const DisplayViewer: React.FC = () => {
         }}>
           {announcement.text}
         </div>
-        <style>{`
-          @keyframes slideUp {
-            from {
-              opacity: 0;
-              transform: translateY(50px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-          @keyframes slideDown {
-            from {
-              opacity: 1;
-              transform: translateY(0);
-            }
-            to {
-              opacity: 0;
-              transform: translateY(50px);
-            }
-          }
-        `}</style>
       </div>
     );
   };
@@ -1296,18 +1457,6 @@ const DisplayViewer: React.FC = () => {
         >
           {currentMessage}
         </div>
-        <style>{`
-          @keyframes messageSlideIn {
-            from {
-              opacity: 0;
-              transform: translateY(-10px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-        `}</style>
       </div>
     );
   };
@@ -1387,12 +1536,6 @@ const DisplayViewer: React.FC = () => {
         }}>
           {stopwatch.running ? 'RUNNING' : 'PAUSED'}
         </div>
-        <style>{`
-          @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
-          }
-        `}</style>
       </div>
     );
   };
@@ -1443,7 +1586,39 @@ const DisplayViewer: React.FC = () => {
 
   // Single return with all layers - YouTube container is NEVER unmounted
   return (
-    <div className="display-window" style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden', background: '#000' }}>
+    <div className="display-window" style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden', background: (cameraDeviceId || isTransparentDisplay) ? 'transparent' : '#000' }}>
+      {/* Camera feed layer - shown when cameraDeviceId param is present
+           visibility:hidden when blank stops GPU compositing while keeping the stream alive */}
+      {cameraDeviceId && (
+        <video
+          ref={cameraVideoRef}
+          autoPlay
+          muted
+          playsInline
+          disablePictureInPicture
+          disableRemotePlayback
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            zIndex: 0,
+            // GPU layer promotion: avoids CPU compositing for full-screen video
+            willChange: 'transform',
+            transform: 'translateZ(0)',
+            // Hide during blank to save GPU compositing cycles (visibility keeps stream alive)
+            visibility: isBlank ? 'hidden' : 'visible'
+          }}
+        />
+      )}
+
+      {/* Hidden audio element for camera audio source */}
+      {audioDeviceId && (
+        <audio ref={audioRef} autoPlay />
+      )}
+
       {/* YouTube container - ALWAYS mounted, shown/hidden via zIndex and opacity */}
       <div
         ref={youtubeContainerRef}
@@ -1476,19 +1651,7 @@ const DisplayViewer: React.FC = () => {
               background: 'rgba(0, 0, 0, 0.7)',
               zIndex: 10
             }}>
-              <div style={{
-                width: '40px',
-                height: '40px',
-                border: '3px solid rgba(255, 255, 255, 0.2)',
-                borderTopColor: '#06b6d4',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite'
-              }} />
-              <style>{`
-                @keyframes spin {
-                  to { transform: rotate(360deg); }
-                }
-              `}</style>
+              <div className="loading-spinner" />
             </div>
           )}
           {/* Error overlay */}
@@ -1524,48 +1687,15 @@ const DisplayViewer: React.FC = () => {
               className="display-video"
               muted
               playsInline
-              onLoadStart={() => {
-                console.log('[DisplayViewer] Video load started, src:', mediaPath);
-              }}
-              onProgress={(e) => {
-                const video = e.target as HTMLVideoElement;
-                const buffered = video.buffered;
-                console.log('[DisplayViewer] Video progress event - buffered ranges:', buffered.length,
-                  'networkState:', video.networkState, 'readyState:', video.readyState);
-                if (buffered.length > 0) {
-                  console.log('[DisplayViewer] Video buffered:', buffered.end(0).toFixed(2), 'sec of', video.duration?.toFixed(2) || 'unknown', 'sec');
-                }
-              }}
-              onLoadedMetadata={(e) => {
-                const video = e.target as HTMLVideoElement;
-                console.log('[DisplayViewer] Video metadata loaded:', {
-                  duration: video.duration,
-                  videoWidth: video.videoWidth,
-                  videoHeight: video.videoHeight,
-                  src: video.src
-                });
-              }}
               onLoadedData={() => {
-                console.log('[DisplayViewer] Video data loaded');
                 setMediaLoading(false);
                 setMediaLoadError(null);
               }}
-              onAbort={() => {
-                console.log('[DisplayViewer] Video load aborted');
-              }}
-              onStalled={() => {
-                console.log('[DisplayViewer] Video stalled - waiting for data');
-              }}
-              onWaiting={() => {
-                console.log('[DisplayViewer] Video waiting for data');
-              }}
               onCanPlay={async () => {
-                console.log('[DisplayViewer] Video can play');
                 if (videoSyncedRef.current) return;
                 videoSyncedRef.current = true;
                 try {
                   const started = await window.displayAPI.signalVideoReady();
-                  console.log('[DisplayViewer] Video ready signal sent, playback started:', started);
                   if (!started) {
                     const pos = await window.displayAPI.getVideoPosition();
                     if (pos && videoRef.current) {
@@ -1585,7 +1715,6 @@ const DisplayViewer: React.FC = () => {
                 const videoElement = e.target as HTMLVideoElement;
                 const videoSrc = videoElement?.src || '';
                 if (!videoSrc || videoSrc.endsWith('/') || (!videoSrc.includes('/media/') && !videoSrc.startsWith('media://'))) {
-                  console.log('[DisplayViewer] Ignoring stale video error, src:', videoSrc);
                   return;
                 }
                 const mediaError = videoElement?.error;
@@ -1634,19 +1763,7 @@ const DisplayViewer: React.FC = () => {
               background: 'rgba(0, 0, 0, 0.7)',
               zIndex: 10
             }}>
-              <div style={{
-                width: '40px',
-                height: '40px',
-                border: '3px solid rgba(255, 255, 255, 0.2)',
-                borderTopColor: '#06b6d4',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite'
-              }} />
-              <style>{`
-                @keyframes spin {
-                  to { transform: rotate(360deg); }
-                }
-              `}</style>
+              <div className="loading-spinner" />
             </div>
           )}
           {mediaLoadError && (
@@ -1704,30 +1821,80 @@ const DisplayViewer: React.FC = () => {
         </div>
       )}
 
-      {/* Slide content layer */}
-      {showSlides && !isBlank && (
-        <SlideRenderer
-          slideData={slideData}
-          displayMode={displayMode}
-          theme={theme}
-          backgroundImage={backgroundImage}
-          isBlank={false}
-          fillContainer={true}
-          presentationSlide={presentationSlide}
-          combinedSlides={combinedSlides}
+      {/* Image background layer (per-song background override) — hidden for camera/streaming displays */}
+      {isImageBackground && !cameraDeviceId && !isTransparentDisplay && (
+        <img
+          key={backgroundImage}
+          src={backgroundImage}
+          alt=""
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            zIndex: 1
+          }}
         />
+      )}
+
+      {/* Video background layer (per-song background override) — hidden for camera/streaming displays */}
+      {!cameraDeviceId && !isTransparentDisplay && backgroundImage.startsWith('video:') && (
+        <video
+          key={backgroundImage}
+          src={backgroundImage.slice(6)}
+          loop
+          muted
+          playsInline
+          onCanPlay={(e) => {
+            const video = e.target as HTMLVideoElement;
+            if (video.duration) {
+              video.currentTime = (Date.now() / 1000) % video.duration;
+            }
+            video.play().catch(err => console.error('Background video play error:', err));
+          }}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            zIndex: 1
+          }}
+        />
+      )}
+
+      {/* Slide content layer - z-index 2 to render above image/video background layers (z-index 1)
+           For camera/streaming displays, force transparent background so the video feed shows through */}
+      {showSlides && !isBlank && (
+        <div style={{ position: 'relative', width: '100%', height: '100%', zIndex: 2 }}>
+          <SlideRenderer
+            slideData={slideData}
+            displayMode={displayMode}
+            theme={theme}
+            backgroundImage={(cameraDeviceId || isTransparentDisplay) ? 'transparent' : backgroundImage}
+            isBlank={false}
+            fillContainer={true}
+            presentationSlide={presentationSlide}
+            combinedSlides={combinedSlides}
+          />
+        </div>
       )}
 
       {/* Blank screen - just show background */}
       {isBlank && !countdown.active && !clock.active && !stopwatch.active && (
-        <SlideRenderer
-          slideData={null}
-          displayMode={displayMode}
-          theme={theme}
-          backgroundImage={backgroundImage}
-          isBlank={true}
-          fillContainer={true}
-        />
+        <div style={{ position: 'relative', width: '100%', height: '100%', zIndex: 2 }}>
+          <SlideRenderer
+            slideData={null}
+            displayMode={displayMode}
+            theme={theme}
+            backgroundImage={(cameraDeviceId || isTransparentDisplay) ? 'transparent' : backgroundImage}
+            isBlank={true}
+            fillContainer={true}
+          />
+        </div>
       )}
 
       {/* Tool overlays - highest z-index */}

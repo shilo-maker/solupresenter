@@ -2,6 +2,7 @@ import React, { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { colors, buttonStyles, dropdownStyles, panelStyles, flexStyles } from '../../styles/controlPanelStyles';
 import DisplaySettingsModal from './modals/DisplaySettingsModal';
+import { DisplayAssignedType, DISPLAY_TYPE_BADGE_COLORS } from './panels/types';
 
 interface Theme {
   id: string;
@@ -14,7 +15,7 @@ interface Display {
   bounds: { x: number; y: number; width: number; height: number };
   isPrimary: boolean;
   isAssigned: boolean;
-  assignedType?: 'viewer' | 'stage';
+  assignedType?: DisplayAssignedType;
 }
 
 interface DisplayPanelProps {
@@ -22,7 +23,7 @@ interface DisplayPanelProps {
   isOpen: boolean;
   isRTL: boolean;
   onToggle: () => void;
-  onOpenDisplay: (displayId: number, type: 'viewer' | 'stage') => void;
+  onOpenDisplay: (displayId: number, type: DisplayAssignedType, deviceId?: string) => void;
   onCloseDisplay: (displayId: number) => void;
   // Theme props for the settings modal
   themes?: Theme[];
@@ -139,11 +140,11 @@ const DisplayPanel: React.FC<DisplayPanelProps> = memo(({
                       <span style={{
                         marginLeft: '8px',
                         fontSize: '0.7rem',
-                        background: display.assignedType === 'stage' ? '#6c757d' : '#28a745',
+                        background: DISPLAY_TYPE_BADGE_COLORS[display.assignedType!] || '#28a745',
                         padding: '2px 6px',
                         borderRadius: '4px'
                       }}>
-                        {display.assignedType === 'stage' ? t('controlPanel.stage') : t('controlPanel.viewer')}
+                        {display.assignedType === 'camera' ? t('controlPanel.camera', 'Camera') : display.assignedType === 'stage' ? t('controlPanel.stage') : t('controlPanel.viewer')}
                       </span>
                     )}
                   </div>

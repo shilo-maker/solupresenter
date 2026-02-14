@@ -61,8 +61,8 @@ export function usePanelResize(
       const rect = mainContentRef.current.getBoundingClientRect();
       const { x: startX, y: startY, startValue } = resizeStartRef.current;
 
-      // In RTL mode, horizontal drag direction is inverted
-      const rtlMultiplier = isRTLRef.current ? -1 : 1;
+      // row-reverse on an RTL document cancels out, so visual order is always the same
+      const rtlMultiplier = -1;
 
       if (isResizing === 'row') {
         // 'row' controls the boundary between Live Preview and Setlist

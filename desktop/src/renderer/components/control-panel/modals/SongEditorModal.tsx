@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../../../styles/controlPanelStyles';
 
@@ -7,6 +7,7 @@ interface SongSlide {
   transliteration: string;
   translation: string;
   translationOverflow: string;
+  translations?: Record<string, string>;
   verseType: string;
 }
 
@@ -36,6 +37,21 @@ const songLanguages = [
   { code: 'other', name: 'Other' }
 ];
 
+const translationLanguageLabels: Record<string, string> = {
+  en: 'English',
+  cs: 'Čeština',
+  es: 'Español',
+  fr: 'Français',
+  de: 'Deutsch',
+  ru: 'Русский',
+  pt: 'Português',
+  it: 'Italiano',
+};
+
+function getLanguageLabel(code: string): string {
+  return translationLanguageLabels[code] || code.toUpperCase();
+}
+
 const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave }) => {
   const { t } = useTranslation();
 
@@ -45,14 +61,34 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
     author: '',
     originalLanguage: 'he',
     tags: [],
-    slides: [{ originalText: '', transliteration: '', translation: '', translationOverflow: '', verseType: 'Verse' }]
+    slides: [{ originalText: '', transliteration: '', translation: '', translationOverflow: '', translations: {}, verseType: 'Verse' }]
   });
 
   const [editingSlideIndex, setEditingSlideIndex] = useState(0);
   const [expressMode, setExpressMode] = useState(true);
+  const [activeEditLanguage, setActiveEditLanguage] = useState<string>(() => {
+    // Default to first language found in translations map, or 'en'
+    if (song?.slides) {
+      for (const slide of song.slides) {
+        if (slide.translations && typeof slide.translations === 'object') {
+          const langs = Object.keys(slide.translations);
+          if (langs.length > 0) return langs.includes('en') ? 'en' : langs[0];
+        }
+      }
+    }
+    return 'en';
+  });
   const [expressText, setExpressText] = useState(() => {
     // Initialize express text from song slides if editing existing song
     if (song && song.slides.length > 0) {
+      // Determine initial language (same logic as activeEditLanguage init)
+      let initLang = 'en';
+      for (const s of song.slides) {
+        if (s.translations && typeof s.translations === 'object') {
+          const langs = Object.keys(s.translations);
+          if (langs.length > 0) { initLang = langs.includes('en') ? 'en' : langs[0]; break; }
+        }
+      }
       let lastVerseType = '';
       return song.slides
         .filter(slide => slide.originalText)
@@ -64,15 +100,65 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
           }
           lines.push(slide.originalText);
           if (slide.transliteration) lines.push(slide.transliteration);
-          if (slide.translation) lines.push(slide.translation);
-          if (slide.translationOverflow) lines.push(slide.translationOverflow);
+          // Use translations map for the active language
+          const hasLangKey = slide.translations && initLang in slide.translations;
+          const langText = hasLangKey ? slide.translations![initLang] : null;
+          if (langText) {
+            const nlIdx = langText.indexOf('\n');
+            if (nlIdx !== -1) {
+              lines.push(langText.substring(0, nlIdx));
+              lines.push(langText.substring(nlIdx + 1));
+            } else {
+              lines.push(langText);
+            }
+          } else if (!hasLangKey) {
+            // Fallback to flat fields only when translations map has no entry for this language
+            if (slide.translation) lines.push(slide.translation);
+            if (slide.translationOverflow) lines.push(slide.translationOverflow);
+          }
           return lines.join('\n');
         }).join('\n\n');
     }
     return '';
   });
   const [tagInput, setTagInput] = useState('');
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const expressTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Track initial state to detect unsaved changes
+  const initialStateRef = useRef({
+    title: editingSong.title,
+    author: editingSong.author,
+    originalLanguage: editingSong.originalLanguage,
+    tags: JSON.stringify(editingSong.tags),
+    slides: JSON.stringify(editingSong.slides),
+    expressText: expressText,
+  });
+
+  const hasUnsavedChanges = useCallback((): boolean => {
+    const init = initialStateRef.current;
+    if (expressMode) {
+      // In express mode, check express text changes + metadata
+      return init.title !== editingSong.title ||
+        init.author !== editingSong.author ||
+        init.originalLanguage !== editingSong.originalLanguage ||
+        init.tags !== JSON.stringify(editingSong.tags) ||
+        init.expressText !== expressText;
+    }
+    return init.title !== editingSong.title ||
+      init.author !== editingSong.author ||
+      init.originalLanguage !== editingSong.originalLanguage ||
+      init.tags !== JSON.stringify(editingSong.tags) ||
+      init.slides !== JSON.stringify(editingSong.slides);
+  }, [editingSong, expressText, expressMode]);
+
+  const handleClose = useCallback(() => {
+    if (hasUnsavedChanges()) {
+      setShowDiscardConfirm(true);
+    } else {
+      onClose();
+    }
+  }, [hasUnsavedChanges, onClose]);
 
   // Section markers for express mode
   const sectionMarkers = [
@@ -127,6 +213,7 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
       transliteration: '',
       translation: '',
       translationOverflow: '',
+      translations: {},
       verseType: 'Verse'
     }];
     setEditingSong({ ...editingSong, slides: newSlides });
@@ -149,6 +236,76 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
     setEditingSong({ ...editingSong, slides: newSlides });
   };
 
+  // Get the translation text for the active language from the current slide
+  const getActiveTranslation = (): string => {
+    const slide = editingSong.slides[editingSlideIndex];
+    if (!slide) return '';
+    // Read from translations map if the language key exists
+    if (slide.translations && typeof slide.translations === 'object' && activeEditLanguage in slide.translations) {
+      return slide.translations[activeEditLanguage] || '';
+    }
+    return '';
+  };
+
+  // Set the translation text for the active language on the current slide
+  const setActiveTranslation = (text: string) => {
+    const newSlides = [...editingSong.slides];
+    if (editingSlideIndex < 0 || editingSlideIndex >= newSlides.length) return;
+    const slide = { ...newSlides[editingSlideIndex] };
+    const translations = { ...(slide.translations || {}) };
+    // Always store the value (even empty string) so getActiveTranslation sees it
+    translations[activeEditLanguage] = text;
+    slide.translations = translations;
+    newSlides[editingSlideIndex] = slide;
+    setEditingSong({ ...editingSong, slides: newSlides });
+  };
+
+  // Get all translation languages used across all slides
+  const availableLanguages = useMemo(() => {
+    const langs = new Set<string>();
+    for (const slide of editingSong.slides) {
+      if (slide.translations) {
+        for (const lang of Object.keys(slide.translations)) {
+          langs.add(lang);
+        }
+      }
+    }
+    // Always show 'en' and the active edit language
+    langs.add('en');
+    langs.add(activeEditLanguage);
+    return Array.from(langs).sort();
+  }, [editingSong.slides, activeEditLanguage]);
+
+  // Add a new translation language
+  const [showAddLanguage, setShowAddLanguage] = useState(false);
+  const addTranslationLanguage = (langCode: string) => {
+    setActiveEditLanguage(langCode);
+    setShowAddLanguage(false);
+  };
+
+  // Remove a translation language from all slides
+  const removeTranslationLanguage = (langCode: string) => {
+    if (availableLanguages.length <= 1) return;
+    const newSlides = editingSong.slides.map(slide => {
+      if (!slide.translations || !(langCode in slide.translations)) return slide;
+      const translations = { ...slide.translations };
+      delete translations[langCode];
+      // Recalculate flat fields from remaining translations
+      const primaryText = translations['en'] || Object.values(translations)[0] || '';
+      const nlIdx = primaryText.indexOf('\n');
+      return {
+        ...slide,
+        translations,
+        translation: nlIdx !== -1 ? primaryText.substring(0, nlIdx) : primaryText,
+        translationOverflow: nlIdx !== -1 ? primaryText.substring(nlIdx + 1) : '',
+      };
+    });
+    setEditingSong({ ...editingSong, slides: newSlides });
+    if (activeEditLanguage === langCode) {
+      setActiveEditLanguage(availableLanguages.find(l => l !== langCode) || 'en');
+    }
+  };
+
   const autoGenerateContent = async () => {
     const slide = editingSong.slides[editingSlideIndex];
     if (!slide || !slide.originalText.trim()) return;
@@ -156,10 +313,15 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
     try {
       const result = await window.electronAPI.processQuickSlide(slide.originalText);
       const newSlides = [...editingSong.slides];
+      const translations = { ...(newSlides[editingSlideIndex].translations || {}) };
+      if (result.translation) {
+        translations[activeEditLanguage] = result.translation;
+      }
       newSlides[editingSlideIndex] = {
         ...newSlides[editingSlideIndex],
         transliteration: result.transliteration,
-        translation: result.translation
+        translation: result.translation,
+        translations
       };
       setEditingSong({ ...editingSong, slides: newSlides });
     } catch (error) {
@@ -171,6 +333,14 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
   const parseExpressText = (): SongSlide[] => {
     const slideBlocks = expressText.split(/\n\s*\n/);
     let currentVerseType = 'Verse';
+
+    // Build a lookup of existing translations by originalText so we can preserve other languages
+    const existingTranslations = new Map<string, Record<string, string>>();
+    for (const slide of editingSong.slides) {
+      if (slide.originalText && slide.translations) {
+        existingTranslations.set(slide.originalText, slide.translations);
+      }
+    }
 
     const parsedSlides: SongSlide[] = [];
 
@@ -187,11 +357,22 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
 
       const originalText = lines[0] || '';
       if (originalText) {
+        const translationText = lines[2] || '';
+        const overflowText = lines[3] || '';
+        // Preserve existing translations for other languages, update only the active language
+        const translations: Record<string, string> = { ...(existingTranslations.get(originalText) || {}) };
+        const combinedTranslation = [translationText, overflowText].filter(Boolean).join('\n');
+        if (combinedTranslation) {
+          translations[activeEditLanguage] = combinedTranslation;
+        } else {
+          delete translations[activeEditLanguage];
+        }
         parsedSlides.push({
           originalText,
           transliteration: lines[1] || '',
-          translation: lines[2] || '',
-          translationOverflow: lines[3] || '',
+          translation: translationText,
+          translationOverflow: overflowText,
+          translations,
           verseType: currentVerseType
         });
       }
@@ -202,6 +383,7 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
       transliteration: '',
       translation: '',
       translationOverflow: '',
+      translations: {},
       verseType: 'Verse'
     }];
   };
@@ -218,8 +400,22 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
         }
         lines.push(slide.originalText);
         if (slide.transliteration) lines.push(slide.transliteration);
-        if (slide.translation) lines.push(slide.translation);
-        if (slide.translationOverflow) lines.push(slide.translationOverflow);
+        // Use translation from active language in the translations map
+        const hasLangKey = slide.translations && activeEditLanguage in slide.translations;
+        const langText = hasLangKey ? slide.translations![activeEditLanguage] : null;
+        if (langText) {
+          const nlIdx = langText.indexOf('\n');
+          if (nlIdx !== -1) {
+            lines.push(langText.substring(0, nlIdx));
+            lines.push(langText.substring(nlIdx + 1));
+          } else {
+            lines.push(langText);
+          }
+        } else if (!hasLangKey) {
+          // Fallback to flat fields only when translations map has no entry for this language
+          if (slide.translation) lines.push(slide.translation);
+          if (slide.translationOverflow) lines.push(slide.translationOverflow);
+        }
         return lines.join('\n');
       }).join('\n\n');
   };
@@ -281,12 +477,34 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
       return;
     }
 
-    await onSave({ ...editingSong, slides: validSlides });
+    // Ensure translations map is clean and flat fields are mirrored for backward compat
+    const finalSlides = validSlides.map(slide => {
+      const translations: Record<string, string> = {};
+      // Copy only non-empty translations
+      if (slide.translations && typeof slide.translations === 'object') {
+        for (const [lang, text] of Object.entries(slide.translations)) {
+          if (typeof text === 'string' && text.trim()) {
+            translations[lang] = text;
+          }
+        }
+      }
+      // Mirror primary language to flat fields
+      const primaryText = translations['en'] || Object.values(translations)[0] || '';
+      const nlIdx = primaryText.indexOf('\n');
+      return {
+        ...slide,
+        translations,
+        translation: nlIdx !== -1 ? primaryText.substring(0, nlIdx) : primaryText,
+        translationOverflow: nlIdx !== -1 ? primaryText.substring(nlIdx + 1) : '',
+      };
+    });
+
+    await onSave({ ...editingSong, slides: finalSlides });
   };
 
   return (
     <div
-      onClick={onClose}
+      onClick={handleClose}
       style={{
         position: 'fixed',
         inset: 0,
@@ -301,6 +519,7 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
         onClick={(e) => e.stopPropagation()}
         onMouseDown={() => window.focus()}
         style={{
+          position: 'relative',
           background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.98), rgba(18, 18, 21, 0.98))',
           borderRadius: '16px',
           padding: '24px',
@@ -335,7 +554,7 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
               {expressMode ? 'Standard Mode' : 'Express Mode ⚡'}
             </button>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '6px', padding: '4px 8px', color: 'white', cursor: 'pointer' }}
             >
               ✕
@@ -677,14 +896,105 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
                 />
               </div>
 
-              {/* Translation / Line 3 */}
+              {/* Translation with Language Tabs */}
               <div>
                 <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', marginBottom: '4px' }}>
-                  {isTransliterationLanguage ? 'Translation' : 'Additional Lyrics'}
+                  {isTransliterationLanguage ? `Translation (${getLanguageLabel(activeEditLanguage)})` : `Translation (${getLanguageLabel(activeEditLanguage)})`}
                 </label>
+                {/* Language tab bar */}
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {availableLanguages.map(lang => (
+                      <div key={lang} style={{ display: 'flex', alignItems: 'center' }}>
+                        <button
+                          onClick={() => setActiveEditLanguage(lang)}
+                          style={{
+                            background: activeEditLanguage === lang ? 'rgba(102, 126, 234, 0.4)' : 'rgba(255,255,255,0.08)',
+                            border: activeEditLanguage === lang ? '1px solid #667eea' : '1px solid rgba(255,255,255,0.15)',
+                            borderRadius: availableLanguages.length > 1 ? '4px 0 0 4px' : '4px',
+                            padding: '3px 8px',
+                            color: activeEditLanguage === lang ? '#a0b0ff' : 'rgba(255,255,255,0.6)',
+                            cursor: 'pointer',
+                            fontSize: '0.7rem',
+                            fontWeight: activeEditLanguage === lang ? 600 : 400,
+                          }}
+                        >
+                          {lang.toUpperCase()}
+                        </button>
+                        {availableLanguages.length > 1 && (
+                          <button
+                            onClick={() => removeTranslationLanguage(lang)}
+                            style={{
+                              background: 'rgba(220, 53, 69, 0.2)',
+                              border: '1px solid rgba(220, 53, 69, 0.3)',
+                              borderLeft: 'none',
+                              borderRadius: '0 4px 4px 0',
+                              padding: '3px 5px',
+                              color: 'rgba(220, 53, 69, 0.8)',
+                              cursor: 'pointer',
+                              fontSize: '0.6rem',
+                            }}
+                            title={`Remove ${getLanguageLabel(lang)}`}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {/* Add language button */}
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => setShowAddLanguage(!showAddLanguage)}
+                        style={{
+                          background: 'rgba(40, 167, 69, 0.2)',
+                          border: '1px solid rgba(40, 167, 69, 0.4)',
+                          borderRadius: '4px',
+                          padding: '3px 8px',
+                          color: '#28a745',
+                          cursor: 'pointer',
+                          fontSize: '0.7rem',
+                        }}
+                      >
+                        + Lang
+                      </button>
+                      {showAddLanguage && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          background: '#2a2a3e',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          borderRadius: '6px',
+                          marginTop: '4px',
+                          zIndex: 100,
+                          minWidth: '120px',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                        }}>
+                          {Object.entries(translationLanguageLabels)
+                            .filter(([code]) => !availableLanguages.includes(code))
+                            .map(([code, name]) => (
+                              <div
+                                key={code}
+                                onClick={() => addTranslationLanguage(code)}
+                                style={{
+                                  padding: '6px 10px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.75rem',
+                                  color: 'white',
+                                  borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(102, 126, 234, 0.2)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                              >
+                                {code.toUpperCase()} - {name}
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 <textarea
-                  value={editingSong.slides[editingSlideIndex]?.translation || ''}
-                  onChange={(e) => updateSlide('translation', e.target.value)}
+                  value={getActiveTranslation()}
+                  onChange={(e) => setActiveTranslation(e.target.value)}
                   style={{
                     width: '100%',
                     background: 'rgba(255,255,255,0.08)',
@@ -694,32 +1004,9 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
                     color: 'white',
                     fontSize: '0.9rem',
                     resize: 'vertical',
-                    minHeight: '40px'
+                    minHeight: '60px'
                   }}
-                  placeholder={isTransliterationLanguage ? 'Enter translation...' : 'Additional lyrics...'}
-                />
-              </div>
-
-              {/* Translation Overflow / Line 4 */}
-              <div>
-                <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', marginBottom: '4px' }}>
-                  {isTransliterationLanguage ? 'Translation Overflow' : 'Additional Lyrics'}
-                </label>
-                <textarea
-                  value={editingSong.slides[editingSlideIndex]?.translationOverflow || ''}
-                  onChange={(e) => updateSlide('translationOverflow', e.target.value)}
-                  style={{
-                    width: '100%',
-                    background: 'rgba(255,255,255,0.08)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    borderRadius: '8px',
-                    padding: '10px',
-                    color: 'white',
-                    fontSize: '0.9rem',
-                    resize: 'vertical',
-                    minHeight: '40px'
-                  }}
-                  placeholder={isTransliterationLanguage ? 'Additional translation lines...' : 'Additional lyrics...'}
+                  placeholder={isTransliterationLanguage ? `Enter ${getLanguageLabel(activeEditLanguage)} translation... (use Enter for overflow line)` : 'Additional lyrics...'}
                 />
               </div>
             </div>
@@ -729,7 +1016,7 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
         {/* Actions */}
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             style={{
               background: 'rgba(255,255,255,0.1)',
               border: '1px solid rgba(255,255,255,0.2)',
@@ -757,6 +1044,74 @@ const SongEditorModal: React.FC<SongEditorModalProps> = ({ song, onClose, onSave
             Save Song
           </button>
         </div>
+
+        {/* Discard confirmation overlay */}
+        {showDiscardConfirm && (
+          <div
+            onClick={() => setShowDiscardConfirm(false)}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(0,0,0,0.6)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '16px',
+              zIndex: 10
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'linear-gradient(135deg, #2a2a3e, #1e1e2e)',
+                borderRadius: '12px',
+                padding: '24px',
+                border: '1px solid rgba(255,255,255,0.2)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                maxWidth: '400px',
+                textAlign: 'center'
+              }}
+            >
+              <div style={{ color: 'white', fontSize: '1rem', fontWeight: 600, marginBottom: '8px' }}>
+                Discard changes?
+              </div>
+              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', marginBottom: '20px' }}>
+                You have unsaved changes that will be lost.
+              </div>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                <button
+                  onClick={() => setShowDiscardConfirm(false)}
+                  style={{
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '8px',
+                    padding: '8px 20px',
+                    color: 'white',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  Keep Editing
+                </button>
+                <button
+                  onClick={onClose}
+                  style={{
+                    background: 'linear-gradient(135deg, #dc3545, #c82333)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 20px',
+                    color: 'white',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                    fontWeight: 600
+                  }}
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

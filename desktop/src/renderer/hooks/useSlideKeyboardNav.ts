@@ -15,7 +15,8 @@ interface UseSlideKeyboardNavResult {
 }
 
 // Reserved keys that shouldn't trigger slide navigation
-const RESERVED_KEYS = new Set(['B']); // B = blank toggle
+// Section jump keys (A,S,D,F,G,H = verses, C,X,Z = chorus, B,N,M = bridge, P = prechorus) + Q = quick slide
+const RESERVED_KEYS = new Set(['A', 'S', 'D', 'F', 'G', 'H', 'C', 'X', 'Z', 'B', 'N', 'M', 'P', 'Q']);
 
 export function useSlideKeyboardNav({
   codeMap,

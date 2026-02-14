@@ -1,13 +1,14 @@
 import React, { memo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../../styles/controlPanelStyles';
+import { DisplayAssignedType, DISPLAY_TYPE_BADGE_COLORS } from './panels/types';
 
 interface Display {
   id: number;
   label: string;
   bounds: { x: number; y: number; width: number; height: number };
   isAssigned?: boolean;
-  assignedType?: 'viewer' | 'stage';
+  assignedType?: DisplayAssignedType;
 }
 
 interface DisplayItemProps {
@@ -130,15 +131,15 @@ const DisplayItem = memo<DisplayItemProps>(({
         <div>
           <div style={{ color: 'white', fontWeight: 500 }}>
             {display.label}
-            {display.isAssigned && (
+            {display.isAssigned && display.assignedType && (
               <span style={{
                 marginLeft: '8px',
                 fontSize: '0.7rem',
-                background: '#28a745',
+                background: DISPLAY_TYPE_BADGE_COLORS[display.assignedType] || '#28a745',
                 padding: '2px 6px',
                 borderRadius: '4px'
               }}>
-                {display.assignedType}
+                {display.assignedType === 'camera' ? t('controlPanel.camera', 'Camera') : display.assignedType === 'stage' ? t('controlPanel.stage', 'Stage') : t('controlPanel.viewer', 'Viewer')}
               </span>
             )}
           </div>

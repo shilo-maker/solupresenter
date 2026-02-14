@@ -2,7 +2,7 @@ import * as http from 'http';
 import { EventEmitter } from 'events';
 import { getDefaultOBSTheme } from '../database/obsThemes';
 
-const DEFAULT_PORT = 45678;
+const DEFAULT_PORT = 45690;
 const MAX_PORT_RETRIES = 10;
 const SSE_HEARTBEAT_INTERVAL_MS = 30000; // Send heartbeat every 30 seconds
 
@@ -10,6 +10,7 @@ interface SlideData {
   originalText?: string;
   transliteration?: string;
   translation?: string;
+  translationB?: string;
   translationOverflow?: string;
   reference?: string;
   referenceTranslation?: string;
@@ -89,6 +90,8 @@ class OBSServer extends EventEmitter {
         this.startHeartbeat();
         // Load default themes if not already set
         await this.loadDefaultThemes();
+        // Broadcast to any early-connecting SSE clients so they get the loaded themes
+        this.broadcast();
         resolve(port);
       });
     });

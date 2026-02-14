@@ -1,5 +1,20 @@
 // Shared types for Control Panel tabs/panels
 
+/** Display type assigned to a physical display window */
+export type DisplayAssignedType = 'viewer' | 'stage' | 'camera';
+
+/** Check if a display type behaves like a viewer (receives viewer themes, slides, media, YouTube, etc.) */
+export function isViewerLike(type: string | undefined): boolean {
+  return type === 'viewer' || type === 'camera';
+}
+
+/** Badge color for each display assigned type */
+export const DISPLAY_TYPE_BADGE_COLORS: Record<DisplayAssignedType, string> = {
+  viewer: '#28a745',
+  stage: '#6c757d',
+  camera: '#00897b',
+};
+
 export interface Song {
   id: string;
   title: string;
@@ -10,6 +25,7 @@ export interface Song {
     transliteration?: string;
     translation?: string;
     translationOverflow?: string;
+    translations?: Record<string, string>;
     verseType?: string;
   }>;
   author?: string;
@@ -57,6 +73,8 @@ export interface SetlistItem {
   youtubeVideoId?: string;
   youtubeTitle?: string;
   youtubeThumbnail?: string;
+  // Per-item background override (viewer only)
+  background?: string;
 }
 
 export interface Presentation {
@@ -80,6 +98,8 @@ export interface Presentation {
 export interface QuickModeMetadata {
   type: 'sermon' | 'prayer' | 'announcements';
   title: string;
+  titleTranslation?: string;
+  generateTranslation?: boolean;
   subtitles: Array<{
     subtitle: string;
     subtitleTranslation?: string;

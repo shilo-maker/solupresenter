@@ -1,9 +1,6 @@
 /**
  * Full sync: Replace production song data with local database.
- * Local is the source of truth for all fields:
- * title, author, originalLanguage, tags, slides (text, translations, verseTypes).
- *
- * This migration is idempotent - it compares and only updates if different.
+ * Local is the source of truth for all fields.
  */
 const fs = require('fs');
 const path = require('path');
@@ -16,66 +13,95 @@ async function applyLocalSync(Song) {
     return;
   }
 
-  console.log('[migration] Full local sync starting...');
+  console.log('[migration] Full local sync v2 starting...');
 
   const updates = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
   const songIds = Object.keys(updates);
+  console.log('[migration] Loaded ' + songIds.length + ' songs from local data');
 
-  let updated = 0;
-  let notFound = 0;
-  let skipped = 0;
+  // Debug: check data format of first song
+  var firstId = songIds[0];
+  var firstData = updates[firstId];
+  console.log('[migration] First song data keys: ' + Object.keys(firstData).join(', '));
+  console.log('[migration] First song title: ' + (firstData.title || 'N/A'));
+  console.log('[migration] First song slides count: ' + ((firstData.slides || []).length));
 
-  for (const songId of songIds) {
-    const song = await Song.findByPk(songId);
+  var updated = 0;
+  var notFound = 0;
+  var skipped = 0;
+  var errors = 0;
+
+  for (var s = 0; s < songIds.length; s++) {
+    var songId = songIds[s];
+    var song;
+    try {
+      song = await Song.findByPk(songId);
+    } catch (findErr) {
+      console.error('[migration] Error finding song ' + songId + ': ' + findErr.message);
+      errors++;
+      continue;
+    }
+
     if (!song) {
       notFound++;
       continue;
     }
 
-    const local = updates[songId];
-    const localSlides = local.slides || [];
-    const prodSlides = song.slides || [];
+    var local = updates[songId];
+    var localSlides = local.slides || [];
+    var prodSlides = song.slides || [];
 
     // Check if anything differs
     var needsUpdate = false;
 
-    // Compare metadata
-    if (local.title && song.title !== local.title) needsUpdate = true;
-    if (local.author !== undefined && (song.author || '') !== local.author) needsUpdate = true;
-    if (local.originalLanguage && song.originalLanguage !== local.originalLanguage) needsUpdate = true;
-    if (local.tags && JSON.stringify(song.tags || []) !== JSON.stringify(local.tags)) needsUpdate = true;
-
-    // Compare slides
+    // Compare slide count
     if (localSlides.length !== prodSlides.length) {
       needsUpdate = true;
-    } else {
+    }
+
+    // Compare slide content if same length
+    if (!needsUpdate) {
       for (var i = 0; i < localSlides.length; i++) {
         var ls = localSlides[i];
         var ps = prodSlides[i] || {};
-        if (ls.originalText !== (ps.originalText || '')) { needsUpdate = true; break; }
-        if (ls.transliteration !== (ps.transliteration || '')) { needsUpdate = true; break; }
-        if (ls.verseType !== (ps.verseType || 'Verse')) { needsUpdate = true; break; }
+        if ((ls.originalText || '') !== (ps.originalText || '')) { needsUpdate = true; break; }
+        if ((ls.transliteration || '') !== (ps.transliteration || '')) { needsUpdate = true; break; }
+        if ((ls.verseType || '') !== (ps.verseType || '')) { needsUpdate = true; break; }
         if (JSON.stringify(ls.translations || {}) !== JSON.stringify(ps.translations || {})) { needsUpdate = true; break; }
       }
     }
+
+    // Compare metadata
+    if (!needsUpdate && local.title && song.title !== local.title) needsUpdate = true;
+    if (!needsUpdate && local.author !== undefined && (song.author || '') !== (local.author || '')) needsUpdate = true;
 
     if (!needsUpdate) {
       skipped++;
       continue;
     }
 
-    // Full replace: local is source of truth
-    var updateFields = { slides: localSlides };
-    if (local.title) updateFields.title = local.title;
-    if (local.author !== undefined) updateFields.author = local.author;
-    if (local.originalLanguage) updateFields.originalLanguage = local.originalLanguage;
-    if (local.tags) updateFields.tags = local.tags;
+    // Log what we're updating for the 3 key songs
+    if (localSlides.length !== prodSlides.length) {
+      console.log('[migration] Updating ' + (local.title || songId) + ': ' + prodSlides.length + ' -> ' + localSlides.length + ' slides');
+    }
 
-    await song.update(updateFields);
-    updated++;
+    // Full replace
+    try {
+      var updateFields = { slides: localSlides };
+      if (local.title) updateFields.title = local.title;
+      if (local.author !== undefined) updateFields.author = local.author || null;
+      if (local.originalLanguage) updateFields.originalLanguage = local.originalLanguage;
+      if (local.tags) updateFields.tags = local.tags;
+
+      await song.update(updateFields);
+      updated++;
+    } catch (updateErr) {
+      console.error('[migration] Error updating ' + (local.title || songId) + ': ' + updateErr.message);
+      errors++;
+    }
   }
 
-  console.log('[migration] Full sync: ' + updated + ' updated, ' + skipped + ' already ok, ' + notFound + ' not found');
+  console.log('[migration] Full sync complete: ' + updated + ' updated, ' + skipped + ' ok, ' + notFound + ' not found, ' + errors + ' errors');
 }
 
 module.exports = applyLocalSync;

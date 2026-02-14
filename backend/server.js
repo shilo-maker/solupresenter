@@ -175,8 +175,8 @@ app.use(helmet({
 })); // Security headers
 app.use(compression()); // Enable gzip compression
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Session configuration
 app.use(session({
@@ -211,6 +211,49 @@ app.use('/api/remote-screens', remoteScreensRoutes);
 app.use('/api/screen-access', screenAccessRoutes);
 app.use('/api/presentations', presentationsRoutes);
 app.use('/api/quick-slide', quickSlideRoutes);
+
+// Temporary bulk sync endpoint - updates all songs from local database
+app.post('/api/admin/bulk-sync', async (req, res) => {
+  try {
+    const syncKey = req.headers['x-sync-key'];
+    if (syncKey !== 'solucast-sync-2026') {
+      return res.status(403).json({ error: 'Invalid sync key' });
+    }
+
+    const songs = req.body;
+    if (!songs || typeof songs !== 'object') {
+      return res.status(400).json({ error: 'Invalid data' });
+    }
+
+    const songIds = Object.keys(songs);
+    let updated = 0, notFound = 0, errors = 0;
+
+    for (const songId of songIds) {
+      try {
+        const song = await Song.findByPk(songId);
+        if (!song) { notFound++; continue; }
+
+        const local = songs[songId];
+        const updateFields = { slides: local.slides || [] };
+        if (local.title) updateFields.title = local.title;
+        if (local.author !== undefined) updateFields.author = local.author || null;
+        if (local.originalLanguage) updateFields.originalLanguage = local.originalLanguage;
+        if (local.tags) updateFields.tags = local.tags;
+
+        await song.update(updateFields);
+        updated++;
+      } catch (err) {
+        console.error('[bulk-sync] Error updating ' + songId + ':', err.message);
+        errors++;
+      }
+    }
+
+    res.json({ updated, notFound, errors, total: songIds.length });
+  } catch (err) {
+    console.error('[bulk-sync] Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Health check
 app.get('/health', (req, res) => {

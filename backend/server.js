@@ -154,6 +154,14 @@ sequelize.authenticate()
     } catch (err) {
       console.error('[migration] Spanish translations failed:', err.message);
     }
+
+    // One-time migration: fix corrupted Hebrew text from local sync
+    try {
+      const applyLocalSync = require('./migrations/apply-local-sync');
+      await applyLocalSync(Song);
+    } catch (err) {
+      console.error('[migration] Local sync failed:', err.message);
+    }
   })
   .catch(err => {
     console.error('❌ Unable to connect to PostgreSQL:', err);

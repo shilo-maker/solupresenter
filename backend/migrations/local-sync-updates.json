@@ -1,0 +1,1127 @@
+{
+  "9d8d1252-a0bf-4331-a0ad-af4052576ca1": [
+    {
+      "verseType": "Chorus",
+      "translation": "O Lord, our Lord, how majestic is your name",
+      "originalText": "אדוני אדוננו מה אדיר שמך",
+      "transliteration": "adonai adonenu, ma adir shimkha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "O Lord, our Lord, how majestic is your name",
+        "cs": "HOSPODINE, PANE NÁŠ, JAK VZNEŠENÉ JE TVÉ JMÉNO",
+        "ru": "ГОСПОДИ, БОЖЕ НАШ, КАК ВЕЛИЧЕСТВЕННО ИМЯ ТВОЁ",
+        "es": "OH SEÑOR, SEÑOR NUESTRO, ¡CUÁN MAJESTUOSO ES TU NOMBRE"
+      }
+    },
+    {
+      "verseType": "Chorus",
+      "translation": "in all the earth! You have set your glory above the heavens.",
+      "originalText": "בְּכָל הָאָרֶץ, אֲשֶׁר תְּנָה הוֹדְךָ עַל הַשָׁמָיִם",
+      "transliteration": "bekhol haarets asher tena hodkha al hashamaim",
+      "translationOverflow": "",
+      "translations": {
+        "en": "in all the earth! You have set your glory above the heavens.",
+        "cs": "PO CELÉ ZEMI, TY JSI VLOŽIL SVOU SLÁVU NAD NEBESA",
+        "ru": "ПО ВСЕЙ ЗЕМЛЕ, ТЫ ВОЗНЁС СЛАВУ СВОЮ ПРЕВЫШЕ НЕБЕС",
+        "es": "EN TODA LA TIERRA! HAS PUESTO TU GLORIA SOBRE LOS CIELOS"
+      }
+    },
+    {
+      "verseType": "Verse1",
+      "translation": "Out of the mouth of babies and infants,",
+      "originalText": "מִפִּי עוֹלְלִים וְיוֹנְקִים",
+      "transliteration": "mipi olelim veyonkim",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Out of the mouth of babies and infants,",
+        "cs": "Z ÚST NEMLUVŇAT A KOJENCŮ",
+        "ru": "ИЗ УСТ МЛАДЕНЦЕВ И ГРУДНЫХ ДЕТЕЙ",
+        "es": "DE LA BOCA DE LOS NIÑOS Y LOS LACTANTES"
+      }
+    },
+    {
+      "verseType": "Verse1",
+      "translation": "You have established strength",
+      "originalText": "יִסַּדְתָּ עוֹז",
+      "transliteration": "yisadeta oz",
+      "translationOverflow": "",
+      "translations": {
+        "en": "You have established strength",
+        "cs": "JSI ZALOŽIL SÍLU",
+        "ru": "ТЫ УТВЕРДИЛ СИЛУ",
+        "es": "HAS ESTABLECIDO TU FORTALEZA"
+      }
+    },
+    {
+      "verseType": "Verse1",
+      "translation": "because of Your foes",
+      "originalText": "לְמַעַן צוֹרְרֶיךָ",
+      "transliteration": "lema'an tsorerekha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "because of Your foes",
+        "cs": "KVŮLI SVÝM NEPŘÁTELŮM",
+        "ru": "РАДИ ВРАГОВ ТВОИХ",
+        "es": "A CAUSA DE TUS ENEMIGOS"
+      }
+    },
+    {
+      "verseType": "Verse1",
+      "translation": "to still the enemy and the avenger",
+      "originalText": "לְהַשְׁבִּית אוֹיֵב וּמִתְנַקֵּם",
+      "transliteration": "lehashbit oyev umitnakem",
+      "translationOverflow": "",
+      "translations": {
+        "en": "to still the enemy and the avenger",
+        "cs": "ABY JSI UMLČEL NEPŘÍTELE A MSTITELE",
+        "ru": "ДАБЫ СОМКНУТЬ УСТА ВРАГУ И МСТИТЕЛЮ",
+        "es": "PARA HACER CALLAR AL ENEMIGO Y AL VENGADOR"
+      }
+    },
+    {
+      "verseType": "Verse2",
+      "translation": "When I look at your heavens",
+      "originalText": "כִּי אֶרְאֶה שָׁמֶיךָ",
+      "transliteration": "ki ereh shamekha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "When I look at your heavens",
+        "cs": "KDYŽ HLEDÍM NA TVÁ NEBESA",
+        "ru": "КОГДА ВЗИРАЮ Я НА НЕБЕСА ТВОИ",
+        "es": "CUANDO VEO TUS CIELOS"
+      }
+    },
+    {
+      "verseType": "Verse2",
+      "translation": "the work of your fingers",
+      "originalText": "מַעֲשֵׂה אֶצְבְּעוֹתֶיךָ,",
+      "transliteration": "maaseh etsbeotekha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "the work of your fingers",
+        "cs": "DÍLO TVÝCH PRSTŮ",
+        "ru": "ДЕЛО ПЕРСТОВ ТВОИХ",
+        "es": "OBRA DE TUS DEDOS"
+      }
+    },
+    {
+      "verseType": "Verse2",
+      "translation": "the moon and the stars, which you have set in place",
+      "originalText": "יָרֵח וְכוֹכָבִים אֲשֶׁר כּוֹנָנְתָּה.",
+      "transliteration": "yare'akh vekhokhavim asher konanta",
+      "translationOverflow": "",
+      "translations": {
+        "en": "the moon and the stars, which you have set in place",
+        "cs": "MĚSÍC A HVĚZDY, KTERÉ JSI UMÍSTIL",
+        "ru": "ЛУНУ И ЗВЁЗДЫ, КОТОРЫЕ ТЫ ПОСТАВИЛ",
+        "es": "LA LUNA Y LAS ESTRELLAS QUE TÚ FORMASTE"
+      }
+    },
+    {
+      "verseType": "Verse3",
+      "translation": "what is man that you are mindful of him",
+      "originalText": "מָה אֱנוֹשׁ כִּי תִּזְכְּרֶנוּ",
+      "transliteration": "ma enosh ki tizkerenu",
+      "translationOverflow": "",
+      "translations": {
+        "en": "what is man that you are mindful of him",
+        "cs": "CO JE ČLOVĚK, ŽE NA NĚJ PAMATUJEŠ",
+        "ru": "ЧТО ЕСТЬ ЧЕЛОВЕК, ЧТО ТЫ ПОМНИШЬ ЕГО",
+        "es": "¿QUÉ ES EL HOMBRE PARA QUE TE ACUERDES DE ÉL"
+      }
+    },
+    {
+      "verseType": "Verse3",
+      "translation": "and the son of man that you care for him?",
+      "originalText": "וּבֵן אָדָם כִּי תִּפְקְדֶנוּ,",
+      "transliteration": "uven adam ki tifkedenu",
+      "translationOverflow": "",
+      "translations": {
+        "en": "and the son of man that you care for him?",
+        "cs": "A SYN ČLOVĚKA, ŽE SE O NĚJ STARÁŠ?",
+        "ru": "И СЫН ЧЕЛОВЕЧЕСКИЙ, ЧТО ТЫ ПОСЕЩАЕШЬ ЕГО",
+        "es": "Y EL HIJO DEL HOMBRE PARA QUE LO CUIDES?"
+      }
+    },
+    {
+      "verseType": "Verse3",
+      "translation": "Yet you have made him a little lower than the heavenly beings",
+      "originalText": "וַתְּחַסְּרֵהוּ מְעַט מֵאֱלוֹהִים,",
+      "transliteration": "vatekhasrehu me'at me'elohim",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Yet you have made him a little lower than the heavenly beings",
+        "cs": "UČINIL JSI HO O MÁLO MENŠÍM NEŽ NEBESKÉ BYTOSTI",
+        "ru": "НЕ МНОГО ТЫ УМАЛИЛ ЕГО ПРЕД АНГЕЛАМИ",
+        "es": "LO HICISTE UN POCO MENOR QUE LOS SERES CELESTIALES"
+      }
+    },
+    {
+      "verseType": "Verse3",
+      "translation": "and crowned him with glory and honor",
+      "originalText": "וְכָבוֹד וְהָדָר תְּעַטְּרֵהוּ",
+      "transliteration": "vekhavod vehadar te'atrehu",
+      "translationOverflow": "",
+      "translations": {
+        "en": "and crowned him with glory and honor",
+        "cs": "A KORUNOVAL JSI HO SLÁVOU A CTÍ",
+        "ru": "СЛАВОЮ И ЧЕСТЬЮ УВЕНЧАЛ ЕГО",
+        "es": "Y LO CORONASTE DE GLORIA Y HONOR"
+      }
+    },
+    {
+      "verseType": "Verse4",
+      "translation": "You have given him dominion over the works of your hands",
+      "originalText": "תַּמְשִׁילֵהוּ בְּמַעֲשֵׂי יָדֶיךָ",
+      "transliteration": "tamshilehu bema'aseh yadekha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "You have given him dominion over the works of your hands",
+        "cs": "DAL JSI MU VLÁDU NAD DÍLEM SVÝCH RUKOU",
+        "ru": "ПОСТАВИЛ ЕГО ВЛАДЫКОЮ НАД ДЕЛАМИ РУК ТВОИХ",
+        "es": "LE DISTE DOMINIO SOBRE LAS OBRAS DE TUS MANOS"
+      }
+    },
+    {
+      "verseType": "Verse4",
+      "translation": "you have put all things under his feet",
+      "originalText": "כָּל שַׁתָּה תַּחַת רַגְלָיו",
+      "transliteration": "kol shata takhat raglav",
+      "translationOverflow": "",
+      "translations": {
+        "en": "you have put all things under his feet",
+        "cs": "VŠE JSI POLOŽIL POD JEHO NOHY",
+        "ru": "ВСЁ ПОЛОЖИЛ ПОД НОГИ ЕГО",
+        "es": "TODO LO PUSISTE BAJO SUS PIES"
+      }
+    },
+    {
+      "verseType": "Verse4",
+      "translation": "all sheep and oxen",
+      "originalText": "צונה ואלפים כולם",
+      "transliteration": "tsoneh ve'alafim kulam",
+      "translationOverflow": "",
+      "translations": {
+        "en": "all sheep and oxen",
+        "cs": "VŠECHNY OVCE A VOLY",
+        "ru": "ОВЕЦ И ВОЛОВ ВСЕХ",
+        "es": "OVEJAS Y BUEYES, TODOS ELLOS"
+      }
+    },
+    {
+      "verseType": "Verse4",
+      "translation": "and also the beasts of the field",
+      "originalText": "וְגַם בַּהֲמוֹת שדי",
+      "transliteration": "vegam bahamot shaday",
+      "translationOverflow": "",
+      "translations": {
+        "en": "and also the beasts of the field",
+        "cs": "I POLNÍ ZVĚŘ",
+        "ru": "А ТАКЖЕ ПОЛЕВЫХ ЗВЕРЕЙ",
+        "es": "Y TAMBIÉN LAS BESTIAS DEL CAMPO"
+      }
+    },
+    {
+      "verseType": "Verse4",
+      "translation": "the birds of the heavens, and the fish of the sea",
+      "originalText": "צִפּוֹר שָׁמַיִם, וּדְגֵי הַיָּם",
+      "transliteration": "tsipor shamaim, udgey hayam",
+      "translationOverflow": "",
+      "translations": {
+        "en": "the birds of the heavens, and the fish of the sea",
+        "cs": "NEBESKÉ PTÁKY A MOŘSKÉ RYBY",
+        "ru": "ПТИЦ НЕБЕСНЫХ И РЫБ МОРСКИХ",
+        "es": "LAS AVES DE LOS CIELOS Y LOS PECES DEL MAR"
+      }
+    },
+    {
+      "verseType": "Verse4",
+      "translation": "whatever passes along the paths of the seas",
+      "originalText": "עוֹבֵר אָרְחוֹת -יַמִּים",
+      "transliteration": "over orkhot yamim",
+      "translationOverflow": "",
+      "translations": {
+        "en": "whatever passes along the paths of the seas",
+        "cs": "VŠE CO SE POHYBUJE PO STEZKÁCH MOŘÍ",
+        "ru": "ВСЁ, ЧТО ПРОХОДИТ МОРСКИМИ ПУТЯМИ",
+        "es": "TODO LO QUE CRUZA LOS CAMINOS DE LOS MARES"
+      }
+    }
+  ],
+  "5443245e-04eb-4b58-9500-5229cc7b89d6": [
+    {
+      "verseType": "Verse1",
+      "translation": "In your name blind see again",
+      "originalText": "בשמך עוורים חזרו לראות",
+      "transliteration": "beshimkha ivrim khazru lirot",
+      "translationOverflow": "",
+      "translations": {
+        "en": "In your name blind see again",
+        "cs": "VE TVÉM JMÉNU SLEPÍ ZNOVU VIDÍ",
+        "ru": "ВО ИМЯ ТВОЁ СЛЕПЫЕ ВНОВЬ ПРОЗРЕВАЮТ",
+        "es": "EN TU NOMBRE LOS CIEGOS VUELVEN A VER"
+      }
+    },
+    {
+      "verseType": "Verse1",
+      "translation": "Because of You the lame walk again",
+      "originalText": "בזכותך פסחים חזרו לצעוד",
+      "transliteration": "bizkhutkha piskhim khazru litsod",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Because of You the lame walk again",
+        "cs": "DÍKY TOBĚ CHROMÍ ZNOVU KRÁČÍ",
+        "ru": "БЛАГОДАРЯ ТЕБЕ ХРОМЫЕ ВНОВЬ ИДУТ",
+        "es": "POR TI LOS COJOS VUELVEN A CAMINAR"
+      }
+    },
+    {
+      "verseType": "Verse1",
+      "translation": "Now deaf can hear your voice",
+      "originalText": "ועתה חרשים יוכלו לשמוע את קולך",
+      "transliteration": "ve'ata khershim yukhlu lishmoa et kolkha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Now deaf can hear your voice",
+        "cs": "A NYNÍ HLUŠÍ MOHOU SLYŠET TVŮJ HLAS",
+        "ru": "И НЫНЕ ГЛУХИЕ МОГУТ СЛЫШАТЬ ГОЛОС ТВОЙ",
+        "es": "Y AHORA LOS SORDOS PUEDEN ESCUCHAR TU VOZ"
+      }
+    },
+    {
+      "verseType": "Verse2",
+      "translation": "In your name dead start to breath",
+      "originalText": "בשמך מתים חוזרים לנשום",
+      "transliteration": "beshimkha metim khozrim linshom",
+      "translationOverflow": "",
+      "translations": {
+        "en": "In your name dead start to breath",
+        "cs": "VE TVÉM JMÉNU MRTVÍ ZAČÍNAJÍ DÝCHAT",
+        "ru": "ВО ИМЯ ТВОЁ МЁРТВЫЕ ВНОВЬ ДЫШАТ",
+        "es": "EN TU NOMBRE LOS MUERTOS VUELVEN A RESPIRAR"
+      }
+    },
+    {
+      "verseType": "Verse2",
+      "translation": "Because of You my heart started beating",
+      "originalText": "בזכותך ליבי חזר לפעום",
+      "transliteration": "bizkhutkha libi khazar lifom",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Because of You my heart started beating",
+        "cs": "DÍKY TOBĚ MÉ SRDCE ZNOVU BIJE",
+        "ru": "БЛАГОДАРЯ ТЕБЕ МОЁ СЕРДЦЕ ВНОВЬ ЗАБИЛОСЬ",
+        "es": "POR TI MI CORAZÓN VOLVIÓ A LATIR"
+      }
+    },
+    {
+      "verseType": "Verse2",
+      "translation": "You've let me taste from your grace",
+      "originalText": "ואתה נתת לי לטעום מחסדך",
+      "transliteration": "ve'ata natata li litom mikhasdekha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "You've let me taste from your grace",
+        "cs": "A TY JSI MI DAL OKUSIT TVOU MILOST",
+        "ru": "И ТЫ ДАЛА МНЕ ВКУСИТЬ ОТ БЛАГОДАТИ ТВОЕЙ",
+        "es": "Y TÚ ME DEJASTE PROBAR DE TU GRACIA"
+      }
+    },
+    {
+      "verseType": "Chorus",
+      "translation": "God of miracles You are the living God",
+      "originalText": "אל כל הניסים אתה אל חי",
+      "transliteration": "el kol hanisim ata el chai",
+      "translationOverflow": "",
+      "translations": {
+        "en": "God of miracles You are the living God",
+        "cs": "BOŽE ZÁZRAKŮ, TY JSI ŽIVÝ BŮH",
+        "ru": "БОГ ВСЕХ ЧУДЕС ТЫ БОГ ЖИВОЙ",
+        "es": "DIOS DE LOS MILAGROS, TÚ ERES EL DIOS VIVO"
+      }
+    },
+    {
+      "verseType": "Chorus",
+      "translation": "There's none like You Lord and there will never be",
+      "originalText": "אין ולא יהיה כמותך אלוהי",
+      "transliteration": "en velo ihieh kmotkha elohai",
+      "translationOverflow": "",
+      "translations": {
+        "en": "There's none like You Lord and there will never be",
+        "cs": "NIKDO NENÍ JAKO TY, PANE, A NIKDY NEBUDE",
+        "ru": "НЕТ И НЕ БУДЕТ ПОДОБНОГО ТЕБЕ БОЖЕ МОЙ",
+        "es": "NO HAY NI HABRÁ NADIE COMO TÚ, MI DIOS"
+      }
+    },
+    {
+      "verseType": "Verse3",
+      "translation": "In your name mute begin to shout",
+      "originalText": "בשמך אילמים חוזרים לצעוק",
+      "transliteration": "beshimkha ilmim khozrim litsok",
+      "translationOverflow": "",
+      "translations": {
+        "en": "In your name mute begin to shout",
+        "cs": "VE TVÉM JMÉNU NĚMÍ ZAČÍNAJÍ VOLAT",
+        "ru": "ВО ИМЯ ТВОЁ НЕМЫЕ ВНОВЬ КРИЧАТ",
+        "es": "EN TU NOMBRE LOS MUDOS VUELVEN A GRITAR"
+      }
+    },
+    {
+      "verseType": "Verse3",
+      "translation": "Because of You the one who cry begin to laugh",
+      "originalText": "בזכותך בוכים חוזרים לצחוק",
+      "transliteration": "bizkhutkha bokhim khozrim litskhok",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Because of You the one who cry begin to laugh",
+        "cs": "DÍKY TOBĚ PLAČÍCÍ SE ZAČÍNAJÍ SMÁT",
+        "ru": "БЛАГОДАРЯ ТЕБЕ ПЛАЧУЩИЕ ВНОВЬ СМЕЮТСЯ",
+        "es": "POR TI LOS QUE LLORAN VUELVEN A REÍR"
+      }
+    },
+    {
+      "verseType": "Verse3",
+      "translation": "Now the trees start to grow in the desert",
+      "originalText": "ועכשיו עצים חוזרים לצמוח במדבר",
+      "transliteration": "v'akhshav etsim hozrim litsmoah bamidbar",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Now the trees start to grow in the desert",
+        "cs": "A NYNÍ STROMY ZAČÍNAJÍ RŮST V POUŠTI",
+        "ru": "И НЫНЕ ДЕРЕВЬЯ ВНОВЬ РАСТУТ В ПУСТЫНЕ",
+        "es": "Y AHORA LOS ÁRBOLES VUELVEN A CRECER EN EL DESIERTO"
+      }
+    },
+    {
+      "verseType": "Verse4",
+      "translation": "Through You I'll continue walking",
+      "originalText": "דרכך אני אמשיך לצעוד",
+      "transliteration": "darkekha ani amshikh litsod",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Through You I'll continue walking",
+        "cs": "SKRZE TEBE BUDU DÁL KRÁČET",
+        "ru": "ПУТЁМ ТВОИМ Я БУДУ ПРОДОЛЖАТЬ ИДТИ",
+        "es": "EN TU CAMINO SEGUIRÉ ANDANDO"
+      }
+    },
+    {
+      "verseType": "Verse4",
+      "translation": "Because You've let me hold your hand",
+      "originalText": "כי בידך הרשית לאחוז",
+      "transliteration": "ki beyadkha hersheta le'ekhoz",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Because You've let me hold your hand",
+        "cs": "PROTOŽE JSI MI DOVOLIL DRŽET TVOU RUKU",
+        "ru": "ИБО ТЫ ПОЗВОЛИЛ МНЕ ДЕРЖАТЬ ТВОЮ РУКУ",
+        "es": "PORQUE ME PERMITISTE TOMAR TU MANO"
+      }
+    },
+    {
+      "verseType": "Verse4",
+      "translation": "By your blood a sinner like me can be saved",
+      "originalText": "בזכות דמך חוטא כמותי יכול להוושע",
+      "transliteration": "bizhut damha hoteh kmoti yahol lehivasha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "By your blood a sinner like me can be saved",
+        "cs": "DÍKY TVÉ KRVI HŘÍŠNÍK JAKO JÁ MŮŽE BÝT SPASEN",
+        "ru": "КРОВЬЮ ТВОЕЙ ГРЕШНИК КАК Я МОЖЕТ БЫТЬ СПАСЁН",
+        "es": "POR TU SANGRE UN PECADOR COMO YO PUEDE SER SALVO"
+      }
+    }
+  ],
+  "6d10d977-c002-4087-bc8a-09783615bd89": [
+    {
+      "verseType": "Verse1",
+      "translation": "Show me the way back to you",
+      "originalText": "הראה לי את הדרך לשוב אליך",
+      "transliteration": "hareh li et haderekh lashuv elekha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Show me the way back to you",
+        "cs": "UKAŽ MI CESTU ZPĚT K TOBĚ",
+        "ru": "ПОКАЖИ МНЕ ПУТЬ НАЗАД К ТЕБЕ",
+        "es": "MUÉSTRAME EL CAMINO DE REGRESO A TI"
+      }
+    },
+    {
+      "verseType": "Verse1",
+      "translation": "even if it will be hard",
+      "originalText": "גם, אם קשה תהיה",
+      "transliteration": "gam im kasha tieh",
+      "translationOverflow": "",
+      "translations": {
+        "en": "even if it will be hard",
+        "cs": "I KDYBY BYLA TĚŽKÁ",
+        "ru": "ДАЖЕ ЕСЛИ БУДЕТ ТРУДНО",
+        "es": "AUNQUE SEA DIFÍCIL"
+      }
+    },
+    {
+      "verseType": "Verse1",
+      "translation": "To return and to be in your arms",
+      "originalText": "לשוב להיות בזרועותיך",
+      "transliteration": "lashuv liot bizro'otekha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "To return and to be in your arms",
+        "cs": "VRÁTIT SE DO TVÉ NÁRUČE",
+        "ru": "ВЕРНУТЬСЯ В ОБЪЯТИЯ ТВОИ",
+        "es": "VOLVER A ESTAR EN TUS BRAZOS"
+      }
+    },
+    {
+      "verseType": "Verse1",
+      "translation": "the way, where I will live",
+      "originalText": "הדרך, בסופה אחיה",
+      "transliteration": "haderekh besofa ekhye",
+      "translationOverflow": "",
+      "translations": {
+        "en": "the way, where I will live",
+        "cs": "CESTU, NA JEJÍMŽ KONCI BUDU ŽÍT",
+        "ru": "ПУТЬ ГДЕ Я БУДУ ЖИТЬ",
+        "es": "EL CAMINO, DONDE AL FINAL VIVIRÉ"
+      }
+    },
+    {
+      "verseType": "Chorus",
+      "translation": "So I return and give you my life",
+      "originalText": "אז אשוב, אשוב ואתן לך את חיי",
+      "transliteration": "az ashuv, ashuv ve'eten lekha et khayay",
+      "translationOverflow": "",
+      "translations": {
+        "en": "So I return and give you my life",
+        "cs": "TAK SE VRACÍM A DÁVÁM TI SVŮJ ŽIVOT",
+        "ru": "Я ВЕРНУСЬ, ВЕРНУСЬ И ОТДАМ ТЕБЕ ЖИЗНЬ МОЮ",
+        "es": "ASÍ QUE VUELVO Y TE ENTREGO MI VIDA"
+      }
+    },
+    {
+      "verseType": "Chorus",
+      "translation": "every corner in my heart, my soul",
+      "originalText": "כל פינה שבליבי, את נפשי",
+      "transliteration": "kol pina shebelibi et nafshi",
+      "translationOverflow": "",
+      "translations": {
+        "en": "every corner in my heart, my soul",
+        "cs": "KAŽDÝ KOUT SVÉHO SRDCE, SVOU DUŠI",
+        "ru": "КАЖДЫЙ УГОЛОК СЕРДЦА МОЕГО, ДУШУ МОЮ",
+        "es": "CADA RINCÓN DE MI CORAZÓN, MI ALMA"
+      }
+    },
+    {
+      "verseType": "Chorus",
+      "translation": "There you are, in me",
+      "originalText": "שם אתה לי, בקרבי",
+      "transliteration": "sham ata li bekirbi",
+      "translationOverflow": "",
+      "translations": {
+        "en": "There you are, in me",
+        "cs": "TAM JSI TY, V MÉM NITRU",
+        "ru": "ТАМ ТЫ СО МНОЙ, ВО МНЕ",
+        "es": "AHÍ ESTÁS TÚ, DENTRO DE MÍ"
+      }
+    },
+    {
+      "verseType": "Chorus",
+      "translation": "You are there with me",
+      "originalText": "אתה שם איתי",
+      "transliteration": "ata sham iti",
+      "translationOverflow": "",
+      "translations": {
+        "en": "You are there with me",
+        "cs": "TY JSI TAM SE MNOU",
+        "ru": "ТЫ ТАМ СО МНОЙ",
+        "es": "TÚ ESTÁS AHÍ CONMIGO"
+      }
+    },
+    {
+      "verseType": "Verse2",
+      "translation": "Many are the ways I tried",
+      "originalText": "רבות הדרכים אותן ניסתי",
+      "transliteration": "rabot hadrakhim otan nisiti",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Many are the ways I tried",
+        "cs": "MNOHÉ JSOU CESTY, KTERÉ JSEM ZKOUŠEL",
+        "ru": "МНОГО ПУТЕЙ КОТОРЫЕ Я ИСПРОБОВАЛ",
+        "es": "MUCHOS SON LOS CAMINOS QUE INTENTÉ"
+      }
+    },
+    {
+      "verseType": "Verse2",
+      "translation": "and in all of them I was lost",
+      "originalText": "ובכולן הלכתי תועה",
+      "transliteration": "uvkhulan halakhti to'eh",
+      "translationOverflow": "",
+      "translations": {
+        "en": "and in all of them I was lost",
+        "cs": "A NA VŠECH JSEM BLOUDIL",
+        "ru": "И НА ВСЕХ Я БЫЛ ПОТЕРЯН",
+        "es": "Y EN TODOS ANDUVE PERDIDO"
+      }
+    },
+    {
+      "verseType": "Verse2",
+      "translation": "Many are the voices I heard",
+      "originalText": "רבים הקולות להם הקשבתי",
+      "transliteration": "rabim hakolot lahem hekshavti",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Many are the voices I heard",
+        "cs": "MNOHÉ JSOU HLASY, KTERÝM JSEM NASLOUCHAL",
+        "ru": "МНОГО ГОЛОСОВ КОТОРЫЕ Я СЛУШАЛ",
+        "es": "MUCHAS SON LAS VOCES QUE ESCUCHÉ"
+      }
+    },
+    {
+      "verseType": "Verse2",
+      "translation": "but one voice burned in me",
+      "originalText": "אך קול אחד בי בוער",
+      "transliteration": "akh kol ekhad bi bo'er",
+      "translationOverflow": "",
+      "translations": {
+        "en": "but one voice burned in me",
+        "cs": "ALE JEDEN HLAS VE MNĚ HOŘÍ",
+        "ru": "НО ОДИН ГОЛОС ВО МНЕ ГОРИТ",
+        "es": "PERO UNA SOLA VOZ ARDE EN MÍ"
+      }
+    }
+  ],
+  "f2a46b88-7cbb-4c0c-973d-12f6db3055aa": [
+    {
+      "verseType": "",
+      "translation": "The heavens declare the glory of God",
+      "originalText": "השמיים מספרים כבוד אל",
+      "transliteration": "ha'shamaim mesaprim kavod El",
+      "translationOverflow": "",
+      "translations": {
+        "en": "The heavens declare the glory of God",
+        "cs": "NEBESA VYPRAVUJÍ O SLÁVĚ BOŽÍ",
+        "ru": "НЕБЕСА ПРОПОВЕДУЮТ СЛАВУ БОЖЬЮ",
+        "es": "LOS CIELOS DECLARAN LA GLORIA DE DIOS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "The skies proclaim the work of his hands",
+      "originalText": "ומעשי ידיו הרקיע",
+      "transliteration": "u'ma'ase yadav ha'rakia",
+      "translationOverflow": "",
+      "translations": {
+        "en": "The skies proclaim the work of his hands",
+        "cs": "A OBLOHA ZVĚSTUJE DÍLO JEHO RUKOU",
+        "ru": "И О ДЕЛАХ РУК ЕГО ВЕЩАЕТ ТВЕРДЬ",
+        "es": "Y LA OBRA DE SUS MANOS EL FIRMAMENTO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Day after day they pour forth speech night after night they reveal knowledge",
+      "originalText": "יום ליום ליום יביע, ולילה ללילה",
+      "transliteration": "yom le'yom le'yom yabia ve'layla le'layla",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Day after day they pour forth speech night after night they reveal knowledge",
+        "cs": "DEN DNI PŘEDÁVÁ ŘEČI A NOC NOCI",
+        "ru": "ДЕНЬ ЗА ДНЁМ ИЗЛИВАЮТ РЕЧЬ, И НОЧЬ ЗА НОЧЬЮ",
+        "es": "DÍA TRAS DÍA DERRAMAN PALABRAS, Y NOCHE TRAS NOCHE"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "May the words of my mouth and the meditation",
+      "originalText": "יהיו לרצון אמרי פי",
+      "transliteration": "yehiu le'ratson imre pi",
+      "translationOverflow": "",
+      "translations": {
+        "en": "May the words of my mouth and the meditation",
+        "cs": "KÉŽÍ JSOU SLOVA MÝCH ÚST A ROZJÍMÁNÍ",
+        "ru": "ДА БУДУТ СЛОВА УСТ МОИХ УГОДНЫ",
+        "es": "SEAN GRATOS LOS DICHOS DE MI BOCA"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "of my heart be pleasing in your sight",
+      "originalText": "והגיון ליבי לפניך",
+      "transliteration": "ve'higaion libi le'fanekha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "of my heart be pleasing in your sight",
+        "cs": "MÉHO SRDCE PŘÍJEMNÁ PŘED TEBOU",
+        "ru": "И ПОМЫШЛЕНИЯ СЕРДЦА МОЕГО ПРЕД ТОБОЙ",
+        "es": "Y LA MEDITACIÓN DE MI CORAZÓN DELANTE DE TI"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "The Lord my rock and my salvation",
+      "originalText": "אדוני צורי וגאולי",
+      "transliteration": "Adonai tsuri ve'goali",
+      "translationOverflow": "",
+      "translations": {
+        "en": "The Lord my rock and my salvation",
+        "cs": "HOSPODINE, MÁ SKÁLO A MÉ VYKOUPENÍ",
+        "ru": "ГОСПОДЬ МОЯ СКАЛА И МОЙ ИСКУПИТЕЛЬ",
+        "es": "SEÑOR, ROCA MÍA Y REDENTOR MÍO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "and He is like a bridegroom coming out of his chamber",
+      "originalText": "והוא כחתן יוצא מחופתו",
+      "transliteration": "ve'hu ke'khatan yotse me'khupato",
+      "translationOverflow": "",
+      "translations": {
+        "en": "and He is like a bridegroom coming out of his chamber",
+        "cs": "A ON JE JAKO ŽENICH VYCHÁZEJÍCÍ ZE SVÉHO STANU",
+        "ru": "И ОН КАК ЖЕНИХ ВЫХОДИТ ИЗ ЧЕРТОГА СВОЕГО",
+        "es": "Y ÉL ES COMO UN NOVIO QUE SALE DE SU CÁMARA"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "He will rejoice as a champion",
+      "originalText": "ישיש כגיבור",
+      "transliteration": "yasis ke'gibor",
+      "translationOverflow": "",
+      "translations": {
+        "en": "He will rejoice as a champion",
+        "cs": "RADUJE SE JAKO HRDINA",
+        "ru": "ВОЗРАДУЕТСЯ КАК ИСПОЛИН",
+        "es": "SE ALEGRARÁ COMO UN CAMPEÓN"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Yes my heart is yours",
+      "originalText": "כן ליבי, כן ליבי לך",
+      "transliteration": "ken libi, ken libi lekha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Yes my heart is yours",
+        "cs": "ANO, MÉ SRDCE JE TVÉ",
+        "ru": "ДА СЕРДЦЕ МОЁ, СЕРДЦЕ МОЁ ТВОЁ",
+        "es": "SÍ MI CORAZÓN, SÍ MI CORAZÓN ES TUYO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "We are calling to you Yeshua",
+      "originalText": "אנו קוראים לך ישוע",
+      "transliteration": "anu korim lekha Yeshua",
+      "translationOverflow": "",
+      "translations": {
+        "en": "We are calling to you Yeshua",
+        "cs": "VOLÁME K TOBĚ, JEŠUO",
+        "ru": "МЫ ВЗЫВАЕМ К ТЕБЕ ИЕШУА",
+        "es": "TE LLAMAMOS A TI JESÚS"
+      }
+    }
+  ],
+  "3888e627-ca73-47bd-a781-77e31aca0847": [
+    {
+      "verseType": "",
+      "translation": "TAK ME TO THE SECRET PLACE",
+      "originalText": "קח אותי למקום סודי",
+      "transliteration": "kakh oti le'makom sodi",
+      "translationOverflow": "",
+      "translations": {
+        "en": "TAK ME TO THE SECRET PLACE",
+        "cs": "VEĎ MĚ NA TAJNÉ MÍSTO",
+        "ru": "ВОЗЬМИ МЕНЯ В ТАЙНОЕ МЕСТО",
+        "es": "LLÉVAME AL LUGAR SECRETO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "MY HEART I WILL POUR OUT BEFORE YOU",
+      "originalText": "ליבי אשפוך לפניך",
+      "transliteration": "libi eshpokh lefanekha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "MY HEART I WILL POUR OUT BEFORE YOU",
+        "cs": "SVÉ SRDCE VYLEJI PŘED TEBOU",
+        "ru": "СЕРДЦЕ МОЁ ИЗОЛЬЮ ПРЕД ТОБОЙ",
+        "es": "MI CORAZÓN DERRAMARÉ ANTE TI"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "HERE I WILL NOT FEAR",
+      "originalText": "כאן אני לא אפחד",
+      "transliteration": "kan ani lo afakhed",
+      "translationOverflow": "",
+      "translations": {
+        "en": "HERE I WILL NOT FEAR",
+        "cs": "ZDE SE NEBUDU BÁT",
+        "ru": "ЗДЕСЬ Я НЕ БУДУ БОЯТЬСЯ",
+        "es": "AQUÍ NO TEMERÉ"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "FOR I AM WITH YOU",
+      "originalText": "כי אני איתך",
+      "transliteration": "ki ani itkha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "FOR I AM WITH YOU",
+        "cs": "NEBOŤ JSEM S TEBOU",
+        "ru": "ИБО Я С ТОБОЙ",
+        "es": "PORQUE ESTOY CONTIGO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "yeshua yeshua",
+      "originalText": "ישוע, ישוע",
+      "transliteration": "Yeshua Yeshua",
+      "translationOverflow": "",
+      "translations": {
+        "en": "yeshua yeshua",
+        "cs": "JEŠUA, JEŠUA",
+        "ru": "ИЕШУА, ИЕШУА",
+        "es": "YESHUA, YESHUA"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "CLOSER TO YOU",
+      "originalText": "יותר קרוב אליך",
+      "transliteration": "yoter karov elekha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "CLOSER TO YOU",
+        "cs": "BLÍŽE K TOBĚ",
+        "ru": "БЛИЖЕ К ТЕБЕ",
+        "es": "MÁS CERCA DE TI"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "THIS IS THE PLACE I WANT TO BE",
+      "originalText": "זה המקום שבו אני רוצה להיות",
+      "transliteration": "ze ha'makom she'bo ani rotze lihiyot",
+      "translationOverflow": "",
+      "translations": {
+        "en": "THIS IS THE PLACE I WANT TO BE",
+        "cs": "TO JE MÍSTO, KDE CHCI BÝT",
+        "ru": "ЭТО ТО МЕСТО, ГДЕ Я ХОЧУ БЫТЬ",
+        "es": "ESTE ES EL LUGAR DONDE QUIERO ESTAR"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "UNDER YOUR WINGS",
+      "originalText": "מתחת לכנפיך",
+      "transliteration": "mitakhat likhnafekha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "UNDER YOUR WINGS",
+        "cs": "POD TVÝMI KŘÍDLY",
+        "ru": "ПОД КРЫЛЬЯМИ ТВОИМИ",
+        "es": "BAJO TUS ALAS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "REVEAL TO ME REVEAL TO ME THE SECRETS",
+      "originalText": "גלה לי, גלה לי את הסודות",
+      "transliteration": "galeh li galeh li et ha'sodot",
+      "translationOverflow": "",
+      "translations": {
+        "en": "REVEAL TO ME REVEAL TO ME THE SECRETS",
+        "cs": "ZJEV MI, ZJEV MI SVÁ TAJEMSTVÍ",
+        "ru": "ОТКРОЙ МНЕ, ОТКРОЙ МНЕ ТАЙНЫ",
+        "es": "REVÉLAME, REVÉLAME LOS SECRETOS"
+      }
+    }
+  ],
+  "9bc28af4-b594-42ca-84fc-289f6168704c": [
+    {
+      "verseType": "",
+      "translation": "You are here moving in our midst",
+      "originalText": "אתה כאן, נמצא כאן בקרבנו",
+      "transliteration": "ata kan, nimtsa kan be'kirbeinu",
+      "translationOverflow": "",
+      "translations": {
+        "en": "You are here moving in our midst",
+        "cs": "JSI TADY, POHYBUJEŠ SE MEZI NÁMI",
+        "ru": "ТЫ ЗДЕСЬ, ТЫ ЗДЕСЬ СРЕДИ НАС",
+        "es": "ESTÁS AQUÍ, MOVIÉNDOTE EN MEDIO DE NOSOTROS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "We worship You, we worship You",
+      "originalText": "נהללך נהללך",
+      "transliteration": "nehalelkha, nehalelkha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "We worship You, we worship You",
+        "cs": "CHVÁLÍME TĚ, CHVÁLÍME TĚ",
+        "ru": "МЫ СЛАВИМ ТЕБЯ, МЫ СЛАВИМ ТЕБЯ",
+        "es": "TE ADORAMOS, TE ADORAMOS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "You are here working in this place",
+      "originalText": "אתה כאן ,פועל כאן בקרבנו",
+      "transliteration": "ata kan, po'el kan be'kirbeinu",
+      "translationOverflow": "",
+      "translations": {
+        "en": "You are here working in this place",
+        "cs": "JSI TADY, PŮSOBÍŠ MEZI NÁMI",
+        "ru": "ТЫ ЗДЕСЬ, ДЕЙСТВУЕШЬ ЗДЕСЬ СРЕДИ НАС",
+        "es": "ESTÁS AQUÍ, OBRANDO EN ESTE LUGAR"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "We worship You, we worship You",
+      "originalText": "נהללך נהללך",
+      "transliteration": "nehalelkha, nehalelkha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "We worship You, we worship You",
+        "cs": "CHVÁLÍME TĚ, CHVÁLÍME TĚ",
+        "ru": "МЫ СЛАВИМ ТЕБЯ, МЫ СЛАВИМ ТЕБЯ",
+        "es": "TE ADORAMOS, TE ADORAMOS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "Way maker, miracle worker",
+      "originalText": "פורץ דרך, עושה פלא",
+      "transliteration": "porets derekh, oseh peleh",
+      "translationOverflow": "",
+      "translations": {
+        "en": "Way maker, miracle worker",
+        "cs": "RAZÍŠ CESTU, ČINÍŠ ZÁZRAKY",
+        "ru": "ПРОКЛАДЫВАЮЩИЙ ПУТЬ, ТВОРЯЩИЙ ЧУДЕСА",
+        "es": "ABRE CAMINOS, HACEDOR DE MILAGROS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "promise keeper, light in the darkness",
+      "originalText": "שומר הברית, אור גם בחושך",
+      "transliteration": "shomer ha'brit, or gam ba'khoshekh",
+      "translationOverflow": "",
+      "translations": {
+        "en": "promise keeper, light in the darkness",
+        "cs": "STRÁŽCE ZASLÍBENÍ, SVĚTLO V TEMNOTĚ",
+        "ru": "ХРАНИТЕЛЬ ЗАВЕТА, СВЕТ ВО ТЬМЕ",
+        "es": "GUARDIÁN DE PROMESAS, LUZ EN LAS TINIEBLAS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "My God, that is who You are",
+      "originalText": "אדון, זה מי שאתה",
+      "transliteration": "Adon zeh mi she'ata",
+      "translationOverflow": "",
+      "translations": {
+        "en": "My God, that is who You are",
+        "cs": "MŮJ BOŽE, TO JSI TY",
+        "ru": "ГОСПОДЬ, ВОТ КТО ТЫ",
+        "es": "MI DIOS, ESO ES QUIEN TÚ ERES"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "You are here touching every heart",
+      "originalText": "אתה כאן, נוגע בכל לב",
+      "transliteration": "ata kan nogea be'khol lev",
+      "translationOverflow": "",
+      "translations": {
+        "en": "You are here touching every heart",
+        "cs": "JSI TADY, DOTÝKÁŠ SE KAŽDÉHO SRDCE",
+        "ru": "ТЫ ЗДЕСЬ, КАСАЕШЬСЯ КАЖДОГО СЕРДЦА",
+        "es": "ESTÁS AQUÍ, TOCANDO CADA CORAZÓN"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "We worship You, we worship You",
+      "originalText": "נהללך נהללך",
+      "transliteration": "nehalelkha, nehalelkha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "We worship You, we worship You",
+        "cs": "CHVÁLÍME TĚ, CHVÁLÍME TĚ",
+        "ru": "МЫ СЛАВИМ ТЕБЯ, МЫ СЛАВИМ ТЕБЯ",
+        "es": "TE ADORAMOS, TE ADORAMOS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "You are here, healing every heart",
+      "originalText": "אתה כאן, מרפא נפשנו",
+      "transliteration": "ata kan merapeh nafsheinu",
+      "translationOverflow": "",
+      "translations": {
+        "en": "You are here, healing every heart",
+        "cs": "JSI TADY, UZDRAVUJEŠ KAŽDÉ SRDCE",
+        "ru": "ТЫ ЗДЕСЬ, ИСЦЕЛЯЕШЬ НАШИ ДУШИ",
+        "es": "ESTÁS AQUÍ, SANANDO NUESTRA ALMA"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "We worship You, we worship You",
+      "originalText": "נהללך נהללך",
+      "transliteration": "nehalelkha, nehalelkha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "We worship You, we worship You",
+        "cs": "CHVÁLÍME TĚ, CHVÁLÍME TĚ",
+        "ru": "МЫ СЛАВИМ ТЕБЯ, МЫ СЛАВИМ ТЕБЯ",
+        "es": "TE ADORAMOS, TE ADORAMOS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "You are here turning lives around",
+      "originalText": "אתה כאן, משנה חיים",
+      "transliteration": "ata kan meshaneh khaim",
+      "translationOverflow": "",
+      "translations": {
+        "en": "You are here turning lives around",
+        "cs": "JSI TADY, MĚNÍŠ ŽIVOTY",
+        "ru": "ТЫ ЗДЕСЬ, ИЗМЕНЯЕШЬ ЖИЗНИ",
+        "es": "ESTÁS AQUÍ, TRANSFORMANDO VIDAS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "We worship You, we worship You",
+      "originalText": "נהללך נהללך",
+      "transliteration": "nehalelkha, nehalelkha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "We worship You, we worship You",
+        "cs": "CHVÁLÍME TĚ, CHVÁLÍME TĚ",
+        "ru": "МЫ СЛАВИМ ТЕБЯ, МЫ СЛАВИМ ТЕБЯ",
+        "es": "TE ADORAMOS, TE ADORAMOS"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "You are here, mending every heart",
+      "originalText": "אתה כאן, בורא בי לב טהור",
+      "transliteration": "ata kan boreh bi lev tahor",
+      "translationOverflow": "",
+      "translations": {
+        "en": "You are here, mending every heart",
+        "cs": "JSI TADY, TVOŘÍŠ VE MNĚ ČISTÉ SRDCE",
+        "ru": "ТЫ ЗДЕСЬ, ТВОРИШЬ ВО МНЕ ЧИСТОЕ СЕРДЦЕ",
+        "es": "ESTÁS AQUÍ, CREANDO EN MÍ UN CORAZÓN PURO"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "We worship You, we worship You",
+      "originalText": "נהללך נהללך",
+      "transliteration": "nehalelkha, nehalelkha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "We worship You, we worship You",
+        "cs": "CHVÁLÍME TĚ, CHVÁLÍME TĚ",
+        "ru": "МЫ СЛАВИМ ТЕБЯ, МЫ СЛАВИМ ТЕБЯ",
+        "es": "TE ADORAMOS, TE ADORAMOS"
+      }
+    }
+  ],
+  "62b94b2d-918d-462a-9786-4c8edde25cc0": [
+    {
+      "verseType": "",
+      "translation": "I pray before you for my people",
+      "originalText": "אבוא לשאת תפילה, בעד עמי",
+      "transliteration": "avo laset tfila be'ad ami",
+      "translationOverflow": "",
+      "translations": {
+        "en": "I pray before you for my people",
+        "cs": "PŘICHÁZÍM S MODLITBOU ZA SVŮJ LID",
+        "ru": "Я ПРИХОЖУ С МОЛИТВОЙ ЗА НАРОД МОЙ"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "my heart is like water inside of me",
+      "originalText": "לבי כמים בקרבי",
+      "transliteration": "libi kemaim bekirbi",
+      "translationOverflow": "",
+      "translations": {
+        "en": "my heart is like water inside of me",
+        "cs": "MÉ SRDCE JE JAKO VODA VE MNĚ",
+        "ru": "СЕРДЦЕ МОЁ КАК ВОДА ВО МНЕ"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "I lift my voice to the God who sees me",
+      "originalText": "אשא קולי לאל החי רואי",
+      "transliteration": "esa koli la'el hakhai ro'i",
+      "translationOverflow": "",
+      "translations": {
+        "en": "I lift my voice to the God who sees me",
+        "cs": "POZVEDÁM SVŮJ HLAS K BOHU, KTERÝ MĚ VIDÍ",
+        "ru": "ВОЗНОШУ ГОЛОС МОЙ К БОГУ ЖИВОМУ, ВИДЯЩЕМУ МЕНЯ"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "in my mouth, a prayer for mercy",
+      "originalText": "בפי תפילה לרחמים",
+      "transliteration": "befi tfila lerakhamim",
+      "translationOverflow": "",
+      "translations": {
+        "en": "in my mouth, a prayer for mercy",
+        "cs": "V MÝCH ÚSTECH JE MODLITBA ZA MILOST",
+        "ru": "В УСТАХ МОИХ МОЛИТВА О МИЛОСТИ"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "I ask mercy for the",
+      "originalText": "רחמים אבקש X2",
+      "transliteration": "rakhamim avakesh",
+      "translationOverflow": "",
+      "translations": {
+        "en": "I ask mercy for the",
+        "cs": "PROSÍM O MILOST x2",
+        "ru": "МИЛОСТИ ПРОШУ Х2"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "sake of your name",
+      "originalText": "למען שמך X2",
+      "transliteration": "lema'an shimkha",
+      "translationOverflow": "",
+      "translations": {
+        "en": "sake of your name",
+        "cs": "PRO TVÉ JMÉNO x2",
+        "ru": "РАДИ ИМЕНИ ТВОЕГО Х2"
+      }
+    },
+    {
+      "verseType": "",
+      "translation": "I ask for mercy",
+      "originalText": "רחמים אבקש",
+      "transliteration": "rakhamim avakesh",
+      "translationOverflow": "",
+      "translations": {
+        "en": "I ask for mercy",
+        "cs": "PROSÍM O MILOST",
+        "ru": "МИЛОСТИ ПРОШУ"
+      }
+    }
+  ]
+}

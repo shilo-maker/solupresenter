@@ -175,8 +175,8 @@ app.use(helmet({
 })); // Security headers
 app.use(compression()); // Enable gzip compression
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Session configuration
 app.use(session({
@@ -212,71 +212,6 @@ app.use('/api/screen-access', screenAccessRoutes);
 app.use('/api/presentations', presentationsRoutes);
 app.use('/api/quick-slide', quickSlideRoutes);
 
-// Temporary bulk sync endpoint - updates all songs from local database
-// Matches by title since local and production IDs may differ
-app.post('/api/admin/bulk-sync', async (req, res) => {
-  try {
-    const syncKey = req.headers['x-sync-key'];
-    if (syncKey !== 'solucast-sync-2026') {
-      return res.status(403).json({ error: 'Invalid sync key' });
-    }
-
-    const songs = req.body;
-    if (!songs || typeof songs !== 'object') {
-      return res.status(400).json({ error: 'Invalid data' });
-    }
-
-    // Build title-to-local-data map
-    const titleMap = {};
-    for (const songId of Object.keys(songs)) {
-      const local = songs[songId];
-      if (local.title) {
-        titleMap[local.title] = local;
-      }
-    }
-
-    // Get all production songs
-    const prodSongs = await Song.findAll();
-    let updated = 0, notFound = 0, errors = 0, skipped = 0;
-    const matched = new Set();
-
-    for (const song of prodSongs) {
-      const local = titleMap[song.title];
-      if (!local) { notFound++; continue; }
-      matched.add(song.title);
-
-      try {
-        const updateFields = { slides: local.slides || [] };
-        if (local.author !== undefined) updateFields.author = local.author || null;
-        if (local.originalLanguage) updateFields.originalLanguage = local.originalLanguage;
-        if (local.tags) updateFields.tags = local.tags;
-
-        await song.update(updateFields);
-        updated++;
-      } catch (err) {
-        console.error('[bulk-sync] Error updating ' + song.title + ':', err.message);
-        errors++;
-      }
-    }
-
-    // Count local songs not matched
-    const localTitles = Object.keys(titleMap);
-    const unmatchedLocal = localTitles.filter(t => !matched.has(t));
-
-    res.json({
-      updated,
-      notFound,
-      errors,
-      prodSongs: prodSongs.length,
-      localSongs: localTitles.length,
-      unmatchedLocal: unmatchedLocal.length,
-      unmatchedTitles: unmatchedLocal.slice(0, 10)
-    });
-  } catch (err) {
-    console.error('[bulk-sync] Error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // Health check
 app.get('/health', (req, res) => {
